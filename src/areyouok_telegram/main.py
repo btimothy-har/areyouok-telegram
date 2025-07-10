@@ -14,8 +14,6 @@ def main():
 if __name__ == "__main__":
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
-    application = (
-        ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).concurrent_updates(True).build()
-    )
+    application = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).concurrent_updates(concurrent_updates=True).build()
 
     application.run_polling()
