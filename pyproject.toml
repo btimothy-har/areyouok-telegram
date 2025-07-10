@@ -39,17 +39,28 @@ fix = true
 
 [tool.ruff.lint]
 select = [
-    "E",
-    "F",
-    "W",
-    "ASYNC",
-    "N",
-    "UP",
-    "YTT",
-    "DTZ",
-    "A",
-    "B",
-    "I"
+    "E", # Pycodestyle
+    "W", # Pycodestyle
+    "F", # Pyflakes
+    "ASYNC", # flake8-async
+    "N", # pep8-naming
+    "UP", # pyupgrade
+    "YTT", # flake8-2020
+    "DTZ", # flake8-datetimez
+    "A", # flake8-builtins
+    "B", # flake8-bugbear
+    "FBT", # flake8-boolean-trap
+    "I", # isort
+    "PLC", # Pylint-Convention
+    "PLE", # Pylint-Error
+    "PLW", # Pylint-Warning
+    "TRY", # tryceratops
+    "FAST", # FastAPI
+    "C4", # flake8-comprehensions
+    "ICN", # import-convention
+    "Q", # flake8-quotes
+    "ARG", # flake8-unused-arguments
+    "PERF", # Perflint
 ]
 
 [tool.ruff.lint.isort]
