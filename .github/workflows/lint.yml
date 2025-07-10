@@ -1,0 +1,20 @@
+name: Lint
+
+on:
+  push:
+    branches-ignore:
+      - main
+  
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Run Lint
+      run: |
+        uv run ruff check . && uv run ruff format --check .
+    
