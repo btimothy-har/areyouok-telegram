@@ -1,6 +1,6 @@
 import logging
 
-from telegram import Update
+import telegram
 from telegram.ext import ContextTypes
 
 from areyouok_telegram.data import Messages
@@ -11,7 +11,7 @@ from .exceptions import NoMessageError
 logger = logging.getLogger(__name__)
 
 
-async def on_new_message(update: Update, context: ContextTypes.DEFAULT_TYPE):  # noqa: ARG001
+async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):  # noqa: ARG001
     if not update.message:
         raise NoMessageError(update.update_id)
 
@@ -21,7 +21,7 @@ async def on_new_message(update: Update, context: ContextTypes.DEFAULT_TYPE):  #
         )
 
 
-async def on_edit_message(update: Update, context: ContextTypes.DEFAULT_TYPE):  # noqa: ARG001
+async def on_edit_message(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):  # noqa: ARG001
     if not update.edited_message:
         raise NoMessageError(update.update_id)
 

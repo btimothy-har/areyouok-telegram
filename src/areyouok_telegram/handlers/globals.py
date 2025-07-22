@@ -2,7 +2,7 @@ import asyncio
 import logging
 import traceback
 
-from telegram import Update
+import telegram
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
@@ -15,7 +15,7 @@ from areyouok_telegram.data import async_database_session
 logger = logging.getLogger(__name__)
 
 
-async def on_new_update(update: Update, context: ContextTypes.DEFAULT_TYPE):  # noqa:ARG001
+async def on_new_update(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):  # noqa:ARG001
     async with async_database_session() as session:
         await Updates.new_or_upsert(session, update=update)
 
@@ -29,7 +29,7 @@ async def on_new_update(update: Update, context: ContextTypes.DEFAULT_TYPE):  # 
         await asyncio.gather(*update_tasks)
 
 
-async def on_error_event(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_error_event(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Log the error and send a telegram message to notify the developer."""
     logger.error(f"Exception while handling an update: {update.update_id}", exc_info=context.error)
 
