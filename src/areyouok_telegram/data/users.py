@@ -1,12 +1,11 @@
-import hashlib
 from datetime import UTC
 from datetime import datetime
 
 import telegram
+from sqlalchemy import BOOLEAN
 from sqlalchemy import Column
 from sqlalchemy import Integer
 from sqlalchemy import String
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import TIMESTAMP
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,41 +15,41 @@ from areyouok_telegram.data.connection import Base
 from areyouok_telegram.data.utils import with_retry
 
 
-class Updates(Base):
-    __tablename__ = "updates"
+class Users(Base):
+    __tablename__ = "users"
     __table_args__ = {"schema": ENV}
 
     num = Column(Integer, primary_key=True, autoincrement=True)
-    update_key = Column(String, nullable=False, unique=True)
-    update_id = Column(String, nullable=False)
-    payload = Column(JSONB, nullable=False)
+    user_id = Column(String, nullable=False, unique=True)
+    is_bot = Column(BOOLEAN, nullable=False)
+    language_code = Column(String, nullable=True)
+    is_premium = Column(BOOLEAN, nullable=False, default=False)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False)
     updated_at = Column(TIMESTAMP(timezone=True), nullable=False)
 
-    @staticmethod
-    def generate_update_key(payload: str) -> str:
-        """Generate a unique key for an update based on its payload."""
-        return hashlib.sha256(payload.encode()).hexdigest()
-
     @classmethod
     @with_retry()
-    async def new_or_upsert(cls, session: AsyncSession, update: telegram.Update):
-        """Insert or update a message in the database."""
+    async def new_or_update(cls, session: AsyncSession, user: telegram.User):
+        """Insert or update a user in the database."""
         now = datetime.now(UTC)
 
         stmt = pg_insert(cls).values(
-            update_key=cls.generate_update_key(update.to_json()),
-            update_id=str(update.update_id),
-            payload=update.to_dict(),
+            user_id=str(user.id),
+            is_bot=user.is_bot,
+            language_code=user.language_code,
+            is_premium=user.is_premium if user.is_premium is not None else False,
             created_at=now,
             updated_at=now,
         )
 
         stmt = stmt.on_conflict_do_update(
-            index_elements=["update_key"],
+            index_elements=["user_id"],
             set_={
-                "payload": stmt.excluded.payload,
+                "is_bot": stmt.excluded.is_bot,
+                "language_code": stmt.excluded.language_code,
+                "is_premium": stmt.excluded.is_premium,
                 "updated_at": stmt.excluded.updated_at,
             },
         )
+
         await session.execute(stmt)

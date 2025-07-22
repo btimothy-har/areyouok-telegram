@@ -21,5 +21,7 @@ async def async_database_session():
     except Exception:
         await session.rollback()
         raise
+    else:
+        await session.commit()
     finally:
         await session.close()

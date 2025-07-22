@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import traceback
 
@@ -6,15 +7,26 @@ from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
 from areyouok_telegram.config import DEVELOPER_CHAT_ID
+from areyouok_telegram.data import Chats
+from areyouok_telegram.data import Updates
+from areyouok_telegram.data import Users
 from areyouok_telegram.data import async_database_session
-from areyouok_telegram.data import new_or_upsert_update
 
 logger = logging.getLogger(__name__)
 
 
-async def on_new_update(update: Update, context: ContextTypes.DEFAULT_TYPE):  # noqa: ARG001
+async def on_new_update(update: Update, context: ContextTypes.DEFAULT_TYPE):  # noqa:ARG001
     async with async_database_session() as session:
-        await new_or_upsert_update(session, update=update)
+        await Updates.new_or_upsert(session, update=update)
+
+        update_tasks = []
+        if update.effective_user:
+            update_tasks.append(asyncio.create_task(Users.new_or_update(session=session, user=update.effective_user)))
+
+        if update.effective_chat:
+            update_tasks.append(asyncio.create_task(Chats.new_or_update(session=session, chat=update.effective_chat)))
+
+        await asyncio.gather(*update_tasks)
 
 
 async def on_error_event(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
