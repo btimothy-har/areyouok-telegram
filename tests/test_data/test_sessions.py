@@ -6,9 +6,11 @@ from datetime import datetime
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
+import pytest
 from freezegun import freeze_time
 from sqlalchemy import select
 
+from areyouok_telegram.data.sessions import InvalidMessageTypeError
 from areyouok_telegram.data.sessions import Sessions
 
 
@@ -242,6 +244,14 @@ class TestSessionsNewMessage:
         assert session.last_user_activity == new_timestamp
         assert session.message_count == 3  # Should not increment for bot messages
         assert session.last_user_message == datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)  # Unchanged
+
+    async def test_new_message_invalid_type(self):
+        """Test that invalid message_type raises InvalidMessageTypeError."""
+        session = Sessions()
+        new_timestamp = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
+
+        with pytest.raises(InvalidMessageTypeError, match="Invalid message_type: invalid. Must be 'user' or 'bot'."):
+            await session.new_message(new_timestamp, "invalid")  # type: ignore
 
 
 class TestSessionsNewUserActivity:

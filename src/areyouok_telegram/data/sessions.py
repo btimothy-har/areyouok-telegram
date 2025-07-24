@@ -18,6 +18,13 @@ from areyouok_telegram.data.messages import Messages
 from areyouok_telegram.data.utils import with_retry
 
 
+class InvalidMessageTypeError(ValueError):
+    """Raised when an invalid message type is provided."""
+
+    def __init__(self, message_type: str) -> None:
+        super().__init__(f"Invalid message_type: {message_type}. Must be 'user' or 'bot'.")
+
+
 class Sessions(Base):
     __tablename__ = "sessions"
     __table_args__ = {"schema": ENV}
@@ -90,6 +97,8 @@ class Sessions(Base):
             self.message_count = self.message_count + 1 if self.message_count is not None else 1
         elif message_type == "bot":
             self.last_bot_message = timestamp
+        else:
+            raise InvalidMessageTypeError(message_type)
 
     @with_retry()
     async def new_user_activity(self, timestamp: datetime) -> None:
