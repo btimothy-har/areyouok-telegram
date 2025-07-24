@@ -4,11 +4,14 @@ from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
 from unittest.mock import AsyncMock
+from unittest.mock import MagicMock
 from unittest.mock import create_autospec
 from unittest.mock import patch
 
 import pytest
 import telegram
+
+from areyouok_telegram.data import Sessions
 
 DEFAULT_DATETIME = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
 
@@ -24,11 +27,15 @@ def mock_async_database_session():
     """
     mock_session = AsyncMock()
 
-    # Mock common session methods
+    # Mock common session methods - async ones
     mock_session.execute = AsyncMock()
     mock_session.commit = AsyncMock()
     mock_session.rollback = AsyncMock()
     mock_session.close = AsyncMock()
+
+    # Mock synchronous session methods
+    mock_session.add = MagicMock()
+    mock_session.delete = MagicMock()
 
     with patch("areyouok_telegram.data.connection.AsyncSessionLocal") as mock_session_local:
         mock_session_local.return_value = mock_session
@@ -162,3 +169,19 @@ def mock_update_private_chat_edited_message(mock_update_empty, mock_edited_priva
     mock_update_empty.effective_chat = mock_edited_private_message.chat
 
     return mock_update_empty
+
+
+@pytest.fixture
+def mock_session():
+    """Create a mock Sessions object."""
+
+    mock_session = create_autospec(Sessions, spec_set=True, instance=True)
+    mock_session.session_start = DEFAULT_DATETIME
+    mock_session.last_message = DEFAULT_DATETIME
+    mock_session.session_end = None
+    mock_session.message_count = None
+    mock_session.extend_session = AsyncMock()
+    mock_session.close_session = AsyncMock()
+    mock_session.get_messages = AsyncMock()
+
+    return mock_session

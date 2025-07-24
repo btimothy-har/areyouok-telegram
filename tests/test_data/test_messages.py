@@ -4,12 +4,31 @@ import hashlib
 from datetime import UTC
 from datetime import datetime
 from unittest.mock import MagicMock
+from unittest.mock import patch
 
 import pytest
+import telegram
 from freezegun import freeze_time
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from areyouok_telegram.data.messages import Messages
+
+
+@pytest.fixture
+def mock_message_record1():
+    """Create a mock Messages database record."""
+    mock_record = MagicMock()
+    mock_record.payload = {"message_id": 111, "text": "Message 1"}
+    return mock_record
+
+
+@pytest.fixture
+def mock_message_record2():
+    """Create a second mock Messages database record."""
+    mock_record = MagicMock()
+    mock_record.payload = {"message_id": 222, "text": "Message 2"}
+    return mock_record
 
 
 @pytest.fixture
@@ -236,3 +255,111 @@ class TestMessagesNewOrUpdate:
         key2 = second_call_stmt.compile().params["message_key"]
 
         assert key1 != key2
+
+
+class TestMessagesRetrieveByChat:
+    """Test the retrieve_by_chat class method."""
+
+    async def test_retrieve_by_chat_basic(
+        self, mock_async_database_session, mock_message_record1, mock_message_record2
+    ):
+        """Test retrieving messages by chat ID."""
+        chat_id = "123456"
+
+        # Mock the query result
+        mock_result = MagicMock()
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = [mock_message_record1, mock_message_record2]
+        mock_result.scalars.return_value = mock_scalars
+        mock_async_database_session.execute.return_value = mock_result
+
+        # Mock telegram.Message.de_json
+        mock_telegram_msg1 = MagicMock(spec=telegram.Message)
+        mock_telegram_msg2 = MagicMock(spec=telegram.Message)
+
+        with patch("telegram.Message.de_json") as mock_de_json:
+            mock_de_json.side_effect = [mock_telegram_msg1, mock_telegram_msg2]
+
+            # Call the method
+            result = await Messages.retrieve_by_chat(mock_async_database_session, chat_id)
+
+        # Verify the query was executed
+        mock_async_database_session.execute.assert_called_once()
+        stmt = mock_async_database_session.execute.call_args[0][0]
+
+        # Check that the statement filters by chat_id
+        assert isinstance(stmt, type(select(Messages)))
+
+        # Verify telegram.Message.de_json was called for each payload
+        assert mock_de_json.call_count == 2
+        mock_de_json.assert_any_call(mock_message_record1.payload, None)
+        mock_de_json.assert_any_call(mock_message_record2.payload, None)
+
+        # Verify the result
+        assert result == [mock_telegram_msg1, mock_telegram_msg2]
+
+    async def test_retrieve_by_chat_with_time_range(self, mock_async_database_session):
+        """Test retrieving messages with time range filters."""
+        chat_id = "123456"
+        from_time = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
+        to_time = datetime(2025, 1, 15, 11, 0, 0, tzinfo=UTC)
+
+        # Mock empty result
+        mock_result = MagicMock()
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = []
+        mock_result.scalars.return_value = mock_scalars
+        mock_async_database_session.execute.return_value = mock_result
+
+        # Call the method with time range
+        result = await Messages.retrieve_by_chat(
+            mock_async_database_session, chat_id, from_time=from_time, to_time=to_time
+        )
+
+        # Verify the query was executed
+        mock_async_database_session.execute.assert_called_once()
+
+        # Verify empty result
+        assert result == []
+
+    async def test_retrieve_by_chat_with_limit(self, mock_async_database_session, mock_message_record1):
+        """Test retrieving messages with limit."""
+        chat_id = "123456"
+        limit = 10
+
+        # Mock result with one message
+        mock_result = MagicMock()
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = [mock_message_record1]
+        mock_result.scalars.return_value = mock_scalars
+        mock_async_database_session.execute.return_value = mock_result
+
+        mock_telegram_msg = MagicMock(spec=telegram.Message)
+
+        with patch("telegram.Message.de_json", return_value=mock_telegram_msg):
+            # Call the method with limit
+            result = await Messages.retrieve_by_chat(mock_async_database_session, chat_id, limit=limit)
+
+        # Verify the query was executed
+        mock_async_database_session.execute.assert_called_once()
+
+        # Verify the result
+        assert len(result) == 1
+        assert result[0] == mock_telegram_msg
+
+    async def test_retrieve_by_chat_no_messages(self, mock_async_database_session):
+        """Test retrieving messages when none exist."""
+        chat_id = "nonexistent"
+
+        # Mock empty result
+        mock_result = MagicMock()
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = []
+        mock_result.scalars.return_value = mock_scalars
+        mock_async_database_session.execute.return_value = mock_result
+
+        # Call the method
+        result = await Messages.retrieve_by_chat(mock_async_database_session, chat_id)
+
+        # Verify the result is empty
+        assert result == []

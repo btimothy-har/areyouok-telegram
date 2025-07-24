@@ -1,4 +1,6 @@
+from datetime import timedelta
 from unittest.mock import AsyncMock
+from unittest.mock import MagicMock
 from unittest.mock import patch
 
 import pytest
@@ -11,19 +13,68 @@ class TestNewMessageHandler:
     """Test suite for message handlers functionality."""
 
     @pytest.mark.asyncio
-    async def test_on_new_message(self, mock_async_database_session, mock_update_private_chat_new_message):
-        """Test on_new_message with the expected payload for a new private message."""
+    async def test_on_new_message_with_existing_session(
+        self, mock_async_database_session, mock_update_private_chat_new_message
+    ):
+        """Test on_new_message with existing active session."""
         mock_context = AsyncMock()
 
-        with patch("areyouok_telegram.data.Messages.new_or_update") as mock_messages_new_or_update:
+        # Mock an existing active session
+        mock_session = MagicMock()
+        mock_session.extend_session = AsyncMock()
+
+        with (
+            patch("areyouok_telegram.data.Messages.new_or_update") as mock_messages_new_or_update,
+            patch("areyouok_telegram.data.Sessions.get_active_session", return_value=mock_session) as mock_get_active,
+        ):
             # Act
             await on_new_message(mock_update_private_chat_new_message, mock_context)
 
+            # Verify message was saved
             mock_messages_new_or_update.assert_called_once_with(
                 mock_async_database_session,
                 user_id=mock_update_private_chat_new_message.effective_user.id,
                 chat_id=mock_update_private_chat_new_message.effective_chat.id,
                 message=mock_update_private_chat_new_message.message,
+            )
+
+            # Verify session management
+            mock_get_active.assert_called_once_with(
+                mock_async_database_session, str(mock_update_private_chat_new_message.effective_chat.id)
+            )
+            mock_session.extend_session.assert_called_once_with(mock_update_private_chat_new_message.message.date)
+
+    @pytest.mark.asyncio
+    async def test_on_new_message_without_existing_session(
+        self, mock_async_database_session, mock_update_private_chat_new_message
+    ):
+        """Test on_new_message without existing active session."""
+        mock_context = AsyncMock()
+
+        with (
+            patch("areyouok_telegram.data.Messages.new_or_update") as mock_messages_new_or_update,
+            patch("areyouok_telegram.data.Sessions.get_active_session", return_value=None) as mock_get_active,
+            patch("areyouok_telegram.data.Sessions.create_session") as mock_create_session,
+        ):
+            # Act
+            await on_new_message(mock_update_private_chat_new_message, mock_context)
+
+            # Verify message was saved
+            mock_messages_new_or_update.assert_called_once_with(
+                mock_async_database_session,
+                user_id=mock_update_private_chat_new_message.effective_user.id,
+                chat_id=mock_update_private_chat_new_message.effective_chat.id,
+                message=mock_update_private_chat_new_message.message,
+            )
+
+            # Verify session management
+            mock_get_active.assert_called_once_with(
+                mock_async_database_session, str(mock_update_private_chat_new_message.effective_chat.id)
+            )
+            mock_create_session.assert_called_once_with(
+                mock_async_database_session,
+                str(mock_update_private_chat_new_message.effective_chat.id),
+                mock_update_private_chat_new_message.message.date,
             )
 
     @pytest.mark.asyncio
@@ -44,20 +95,97 @@ class TestEditMessageHandler:
     """Test suite for message edit handlers functionality."""
 
     @pytest.mark.asyncio
-    async def test_on_edit_message(self, mock_async_database_session, mock_update_private_chat_edited_message):
-        """Test on_edit_message with the expected payload for an edited private message."""
+    async def test_on_edit_message_with_active_session_recent_message(
+        self, mock_async_database_session, mock_update_private_chat_edited_message, mock_session
+    ):
+        """Test on_edit_message with active session and recent message (after session start)."""
         mock_context = AsyncMock()
 
-        with patch("areyouok_telegram.data.Messages.new_or_update") as mock_messages_new_or_update:
+        # Set session start to the message date (message is current, so should extend)
+        mock_session.session_start = mock_update_private_chat_edited_message.edited_message.date
+
+        with (
+            patch("areyouok_telegram.data.Messages.new_or_update") as mock_messages_new_or_update,
+            patch("areyouok_telegram.data.Sessions.get_active_session", return_value=mock_session) as mock_get_active,
+        ):
             # Act
             await on_edit_message(mock_update_private_chat_edited_message, mock_context)
 
+            # Verify message was saved
             mock_messages_new_or_update.assert_called_once_with(
                 mock_async_database_session,
                 user_id=mock_update_private_chat_edited_message.effective_user.id,
                 chat_id=mock_update_private_chat_edited_message.effective_chat.id,
                 message=mock_update_private_chat_edited_message.edited_message,
             )
+
+            # Verify session was extended with edit_date
+            mock_get_active.assert_called_once_with(
+                mock_async_database_session, str(mock_update_private_chat_edited_message.effective_chat.id)
+            )
+            mock_session.extend_session.assert_called_once_with(
+                mock_update_private_chat_edited_message.edited_message.edit_date
+            )
+
+    @pytest.mark.asyncio
+    async def test_on_edit_message_with_active_session_old_message(
+        self, mock_async_database_session, mock_update_private_chat_edited_message, mock_session
+    ):
+        """Test on_edit_message with active session but old message (before session start)."""
+        mock_context = AsyncMock()
+
+        # Set session start after the message date (old message, should NOT extend)
+        mock_session.session_start = mock_update_private_chat_edited_message.edited_message.date + timedelta(minutes=30)
+
+        with (
+            patch("areyouok_telegram.data.Messages.new_or_update") as mock_messages_new_or_update,
+            patch("areyouok_telegram.data.Sessions.get_active_session", return_value=mock_session) as mock_get_active,
+        ):
+            # Act
+            await on_edit_message(mock_update_private_chat_edited_message, mock_context)
+
+            # Verify message was saved
+            mock_messages_new_or_update.assert_called_once_with(
+                mock_async_database_session,
+                user_id=mock_update_private_chat_edited_message.effective_user.id,
+                chat_id=mock_update_private_chat_edited_message.effective_chat.id,
+                message=mock_update_private_chat_edited_message.edited_message,
+            )
+
+            # Verify session was NOT extended (old message)
+            mock_get_active.assert_called_once_with(
+                mock_async_database_session, str(mock_update_private_chat_edited_message.effective_chat.id)
+            )
+            mock_session.extend_session.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_on_edit_message_without_active_session(
+        self, mock_async_database_session, mock_update_private_chat_edited_message
+    ):
+        """Test on_edit_message without active session (no session created for edits)."""
+        mock_context = AsyncMock()
+
+        with (
+            patch("areyouok_telegram.data.Messages.new_or_update") as mock_messages_new_or_update,
+            patch("areyouok_telegram.data.Sessions.get_active_session", return_value=None) as mock_get_active,
+            patch("areyouok_telegram.data.Sessions.create_session") as mock_create_session,
+        ):
+            # Act
+            await on_edit_message(mock_update_private_chat_edited_message, mock_context)
+
+            # Verify message was saved
+            mock_messages_new_or_update.assert_called_once_with(
+                mock_async_database_session,
+                user_id=mock_update_private_chat_edited_message.effective_user.id,
+                chat_id=mock_update_private_chat_edited_message.effective_chat.id,
+                message=mock_update_private_chat_edited_message.edited_message,
+            )
+
+            # Verify no session was created for edits
+            mock_get_active.assert_called_once_with(
+                mock_async_database_session, str(mock_update_private_chat_edited_message.effective_chat.id)
+            )
+            mock_create_session.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_no_message_received(self, mock_async_database_session, mock_update_empty):
