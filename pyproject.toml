@@ -5,9 +5,15 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "python-dotenv==1.1.1",
     "uvloop~=0.21.0",
-    "python-telegram-bot~=21.10",
+    "python-telegram-bot~=22.3",
     "python-telegram-bot[job-queue]",
+    "sqlalchemy~=2.0.41",
+    "greenlet",
+    "psycopg2~=2.9.10",
+    "asyncpg~=0.30.0",
+    "tenacity~=9.1.2",
 ]
 
 [dependency-groups]
@@ -67,3 +73,48 @@ select = [
 combine-as-imports = true
 force-single-line = true
 detect-same-package = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["tests.py", "test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers"
+]
+asyncio_mode = "auto"
+pythonpath = ["src"]
+
+[tool.coverage.run]
+source = ["src/areyouok_telegram"]
+branch = true
+parallel = true
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+    "*/__init__.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+show_missing = true
+skip_covered = false
+precision = 2
+
+[tool.coverage.html]
+directory = "htmlcov"
+
+[tool.coverage.xml]
+output = "coverage.xml"
