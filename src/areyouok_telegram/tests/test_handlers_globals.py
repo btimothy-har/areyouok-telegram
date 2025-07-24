@@ -3,11 +3,11 @@ from unittest.mock import patch
 
 import pytest
 
-from areyouok_telegram.handlers.globals import on_error_event
-from areyouok_telegram.handlers.globals import on_new_update
+from areyouok_telegram.handlers import on_error_event
+from areyouok_telegram.handlers import on_new_update
 
 
-class TestGlobalHandlers:
+class TestGlobalUpdateHandler:
     """Test suite for global handlers functionality."""
 
     @pytest.mark.asyncio
@@ -101,6 +101,8 @@ class TestGlobalHandlers:
                 session=mock_async_database_session, chat=mock_update_private_chat_new_message.effective_chat
             )
 
+
+class TestGlobalErrorHandler:
     @pytest.mark.asyncio
     async def test_on_error_event_with_developer_chat_id(self):
         """Test on_error_event when DEVELOPER_CHAT_ID is configured."""

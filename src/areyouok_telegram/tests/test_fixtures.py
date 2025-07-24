@@ -1,5 +1,6 @@
 from datetime import UTC
 from datetime import datetime
+from datetime import timedelta
 
 import telegram
 from freezegun import freeze_time
@@ -52,6 +53,22 @@ def test_private_message_fixture(mock_private_message):
     assert mock_private_message.chat.id == mock_private_message.chat_id == 123456789
 
     assert mock_private_message.date == datetime.now(tz=UTC)
+
+
+@freeze_time("2025-01-01 12:00:00", tz_offset=0)
+def test_edited_private_message_fixture(mock_edited_private_message):
+    """Test that test_edited_private_message fixture returns a proper Mock."""
+    # Check it's a Mock with telegram.Message spec
+    assert hasattr(mock_edited_private_message, "_spec_class")
+    assert mock_edited_private_message._spec_class == telegram.Message
+
+    assert mock_edited_private_message.text == "Hello, world!"
+    assert mock_edited_private_message.message_id == 1
+    assert mock_edited_private_message.from_user.id == 987654321
+    assert mock_edited_private_message.chat.id == mock_edited_private_message.chat_id == 123456789
+
+    assert mock_edited_private_message.date == datetime.now(tz=UTC)
+    assert mock_edited_private_message.edit_date == datetime.now(tz=UTC) + timedelta(minutes=5)
 
 
 def test_update_empty(mock_update_empty):

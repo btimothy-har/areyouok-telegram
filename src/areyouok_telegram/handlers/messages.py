@@ -5,8 +5,8 @@ from telegram.ext import ContextTypes
 
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data import async_database_session
-
-from .exceptions import NoMessageError
+from areyouok_telegram.handlers.exceptions import NoEditedMessageError
+from areyouok_telegram.handlers.exceptions import NoMessageError
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +23,7 @@ async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_
 
 async def on_edit_message(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):  # noqa: ARG001
     if not update.edited_message:
-        raise NoMessageError(update.update_id)
+        raise NoEditedMessageError(update.update_id)
 
     async with async_database_session() as session:
         await Messages.new_or_update(

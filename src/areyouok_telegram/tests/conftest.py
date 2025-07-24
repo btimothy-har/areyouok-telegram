@@ -2,6 +2,7 @@
 
 from datetime import UTC
 from datetime import datetime
+from datetime import timedelta
 from unittest.mock import AsyncMock
 from unittest.mock import create_autospec
 from unittest.mock import patch
@@ -120,6 +121,14 @@ def mock_private_message(mock_private_chat):
 
 
 @pytest.fixture
+def mock_edited_private_message(mock_private_message):
+    """Create a mock telegram.Message object for an edited message."""
+    mock_private_message.edit_date = DEFAULT_DATETIME + timedelta(minutes=5)
+
+    return mock_private_message
+
+
+@pytest.fixture
 def mock_update_empty():
     """Create a mock telegram.Update object."""
     mock_update = create_autospec(telegram.Update, spec_set=True, instance=True)
@@ -140,5 +149,16 @@ def mock_update_private_chat_new_message(mock_update_empty, mock_private_message
     mock_update_empty.message = mock_private_message
     mock_update_empty.effective_user = mock_private_message.from_user
     mock_update_empty.effective_chat = mock_private_message.chat
+
+    return mock_update_empty
+
+
+@pytest.fixture
+def mock_update_private_chat_edited_message(mock_update_empty, mock_edited_private_message):
+    """Create a mock telegram.Update object."""
+
+    mock_update_empty.edited_message = mock_edited_private_message
+    mock_update_empty.effective_user = mock_edited_private_message.from_user
+    mock_update_empty.effective_chat = mock_edited_private_message.chat
 
     return mock_update_empty
