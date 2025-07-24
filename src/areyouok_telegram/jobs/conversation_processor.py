@@ -2,15 +2,10 @@ import asyncio
 import hashlib
 import logging
 from collections import defaultdict
-from datetime import UTC
-from datetime import datetime
-from datetime import timedelta
 
-from sqlalchemy import select
 from telegram.ext import ContextTypes
 
 from areyouok_telegram.data import Messages
-from areyouok_telegram.data import async_database_session
 
 logger = logging.getLogger(__name__)
 
@@ -46,29 +41,33 @@ class ConversationProcessor:
     def job_id(self) -> str:
         return hashlib.md5(self.job_name.encode()).hexdigest()
 
-    async def process(self, context: ContextTypes.DEFAULT_TYPE) -> None:
+    async def process(self, context: ContextTypes.DEFAULT_TYPE) -> None:  # noqa: ARG002
         """Process conversation for this chat."""
         logger.info(f"Processing conversation for chat {self.chat_id}")
 
-        async with async_database_session() as session:
-            # Fetch recent messages for this specific chat
-            cutoff_time = datetime.now(UTC) - timedelta(seconds=self.delay_seconds + 5)
+        print(f"Processing conversation for chat {self.chat_id}")
 
-            stmt = (
-                select(Messages)
-                .where(Messages.chat_id == self.chat_id)
-                .where(Messages.created_at > cutoff_time)
-                .order_by(Messages.created_at)
-            )
+        await asyncio.sleep(5)  # Simulate delay for processing
 
-            result = await session.execute(stmt)
-            messages = result.scalars().all()
+        # async with async_database_session() as session:
+        #     # Fetch recent messages for this specific chat
+        #     cutoff_time = datetime.now(UTC) - timedelta(seconds=self.delay_seconds + 5)
 
-            if not messages:
-                logger.debug(f"No recent messages for chat {self.chat_id}")
-                return
+        #     stmt = (
+        #         select(Messages)
+        #         .where(Messages.chat_id == self.chat_id)
+        #         .where(Messages.created_at > cutoff_time)
+        #         .order_by(Messages.created_at)
+        #     )
 
-            await self._process_messages(context, session, messages)
+        #     result = await session.execute(stmt)
+        #     messages = result.scalars().all()
+
+        #     if not messages:
+        #         logger.debug(f"No recent messages for chat {self.chat_id}")
+        #         return
+
+        #     await self._process_messages(context, session, messages)
 
     async def _process_messages(self, context: ContextTypes.DEFAULT_TYPE, session, messages: list[Messages]) -> None:
         """Process messages for this chat and send appropriate replies."""
@@ -133,4 +132,4 @@ async def schedule_conversation_job(context: ContextTypes.DEFAULT_TYPE, chat_id:
                 "max_instances": 1,
             },
         )
-        await new_job.run()
+        await new_job.run(context.application)
