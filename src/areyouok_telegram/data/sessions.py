@@ -1,0 +1,83 @@
+import hashlib
+from datetime import UTC
+from datetime import datetime
+from typing import Optional
+
+from sqlalchemy import Column
+from sqlalchemy import Integer
+from sqlalchemy import String
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import TIMESTAMP
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from areyouok_telegram.config import ENV
+from areyouok_telegram.data.connection import Base
+from areyouok_telegram.data.utils import with_retry
+
+
+class Sessions(Base):
+    __tablename__ = "sessions"
+    __table_args__ = {"schema": ENV}
+
+    num = Column(Integer, primary_key=True, autoincrement=True)
+    session_key = Column(String, nullable=False, unique=True)
+    chat_id = Column(String, nullable=False)
+    session_start = Column(TIMESTAMP(timezone=True), nullable=False)
+    last_message = Column(TIMESTAMP(timezone=True), nullable=False)
+    session_end = Column(TIMESTAMP(timezone=True), nullable=True)
+    message_count = Column(Integer, nullable=True)
+
+    @staticmethod
+    def generate_session_key(chat_id: str, session_start: datetime) -> str:
+        """Generate a unique key for a session based on chat ID and start time."""
+        timestamp_str = session_start.isoformat()
+        return hashlib.sha256(f"{chat_id}:{timestamp_str}".encode()).hexdigest()
+
+    @classmethod
+    @with_retry()
+    async def get_active_session(cls, session: AsyncSession, chat_id: str) -> Optional["Sessions"]:
+        """Get the active (non-closed) session for a chat."""
+        stmt = select(cls).where(cls.chat_id == chat_id).where(cls.session_end.is_(None))
+
+        result = await session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    @classmethod
+    @with_retry()
+    async def create_session(cls, session: AsyncSession, chat_id: str, timestamp: datetime) -> "Sessions":
+        """Create a new session for a chat."""
+        session_key = cls.generate_session_key(chat_id, timestamp)
+
+        new_session = cls(
+            session_key=session_key,
+            chat_id=chat_id,
+            session_start=timestamp,
+            last_message=timestamp,
+        )
+
+        session.add(new_session)
+        return new_session
+
+    @with_retry()
+    async def extend_session(self, timestamp: datetime) -> None:
+        """Extend an existing session by updating the last_message timestamp."""
+        self.last_message = timestamp
+
+    @with_retry()
+    async def close_session(self, message_count: int) -> None:
+        """Close a session by setting session_end and message_count."""
+        self.session_end = datetime.now(UTC)
+        self.message_count = message_count
+
+    @classmethod
+    @with_retry()
+    async def get_inactive_sessions(cls, session: AsyncSession, cutoff_time: datetime) -> list["Sessions"]:
+        """Get all sessions that have been inactive since cutoff_time."""
+        stmt = (
+            select(cls)
+            .where(cls.session_end.is_(None))  # Only active sessions
+            .where(cls.last_message < cutoff_time)  # Inactive for more than cutoff
+        )
+
+        result = await session.execute(stmt)
+        return list(result.scalars().all())
