@@ -3,6 +3,7 @@ from datetime import UTC
 from datetime import datetime
 from typing import Optional
 
+import telegram
 from sqlalchemy import Column
 from sqlalchemy import Integer
 from sqlalchemy import String
@@ -12,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from areyouok_telegram.config import ENV
 from areyouok_telegram.data.connection import Base
+from areyouok_telegram.data.messages import Messages
 from areyouok_telegram.data.utils import with_retry
 
 
@@ -44,6 +46,19 @@ class Sessions(Base):
 
     @classmethod
     @with_retry()
+    async def get_inactive_sessions(cls, session: AsyncSession, cutoff_time: datetime) -> list["Sessions"]:
+        """Get all sessions that have been inactive since cutoff_time."""
+        stmt = (
+            select(cls)
+            .where(cls.session_end.is_(None))  # Only active sessions
+            .where(cls.last_message < cutoff_time)  # Inactive for more than cutoff
+        )
+
+        result = await session.execute(stmt)
+        return list(result.scalars().all())
+
+    @classmethod
+    @with_retry()
     async def create_session(cls, session: AsyncSession, chat_id: str, timestamp: datetime) -> "Sessions":
         """Create a new session for a chat."""
         session_key = cls.generate_session_key(chat_id, timestamp)
@@ -62,22 +77,21 @@ class Sessions(Base):
     async def extend_session(self, timestamp: datetime) -> None:
         """Extend an existing session by updating the last_message timestamp."""
         self.last_message = timestamp
+        self.message_count = self.message_count + 1 if self.message_count is not None else 1
 
     @with_retry()
-    async def close_session(self, message_count: int) -> None:
+    async def close_session(self, session: AsyncSession) -> None:
         """Close a session by setting session_end and message_count."""
+        messages = await self.get_messages(session)
         self.session_end = datetime.now(UTC)
-        self.message_count = message_count
+        self.message_count = len(messages)
 
-    @classmethod
     @with_retry()
-    async def get_inactive_sessions(cls, session: AsyncSession, cutoff_time: datetime) -> list["Sessions"]:
-        """Get all sessions that have been inactive since cutoff_time."""
-        stmt = (
-            select(cls)
-            .where(cls.session_end.is_(None))  # Only active sessions
-            .where(cls.last_message < cutoff_time)  # Inactive for more than cutoff
-        )
+    async def get_messages(self, session: AsyncSession) -> list[telegram.Message]:
+        """Retrieve all messages from this session."""
+        # Determine the end time - either session_end or current time for active sessions
+        end_time = self.session_end if self.session_end else datetime.now(UTC)
 
-        result = await session.execute(stmt)
-        return list(result.scalars().all())
+        return await Messages.retrieve_by_chat(
+            session=session, chat_id=self.chat_id, from_time=self.session_start, to_time=end_time
+        )

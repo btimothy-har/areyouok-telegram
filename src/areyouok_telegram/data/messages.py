@@ -6,6 +6,7 @@ import telegram
 from sqlalchemy import Column
 from sqlalchemy import Integer
 from sqlalchemy import String
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import TIMESTAMP
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -61,3 +62,33 @@ class Messages(Base):
         )
 
         await session.execute(stmt)
+
+    @classmethod
+    @with_retry()
+    async def retrieve_by_chat(
+        cls,
+        session: AsyncSession,
+        chat_id: str,
+        from_time: datetime | None = None,
+        to_time: datetime | None = None,
+        limit: int | None = None,
+    ) -> list[telegram.Message]:
+        """Retrieve messages by chat_id and optional time range, returning telegram.Message objects."""
+        stmt = select(cls).where(cls.chat_id == chat_id)
+
+        if from_time:
+            stmt = stmt.where(cls.created_at >= from_time)
+
+        if to_time:
+            stmt = stmt.where(cls.created_at <= to_time)
+
+        stmt = stmt.order_by(cls.created_at)
+
+        if limit:
+            stmt = stmt.limit(limit)
+
+        result = await session.execute(stmt)
+        messages = result.scalars().all()
+
+        # Convert payload back to telegram.Message objects
+        return [telegram.Message.de_json(msg.payload, None) for msg in messages]
