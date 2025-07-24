@@ -58,7 +58,9 @@ class TestNewMessageHandler:
         with (
             patch("areyouok_telegram.data.Messages.new_or_update") as mock_messages_new_or_update,
             patch("areyouok_telegram.data.Sessions.get_active_session", return_value=None) as mock_get_active,
-            patch("areyouok_telegram.data.Sessions.create_session", return_value=mock_new_session) as mock_create_session,
+            patch(
+                "areyouok_telegram.data.Sessions.create_session", return_value=mock_new_session
+            ) as mock_create_session,
         ):
             # Act
             await on_new_message(mock_update_private_chat_new_message, mock_context)
@@ -80,7 +82,9 @@ class TestNewMessageHandler:
                 str(mock_update_private_chat_new_message.effective_chat.id),
                 mock_update_private_chat_new_message.message.date,
             )
-            mock_new_session.new_message.assert_called_once_with(mock_update_private_chat_new_message.message.date, "user")
+            mock_new_session.new_message.assert_called_once_with(
+                mock_update_private_chat_new_message.message.date, "user"
+            )
 
     @pytest.mark.asyncio
     async def test_no_message_received(self, mock_async_database_session, mock_update_empty):
