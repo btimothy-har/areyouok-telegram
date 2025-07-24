@@ -176,8 +176,8 @@ class TestSessionsCreateSession:
         assert isinstance(added_session, Sessions)
         assert added_session.chat_id == chat_id
         assert added_session.session_start == timestamp
-        assert added_session.last_user_message == timestamp
-        assert added_session.last_user_activity == timestamp
+        assert added_session.last_user_message is None  # Should be None initially
+        assert added_session.last_user_activity is None  # Should be None initially
         assert added_session.session_key == Sessions.generate_session_key(chat_id, timestamp)
         assert added_session.session_end is None
         assert added_session.message_count is None

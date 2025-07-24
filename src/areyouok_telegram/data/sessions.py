@@ -27,9 +27,9 @@ class Sessions(Base):
     chat_id = Column(String, nullable=False)
     session_start = Column(TIMESTAMP(timezone=True), nullable=False)
     session_end = Column(TIMESTAMP(timezone=True), nullable=True)
-    last_user_message = Column(TIMESTAMP(timezone=True), nullable=False)
+    last_user_message = Column(TIMESTAMP(timezone=True), nullable=True)
+    last_user_activity = Column(TIMESTAMP(timezone=True), nullable=True)
     last_bot_message = Column(TIMESTAMP(timezone=True), nullable=True)
-    last_user_activity = Column(TIMESTAMP(timezone=True), nullable=False)
 
     message_count = Column(Integer, nullable=True)
 
@@ -55,7 +55,9 @@ class Sessions(Base):
         stmt = (
             select(cls)
             .where(cls.session_end.is_(None))  # Only active sessions
-            .where(cls.last_user_activity < cutoff_time)  # Inactive for more than cutoff
+            .where(
+                (cls.last_user_activity.is_not(None)) & (cls.last_user_activity < cutoff_time)
+            )  # Inactive for more than cutoff (only if activity exists)
         )
 
         result = await session.execute(stmt)
@@ -71,8 +73,6 @@ class Sessions(Base):
             session_key=session_key,
             chat_id=chat_id,
             session_start=timestamp,
-            last_user_message=timestamp,
-            last_user_activity=timestamp,
         )
 
         session.add(new_session)
