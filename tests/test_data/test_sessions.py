@@ -111,11 +111,11 @@ class TestSessionsGetInactiveSessions:
 
         # Create mock inactive sessions
         session1 = MagicMock(spec=Sessions)
-        session1.last_message = datetime(2025, 1, 15, 9, 0, 0, tzinfo=UTC)
+        session1.last_user_activity = datetime(2025, 1, 15, 9, 0, 0, tzinfo=UTC)
         session1.session_end = None
 
         session2 = MagicMock(spec=Sessions)
-        session2.last_message = datetime(2025, 1, 15, 8, 0, 0, tzinfo=UTC)
+        session2.last_user_activity = datetime(2025, 1, 15, 8, 0, 0, tzinfo=UTC)
         session2.session_end = None
 
         # Mock the query result
@@ -176,7 +176,8 @@ class TestSessionsCreateSession:
         assert isinstance(added_session, Sessions)
         assert added_session.chat_id == chat_id
         assert added_session.session_start == timestamp
-        assert added_session.last_message == timestamp
+        assert added_session.last_user_message == timestamp
+        assert added_session.last_user_activity == timestamp
         assert added_session.session_key == Sessions.generate_session_key(chat_id, timestamp)
         assert added_session.session_end is None
         assert added_session.message_count is None
@@ -185,40 +186,82 @@ class TestSessionsCreateSession:
         assert result == added_session
 
 
-class TestSessionsExtendSession:
-    """Test the extend_session method."""
+class TestSessionsNewMessage:
+    """Test the new_message method."""
 
-    async def test_extend_session_first_extension(self):
-        """Test extending a session for the first time."""
+    async def test_new_message_user_first_message(self):
+        """Test recording first user message."""
         # Create a session instance
         session = Sessions()
-        session.last_message = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
+        session.last_user_activity = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
         session.message_count = None
 
         new_timestamp = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
 
-        # Extend the session
-        await session.extend_session(new_timestamp)
+        # Record user message
+        await session.new_message(new_timestamp, "user")
 
         # Verify updates
-        assert session.last_message == new_timestamp
+        assert session.last_user_message == new_timestamp
+        assert session.last_user_activity == new_timestamp
         assert session.message_count == 1
+        assert session.last_bot_message is None
 
-    async def test_extend_session_increment_count(self):
-        """Test extending a session with existing message count."""
+    async def test_new_message_user_increment_count(self):
+        """Test recording user message with existing message count."""
         # Create a session instance with existing message count
         session = Sessions()
-        session.last_message = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
+        session.last_user_activity = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
         session.message_count = 5
 
         new_timestamp = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
 
-        # Extend the session
-        await session.extend_session(new_timestamp)
+        # Record user message
+        await session.new_message(new_timestamp, "user")
 
         # Verify updates
-        assert session.last_message == new_timestamp
+        assert session.last_user_message == new_timestamp
+        assert session.last_user_activity == new_timestamp
         assert session.message_count == 6
+
+    async def test_new_message_bot(self):
+        """Test recording bot message doesn't increment user count."""
+        # Create a session instance
+        session = Sessions()
+        session.last_user_activity = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
+        session.last_user_message = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
+        session.message_count = 3
+
+        new_timestamp = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
+
+        # Record bot message
+        await session.new_message(new_timestamp, "bot")
+
+        # Verify updates
+        assert session.last_bot_message == new_timestamp
+        assert session.last_user_activity == new_timestamp
+        assert session.message_count == 3  # Should not increment for bot messages
+        assert session.last_user_message == datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)  # Unchanged
+
+
+class TestSessionsNewUserActivity:
+    """Test the new_user_activity method."""
+
+    async def test_new_user_activity_no_count_increment(self):
+        """Test recording user activity without incrementing message count."""
+        # Create a session instance
+        session = Sessions()
+        session.last_user_activity = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
+        session.message_count = 5
+
+        new_timestamp = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
+
+        # Record user activity (like edit)
+        await session.new_user_activity(new_timestamp)
+
+        # Verify only activity timestamp updated
+        assert session.last_user_activity == new_timestamp
+        assert session.message_count == 5  # Should remain unchanged
 
 
 class TestSessionsCloseSession:

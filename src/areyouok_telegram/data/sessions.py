@@ -1,6 +1,7 @@
 import hashlib
 from datetime import UTC
 from datetime import datetime
+from typing import Literal
 from typing import Optional
 
 import telegram
@@ -25,8 +26,11 @@ class Sessions(Base):
     session_key = Column(String, nullable=False, unique=True)
     chat_id = Column(String, nullable=False)
     session_start = Column(TIMESTAMP(timezone=True), nullable=False)
-    last_message = Column(TIMESTAMP(timezone=True), nullable=False)
     session_end = Column(TIMESTAMP(timezone=True), nullable=True)
+    last_user_message = Column(TIMESTAMP(timezone=True), nullable=False)
+    last_bot_message = Column(TIMESTAMP(timezone=True), nullable=True)
+    last_user_activity = Column(TIMESTAMP(timezone=True), nullable=False)
+
     message_count = Column(Integer, nullable=True)
 
     @staticmethod
@@ -51,7 +55,7 @@ class Sessions(Base):
         stmt = (
             select(cls)
             .where(cls.session_end.is_(None))  # Only active sessions
-            .where(cls.last_message < cutoff_time)  # Inactive for more than cutoff
+            .where(cls.last_user_activity < cutoff_time)  # Inactive for more than cutoff
         )
 
         result = await session.execute(stmt)
@@ -67,17 +71,30 @@ class Sessions(Base):
             session_key=session_key,
             chat_id=chat_id,
             session_start=timestamp,
-            last_message=timestamp,
+            last_user_message=timestamp,
+            last_user_activity=timestamp,
         )
 
         session.add(new_session)
         return new_session
 
     @with_retry()
-    async def extend_session(self, timestamp: datetime) -> None:
-        """Extend an existing session by updating the last_message timestamp."""
-        self.last_message = timestamp
-        self.message_count = self.message_count + 1 if self.message_count is not None else 1
+    async def new_message(self, timestamp: datetime, message_type: Literal["user", "bot"]) -> None:
+        """Record a new message in the session, updating appropriate timestamps."""
+        # Always update user activity timestamp
+        self.last_user_activity = timestamp
+
+        if message_type == "user":
+            self.last_user_message = timestamp
+            # Increment message count only for user messages
+            self.message_count = self.message_count + 1 if self.message_count is not None else 1
+        elif message_type == "bot":
+            self.last_bot_message = timestamp
+
+    @with_retry()
+    async def new_user_activity(self, timestamp: datetime) -> None:
+        """Record user activity (like edits) without incrementing message count."""
+        self.last_user_activity = timestamp
 
     @with_retry()
     async def close_session(self, session: AsyncSession) -> None:
