@@ -21,7 +21,7 @@ class TestNewMessageHandler:
 
         # Mock an existing active session
         mock_session = MagicMock()
-        mock_session.extend_session = AsyncMock()
+        mock_session.new_message = AsyncMock()
 
         with (
             patch("areyouok_telegram.data.Messages.new_or_update") as mock_messages_new_or_update,
@@ -42,7 +42,7 @@ class TestNewMessageHandler:
             mock_get_active.assert_called_once_with(
                 mock_async_database_session, str(mock_update_private_chat_new_message.effective_chat.id)
             )
-            mock_session.extend_session.assert_called_once_with(mock_update_private_chat_new_message.message.date)
+            mock_session.new_message.assert_called_once_with(mock_update_private_chat_new_message.message.date, "user")
 
     @pytest.mark.asyncio
     async def test_on_new_message_without_existing_session(
@@ -51,10 +51,14 @@ class TestNewMessageHandler:
         """Test on_new_message without existing active session."""
         mock_context = AsyncMock()
 
+        # Mock the created session
+        mock_new_session = MagicMock()
+        mock_new_session.new_message = AsyncMock()
+
         with (
             patch("areyouok_telegram.data.Messages.new_or_update") as mock_messages_new_or_update,
             patch("areyouok_telegram.data.Sessions.get_active_session", return_value=None) as mock_get_active,
-            patch("areyouok_telegram.data.Sessions.create_session") as mock_create_session,
+            patch("areyouok_telegram.data.Sessions.create_session", return_value=mock_new_session) as mock_create_session,
         ):
             # Act
             await on_new_message(mock_update_private_chat_new_message, mock_context)
@@ -76,6 +80,7 @@ class TestNewMessageHandler:
                 str(mock_update_private_chat_new_message.effective_chat.id),
                 mock_update_private_chat_new_message.message.date,
             )
+            mock_new_session.new_message.assert_called_once_with(mock_update_private_chat_new_message.message.date, "user")
 
     @pytest.mark.asyncio
     async def test_no_message_received(self, mock_async_database_session, mock_update_empty):
@@ -123,7 +128,7 @@ class TestEditMessageHandler:
             mock_get_active.assert_called_once_with(
                 mock_async_database_session, str(mock_update_private_chat_edited_message.effective_chat.id)
             )
-            mock_session.extend_session.assert_called_once_with(
+            mock_session.new_user_activity.assert_called_once_with(
                 mock_update_private_chat_edited_message.edited_message.edit_date
             )
 
@@ -156,7 +161,7 @@ class TestEditMessageHandler:
             mock_get_active.assert_called_once_with(
                 mock_async_database_session, str(mock_update_private_chat_edited_message.effective_chat.id)
             )
-            mock_session.extend_session.assert_not_called()
+            mock_session.new_user_activity.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_on_edit_message_without_active_session(

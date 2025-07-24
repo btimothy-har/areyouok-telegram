@@ -177,10 +177,13 @@ def mock_session():
 
     mock_session = create_autospec(Sessions, spec_set=True, instance=True)
     mock_session.session_start = DEFAULT_DATETIME
-    mock_session.last_message = DEFAULT_DATETIME
+    mock_session.last_user_message = DEFAULT_DATETIME
+    mock_session.last_bot_message = None
+    mock_session.last_user_activity = DEFAULT_DATETIME
     mock_session.session_end = None
     mock_session.message_count = None
-    mock_session.extend_session = AsyncMock()
+    mock_session.new_message = AsyncMock()
+    mock_session.new_user_activity = AsyncMock()
     mock_session.close_session = AsyncMock()
     mock_session.get_messages = AsyncMock()
 

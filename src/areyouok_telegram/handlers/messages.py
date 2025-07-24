@@ -27,11 +27,12 @@ async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_
         active_session = await Sessions.get_active_session(session, chat_id)
 
         if active_session:
-            # Extend existing session
-            await active_session.extend_session(update.message.date)
+            # Record new user message
+            await active_session.new_message(update.message.date, "user")
         else:
-            # Create new session
-            await Sessions.create_session(session, chat_id, update.message.date)
+            # Create new session and record the first message
+            new_session = await Sessions.create_session(session, chat_id, update.message.date)
+            await new_session.new_message(update.message.date, "user")
 
 
 async def on_edit_message(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):  # noqa: ARG001
@@ -49,8 +50,8 @@ async def on_edit_message(update: telegram.Update, context: ContextTypes.DEFAULT
         active_session = await Sessions.get_active_session(session, chat_id)
 
         if active_session:
-            # Only extend session if the original message was sent after session start
+            # Only record user activity if the original message was sent after session start
             if update.edited_message.date >= active_session.session_start:
-                await active_session.extend_session(update.edited_message.edit_date or update.edited_message.date)
-            # If message is from before session start, don't extend
+                await active_session.new_user_activity(update.edited_message.edit_date or update.edited_message.date)
+            # If message is from before session start, don't record activity
         # If no active session, don't create one for edits
