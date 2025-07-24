@@ -11,11 +11,12 @@ from areyouok_telegram.data import Chats
 from areyouok_telegram.data import Updates
 from areyouok_telegram.data import Users
 from areyouok_telegram.data import async_database_session
+from areyouok_telegram.jobs import schedule_conversation_job
 
 logger = logging.getLogger(__name__)
 
 
-async def on_new_update(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):  # noqa:ARG001
+async def on_new_update(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):
     async with async_database_session() as session:
         await Updates.new_or_upsert(session, update=update)
 
@@ -27,6 +28,14 @@ async def on_new_update(update: telegram.Update, context: ContextTypes.DEFAULT_T
             update_tasks.append(asyncio.create_task(Chats.new_or_update(session=session, chat=update.effective_chat)))
 
         await asyncio.gather(*update_tasks)
+
+        # Schedule conversation job for any update with a chat
+        if update.effective_chat:
+            schedule_conversation_job(
+                context=context,
+                chat_id=str(update.effective_chat.id),
+                delay_seconds=30
+            )
 
 
 async def on_error_event(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> None:

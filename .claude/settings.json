@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(make:*)"
+    ],
+    "deny": []
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run ruff check --no-fix . || echo 'Code quality checks failed. See output above.' >&2"
+          },
+          {
+              "type": "command",
+              "command": "uv run ruff format --check . || echo 'Code formatting checks failed. See output above.' >&2"
+          }
+        ]
+      }
+    ]
+  }
+}
