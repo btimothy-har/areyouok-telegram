@@ -75,7 +75,7 @@ force-single-line = true
 detect-same-package = true
 
 [tool.pytest.ini_options]
-testpaths = ["src"]
+testpaths = ["tests"]
 python_files = ["tests.py", "test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
