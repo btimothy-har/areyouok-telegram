@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 import pytest
 
+from areyouok_telegram.handlers.globals import on_error_event
 from areyouok_telegram.handlers.globals import on_new_update
 
 
@@ -21,10 +22,14 @@ class TestGlobalHandlers:
 
         with (
             patch("areyouok_telegram.data.Updates.new_or_upsert") as mock_updates_upsert,
+            patch("areyouok_telegram.data.Users.new_or_update") as mock_users_update,
+            patch("areyouok_telegram.data.Chats.new_or_update") as mock_chats_update,
         ):
             # Act
             await on_new_update(mock_update_empty, mock_context)
             mock_updates_upsert.assert_called_once_with(mock_async_database_session, update=mock_update_empty)
+            mock_users_update.assert_not_called()
+            mock_chats_update.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_update_with_user(self, mock_async_database_session, mock_update_empty, mock_user):
@@ -36,6 +41,7 @@ class TestGlobalHandlers:
         with (
             patch("areyouok_telegram.data.Updates.new_or_upsert") as mock_updates_upsert,
             patch("areyouok_telegram.data.Users.new_or_update") as mock_users_update,
+            patch("areyouok_telegram.data.Chats.new_or_update") as mock_chats_update,
         ):
             # Act
             await on_new_update(mock_update_empty, mock_context)
@@ -44,6 +50,7 @@ class TestGlobalHandlers:
             mock_users_update.assert_called_once_with(
                 session=mock_async_database_session, user=mock_update_empty.effective_user
             )
+            mock_chats_update.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_update_with_chat(self, mock_async_database_session, mock_update_empty, mock_private_chat):
@@ -54,12 +61,14 @@ class TestGlobalHandlers:
 
         with (
             patch("areyouok_telegram.data.Updates.new_or_upsert") as mock_updates_upsert,
+            patch("areyouok_telegram.data.Users.new_or_update") as mock_users_update,
             patch("areyouok_telegram.data.Chats.new_or_update") as mock_chats_update,
         ):
             # Act
             await on_new_update(mock_update_empty, mock_context)
 
             mock_updates_upsert.assert_called_once_with(mock_async_database_session, update=mock_update_empty)
+            mock_users_update.assert_not_called()
             mock_chats_update.assert_called_once_with(
                 session=mock_async_database_session, chat=mock_update_empty.effective_chat
             )
@@ -91,3 +100,36 @@ class TestGlobalHandlers:
             mock_chats_update.assert_called_once_with(
                 session=mock_async_database_session, chat=mock_update_private_chat_new_message.effective_chat
             )
+
+    @pytest.mark.asyncio
+    async def test_on_error_event_with_developer_chat_id(self):
+        """Test on_error_event when DEVELOPER_CHAT_ID is configured."""
+        mock_update = AsyncMock()
+        mock_update.update_id = 12345
+
+        mock_context = AsyncMock()
+        mock_context.error = ValueError("Test error")
+        mock_context.bot.send_message = AsyncMock()
+
+        with patch("areyouok_telegram.handlers.globals.DEVELOPER_CHAT_ID", "123456789"):
+            await on_error_event(mock_update, mock_context)
+
+            mock_context.bot.send_message.assert_called_once()
+            call_args = mock_context.bot.send_message.call_args
+            assert call_args.kwargs["chat_id"] == "123456789"
+            assert "An exception was raised while handling an update" in call_args.kwargs["text"]
+            assert "ValueError: Test error" in call_args.kwargs["text"]
+
+    @pytest.mark.asyncio
+    async def test_on_error_event_without_developer_chat_id(self):
+        """Test on_error_event when DEVELOPER_CHAT_ID is not configured."""
+        mock_update = AsyncMock()
+        mock_update.update_id = 12345
+
+        mock_context = AsyncMock()
+        mock_context.error = ValueError("Test error")
+        mock_context.bot.send_message = AsyncMock()
+
+        with patch("areyouok_telegram.handlers.globals.DEVELOPER_CHAT_ID", None):
+            await on_error_event(mock_update, mock_context)
+            mock_context.bot.send_message.assert_not_called()
