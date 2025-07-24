@@ -2,12 +2,36 @@
 
 from datetime import UTC
 from datetime import datetime
+from unittest.mock import AsyncMock
 from unittest.mock import create_autospec
+from unittest.mock import patch
 
 import pytest
 import telegram
 
 DEFAULT_DATETIME = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
+
+
+@pytest.fixture(autouse=True)
+def mock_async_database_session():
+    """
+    Fixture that provides a mock async database session for all tests.
+
+    This fixture automatically mocks the database session to prevent tests
+    from requiring an actual database connection. The mock session can be
+    configured within individual tests to return specific data.
+    """
+    mock_session = AsyncMock()
+
+    # Mock common session methods
+    mock_session.execute = AsyncMock()
+    mock_session.commit = AsyncMock()
+    mock_session.rollback = AsyncMock()
+    mock_session.close = AsyncMock()
+
+    with patch("areyouok_telegram.data.connection.AsyncSessionLocal") as mock_session_local:
+        mock_session_local.return_value = mock_session
+        yield mock_session
 
 
 @pytest.fixture
@@ -96,13 +120,25 @@ def mock_private_message(mock_private_chat):
 
 
 @pytest.fixture
-def mock_update_private_chat_new_message(mock_private_message):
+def mock_update_empty():
     """Create a mock telegram.Update object."""
     mock_update = create_autospec(telegram.Update, spec_set=True, instance=True)
 
     mock_update.update_id = 1
-    mock_update.message = mock_private_message
-    mock_update.effective_user = mock_private_message.from_user
-    mock_update.effective_chat = mock_private_message.chat
+    mock_update.message = None
+    mock_update.edited_message = None
+    mock_update.effective_user = None
+    mock_update.effective_chat = None
 
     return mock_update
+
+
+@pytest.fixture
+def mock_update_private_chat_new_message(mock_update_empty, mock_private_message):
+    """Create a mock telegram.Update object."""
+
+    mock_update_empty.message = mock_private_message
+    mock_update_empty.effective_user = mock_private_message.from_user
+    mock_update_empty.effective_chat = mock_private_message.chat
+
+    return mock_update_empty

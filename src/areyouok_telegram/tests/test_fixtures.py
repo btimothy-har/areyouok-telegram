@@ -54,6 +54,19 @@ def test_private_message_fixture(mock_private_message):
     assert mock_private_message.date == datetime.now(tz=UTC)
 
 
+def test_update_empty(mock_update_empty):
+    """Test that test_update_empty fixture returns a proper Mock."""
+    # Check it's a Mock with telegram.Update spec
+    assert hasattr(mock_update_empty, "_spec_class")
+    assert mock_update_empty._spec_class == telegram.Update
+
+    assert mock_update_empty.update_id == 1
+    assert mock_update_empty.message is None
+    assert mock_update_empty.edited_message is None
+    assert mock_update_empty.effective_user is None
+    assert mock_update_empty.effective_chat is None
+
+
 def test_update_new_message_from_private_chat(mock_update_private_chat_new_message):
     """Test that test_update_new_message_from_private_chat fixture returns a proper Mock."""
     # Check it's a Mock with telegram.Update spec
