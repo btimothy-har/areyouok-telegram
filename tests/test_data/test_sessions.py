@@ -356,3 +356,49 @@ class TestSessionsGetMessages:
 
             # Verify the result
             assert result == mock_messages
+
+
+class TestSessionsHasBotResponded:
+    """Test the has_bot_responded property."""
+
+    def test_has_bot_responded_no_bot_message(self):
+        """Test when bot has not sent any message."""
+        session = Sessions()
+        session.last_bot_message = None
+        session.last_user_message = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
+
+        assert session.has_bot_responded is False
+
+    def test_has_bot_responded_no_user_message(self):
+        """Test when there's no user message but bot has messaged."""
+        session = Sessions()
+        session.last_bot_message = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
+        session.last_user_message = None
+
+        assert session.has_bot_responded is True
+
+    def test_has_bot_responded_bot_after_user(self):
+        """Test when bot message is after user message."""
+        session = Sessions()
+        session.last_user_message = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
+        session.last_bot_message = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
+
+        assert session.has_bot_responded is True
+
+    def test_has_bot_responded_user_after_bot(self):
+        """Test when user message is after bot message."""
+        session = Sessions()
+        session.last_bot_message = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
+        session.last_user_message = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
+
+        assert session.has_bot_responded is False
+
+    def test_has_bot_responded_same_time(self):
+        """Test when messages have the same timestamp."""
+        timestamp = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
+        session = Sessions()
+        session.last_bot_message = timestamp
+        session.last_user_message = timestamp
+
+        # When timestamps are equal, bot has not responded after user
+        assert session.has_bot_responded is False

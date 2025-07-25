@@ -135,3 +135,22 @@ class TestGlobalErrorHandler:
         with patch("areyouok_telegram.handlers.globals.DEVELOPER_CHAT_ID", None):
             await on_error_event(mock_update, mock_context)
             mock_context.bot.send_message.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_on_error_event_with_none_update(self):
+        """Test on_error_event when update is None."""
+        mock_context = AsyncMock()
+        mock_context.error = ValueError("Test error with no update")
+        mock_context.bot.send_message = AsyncMock()
+
+        with patch("areyouok_telegram.handlers.globals.DEVELOPER_CHAT_ID", "123456789"):
+            with patch("areyouok_telegram.handlers.globals.logger") as mock_logger:
+                await on_error_event(None, mock_context)
+
+                # Should log error with different message
+                mock_logger.error.assert_called_once_with(
+                    "An error occurred but no update was provided.", exc_info=mock_context.error
+                )
+
+                # Should still send developer notification
+                mock_context.bot.send_message.assert_called_once()

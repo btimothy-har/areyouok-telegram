@@ -48,7 +48,7 @@ class ConversationJob:
 
     @property
     def _id(self) -> str:
-        return hashlib.md5(self.job_name.encode()).hexdigest()
+        return hashlib.md5(self.name.encode()).hexdigest()
 
     @property
     def sleep_time(self) -> float:
