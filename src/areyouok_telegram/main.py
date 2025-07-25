@@ -1,5 +1,4 @@
 import asyncio
-import logging
 
 import telegram
 import uvloop
@@ -14,14 +13,15 @@ from areyouok_telegram.handlers import on_error_event
 from areyouok_telegram.handlers import on_new_message
 from areyouok_telegram.handlers import on_new_update
 from areyouok_telegram.lifecycle import database_setup
+from areyouok_telegram.lifecycle import logging_setup
 
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
-logging.getLogger("apscheduler.scheduler").setLevel(logging.ERROR)
-logging.getLogger("apscheduler.executors.default").setLevel(logging.WARNING)
-
 
 if __name__ == "__main__":
+    # Setup logging configuration
+    logging_setup()
+
     # Setup the database connection and tables
     database_setup()
 
