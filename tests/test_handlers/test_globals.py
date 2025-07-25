@@ -63,6 +63,7 @@ class TestGlobalUpdateHandler:
             patch("areyouok_telegram.data.Updates.new_or_upsert") as mock_updates_upsert,
             patch("areyouok_telegram.data.Users.new_or_update") as mock_users_update,
             patch("areyouok_telegram.data.Chats.new_or_update") as mock_chats_update,
+            patch("areyouok_telegram.handlers.globals.schedule_conversation_job") as mock_schedule_job,
         ):
             # Act
             await on_new_update(mock_update_empty, mock_context)
@@ -71,6 +72,9 @@ class TestGlobalUpdateHandler:
             mock_users_update.assert_not_called()
             mock_chats_update.assert_called_once_with(
                 session=mock_async_database_session, chat=mock_update_empty.effective_chat
+            )
+            mock_schedule_job.assert_called_once_with(
+                context=mock_context, chat_id=str(mock_update_empty.effective_chat.id)
             )
 
     @pytest.mark.asyncio
@@ -87,6 +91,7 @@ class TestGlobalUpdateHandler:
             patch("areyouok_telegram.data.Updates.new_or_upsert") as mock_updates_upsert,
             patch("areyouok_telegram.data.Users.new_or_update") as mock_users_update,
             patch("areyouok_telegram.data.Chats.new_or_update") as mock_chats_update,
+            patch("areyouok_telegram.handlers.globals.schedule_conversation_job") as mock_schedule_job,
         ):
             # Act
             await on_new_update(mock_update_private_chat_new_message, mock_context)
@@ -99,6 +104,9 @@ class TestGlobalUpdateHandler:
             )
             mock_chats_update.assert_called_once_with(
                 session=mock_async_database_session, chat=mock_update_private_chat_new_message.effective_chat
+            )
+            mock_schedule_job.assert_called_once_with(
+                context=mock_context, chat_id=str(mock_update_private_chat_new_message.effective_chat.id)
             )
 
 
