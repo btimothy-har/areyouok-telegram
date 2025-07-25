@@ -1,4 +1,5 @@
 """Tests for setup.exceptions module."""
+# ruff: noqa: TRY301
 
 import pytest
 

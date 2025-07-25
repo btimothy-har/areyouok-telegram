@@ -1,9 +1,6 @@
 """Application factory for the Telegram bot."""
 
-import asyncio
-
 import telegram
-import uvloop
 from telegram.ext import Application
 from telegram.ext import ApplicationBuilder
 from telegram.ext import MessageHandler
@@ -29,9 +26,6 @@ async def application_startup(application: Application):
 
 def create_application() -> Application:
     """Create and configure the Telegram bot application."""
-    # Configure event loop policy
-    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-
     # Initialize infrastructure
     logging_setup()
     database_setup()

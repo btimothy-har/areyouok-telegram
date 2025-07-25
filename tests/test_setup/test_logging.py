@@ -1,18 +1,29 @@
 """Tests for setup.logging module."""
 
-import logging
 from unittest.mock import patch
 
-from areyouok_telegram.setup.logging import logging_setup
+import pytest
+
+from areyouok_telegram.setup import logging_setup
 
 
+@pytest.fixture(autouse=True)
+def mock_logging():
+    """Fixture for mocking logging module."""
+    with patch("areyouok_telegram.setup.logging.logging") as mock:
+        yield mock
+
+
+@pytest.fixture(autouse=True)
+def mock_logfire():
+    """Fixture for mocking logfire module."""
+    with patch("areyouok_telegram.setup.logging.logfire") as mock:
+        yield mock
 
 
 class TestLoggingSetup:
     """Test cases for logging_setup function."""
 
-    @patch("areyouok_telegram.setup.logging.logfire")
-    @patch("areyouok_telegram.setup.logging.logging")
     def test_logging_setup_basic_configuration(self, mock_logging, mock_logfire):
         """Test logging setup configures basic logging with Logfire handler."""
         # Act
@@ -20,12 +31,10 @@ class TestLoggingSetup:
 
         # Assert
         mock_logging.basicConfig.assert_called_once_with(
-            level=logging.INFO, handlers=[mock_logfire.LogfireLoggingHandler()]
+            level=mock_logging.INFO, handlers=[mock_logfire.LogfireLoggingHandler()]
         )
 
-    @patch("areyouok_telegram.setup.logging.logfire")
-    @patch("areyouok_telegram.setup.logging.logging")
-    def test_logging_setup_configures_third_party_loggers(self, mock_logging, mock_logfire):
+    def test_logging_setup_configures_third_party_loggers(self, mock_logging):
         """Test logging setup sets appropriate levels for third-party loggers."""
         # Act
         logging_setup()
@@ -39,7 +48,6 @@ class TestLoggingSetup:
     @patch("areyouok_telegram.setup.logging.GITHUB_REPOSITORY", "user/repo")
     @patch("areyouok_telegram.setup.logging.GITHUB_SHA", "abc123")
     @patch("areyouok_telegram.setup.logging.LOGFIRE_TOKEN", "test_token")
-    @patch("areyouok_telegram.setup.logging.logfire")
     def test_logging_setup_production_environment(self, mock_logfire):
         """Test logging setup for production environment with GitHub integration."""
         # Act
@@ -54,7 +62,6 @@ class TestLoggingSetup:
 
     @patch("areyouok_telegram.setup.logging.ENV", "development")
     @patch("areyouok_telegram.setup.logging.LOGFIRE_TOKEN", "test_token")
-    @patch("areyouok_telegram.setup.logging.logfire")
     def test_logging_setup_development_environment(self, mock_logfire):
         """Test logging setup for development environment with console output."""
         # Act
@@ -67,7 +74,6 @@ class TestLoggingSetup:
         )
 
     @patch("areyouok_telegram.setup.logging.LOGFIRE_TOKEN", None)
-    @patch("areyouok_telegram.setup.logging.logfire")
     def test_logging_setup_without_logfire_token(self, mock_logfire):
         """Test logging setup when LOGFIRE_TOKEN is not provided."""
         # Act
@@ -75,12 +81,11 @@ class TestLoggingSetup:
 
         # Assert
         # Verify logfire.configure is called with send_to_logfire=False
-        args, kwargs = mock_logfire.configure.call_args
+        _, kwargs = mock_logfire.configure.call_args
         assert kwargs["send_to_logfire"] is False
 
     @patch("areyouok_telegram.setup.logging.ENV", "staging")
     @patch("areyouok_telegram.setup.logging.GITHUB_REPOSITORY", None)
-    @patch("areyouok_telegram.setup.logging.logfire")
     def test_logging_setup_staging_without_github_info(self, mock_logfire):
         """Test logging setup in staging environment without GitHub repository info."""
         # Act
@@ -90,17 +95,16 @@ class TestLoggingSetup:
         # Should not create CodeSource when GITHUB_REPOSITORY is None
         mock_logfire.CodeSource.assert_not_called()
 
-    @patch("areyouok_telegram.setup.logging.logfire")
-    @patch("areyouok_telegram.setup.logging.version")
-    def test_logging_setup_includes_service_version(self, mock_version, mock_logfire):
+    def test_logging_setup_includes_service_version(self, mock_logfire):
         """Test logging setup includes the correct service version."""
-        # Arrange
+
         expected_version = "2.0.0"
-        mock_version.return_value = expected_version
+        with patch("areyouok_telegram.setup.logging.version") as mock_version:
+            mock_version.return_value = expected_version
 
-        # Act
-        logging_setup()
+            # Act
+            logging_setup()
 
-        # Assert
-        args, kwargs = mock_logfire.configure.call_args
-        assert kwargs["service_version"] == expected_version
+            # Assert
+            _, kwargs = mock_logfire.configure.call_args
+            assert kwargs["service_version"] == expected_version
