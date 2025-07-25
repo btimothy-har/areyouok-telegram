@@ -18,15 +18,18 @@ jobs:
       with:
         version: "0.7.20"
     
+    - name: Set up Environment
+      run: |
+        uv sync --locked
+    
     - name: Run Linter
       run: |
-        uv run ruff check --no-fix .
+        uv run --locked ruff check --no-fix .
 
     - name: Run Formatter
       run: |
-        uv run ruff format --check .
+        uv run --locked ruff format --check .
 
     - name: Run Tests (with coverage)
       run: |
-        uv run pytest --cov=areyouok_telegram --cov-report=term-missing --cov-fail-under=95 .
-    
+        uv run --locked pytest --cov=areyouok_telegram --cov-report=term-missing --cov-fail-under=95 .
