@@ -1,13 +1,12 @@
-name: Lint
+name: CI
 
 on:
   push:
-    branches-ignore:
-      - main
+  pull_request:
   
 jobs:
-  lint:
-    name: Lint
+  ci:
+    name: CI
     runs-on: ubuntu-latest
 
     steps:
@@ -18,7 +17,7 @@ jobs:
       uses: astral-sh/setup-uv@v6
       with:
         version: "0.7.20"
-
+    
     - name: Run Linter
       run: |
         uv run ruff check --no-fix .
@@ -26,3 +25,8 @@ jobs:
     - name: Run Formatter
       run: |
         uv run ruff format --check .
+
+    - name: Run Tests (with coverage)
+      run: |
+        uv run pytest --cov=areyouok_telegram --cov-report=term-missing --cov-fail-under=95 .
+    
