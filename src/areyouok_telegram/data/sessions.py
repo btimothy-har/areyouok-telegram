@@ -40,6 +40,17 @@ class Sessions(Base):
 
     message_count = Column(Integer, nullable=True)
 
+    @property
+    def has_bot_responded(self) -> bool:
+        """Check if the bot has responded to the latest updates in the session."""
+        if not self.last_bot_message:
+            return False
+
+        if not self.last_user_message:
+            return True
+
+        return self.last_bot_message > self.last_user_message
+
     @staticmethod
     def generate_session_key(chat_id: str, session_start: datetime) -> str:
         """Generate a unique key for a session based on chat ID and start time."""

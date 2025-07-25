@@ -11,7 +11,7 @@ from areyouok_telegram.data import Chats
 from areyouok_telegram.data import Updates
 from areyouok_telegram.data import Users
 from areyouok_telegram.data import async_database_session
-from areyouok_telegram.jobs.conversation_processor import schedule_conversation_job
+from areyouok_telegram.jobs import schedule_conversation_job
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,10 @@ async def on_new_update(update: telegram.Update, context: ContextTypes.DEFAULT_T
 
 async def on_error_event(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Log the error and send a telegram message to notify the developer."""
-    logger.error(f"Exception while handling an update: {update.update_id}", exc_info=context.error)
+    if not update:
+        logger.error("An error occurred but no update was provided.", exc_info=context.error)
+    else:
+        logger.error(f"Exception while handling an update: {update.update_id}", exc_info=context.error)
 
     if DEVELOPER_CHAT_ID:
         tb_list = traceback.format_exception(None, context.error, context.error.__traceback__)
