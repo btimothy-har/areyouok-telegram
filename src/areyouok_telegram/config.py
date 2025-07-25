@@ -6,6 +6,11 @@ load_dotenv()
 
 ENV = os.getenv("ENV", "development")
 
+GITHUB_REPOSITORY = os.getenv("GITHUB_REPOSITORY")
+GITHUB_SHA = os.getenv("GITHUB_SHA")
+
+LOGFIRE_TOKEN = os.getenv("LOGFIRE_TOKEN")
+
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 DEVELOPER_CHAT_ID = os.getenv("DEVELOPER_CHAT_ID")
 

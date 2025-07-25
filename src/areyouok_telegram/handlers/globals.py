@@ -27,7 +27,8 @@ async def on_new_update(update: telegram.Update, context: ContextTypes.DEFAULT_T
         if update.effective_chat:
             update_tasks.append(asyncio.create_task(Chats.new_or_update(session=session, chat=update.effective_chat)))
             # Schedule conversation job for any update with a chat
-            update_tasks.append(schedule_conversation_job(context=context, chat_id=str(update.effective_chat.id)))
+            conversation_job = schedule_conversation_job(context=context, chat_id=str(update.effective_chat.id))
+            update_tasks.append(asyncio.create_task(conversation_job))
 
         await asyncio.gather(*update_tasks)
 
