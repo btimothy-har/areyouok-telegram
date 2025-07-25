@@ -11,11 +11,12 @@ from areyouok_telegram.data import Chats
 from areyouok_telegram.data import Updates
 from areyouok_telegram.data import Users
 from areyouok_telegram.data import async_database_session
+from areyouok_telegram.jobs import schedule_conversation_job
 
 logger = logging.getLogger(__name__)
 
 
-async def on_new_update(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):  # noqa:ARG001
+async def on_new_update(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):
     async with async_database_session() as session:
         await Updates.new_or_upsert(session, update=update)
 
@@ -25,13 +26,18 @@ async def on_new_update(update: telegram.Update, context: ContextTypes.DEFAULT_T
 
         if update.effective_chat:
             update_tasks.append(asyncio.create_task(Chats.new_or_update(session=session, chat=update.effective_chat)))
+            # Schedule conversation job for any update with a chat
+            update_tasks.append(schedule_conversation_job(context=context, chat_id=str(update.effective_chat.id)))
 
         await asyncio.gather(*update_tasks)
 
 
 async def on_error_event(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Log the error and send a telegram message to notify the developer."""
-    logger.error(f"Exception while handling an update: {update.update_id}", exc_info=context.error)
+    if not update:
+        logger.error("An error occurred but no update was provided.", exc_info=context.error)
+    else:
+        logger.error(f"Exception while handling an update: {update.update_id}", exc_info=context.error)
 
     if DEVELOPER_CHAT_ID:
         tb_list = traceback.format_exception(None, context.error, context.error.__traceback__)
