@@ -148,13 +148,14 @@ class TestCreateApplication:
         mock_application.add_error_handler.assert_called_once()
 
         # Should add handlers with correct groups
-        assert mock_application.add_handler.call_count == 3
+        assert mock_application.add_handler.call_count == 4
         calls = mock_application.add_handler.call_args_list
 
         # Check group assignments
         assert calls[0][1]["group"] == 0  # Global update handler
         assert calls[1][1]["group"] == 1  # Message handler
         assert calls[2][1]["group"] == 1  # Edited message handler
+        assert calls[3][1]["group"] == 1  # Message reaction handler
 
     def test_create_application_returns_application_instance(
         self, mock_infrastructure_patches, mock_application_builder

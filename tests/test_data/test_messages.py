@@ -4,7 +4,6 @@ import hashlib
 from datetime import UTC
 from datetime import datetime
 from unittest.mock import MagicMock
-from unittest.mock import patch
 
 import pytest
 import telegram
@@ -20,6 +19,8 @@ def mock_message_record1():
     """Create a mock Messages database record."""
     mock_record = MagicMock()
     mock_record.payload = {"message_id": 111, "text": "Message 1"}
+    mock_telegram_msg = MagicMock(spec=telegram.Message)
+    mock_record.to_telegram_object.return_value = mock_telegram_msg
     return mock_record
 
 
@@ -28,51 +29,62 @@ def mock_message_record2():
     """Create a second mock Messages database record."""
     mock_record = MagicMock()
     mock_record.payload = {"message_id": 222, "text": "Message 2"}
+    mock_telegram_msg = MagicMock(spec=telegram.Message)
+    mock_record.to_telegram_object.return_value = mock_telegram_msg
     return mock_record
 
 
 @pytest.fixture
-def mock_text_message():
+def mock_text_message(mock_private_message):
     """Create a mock telegram.Message object for a text message."""
-    mock_message = MagicMock()
-    mock_message.message_id = 12345
-    mock_message.to_dict.return_value = {
+    # Reuse the base fixture and customize it
+    mock_private_message.message_id = 12345
+    mock_private_message.to_dict.return_value = {
         "message_id": 12345,
         "text": "Hello, world!",
         "date": 1705311000,
         "from": {"id": 987654321, "first_name": "John"},
     }
-    return mock_message
+    return mock_private_message
 
 
 @pytest.fixture
-def mock_photo_message():
+def mock_photo_message(mock_private_message):
     """Create a mock telegram.Message object for a photo message."""
-    mock_message = MagicMock()
-    mock_message.message_id = 67890
-    mock_message.to_dict.return_value = {
+    # Reuse the base fixture and customize it
+    mock_private_message.message_id = 67890
+    mock_private_message.text = None  # Photo messages don't have text
+    mock_private_message.photo = [{"file_id": "photo123", "width": 1280, "height": 720}]
+    mock_private_message.caption = "A beautiful sunset"
+    mock_private_message.to_dict.return_value = {
         "message_id": 67890,
         "photo": [{"file_id": "photo123", "width": 1280, "height": 720}],
         "caption": "A beautiful sunset",
         "date": 1705311200,
         "from": {"id": 555666777, "first_name": "Jane"},
     }
-    return mock_message
+    return mock_private_message
 
 
 @pytest.fixture
-def mock_forwarded_message():
+def mock_forwarded_message(mock_private_message):
     """Create a mock telegram.Message object for a forwarded message."""
-    mock_message = MagicMock()
-    mock_message.message_id = 54321
-    mock_message.to_dict.return_value = {
+    # Reuse the base fixture and customize it
+    mock_private_message.message_id = 54321
+    mock_private_message.text = "This is forwarded"
+    # Create mock MessageOrigin for forward_origin
+    mock_origin = MagicMock()
+    mock_origin.type = "user"
+    mock_origin.sender_user = MagicMock(id=111222333, first_name="Alice")
+    mock_private_message.forward_origin = mock_origin
+    mock_private_message.to_dict.return_value = {
         "message_id": 54321,
         "text": "This is forwarded",
         "date": 1705311400,
-        "forward_from": {"id": 111222333, "first_name": "Alice"},
+        "forward_origin": {"type": "user", "sender_user": {"id": 111222333, "first_name": "Alice"}},
         "from": {"id": 444555666, "first_name": "Bob"},
     }
-    return mock_message
+    return mock_private_message
 
 
 class TestMessagesGenerateMessageKey:
@@ -148,6 +160,7 @@ class TestMessagesNewOrUpdate:
 
         assert values["message_key"] == expected_key
         assert values["message_id"] == "12345"
+        assert values["message_type"] == "Message"
         assert values["user_id"] == "987654321"
         assert values["chat_id"] == "111222333"
         assert values["payload"] == mock_text_message.to_dict.return_value
@@ -173,6 +186,7 @@ class TestMessagesNewOrUpdate:
 
         assert values["message_key"] == expected_key
         assert values["message_id"] == "67890"
+        assert values["message_type"] == "Message"
         assert values["user_id"] == "555666777"
         assert values["chat_id"] == "888999000"
         assert values["payload"] == mock_photo_message.to_dict.return_value
@@ -189,6 +203,7 @@ class TestMessagesNewOrUpdate:
         stmt = mock_async_database_session.execute.call_args[0][0]
 
         values = stmt.compile().params
+        assert values["message_type"] == "Message"
         assert values["payload"] == mock_forwarded_message.to_dict.return_value
 
     async def test_on_conflict_do_update_configured(self, mock_async_database_session, mock_text_message):
@@ -208,11 +223,11 @@ class TestMessagesNewOrUpdate:
         """Test inserting multiple messages with different keys."""
 
         # Create multiple mock messages
-        message1 = MagicMock()
+        message1 = MagicMock(spec=telegram.Message)
         message1.message_id = 111
         message1.to_dict.return_value = {"message_id": 111, "text": "Message 1"}
 
-        message2 = MagicMock()
+        message2 = MagicMock(spec=telegram.Message)
         message2.message_id = 222
         message2.to_dict.return_value = {"message_id": 222, "text": "Message 2"}
 
@@ -236,7 +251,7 @@ class TestMessagesNewOrUpdate:
 
     async def test_same_message_different_chats_different_keys(self, mock_async_database_session):
         """Test that the same message in different chats gets different keys."""
-        message = MagicMock()
+        message = MagicMock(spec=telegram.Message)
         message.message_id = 12345
         message.to_dict.return_value = {"message_id": 12345, "text": "Same message"}
 
@@ -256,6 +271,47 @@ class TestMessagesNewOrUpdate:
 
         assert key1 != key2
 
+    @freeze_time("2025-01-15 10:30:00", tz_offset=0)
+    async def test_insert_message_reaction(self, mock_async_database_session, mock_message_reaction):
+        """Test inserting a message reaction update."""
+        user_id = str(mock_message_reaction.user.id)
+        chat_id = str(mock_message_reaction.chat.id)
+
+        # Add to_dict method to the mock
+        mock_message_reaction.to_dict.return_value = {
+            "chat": {"id": mock_message_reaction.chat.id},
+            "message_id": mock_message_reaction.message_id,
+            "user": {"id": mock_message_reaction.user.id},
+            "date": 1705311000,
+            "old_reaction": [{"type": "emoji", "emoji": "👍"}],
+            "new_reaction": [{"type": "emoji", "emoji": "❤️"}],
+        }
+
+        # Call the method
+        await Messages.new_or_update(mock_async_database_session, user_id, chat_id, mock_message_reaction)
+
+        # Verify the session.execute was called once
+        mock_async_database_session.execute.assert_called_once()
+
+        # Get the statement that was executed
+        stmt = mock_async_database_session.execute.call_args[0][0]
+
+        # Verify it's an insert statement
+        assert isinstance(stmt, type(pg_insert(Messages)))
+
+        # Verify the values
+        values = stmt.compile().params
+        expected_key = Messages.generate_message_key(user_id, chat_id, mock_message_reaction.message_id)
+
+        assert values["message_key"] == expected_key
+        assert values["message_id"] == str(mock_message_reaction.message_id)
+        assert values["message_type"] == "MessageReactionUpdated"
+        assert values["user_id"] == user_id
+        assert values["chat_id"] == chat_id
+        assert values["payload"] == mock_message_reaction.to_dict.return_value
+        assert values["created_at"] == datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
+        assert values["updated_at"] == datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
+
 
 class TestMessagesRetrieveByChat:
     """Test the retrieve_by_chat class method."""
@@ -273,15 +329,8 @@ class TestMessagesRetrieveByChat:
         mock_result.scalars.return_value = mock_scalars
         mock_async_database_session.execute.return_value = mock_result
 
-        # Mock telegram.Message.de_json
-        mock_telegram_msg1 = MagicMock(spec=telegram.Message)
-        mock_telegram_msg2 = MagicMock(spec=telegram.Message)
-
-        with patch("telegram.Message.de_json") as mock_de_json:
-            mock_de_json.side_effect = [mock_telegram_msg1, mock_telegram_msg2]
-
-            # Call the method
-            result = await Messages.retrieve_by_chat(mock_async_database_session, chat_id)
+        # Call the method
+        result = await Messages.retrieve_by_chat(mock_async_database_session, chat_id)
 
         # Verify the query was executed
         mock_async_database_session.execute.assert_called_once()
@@ -290,13 +339,14 @@ class TestMessagesRetrieveByChat:
         # Check that the statement filters by chat_id
         assert isinstance(stmt, type(select(Messages)))
 
-        # Verify telegram.Message.de_json was called for each payload
-        assert mock_de_json.call_count == 2
-        mock_de_json.assert_any_call(mock_message_record1.payload, None)
-        mock_de_json.assert_any_call(mock_message_record2.payload, None)
+        # Verify to_telegram_object was called for each record
+        mock_message_record1.to_telegram_object.assert_called_once()
+        mock_message_record2.to_telegram_object.assert_called_once()
 
-        # Verify the result
-        assert result == [mock_telegram_msg1, mock_telegram_msg2]
+        # Verify the result contains the telegram objects
+        assert len(result) == 2
+        assert result[0] == mock_message_record1.to_telegram_object.return_value
+        assert result[1] == mock_message_record2.to_telegram_object.return_value
 
     async def test_retrieve_by_chat_with_time_range(self, mock_async_database_session):
         """Test retrieving messages with time range filters."""
@@ -334,18 +384,18 @@ class TestMessagesRetrieveByChat:
         mock_result.scalars.return_value = mock_scalars
         mock_async_database_session.execute.return_value = mock_result
 
-        mock_telegram_msg = MagicMock(spec=telegram.Message)
-
-        with patch("telegram.Message.de_json", return_value=mock_telegram_msg):
-            # Call the method with limit
-            result = await Messages.retrieve_by_chat(mock_async_database_session, chat_id, limit=limit)
+        # Call the method with limit
+        result = await Messages.retrieve_by_chat(mock_async_database_session, chat_id, limit=limit)
 
         # Verify the query was executed
         mock_async_database_session.execute.assert_called_once()
 
+        # Verify to_telegram_object was called
+        mock_message_record1.to_telegram_object.assert_called_once()
+
         # Verify the result
         assert len(result) == 1
-        assert result[0] == mock_telegram_msg
+        assert result[0] == mock_message_record1.to_telegram_object.return_value
 
     async def test_retrieve_by_chat_no_messages(self, mock_async_database_session):
         """Test retrieving messages when none exist."""
