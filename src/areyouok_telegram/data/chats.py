@@ -19,11 +19,12 @@ class Chats(Base):
     __tablename__ = "chats"
     __table_args__ = {"schema": ENV}
 
-    num = Column(Integer, primary_key=True, autoincrement=True)
     chat_id = Column(String, nullable=False, unique=True)
     type = Column(String, nullable=False)
     title = Column(String, nullable=True)
     is_forum = Column(BOOLEAN, nullable=False)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False)
     updated_at = Column(TIMESTAMP(timezone=True), nullable=False)
 

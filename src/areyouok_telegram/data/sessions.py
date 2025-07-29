@@ -29,7 +29,6 @@ class Sessions(Base):
     __tablename__ = "sessions"
     __table_args__ = {"schema": ENV}
 
-    num = Column(Integer, primary_key=True, autoincrement=True)
     session_key = Column(String, nullable=False, unique=True)
     chat_id = Column(String, nullable=False)
     session_start = Column(TIMESTAMP(timezone=True), nullable=False)
@@ -39,6 +38,8 @@ class Sessions(Base):
     last_bot_message = Column(TIMESTAMP(timezone=True), nullable=True)
 
     message_count = Column(Integer, nullable=True)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
 
     @property
     def has_bot_responded(self) -> bool:
