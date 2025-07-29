@@ -143,6 +143,7 @@ def mock_update_empty():
     mock_update.update_id = 1
     mock_update.message = None
     mock_update.edited_message = None
+    mock_update.message_reaction = None
     mock_update.effective_user = None
     mock_update.effective_chat = None
 
@@ -168,6 +169,47 @@ def mock_update_private_chat_edited_message(mock_update_empty, mock_edited_priva
     mock_update_empty.effective_user = mock_edited_private_message.from_user
     mock_update_empty.effective_chat = mock_edited_private_message.chat
 
+    return mock_update_empty
+
+
+@pytest.fixture
+def mock_reaction_type_emoji():
+    """Create a mock ReactionTypeEmoji object."""
+    mock_reaction = MagicMock()
+    mock_reaction.type = "emoji"
+    mock_reaction.emoji = "❤️"
+    return mock_reaction
+
+
+@pytest.fixture
+def mock_message_reaction(mock_user, mock_private_chat, mock_reaction_type_emoji):
+    """Create a mock telegram.MessageReactionUpdated object."""
+    mock_reaction = create_autospec(telegram.MessageReactionUpdated, spec_set=True, instance=True)
+    
+    mock_reaction.chat = mock_private_chat
+    mock_reaction.message_id = 123
+    mock_reaction.user = mock_user
+    mock_reaction.date = DEFAULT_DATETIME
+    
+    # Mock old and new reactions as tuples of ReactionType objects
+    old_reaction_type = MagicMock()
+    old_reaction_type.type = "emoji"
+    old_reaction_type.emoji = "👍"
+    
+    mock_reaction.old_reaction = (old_reaction_type,)
+    mock_reaction.new_reaction = (mock_reaction_type_emoji,)
+    
+    return mock_reaction
+
+
+@pytest.fixture
+def mock_update_message_reaction(mock_update_empty, mock_message_reaction):
+    """Create a mock telegram.Update object with message reaction."""
+    
+    mock_update_empty.message_reaction = mock_message_reaction
+    mock_update_empty.effective_user = mock_message_reaction.user
+    mock_update_empty.effective_chat = mock_message_reaction.chat
+    
     return mock_update_empty
 
 
