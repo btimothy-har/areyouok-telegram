@@ -1,6 +1,7 @@
 """Bot metadata and configuration."""
 
 import logging
+from datetime import timedelta
 from importlib.metadata import version
 
 import telegram
@@ -44,10 +45,13 @@ async def setup_bot_name(ctx: Application | ContextTypes.DEFAULT_TYPE):
     except telegram.error.RetryAfter as e:
         logging.warning(f"Rate limit exceeded while setting bot name, retrying after {e.retry_after} seconds.")
 
+        # Convert retry_after to timedelta if it's not already
+        retry_after_delta = e.retry_after if isinstance(e.retry_after, timedelta) else timedelta(seconds=e.retry_after)
+
         # Retry after the specified time
         ctx.job_queue.run_once(
             callback=setup_bot_name,
-            when=e.retry_after + 60,
+            when=retry_after_delta + timedelta(seconds=60),
             name="retry_set_bot_name",
         )
         return
@@ -68,10 +72,13 @@ async def setup_bot_description(ctx: Application | ContextTypes.DEFAULT_TYPE):
     except telegram.error.RetryAfter as e:
         logging.warning(f"Rate limit exceeded while setting bot description, retrying after {e.retry_after} seconds.")
 
+        # Convert retry_after to timedelta if it's not already
+        retry_after_delta = e.retry_after if isinstance(e.retry_after, timedelta) else timedelta(seconds=e.retry_after)
+
         # Retry after the specified time
         ctx.job_queue.run_once(
             callback=setup_bot_description,
-            when=e.retry_after + 60,
+            when=retry_after_delta + timedelta(seconds=60),
             name="retry_set_bot_description",
         )
         return

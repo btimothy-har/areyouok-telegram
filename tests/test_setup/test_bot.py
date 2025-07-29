@@ -2,6 +2,7 @@
 
 # ruff: noqa: PLC2701
 
+from datetime import timedelta
 from unittest.mock import AsyncMock
 from unittest.mock import Mock
 from unittest.mock import patch
@@ -172,7 +173,34 @@ class TestSetupBotName:
         # Verify job queue call parameters
         call_args = mock_job_queue.run_once.call_args
         assert call_args[1]["callback"] == setup_bot_name
-        assert call_args[1]["when"] == retry_after_seconds + 60  # retry_after + 60
+        assert call_args[1]["when"] == timedelta(seconds=retry_after_seconds + 60)  # retry_after + 60
+        assert call_args[1]["name"] == "retry_set_bot_name"
+
+    @pytest.mark.asyncio
+    async def test_setup_bot_name_handles_rate_limit_with_timedelta(self):
+        """Test setup_bot_name handles RetryAfter exception with timedelta retry_after."""
+        # Arrange
+        mock_application = Mock()
+        mock_bot = AsyncMock()
+        mock_job_queue = Mock()
+        mock_application.bot = mock_bot
+        mock_application.job_queue = mock_job_queue
+
+        retry_after_delta = timedelta(seconds=45)
+        retry_after_error = telegram.error.RetryAfter(retry_after_delta)
+        mock_bot.set_my_name.side_effect = retry_after_error
+
+        # Act
+        await setup_bot_name(mock_application)
+
+        # Assert
+        mock_bot.set_my_name.assert_called_once()
+        mock_job_queue.run_once.assert_called_once()
+
+        # Verify job queue call parameters
+        call_args = mock_job_queue.run_once.call_args
+        assert call_args[1]["callback"] == setup_bot_name
+        assert call_args[1]["when"] == retry_after_delta + timedelta(seconds=60)  # retry_after + 60
         assert call_args[1]["name"] == "retry_set_bot_name"
 
 
@@ -255,5 +283,32 @@ class TestSetupBotDescription:
         # Verify job queue call parameters
         call_args = mock_job_queue.run_once.call_args
         assert call_args[1]["callback"] == setup_bot_description
-        assert call_args[1]["when"] == retry_after_seconds + 60  # retry_after + 60
+        assert call_args[1]["when"] == timedelta(seconds=retry_after_seconds + 60)  # retry_after + 60
+        assert call_args[1]["name"] == "retry_set_bot_description"
+
+    @pytest.mark.asyncio
+    async def test_setup_bot_description_handles_rate_limit_with_timedelta(self):
+        """Test setup_bot_description handles RetryAfter exception with timedelta retry_after."""
+        # Arrange
+        mock_application = Mock()
+        mock_bot = AsyncMock()
+        mock_job_queue = Mock()
+        mock_application.bot = mock_bot
+        mock_application.job_queue = mock_job_queue
+
+        retry_after_delta = timedelta(seconds=120)
+        retry_after_error = telegram.error.RetryAfter(retry_after_delta)
+        mock_bot.set_my_description.side_effect = retry_after_error
+
+        # Act
+        await setup_bot_description(mock_application)
+
+        # Assert
+        mock_bot.set_my_description.assert_called_once()
+        mock_job_queue.run_once.assert_called_once()
+
+        # Verify job queue call parameters
+        call_args = mock_job_queue.run_once.call_args
+        assert call_args[1]["callback"] == setup_bot_description
+        assert call_args[1]["when"] == retry_after_delta + timedelta(seconds=60)  # retry_after + 60
         assert call_args[1]["name"] == "retry_set_bot_description"
