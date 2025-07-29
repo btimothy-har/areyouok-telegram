@@ -96,22 +96,22 @@ class TestMessagesGenerateMessageKey:
         chat_id = "987654321"
         message_id = 12345
 
-        key = Messages.generate_message_key(user_id, chat_id, message_id)
+        key = Messages.generate_message_key(user_id, chat_id, message_id, "Message")
 
         # Verify it returns a SHA256 hash (64 hex characters)
         assert len(key) == 64
         assert all(c in "0123456789abcdef" for c in key)
 
         # Verify it's deterministic
-        key2 = Messages.generate_message_key(user_id, chat_id, message_id)
+        key2 = Messages.generate_message_key(user_id, chat_id, message_id, "Message")
         assert key == key2
 
     def test_generate_key_different_inputs_different_keys(self):
         """Test that different inputs produce different keys."""
-        key1 = Messages.generate_message_key("123", "456", 789)
-        key2 = Messages.generate_message_key("123", "456", 790)
-        key3 = Messages.generate_message_key("123", "457", 789)
-        key4 = Messages.generate_message_key("124", "456", 789)
+        key1 = Messages.generate_message_key("123", "456", 789, "Message")
+        key2 = Messages.generate_message_key("123", "456", 790, "Message")
+        key3 = Messages.generate_message_key("123", "457", 789, "Message")
+        key4 = Messages.generate_message_key("124", "456", 789, "Message")
 
         # All keys should be different
         keys = [key1, key2, key3, key4]
@@ -123,10 +123,11 @@ class TestMessagesGenerateMessageKey:
         chat_id = "200"
         message_id = 300
 
-        expected_input = f"{user_id}:{chat_id}:{message_id}"
+        message_type = "Message"
+        expected_input = f"{user_id}:{chat_id}:{message_id}:{message_type}"
         expected_hash = hashlib.sha256(expected_input.encode()).hexdigest()
 
-        actual_key = Messages.generate_message_key(user_id, chat_id, message_id)
+        actual_key = Messages.generate_message_key(user_id, chat_id, message_id, message_type)
 
         assert actual_key == expected_hash
 
@@ -156,7 +157,7 @@ class TestMessagesNewOrUpdate:
         assert stmt.table.name == "messages"
 
         values = stmt.compile().params
-        expected_key = Messages.generate_message_key(user_id, chat_id, mock_text_message.message_id)
+        expected_key = Messages.generate_message_key(user_id, chat_id, mock_text_message.message_id, "Message")
 
         assert values["message_key"] == expected_key
         assert values["message_id"] == "12345"
@@ -182,7 +183,7 @@ class TestMessagesNewOrUpdate:
         assert stmt.table.name == "messages"
 
         values = stmt.compile().params
-        expected_key = Messages.generate_message_key(user_id, chat_id, mock_photo_message.message_id)
+        expected_key = Messages.generate_message_key(user_id, chat_id, mock_photo_message.message_id, "Message")
 
         assert values["message_key"] == expected_key
         assert values["message_id"] == "67890"
@@ -242,8 +243,8 @@ class TestMessagesNewOrUpdate:
         first_call_stmt = mock_async_database_session.execute.call_args_list[0][0][0]
         second_call_stmt = mock_async_database_session.execute.call_args_list[1][0][0]
 
-        key1 = Messages.generate_message_key("user1", "chat1", 111)
-        key2 = Messages.generate_message_key("user2", "chat2", 222)
+        key1 = Messages.generate_message_key("user1", "chat1", 111, "Message")
+        key2 = Messages.generate_message_key("user2", "chat2", 222, "Message")
 
         assert first_call_stmt.compile().params["message_key"] == key1
         assert second_call_stmt.compile().params["message_key"] == key2
@@ -301,7 +302,9 @@ class TestMessagesNewOrUpdate:
 
         # Verify the values
         values = stmt.compile().params
-        expected_key = Messages.generate_message_key(user_id, chat_id, mock_message_reaction.message_id)
+        expected_key = Messages.generate_message_key(
+            user_id, chat_id, mock_message_reaction.message_id, "MessageReactionUpdated"
+        )
 
         assert values["message_key"] == expected_key
         assert values["message_id"] == str(mock_message_reaction.message_id)
@@ -311,6 +314,135 @@ class TestMessagesNewOrUpdate:
         assert values["payload"] == mock_message_reaction.to_dict.return_value
         assert values["created_at"] == datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
         assert values["updated_at"] == datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
+
+
+class TestMessagesRetrieveMessageById:
+    """Test the retrieve_message_by_id class method."""
+
+    async def test_retrieve_message_by_id_with_reactions(self, mock_async_database_session, mock_message_record1):
+        """Test retrieving a message by ID that has reactions."""
+        message_id = "123"
+        chat_id = "456"
+
+        # Mock the message query result
+        mock_message_result = MagicMock()
+        mock_message_result.scalar_one_or_none.return_value = mock_message_record1
+
+        # Mock reaction records
+        mock_reaction_record1 = MagicMock()
+        mock_reaction_record1.to_telegram_object.return_value = MagicMock(spec=telegram.MessageReactionUpdated)
+
+        mock_reaction_record2 = MagicMock()
+        mock_reaction_record2.to_telegram_object.return_value = MagicMock(spec=telegram.MessageReactionUpdated)
+
+        # Mock the reactions query result
+        mock_reaction_result = MagicMock()
+        mock_reaction_scalars = MagicMock()
+        mock_reaction_scalars.all.return_value = [mock_reaction_record1, mock_reaction_record2]
+        mock_reaction_result.scalars.return_value = mock_reaction_scalars
+
+        # Configure session to return different results for different queries
+        mock_async_database_session.execute.side_effect = [mock_message_result, mock_reaction_result]
+
+        # Call the method
+        message, reactions = await Messages.retrieve_message_by_id(mock_async_database_session, message_id, chat_id)
+
+        # Verify two queries were executed (message + reactions)
+        assert mock_async_database_session.execute.call_count == 2
+
+        # Verify to_telegram_object was called for message and reactions
+        mock_message_record1.to_telegram_object.assert_called_once()
+        mock_reaction_record1.to_telegram_object.assert_called_once()
+        mock_reaction_record2.to_telegram_object.assert_called_once()
+
+        # Verify the results
+        assert message == mock_message_record1.to_telegram_object.return_value
+        assert len(reactions) == 2
+        assert reactions[0] == mock_reaction_record1.to_telegram_object.return_value
+        assert reactions[1] == mock_reaction_record2.to_telegram_object.return_value
+
+    async def test_retrieve_message_by_id_without_reactions(self, mock_async_database_session, mock_message_record1):
+        """Test retrieving a message by ID that has no reactions."""
+        message_id = "123"
+        chat_id = "456"
+
+        # Mock the message query result
+        mock_message_result = MagicMock()
+        mock_message_result.scalar_one_or_none.return_value = mock_message_record1
+
+        # Mock empty reactions query result
+        mock_reaction_result = MagicMock()
+        mock_reaction_scalars = MagicMock()
+        mock_reaction_scalars.all.return_value = []
+        mock_reaction_result.scalars.return_value = mock_reaction_scalars
+
+        # Configure session to return different results for different queries
+        mock_async_database_session.execute.side_effect = [mock_message_result, mock_reaction_result]
+
+        # Call the method
+        message, reactions = await Messages.retrieve_message_by_id(mock_async_database_session, message_id, chat_id)
+
+        # Verify two queries were executed
+        assert mock_async_database_session.execute.call_count == 2
+
+        # Verify to_telegram_object was called for message only
+        mock_message_record1.to_telegram_object.assert_called_once()
+
+        # Verify the results
+        assert message == mock_message_record1.to_telegram_object.return_value
+        assert reactions == []
+
+    async def test_retrieve_message_by_id_message_not_found(self, mock_async_database_session):
+        """Test retrieving a message by ID when message doesn't exist."""
+        message_id = "nonexistent"
+        chat_id = "456"
+
+        # Mock empty message query result
+        mock_message_result = MagicMock()
+        mock_message_result.scalar_one_or_none.return_value = None
+
+        mock_async_database_session.execute.return_value = mock_message_result
+
+        # Call the method
+        message, reactions = await Messages.retrieve_message_by_id(mock_async_database_session, message_id, chat_id)
+
+        # Verify only one query was executed (message query only)
+        mock_async_database_session.execute.assert_called_once()
+
+        # Verify the results are both None
+        assert message is None
+        assert reactions is None
+
+    async def test_retrieve_message_by_id_query_structure(self, mock_async_database_session, mock_message_record1):
+        """Test that retrieve_message_by_id constructs correct SQL queries."""
+        message_id = "123"
+        chat_id = "456"
+
+        # Mock the message query result
+        mock_message_result = MagicMock()
+        mock_message_result.scalar_one_or_none.return_value = mock_message_record1
+
+        # Mock empty reactions query result
+        mock_reaction_result = MagicMock()
+        mock_reaction_scalars = MagicMock()
+        mock_reaction_scalars.all.return_value = []
+        mock_reaction_result.scalars.return_value = mock_reaction_scalars
+
+        mock_async_database_session.execute.side_effect = [mock_message_result, mock_reaction_result]
+
+        # Call the method
+        await Messages.retrieve_message_by_id(mock_async_database_session, message_id, chat_id)
+
+        # Verify both queries were executed
+        assert mock_async_database_session.execute.call_count == 2
+
+        # Get the statements that were executed
+        message_stmt = mock_async_database_session.execute.call_args_list[0][0][0]
+        reaction_stmt = mock_async_database_session.execute.call_args_list[1][0][0]
+
+        # Verify both are select statements
+        assert isinstance(message_stmt, type(select(Messages)))
+        assert isinstance(reaction_stmt, type(select(Messages)))
 
 
 class TestMessagesRetrieveByChat:
