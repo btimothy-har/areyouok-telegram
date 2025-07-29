@@ -101,14 +101,14 @@ class Sessions(Base):
     async def new_message(self, timestamp: datetime, message_type: Literal["user", "bot"]) -> None:
         """Record a new message in the session, updating appropriate timestamps."""
         # Always update user activity timestamp
-        self.last_user_activity = timestamp
+        self.last_user_activity = max(self.last_user_activity, timestamp) if self.last_user_activity else timestamp
 
         if message_type == "user":
-            self.last_user_message = timestamp
+            self.last_user_message = max(self.last_user_message, timestamp) if self.last_user_message else timestamp
             # Increment message count only for user messages
             self.message_count = self.message_count + 1 if self.message_count is not None else 1
         elif message_type == "bot":
-            self.last_bot_message = timestamp
+            self.last_bot_message = max(self.last_bot_message, timestamp) if self.last_bot_message else timestamp
         else:
             raise InvalidMessageTypeError(message_type)
 

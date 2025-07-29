@@ -253,6 +253,47 @@ class TestSessionsNewMessage:
         with pytest.raises(InvalidMessageTypeError, match="Invalid message_type: invalid. Must be 'user' or 'bot'."):
             await session.new_message(new_timestamp, "invalid")  # type: ignore
 
+    async def test_new_message_timestamp_only_increases_user(self):
+        """Test that user message timestamps only increase, never decrease."""
+        session = Sessions()
+        
+        # Set initial timestamps
+        early_time = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
+        late_time = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
+        
+        # Record a user message with late timestamp
+        await session.new_message(late_time, "user")
+        assert session.last_user_message == late_time
+        assert session.last_user_activity == late_time
+        
+        # Try to record a user message with earlier timestamp
+        await session.new_message(early_time, "user")
+        
+        # Timestamps should not decrease
+        assert session.last_user_message == late_time  # Should stay at late_time
+        assert session.last_user_activity == late_time  # Should stay at late_time
+        assert session.message_count == 2  # But message count should still increment
+
+    async def test_new_message_timestamp_only_increases_bot(self):
+        """Test that bot message timestamps only increase, never decrease."""
+        session = Sessions()
+        
+        # Set initial timestamps
+        early_time = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
+        late_time = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
+        
+        # Record a bot message with late timestamp
+        await session.new_message(late_time, "bot")
+        assert session.last_bot_message == late_time
+        assert session.last_user_activity == late_time
+        
+        # Try to record a bot message with earlier timestamp
+        await session.new_message(early_time, "bot")
+        
+        # Timestamps should not decrease
+        assert session.last_bot_message == late_time  # Should stay at late_time
+        assert session.last_user_activity == late_time  # Should stay at late_time
+
 
 class TestSessionsNewUserActivity:
     """Test the new_user_activity method."""
