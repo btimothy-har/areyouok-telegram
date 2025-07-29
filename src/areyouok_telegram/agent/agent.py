@@ -16,6 +16,7 @@ class AgentDependencies:
     tg_context: ContextTypes.DEFAULT_TYPE
     tg_chat_id: str
     db_connection: AsyncSessionLocal
+    error: Exception | None = None
 
 
 areyouok_agent = Agent(

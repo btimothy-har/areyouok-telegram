@@ -6,6 +6,7 @@ from pydantic_ai.messages import ModelRequest
 from pydantic_ai.messages import ModelResponse
 from telegram.ext import ContextTypes
 
+from areyouok_telegram.agent import exceptions
 from areyouok_telegram.agent.agent import AgentDependencies
 from areyouok_telegram.agent.agent import areyouok_agent
 from areyouok_telegram.agent.responses import DoNothingResponse
@@ -34,6 +35,7 @@ def convert_telegram_message_to_model_message(
 
 __all__ = [
     "areyouok_agent",
+    "exceptions",
     "AgentDependencies",
     "AgentResponse",
     "convert_telegram_message_to_model_message",

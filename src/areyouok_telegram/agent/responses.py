@@ -5,13 +5,27 @@ from datetime import datetime
 
 import pydantic
 import telegram
+import tenacity
 from telegram.constants import ReactionEmoji
 from telegram.ext import ContextTypes
 
+from areyouok_telegram.agent.exceptions import InvalidMessageError
+from areyouok_telegram.agent.exceptions import ReactToSelfError
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data.connection import AsyncSessionLocal
 
 logger = logging.getLogger(__name__)
+
+
+def retry_response():
+    return tenacity.retry(
+        retry=tenacity.retry_if_exception_type((telegram.error.NetworkError, telegram.error.TimedOut)),
+        wait=tenacity.wait_chain(
+            *[tenacity.wait_fixed(0.5) for _ in range(2)] + [tenacity.wait_random_exponential(multiplier=0.5, max=5)]
+        ),
+        stop=tenacity.stop_after_attempt(5),
+        reraise=True,
+    )
 
 
 class BaseAgentResponse(pydantic.BaseModel):
@@ -40,6 +54,7 @@ class TextResponse(BaseAgentResponse):
         default=None, description="Optional message ID to reply to, if the response is a reply to a specific message."
     )
 
+    @retry_response()
     async def execute(
         self,
         db_connection: AsyncSessionLocal,  # noqa: ARG002
@@ -64,8 +79,10 @@ class TextResponse(BaseAgentResponse):
             )
         except Exception:
             logger.exception(f"Failed to send text reply to chat {chat_id}")
-            return None
+            raise
+
         else:
+            logger.debug(f"Text reply sent to chat {chat_id}: {self.message_text}")
             return reply_message
 
 
@@ -75,6 +92,7 @@ class ReactionResponse(BaseAgentResponse):
     react_to_message_id: str = pydantic.Field(description="The message ID to react to with an emoji.")
     emoji: ReactionEmoji = pydantic.Field(description="The emoji to use for the reaction.")
 
+    @retry_response()
     async def execute(
         self, db_connection: AsyncSessionLocal, context: ContextTypes.DEFAULT_TYPE, chat_id: str
     ) -> telegram.MessageReactionUpdated | None:
@@ -85,12 +103,10 @@ class ReactionResponse(BaseAgentResponse):
         )
 
         if not message:
-            logger.error(f"Message with ID {self.react_to_message_id} not found in chat {chat_id}")
-            return None
+            raise InvalidMessageError(self.react_to_message_id)
 
         if message.from_user.id == context.bot.id:
-            logger.warning(f"Cannot react to own message {self.react_to_message_id} in chat {chat_id}")
-            return None
+            raise ReactToSelfError(self.react_to_message_id)
 
         try:
             react_sent = await context.bot.set_message_reaction(
@@ -98,11 +114,15 @@ class ReactionResponse(BaseAgentResponse):
                 message_id=int(self.react_to_message_id),
                 reaction=self.emoji,
             )
+
         except Exception:
             logger.exception(f"Failed to send reaction to message {self.react_to_message_id} in chat {chat_id}")
-            return None
+            raise
+
         else:
             if react_sent:
+                logger.debug(f"Reaction sent to message {self.react_to_message_id} in chat {chat_id}: {self.emoji}")
+
                 # Manually create MessageReactionUpdated object as Telegram API does not return it
                 reaction_message = telegram.MessageReactionUpdated(
                     chat=message.chat,
