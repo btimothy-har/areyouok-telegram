@@ -4,14 +4,18 @@ import logging
 from collections import defaultdict
 from datetime import UTC
 from datetime import datetime
-from datetime import timedelta
 
 import telegram
 from telegram.ext import ContextTypes
 
+from areyouok_telegram.agent import AgentDependencies
+from areyouok_telegram.agent import AgentResponse
+from areyouok_telegram.agent import areyouok_agent
+from areyouok_telegram.agent import convert_telegram_message_to_model_message
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database_session
+from areyouok_telegram.jobs.exceptions import NoActiveSessionError
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +42,8 @@ class ConversationJob:
         """
         self.chat_id = chat_id
 
-        self._reply_lock: bool = True
+        self._last_response = None
+        self._run_timestamp = datetime.now(UTC)
         self._run_count = 0
 
     @property
@@ -65,86 +70,99 @@ class ConversationJob:
         """Process conversation for this chat."""
 
         self._run_count += 1
-        now = datetime.now(UTC)
+        self._run_timestamp = datetime.now(UTC)
 
         logger.info(f"Processing conversation for chat {self.chat_id}. Run count: {self._run_count}")
 
-        action_taken = False
         async with async_database_session() as conn:
             chat_session = await self._get_active_session(conn)
 
             if not chat_session:
-                logger.debug(f"No active session found for chat {self.chat_id}")
+                # This is unexpected behaviour, could imply race conditions in play.
+                raise NoActiveSessionError(self.chat_id)
+
             elif chat_session.has_bot_responded:
-                logger.debug(f"Bot has already responded to chat {self.chat_id}, skipping processing")
+                logger.debug(f"No new updates in {self.chat_id}, skipping processing.")
+                return
+
             else:
-                # If last message was sent more than 30 seconds ago, release reply lock
-                if (now - chat_session.last_user_message) > timedelta(seconds=30):
-                    self._reply_lock = False
+                # Fetch messages for the active session
+                action_taken = await self._generate_response(conn, context, chat_session)
 
-                messages = await chat_session.get_messages(conn)
+                # Exponential backoff when no action is taken
+                if not action_taken:
+                    logger.debug(f"No action taken for chat {self.chat_id}, sleeping for {self.sleep_time}s")
+                    await asyncio.sleep(self.sleep_time)
 
-                if not messages:
-                    logger.debug(f"No messages found for chat {self.chat_id}")
                 else:
-                    action_taken = await self._generate_response(conn, context, messages)
+                    # Reset run count when action is taken
+                    self._run_count = 0
 
-        # Exponential backoff when no action is taken
-        if not action_taken:
-            logger.debug(f"No action taken for chat {self.chat_id}, sleeping for {self.sleep_time}s")
-            await asyncio.sleep(self.sleep_time)
-        else:
-            # Reset run count when action is taken
-            self._run_count = 0
-
-    async def _generate_response(
-        self, conn, context: ContextTypes.DEFAULT_TYPE, messages: list[telegram.Message]
-    ) -> bool:
+    async def _generate_response(self, conn, context: ContextTypes.DEFAULT_TYPE, chat_session: Sessions) -> bool:
         """Process messages for this chat and send appropriate replies.
 
         Returns:
             bool: True if action was taken (message sent), False otherwise
         """
-        logger.debug(f"Processing {len(messages)} messages for chat {self.chat_id}")
-
-        # For now, send a simple "Are you ok?" reply to the most recent message
-        # This is where we'll add more sophisticated conversation logic later
-
-        if self._reply_lock:
-            return False
-
+        messages = await chat_session.get_messages(conn)
         messages.sort(key=lambda msg: msg.date)  # Sort messages by date
 
-        latest_message = messages[-1]
-
         try:
-            # Send reply to the latest message
-            reply_text = "Are you ok? 🤔"
-
-            response_message = await context.bot.send_message(
-                chat_id=int(self.chat_id), text=reply_text, reply_to_message_id=int(latest_message.message_id)
+            agent_run_payload = await areyouok_agent.run(
+                message_history=[
+                    convert_telegram_message_to_model_message(context, msg, self._run_timestamp) for msg in messages
+                ],
+                deps=AgentDependencies(
+                    tg_context=context,
+                    tg_chat_id=self.chat_id,
+                    last_response_type=self._last_response,
+                    db_connection=conn,
+                ),
             )
 
-            # Save the sent message to database
-            await Messages.new_or_update(
-                session=conn,
-                user_id=str(context.bot.id),  # Bot's user ID as the sender
-                chat_id=self.chat_id,
-                message=response_message,
-            )
-
-            active_session = await self._get_active_session(conn)
-            if active_session:
-                # Record the bot's reply in the session
-                await active_session.new_message(timestamp=response_message.date, message_type="bot")
-
-            logger.info(f"Sent reply to chat {self.chat_id}, message {latest_message.message_id}")
+            agent_response: AgentResponse = agent_run_payload.data
 
         except Exception:
-            logger.exception(f"Failed to send reply to chat {self.chat_id}")
+            # TODO: Handle LLM errors
+            logger.exception(f"Failed to generate response for chat {self.chat_id}")
             return False
+
+        try:
+            self._last_response = agent_response.response_type
+
+            response_message = await agent_response.execute(
+                db_connection=conn,
+                context=context,
+                chat_id=self.chat_id,
+            )
+
+        except Exception:
+            # TODO: Handle response execution errors
+            logger.exception(f"Failed to execute response for chat {self.chat_id}")
+            return False
+
         else:
-            return True
+            if response_message:
+                await chat_session.new_activity(
+                    timestamp=response_message.date,
+                    activity_type="bot",
+                )
+
+                await Messages.new_or_update(
+                    session=conn,
+                    user_id=str(context.bot.id),  # Bot's user ID as the sender
+                    chat_id=self.chat_id,
+                    message=response_message,
+                )
+
+                if isinstance(response_message, telegram.Message):
+                    await chat_session.new_message(
+                        timestamp=response_message.date,
+                        message_type="bot",
+                    )
+                return True
+
+        return False
 
 
 async def schedule_conversation_job(context: ContextTypes.DEFAULT_TYPE, chat_id: int, delay_seconds: int = 5) -> None:
@@ -162,7 +180,7 @@ async def schedule_conversation_job(context: ContextTypes.DEFAULT_TYPE, chat_id:
         # Check if a job already exists for this chat
         existing_jobs = context.job_queue.get_jobs_by_name(processor.name)
         if existing_jobs:
-            logger.debug(f"Job already scheduled for chat {chat_id}, skipping")
+            logger.debug(f"Job already scheduled for chat {chat_id}, skipping.")
             return
 
         # Schedule the job to run once after the specified delay
