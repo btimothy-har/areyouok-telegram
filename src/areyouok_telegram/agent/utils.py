@@ -42,9 +42,9 @@ def _telegram_reaction_to_model_message(
     """Convert a Telegram message reaction to a model request or response."""
 
     # TODO: Handle custom and paid reactions
-    reaction_string = ", ".join([
-        r.emoji for r in reaction.new_reaction if r.type == telegram.constants.ReactionType.EMOJI
-    ])
+    reaction_string = ", ".join(
+        [r.emoji for r in reaction.new_reaction if r.type == telegram.constants.ReactionType.EMOJI]
+    )
 
     msg_dict = {
         "reaction": reaction_string,
