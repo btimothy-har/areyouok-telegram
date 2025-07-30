@@ -29,7 +29,7 @@ class ChatAgentDependencies:
 
 chat_agent = pydantic_ai.Agent(
     model=OpenAIModel(
-        model_name="anthropic/claude-3.5-sonnet",
+        model_name="anthropic/claude-sonnet-4",
         provider=OpenRouterProvider(api_key=OPENROUTER_API_KEY),
     ),
     output_type=AgentResponse,
