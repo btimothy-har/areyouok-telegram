@@ -8,9 +8,9 @@ from datetime import datetime
 import telegram
 from telegram.ext import ContextTypes
 
-from areyouok_telegram.agent import AgentDependencies
 from areyouok_telegram.agent import AgentResponse
-from areyouok_telegram.agent import areyouok_agent
+from areyouok_telegram.agent import ChatAgentDependencies
+from areyouok_telegram.agent import chat_agent
 from areyouok_telegram.agent import convert_telegram_message_to_model_message
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data import Sessions
@@ -108,11 +108,11 @@ class ConversationJob:
         messages.sort(key=lambda msg: msg.date)  # Sort messages by date
 
         try:
-            agent_run_payload = await areyouok_agent.run(
+            agent_run_payload = await chat_agent.run(
                 message_history=[
                     convert_telegram_message_to_model_message(context, msg, self._run_timestamp) for msg in messages
                 ],
-                deps=AgentDependencies(
+                deps=ChatAgentDependencies(
                     tg_context=context,
                     tg_chat_id=self.chat_id,
                     last_response_type=self._last_response,

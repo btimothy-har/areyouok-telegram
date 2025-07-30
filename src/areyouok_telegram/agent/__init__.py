@@ -6,8 +6,8 @@ import telegram
 from telegram.ext import ContextTypes
 
 from areyouok_telegram.agent import exceptions
-from areyouok_telegram.agent.agent import AgentDependencies
-from areyouok_telegram.agent.agent import areyouok_agent
+from areyouok_telegram.agent.chat import ChatAgentDependencies
+from areyouok_telegram.agent.chat import chat_agent
 from areyouok_telegram.agent.responses import AgentResponse
 from areyouok_telegram.agent.responses import ReactionResponse
 from areyouok_telegram.agent.responses import TextResponse
@@ -31,10 +31,10 @@ def convert_telegram_message_to_model_message(
 
 
 __all__ = [
-    "areyouok_agent",
+    "chat_agent",
     "exceptions",
     "AgentResponse",
-    "AgentDependencies",
+    "ChatAgentDependencies",
     "convert_telegram_message_to_model_message",
     "ReactionResponse",
     "TextResponse",

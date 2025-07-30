@@ -11,7 +11,7 @@ import pydantic_ai
 import pytest
 from telegram.constants import ReactionEmoji
 
-from areyouok_telegram.agent import AgentDependencies
+from areyouok_telegram.agent import ChatAgentDependencies
 from areyouok_telegram.agent.responses import DoNothingResponse
 from areyouok_telegram.agent.responses import ReactionResponse
 from areyouok_telegram.agent.responses import TextResponse
@@ -52,8 +52,8 @@ def mock_input_message():
 
 @pytest.fixture
 def mock_agent_run():
-    """Create a mock for areyouok_agent.run with configurable response."""
-    with patch("areyouok_telegram.agent.areyouok_agent.run") as mock_run:
+    """Create a mock for chat_agent.run with configurable response."""
+    with patch("areyouok_telegram.agent.chat_agent.run") as mock_run:
         # Default to TextResponse, but can be overridden in tests
         mock_result = MagicMock()
         mock_result.data = TextResponse(reasoning="Default test reasoning", message_text="Default test response")
@@ -295,7 +295,7 @@ class TestConversationJob:
             mock_agent_run.assert_called_once()
             call_args = mock_agent_run.call_args
             assert len(call_args.kwargs["message_history"]) == 2
-            assert isinstance(call_args.kwargs["deps"], AgentDependencies)
+            assert isinstance(call_args.kwargs["deps"], ChatAgentDependencies)
             assert call_args.kwargs["deps"].tg_chat_id == "123456"
 
             # Verify response was executed
@@ -354,7 +354,7 @@ class TestConversationJob:
             mock_agent_run.assert_called_once()
             call_args = mock_agent_run.call_args
             assert len(call_args.kwargs["message_history"]) == 1
-            assert isinstance(call_args.kwargs["deps"], AgentDependencies)
+            assert isinstance(call_args.kwargs["deps"], ChatAgentDependencies)
             assert call_args.kwargs["deps"].tg_chat_id == "123456"
 
             # Verify response was executed
@@ -407,7 +407,7 @@ class TestConversationJob:
             mock_agent_run.assert_called_once()
             call_args = mock_agent_run.call_args
             assert len(call_args.kwargs["message_history"]) == 1
-            assert isinstance(call_args.kwargs["deps"], AgentDependencies)
+            assert isinstance(call_args.kwargs["deps"], ChatAgentDependencies)
             assert call_args.kwargs["deps"].tg_chat_id == "123456"
 
             # Verify response was executed

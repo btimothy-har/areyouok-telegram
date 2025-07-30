@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class AgentDependencies:
+class ChatAgentDependencies:
     """Context data passed to the LLM agent for making decisions."""
 
     # TODO: Add user preferences so we have context
@@ -27,20 +27,20 @@ class AgentDependencies:
     db_connection: AsyncSessionLocal
 
 
-areyouok_agent = pydantic_ai.Agent(
+chat_agent = pydantic_ai.Agent(
     model=OpenAIModel(
         model_name="anthropic/claude-3.5-sonnet",
         provider=OpenRouterProvider(api_key=OPENROUTER_API_KEY),
     ),
     output_type=AgentResponse,
-    deps_type=AgentDependencies,
+    deps_type=ChatAgentDependencies,
     name="areyouok_telegram_agent",
     end_strategy="exhaustive",
 )
 
 
-@areyouok_agent.instructions
-async def generate_instructions(ctx: pydantic_ai.RunContext[AgentDependencies]) -> str:
+@chat_agent.instructions
+async def generate_instructions(ctx: pydantic_ai.RunContext[ChatAgentDependencies]) -> str:
     return f"""
 <identity>
 You are to identify yourself as "RUOK", if asked to do so. You are an empathetic and \
@@ -102,8 +102,10 @@ You last decided to: {ctx.deps.last_response_type}
     """
 
 
-@areyouok_agent.output_validator
-async def validate_agent_response(ctx: pydantic_ai.RunContext[AgentDependencies], data: AgentResponse) -> AgentResponse:
+@chat_agent.output_validator
+async def validate_agent_response(
+    ctx: pydantic_ai.RunContext[ChatAgentDependencies], data: AgentResponse
+) -> AgentResponse:
     if data.response_type == "ReactionResponse":
         message, _ = await Messages.retrieve_message_by_id(
             session=ctx.deps.db_connection,

@@ -16,9 +16,9 @@ from pydantic_ai.models.test import TestModel
 from pydantic_ai.usage import Usage
 from telegram.constants import ReactionEmoji
 
-from areyouok_telegram.agent import AgentDependencies
-from areyouok_telegram.agent import areyouok_agent
-from areyouok_telegram.agent.agent import validate_agent_response
+from areyouok_telegram.agent import ChatAgentDependencies
+from areyouok_telegram.agent import chat_agent
+from areyouok_telegram.agent.chat import validate_agent_response
 from areyouok_telegram.agent.exceptions import InvalidMessageError
 from areyouok_telegram.agent.exceptions import ReactToSelfError
 from areyouok_telegram.agent.responses import AgentResponse
@@ -26,6 +26,13 @@ from areyouok_telegram.agent.responses import ReactionResponse
 from areyouok_telegram.agent.responses import TextResponse
 
 
+@pytest.fixture
+def override_chat_agent():
+    with chat_agent.override(model=TestModel()):
+        yield
+
+
+@pytest.mark.usefixtures("override_chat_agent")
 class TestAreyouokAgent:
     """Test suite for the areyouok agent functionality."""
 
@@ -34,46 +41,38 @@ class TestAreyouokAgent:
         """Test basic agent response generation using TestModel."""
         # Create mock dependencies
         mock_context = AsyncMock()
-        test_deps = AgentDependencies(
+        test_deps = ChatAgentDependencies(
             tg_context=mock_context,
             tg_chat_id="123456789",
             last_response_type="no_previous_response",
             db_connection=mock_async_database_session,
         )
 
-        # Use TestModel to mock the agent
-        test_model = TestModel()
+        result = await chat_agent.run("I'm feeling really overwhelmed today", deps=test_deps)
 
-        with areyouok_agent.override(model=test_model):
-            result = await areyouok_agent.run("I'm feeling really overwhelmed today", deps=test_deps)
-
-            # TestModel returns a summary by default
-            assert result.output is not None
-            assert isinstance(result.output, AgentResponse)
+        # TestModel returns a summary by default
+        assert result.output is not None
+        assert isinstance(result.output, AgentResponse)
 
     @pytest.mark.asyncio
     async def test_agent_produces_text_response(self, mock_async_database_session):
         """Test agent produces TextResponse (the first/default output type)."""
         # Create mock dependencies
         mock_context = AsyncMock()
-        test_deps = AgentDependencies(
+        test_deps = ChatAgentDependencies(
             tg_context=mock_context,
             tg_chat_id="123456789",
             last_response_type="no_previous_response",
             db_connection=mock_async_database_session,
         )
 
-        # TestModel will use the first available output type (TextResponse)
-        test_model = TestModel()
+        result = await chat_agent.run("I'm having a really hard time", deps=test_deps)
 
-        with areyouok_agent.override(model=test_model):
-            result = await areyouok_agent.run("I'm having a really hard time", deps=test_deps)
-
-            # Verify the response is TextResponse and has required fields
-            assert isinstance(result.output, TextResponse)
-            assert result.output.reasoning is not None
-            assert result.output.message_text is not None
-            assert isinstance(result.output.message_text, str)
+        # Verify the response is TextResponse and has required fields
+        assert isinstance(result.output, TextResponse)
+        assert result.output.reasoning is not None
+        assert result.output.message_text is not None
+        assert isinstance(result.output.message_text, str)
 
     @pytest.mark.asyncio
     async def test_agent_with_different_contexts(self, mock_async_database_session):
@@ -85,57 +84,30 @@ class TestAreyouokAgent:
         contexts = ["TextResponse", "ReactionResponse", "DoNothingResponse", "no_previous_response"]
 
         for last_response in contexts:
-            test_deps = AgentDependencies(
+            test_deps = ChatAgentDependencies(
                 tg_context=mock_context,
                 tg_chat_id="123456789",
                 last_response_type=last_response,
                 db_connection=mock_async_database_session,
             )
 
-            test_model = TestModel()
+            result = await chat_agent.run(f"Testing with {last_response}", deps=test_deps)
 
-            with areyouok_agent.override(model=test_model):
-                result = await areyouok_agent.run(f"Testing with {last_response}", deps=test_deps)
-
-                # Should always produce TextResponse with TestModel
-                assert isinstance(result.output, TextResponse)
-                assert result.output.reasoning is not None
-
-    @pytest.mark.asyncio
-    async def test_agent_instructions_include_context(self, mock_async_database_session):
-        """Test that agent instructions include the last response type context."""
-        # Create mock dependencies with specific last response
-        mock_context = AsyncMock()
-        test_deps = AgentDependencies(
-            tg_context=mock_context,
-            tg_chat_id="123456789",
-            last_response_type="ReactionResponse",
-            db_connection=mock_async_database_session,
-        )
-
-        test_model = TestModel()
-
-        with areyouok_agent.override(model=test_model):
-            await areyouok_agent.run("How are you doing?", deps=test_deps)
-
-            # Verify the agent ran successfully with the context
-            # Since we can't easily inspect TestModel's internal messages,
-            # we'll just verify the run completed successfully
-            assert test_model.last_model_request_parameters is not None
+            # Should always produce TextResponse with TestModel
+            assert isinstance(result.output, TextResponse)
+            assert result.output.reasoning is not None
 
     @pytest.mark.asyncio
     async def test_agent_handles_multiple_conversation_turns(self, mock_async_database_session):
         """Test agent with multiple conversation turns."""
         # Create mock dependencies
         mock_context = AsyncMock()
-        test_deps = AgentDependencies(
+        test_deps = ChatAgentDependencies(
             tg_context=mock_context,
             tg_chat_id="123456789",
             last_response_type="TextResponse",
             db_connection=mock_async_database_session,
         )
-
-        test_model = TestModel()
 
         # Test multiple conversation turns
         conversation_messages = [
@@ -144,14 +116,13 @@ class TestAreyouokAgent:
             "I don't know how to cope with all this pressure",
         ]
 
-        with areyouok_agent.override(model=test_model):
-            for message in conversation_messages:
-                result = await areyouok_agent.run(message, deps=test_deps)
+        for message in conversation_messages:
+            result = await chat_agent.run(message, deps=test_deps)
 
-                # Each response should be valid TextResponse
-                assert isinstance(result.output, TextResponse)
-                assert result.output.reasoning is not None
-                assert result.output.message_text is not None
+            # Each response should be valid TextResponse
+            assert isinstance(result.output, TextResponse)
+            assert result.output.reasoning is not None
+            assert result.output.message_text is not None
 
 
 class TestAgentValidation:
@@ -162,7 +133,7 @@ class TestAgentValidation:
         """Test validation fails when message ID doesn't exist."""
         # Create mock dependencies
         mock_context = AsyncMock()
-        test_deps = AgentDependencies(
+        test_deps = ChatAgentDependencies(
             tg_context=mock_context,
             tg_chat_id="123456789",
             last_response_type="no_previous_response",
@@ -194,7 +165,7 @@ class TestAgentValidation:
         mock_context = AsyncMock()
         mock_context.bot.id = 999999999
 
-        test_deps = AgentDependencies(
+        test_deps = ChatAgentDependencies(
             tg_context=mock_context,
             tg_chat_id="123456789",
             last_response_type="no_previous_response",
@@ -228,7 +199,7 @@ class TestAgentValidation:
         mock_context = AsyncMock()
         mock_context.bot.id = 999999999
 
-        test_deps = AgentDependencies(
+        test_deps = ChatAgentDependencies(
             tg_context=mock_context,
             tg_chat_id="123456789",
             last_response_type="no_previous_response",
@@ -262,7 +233,7 @@ class TestAgentValidation:
         """Test validation passes through TextResponse without checks."""
         # Create mock dependencies
         mock_context = AsyncMock()
-        test_deps = AgentDependencies(
+        test_deps = ChatAgentDependencies(
             tg_context=mock_context,
             tg_chat_id="123456789",
             last_response_type="no_previous_response",
