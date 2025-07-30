@@ -4,6 +4,7 @@ import hashlib
 from datetime import UTC
 from datetime import datetime
 from unittest.mock import MagicMock
+from unittest.mock import patch
 
 import pytest
 import telegram
@@ -11,6 +12,7 @@ from freezegun import freeze_time
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+from areyouok_telegram.data.messages import InvalidMessageTypeError
 from areyouok_telegram.data.messages import Messages
 
 
@@ -130,6 +132,60 @@ class TestMessagesGenerateMessageKey:
         actual_key = Messages.generate_message_key(user_id, chat_id, message_id, message_type)
 
         assert actual_key == expected_hash
+
+
+class TestInvalidMessageTypeError:
+    """Test the InvalidMessageTypeError exception."""
+
+    def test_exception_initialization(self):
+        """Test that InvalidMessageTypeError initializes correctly with message type."""
+        message_type = "InvalidType"
+        error = InvalidMessageTypeError(message_type)
+
+        assert error.message_type == message_type
+        assert str(error) == "Invalid message type: InvalidType. Expected 'Message' or 'MessageReactionUpdated'."
+
+
+class TestMessagesProperties:
+    """Test the Messages model properties."""
+
+    def test_message_type_obj_with_message(self):
+        """Test message_type_obj property returns telegram.Message class."""
+        messages_record = Messages()
+        messages_record.message_type = "Message"
+
+        assert messages_record.message_type_obj == telegram.Message
+
+    def test_message_type_obj_with_message_reaction_updated(self):
+        """Test message_type_obj property returns telegram.MessageReactionUpdated class."""
+        messages_record = Messages()
+        messages_record.message_type = "MessageReactionUpdated"
+
+        assert messages_record.message_type_obj == telegram.MessageReactionUpdated
+
+    def test_message_type_obj_with_invalid_type(self):
+        """Test message_type_obj property raises exception for invalid type."""
+        messages_record = Messages()
+        messages_record.message_type = "InvalidType"
+
+        with pytest.raises(InvalidMessageTypeError) as exc_info:
+            _ = messages_record.message_type_obj
+
+        assert exc_info.value.message_type == "InvalidType"
+
+    def test_to_telegram_object(self):
+        """Test to_telegram_object method converts payload to telegram object."""
+        messages_record = Messages()
+        messages_record.message_type = "Message"
+        messages_record.payload = {"message_id": 123, "text": "Hello"}
+
+        # Mock the de_json method to return a mock telegram.Message
+        mock_telegram_msg = MagicMock(spec=telegram.Message)
+        with patch.object(telegram.Message, "de_json", return_value=mock_telegram_msg):
+            result = messages_record.to_telegram_object()
+
+            telegram.Message.de_json.assert_called_once_with(messages_record.payload, None)
+            assert result == mock_telegram_msg
 
 
 class TestMessagesNewOrUpdate:
@@ -314,6 +370,19 @@ class TestMessagesNewOrUpdate:
         assert values["payload"] == mock_message_reaction.to_dict.return_value
         assert values["created_at"] == datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
         assert values["updated_at"] == datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
+
+    async def test_new_or_update_invalid_message_type(self, mock_async_database_session):
+        """Test new_or_update raises exception for invalid message type."""
+        user_id = "123456789"
+        chat_id = "987654321"
+
+        # Create an object that is not a valid MessageTypes
+        invalid_message = "not a telegram message"
+
+        with pytest.raises(InvalidMessageTypeError) as exc_info:
+            await Messages.new_or_update(mock_async_database_session, user_id, chat_id, invalid_message)
+
+        assert exc_info.value.message_type == "str"
 
 
 class TestMessagesRetrieveMessageById:
