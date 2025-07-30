@@ -1,5 +1,9 @@
 name: CI
 
+env:
+  ENV: "test_env"
+  OPENROUTER_API_KEY: "API_KEY_NOT_NEEDED_FOR_TESTS"
+
 on:
   push:
   pull_request:
