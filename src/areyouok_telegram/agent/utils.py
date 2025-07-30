@@ -1,17 +1,14 @@
 import json
 from datetime import datetime
 
+import pydantic_ai
 import telegram
-from pydantic_ai.messages import ModelRequest
-from pydantic_ai.messages import ModelResponse
-from pydantic_ai.messages import TextPart
-from pydantic_ai.messages import UserPromptPart
 from telegram.ext import ContextTypes
 
 
 def _telegram_message_to_model_message(
     context: ContextTypes.DEFAULT_TYPE, message: telegram.Message, ts_reference: datetime
-) -> ModelRequest | ModelResponse:
+) -> pydantic_ai.messages.ModelMessage:
     """Convert a Telegram message to a model request or response."""
 
     msg_dict = {
@@ -21,9 +18,9 @@ def _telegram_message_to_model_message(
     }
 
     if message.from_user and message.from_user.id != context.bot.id:
-        return ModelRequest(
+        return pydantic_ai.messages.ModelRequest(
             parts=[
-                UserPromptPart(
+                pydantic_ai.messages.UserPromptPart(
                     content=json.dumps(msg_dict),
                     timestamp=message.date,
                     part_kind="user-prompt",
@@ -32,8 +29,8 @@ def _telegram_message_to_model_message(
             kind="request",
         )
     else:
-        return ModelResponse(
-            parts=[TextPart(content=json.dumps(msg_dict), part_kind="text")],
+        return pydantic_ai.messages.ModelResponse(
+            parts=[pydantic_ai.messages.TextPart(content=json.dumps(msg_dict), part_kind="text")],
             timestamp=message.date,
             kind="response",
         )
@@ -41,7 +38,7 @@ def _telegram_message_to_model_message(
 
 def _telegram_reaction_to_model_message(
     context: ContextTypes.DEFAULT_TYPE, reaction: telegram.MessageReactionUpdated, ts_reference: datetime
-) -> ModelRequest | ModelResponse:
+) -> pydantic_ai.messages.ModelMessage:
     """Convert a Telegram message reaction to a model request or response."""
 
     # TODO: Handle custom and paid reactions
@@ -56,9 +53,9 @@ def _telegram_reaction_to_model_message(
     }
 
     if reaction.user and reaction.user.id != context.bot.id:
-        return ModelRequest(
+        return pydantic_ai.messages.ModelRequest(
             parts=[
-                UserPromptPart(
+                pydantic_ai.messages.UserPromptPart(
                     content=json.dumps(msg_dict),
                     timestamp=reaction.date,
                     part_kind="user-prompt",
@@ -67,8 +64,8 @@ def _telegram_reaction_to_model_message(
             kind="request",
         )
     else:
-        return ModelResponse(
-            parts=[TextPart(content=json.dumps(msg_dict), part_kind="text")],
+        return pydantic_ai.messages.ModelResponse(
+            parts=[pydantic_ai.messages.TextPart(content=json.dumps(msg_dict), part_kind="text")],
             timestamp=reaction.date,
             kind="response",
         )

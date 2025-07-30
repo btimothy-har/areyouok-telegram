@@ -1,10 +1,7 @@
-class BaseResponseError(Exception):
-    """Base class for all response errors."""
-
-    pass
+import pydantic_ai
 
 
-class InvalidMessageError(BaseResponseError):
+class InvalidMessageError(pydantic_ai.ModelRetry):
     """Exception raised when a message ID cannot be found."""
 
     def __init__(self, message_id: str):
@@ -12,7 +9,7 @@ class InvalidMessageError(BaseResponseError):
         self.message_id = message_id
 
 
-class ReactToSelfError(BaseResponseError):
+class ReactToSelfError(pydantic_ai.ModelRetry):
     """Exception raised when the agent tries to react to its own message."""
 
     def __init__(self, message_id: str):

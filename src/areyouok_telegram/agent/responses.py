@@ -9,8 +9,6 @@ import tenacity
 from telegram.constants import ReactionEmoji
 from telegram.ext import ContextTypes
 
-from areyouok_telegram.agent.exceptions import InvalidMessageError
-from areyouok_telegram.agent.exceptions import ReactToSelfError
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data.connection import AsyncSessionLocal
 
@@ -51,7 +49,7 @@ class TextResponse(BaseAgentResponse):
 
     message_text: str = pydantic.Field(description="The text message to send as a reply to the user.")
     reply_to_message_id: str | None = pydantic.Field(
-        default=None, description="Optional message ID to reply to, if the response is a reply to a specific message."
+        default=None, description="Message ID to reply to, if replying directly to a message. Use only when necessary."
     )
 
     @retry_response()
@@ -102,12 +100,6 @@ class ReactionResponse(BaseAgentResponse):
             chat_id=chat_id,
         )
 
-        if not message:
-            raise InvalidMessageError(self.react_to_message_id)
-
-        if message.from_user.id == context.bot.id:
-            raise ReactToSelfError(self.react_to_message_id)
-
         try:
             react_sent = await context.bot.set_message_reaction(
                 chat_id=int(chat_id),
@@ -145,3 +137,6 @@ class DoNothingResponse(BaseAgentResponse):
         """Execute the do-nothing action."""
         logger.debug(f"DoNothingResponse executed for chat {chat_id}. No action taken.")
         return None
+
+
+AgentResponse = TextResponse | ReactionResponse | DoNothingResponse
