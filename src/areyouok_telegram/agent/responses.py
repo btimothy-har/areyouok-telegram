@@ -124,8 +124,7 @@ class ReactionResponse(BaseAgentResponse):
                     new_reaction=(telegram.ReactionTypeEmoji(emoji=self.emoji),),
                     user=await context.bot.get_me(),
                 )
-
-            return reaction_message
+                return reaction_message
 
         return None
 
