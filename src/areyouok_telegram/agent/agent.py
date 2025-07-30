@@ -2,11 +2,14 @@ import logging
 from dataclasses import dataclass
 
 import pydantic_ai
+from pydantic_ai.models.openai import OpenAIModel
+from pydantic_ai.providers.openrouter import OpenRouterProvider
 from telegram.ext import ContextTypes
 
 from areyouok_telegram.agent.exceptions import InvalidMessageError
 from areyouok_telegram.agent.exceptions import ReactToSelfError
 from areyouok_telegram.agent.responses import AgentResponse
+from areyouok_telegram.config import OPENROUTER_API_KEY
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data.connection import AsyncSessionLocal
 
@@ -25,7 +28,10 @@ class AgentDependencies:
 
 
 areyouok_agent = pydantic_ai.Agent(
-    model="openai:gpt-4o",
+    model=OpenAIModel(
+        model_name="anthropic/claude-3.5-sonnet",
+        provider=OpenRouterProvider(api_key=OPENROUTER_API_KEY),
+    ),
     result_type=AgentResponse,
     deps_type=AgentDependencies,
     name="areyouok_telegram_agent",
