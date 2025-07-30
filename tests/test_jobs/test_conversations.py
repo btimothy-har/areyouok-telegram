@@ -9,9 +9,11 @@ from unittest.mock import patch
 
 import pydantic_ai
 import pytest
+from pydantic_ai.models.test import TestModel
 from telegram.constants import ReactionEmoji
 
 from areyouok_telegram.agent import AgentDependencies
+from areyouok_telegram.agent import areyouok_agent
 from areyouok_telegram.agent.responses import DoNothingResponse
 from areyouok_telegram.agent.responses import ReactionResponse
 from areyouok_telegram.agent.responses import TextResponse
@@ -255,6 +257,9 @@ class TestConversationJob:
     ):
         """Test _generate_response when agent returns a TextResponse."""
 
+        # Mock agent run to return a TextResponse
+        mock_agent_run.return_value.data = mock_text_response
+
         # Use mock messages from fixtures
         msg1 = MagicMock()
         msg1.date = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
@@ -283,7 +288,8 @@ class TestConversationJob:
         bot_response = mock_text_response.execute.return_value
 
         with patch("areyouok_telegram.data.Messages.new_or_update") as mock_new_or_update:
-            result = await mock_job._generate_response(conn, context, mock_session)
+            with areyouok_agent.override(model=TestModel()):
+                result = await mock_job._generate_response(conn, context, mock_session)
 
             assert result is True
             assert mock_job._last_response == "TextResponse"
@@ -342,7 +348,8 @@ class TestConversationJob:
         bot_response = mock_reaction_response.execute.return_value
 
         with patch("areyouok_telegram.data.Messages.new_or_update") as mock_new_or_update:
-            result = await mock_job._generate_response(conn, context, mock_session)
+            with areyouok_agent.override(model=TestModel()):
+                result = await mock_job._generate_response(conn, context, mock_session)
 
             assert result is True
             assert mock_job._last_response == "ReactionResponse"
@@ -370,48 +377,56 @@ class TestConversationJob:
             mock_session.new_activity.assert_called_once_with(timestamp=bot_response.date, activity_type="bot")
 
     @pytest.mark.asyncio
-    async def test_generate_response_with_do_nothing_response(self, mock_async_database_session):
+    @pytest.mark.usefixtures("mock_input_message")
+    async def test_generate_response_with_do_nothing_response(
+        self, mock_job, mock_session, mock_agent_run, mock_do_nothing_response
+    ):
         """Test _generate_response when agent returns a DoNothingResponse."""
-        job = ConversationJob("123456")
 
         # Mock messages
         message = MagicMock()
         message.date = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
 
+        messages = [message]
+
         # Mock context
         context = MagicMock()
 
-        # Use mock database session from fixture
-        conn = mock_async_database_session
+        # Mock connection
+        conn = AsyncMock()
 
-        # Mock active session
-        mock_session = MagicMock()
-        mock_session.get_messages = AsyncMock(return_value=[message])
-        mock_session.new_activity = AsyncMock()
+        # Use mock session from fixture
+        mock_session.get_messages = AsyncMock(return_value=messages)
 
-        # Mock agent response
-        do_nothing_response = DoNothingResponse(reasoning="No response needed at this time")
+        # Configure agent to return the mock DoNothingResponse
+        mock_agent_run.return_value.data = mock_do_nothing_response
 
-        mock_agent_result = MagicMock()
-        mock_agent_result.data = do_nothing_response
+        with patch("areyouok_telegram.data.Messages.new_or_update") as mock_new_or_update:
+            with areyouok_agent.override(model=TestModel()):
+                result = await mock_job._generate_response(conn, context, mock_session)
 
-        with patch("areyouok_telegram.agent.areyouok_agent.run", return_value=mock_agent_result):
-            with patch("areyouok_telegram.agent.convert_telegram_message_to_model_message"):
-                with patch.object(DoNothingResponse, "execute", AsyncMock(return_value=None)) as mock_execute:
-                    with patch("areyouok_telegram.data.Messages.new_or_update") as mock_new_or_update:
-                        result = await job._generate_response(conn, context, mock_session)
+            assert result is False
+            assert mock_job._last_response == "DoNothingResponse"
 
-                        assert result is False
-                        assert job._last_response == "DoNothingResponse"
+            # Verify agent was called correctly
+            mock_agent_run.assert_called_once()
+            call_args = mock_agent_run.call_args
+            assert len(call_args.kwargs["message_history"]) == 1
+            assert isinstance(call_args.kwargs["deps"], AgentDependencies)
+            assert call_args.kwargs["deps"].tg_chat_id == "123456"
 
-                        # Verify response was executed
-                        mock_execute.assert_called_once()
+            # Verify response was executed
+            mock_do_nothing_response.execute.assert_called_once()
+            execute_args = mock_do_nothing_response.execute.call_args
+            assert execute_args.kwargs["db_connection"] == conn
+            assert execute_args.kwargs["context"] == context
+            assert execute_args.kwargs["chat_id"] == "123456"
 
-                        # Verify no message was saved
-                        mock_new_or_update.assert_not_called()
+            # Verify no message was saved
+            mock_new_or_update.assert_not_called()
 
-                        # Verify no session activity was updated
-                        mock_session.new_activity.assert_not_called()
+            # Verify no session activity was updated
+            mock_session.new_activity.assert_not_called()
 
     @pytest.mark.asyncio
     @pytest.mark.usefixtures("mock_input_message")
@@ -436,7 +451,8 @@ class TestConversationJob:
         # Configure agent to fail
         mock_agent_run.side_effect = Exception("Agent error")
 
-        result = await mock_job._generate_response(conn, context, mock_session)
+        with areyouok_agent.override(model=TestModel()):
+            result = await mock_job._generate_response(conn, context, mock_session)
 
         assert result is False
         # Last response should not be updated on failure
@@ -473,7 +489,8 @@ class TestConversationJob:
         # Configure text response execution to fail
         mock_text_response.execute.side_effect = Exception("Network error")
 
-        result = await mock_job._generate_response(conn, context, mock_session)
+        with areyouok_agent.override(model=TestModel()):
+            result = await mock_job._generate_response(conn, context, mock_session)
 
         assert result is False
         # Last response should be updated even if execution fails

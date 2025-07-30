@@ -11,9 +11,7 @@ from unittest.mock import patch
 import pydantic_ai
 import pytest
 import telegram
-from pydantic_ai.models.test import TestModel
 
-from areyouok_telegram.agent.agent import areyouok_agent
 from areyouok_telegram.data import Sessions
 
 DEFAULT_DATETIME = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
@@ -27,14 +25,6 @@ def prevent_model_requests():
     yield
     # Reset to default after test
     pydantic_ai.models.ALLOW_MODEL_REQUESTS = True
-
-
-@pytest.fixture(autouse=True)
-def mock_areyouok_agent():
-    """Mock the areyouok_agent with TestModel to prevent real LLM calls."""
-    # Use TestModel to mock the agent's responses
-    with areyouok_agent.override(model=TestModel()):
-        yield
 
 
 @pytest.fixture(autouse=True)
