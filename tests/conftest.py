@@ -8,12 +8,23 @@ from unittest.mock import MagicMock
 from unittest.mock import create_autospec
 from unittest.mock import patch
 
+import pydantic_ai
 import pytest
 import telegram
 
 from areyouok_telegram.data import Sessions
 
 DEFAULT_DATETIME = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
+
+
+@pytest.fixture(autouse=True)
+def prevent_model_requests():
+    """Prevent accidental requests to real LLM models during testing."""
+    # This global setting prevents any real model requests
+    pydantic_ai.models.ALLOW_MODEL_REQUESTS = False
+    yield
+    # Reset to default after test
+    pydantic_ai.models.ALLOW_MODEL_REQUESTS = True
 
 
 @pytest.fixture(autouse=True)
