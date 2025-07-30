@@ -19,11 +19,12 @@ class Users(Base):
     __tablename__ = "users"
     __table_args__ = {"schema": ENV}
 
-    num = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(String, nullable=False, unique=True)
     is_bot = Column(BOOLEAN, nullable=False)
     language_code = Column(String, nullable=True)
     is_premium = Column(BOOLEAN, nullable=False, default=False)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False)
     updated_at = Column(TIMESTAMP(timezone=True), nullable=False)
 

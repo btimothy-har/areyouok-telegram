@@ -1,5 +1,10 @@
 name: CI
 
+env:
+  ENV: "test_env"
+  PTB_TIMEDELTA: "1"
+  OPENROUTER_API_KEY: "API_KEY_NOT_NEEDED_FOR_TESTS"
+
 on:
   push:
   pull_request:

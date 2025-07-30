@@ -26,6 +26,7 @@ async def on_new_update(update: telegram.Update, context: ContextTypes.DEFAULT_T
 
         if update.effective_chat:
             update_tasks.append(asyncio.create_task(Chats.new_or_update(session=session, chat=update.effective_chat)))
+
             # Schedule conversation job for any update with a chat
             conversation_job = schedule_conversation_job(context=context, chat_id=str(update.effective_chat.id))
             update_tasks.append(asyncio.create_task(conversation_job))
@@ -36,7 +37,7 @@ async def on_new_update(update: telegram.Update, context: ContextTypes.DEFAULT_T
 async def on_error_event(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Log the error and send a telegram message to notify the developer."""
     if not update:
-        logger.error("An error occurred but no update was provided.", exc_info=context.error)
+        logger.error(str(context.error), exc_info=context.error)
     else:
         logger.error(f"Exception while handling an update: {update.update_id}", exc_info=context.error)
 

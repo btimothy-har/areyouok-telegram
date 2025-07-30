@@ -4,12 +4,14 @@ import telegram
 from telegram.ext import Application
 from telegram.ext import ApplicationBuilder
 from telegram.ext import MessageHandler
+from telegram.ext import MessageReactionHandler
 from telegram.ext import TypeHandler
 from telegram.ext import filters
 
 from areyouok_telegram.config import TELEGRAM_BOT_TOKEN
 from areyouok_telegram.handlers import on_edit_message
 from areyouok_telegram.handlers import on_error_event
+from areyouok_telegram.handlers import on_message_react
 from areyouok_telegram.handlers import on_new_message
 from areyouok_telegram.handlers import on_new_update
 from areyouok_telegram.setup import database_setup
@@ -44,7 +46,12 @@ def create_application() -> Application:
 
     # Add handlers by group
     application.add_handler(TypeHandler(telegram.Update, on_new_update, block=True), group=0)
+
+    # Message Handlers
     application.add_handler(MessageHandler(filters.UpdateType.MESSAGE, on_new_message, block=False), group=1)
     application.add_handler(MessageHandler(filters.UpdateType.EDITED_MESSAGE, on_edit_message, block=False), group=1)
+
+    # Reaction Handler
+    application.add_handler(MessageReactionHandler(on_message_react, message_reaction_types=-1, block=False), group=1)
 
     return application

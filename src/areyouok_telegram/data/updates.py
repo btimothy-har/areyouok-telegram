@@ -20,10 +20,11 @@ class Updates(Base):
     __tablename__ = "updates"
     __table_args__ = {"schema": ENV}
 
-    num = Column(Integer, primary_key=True, autoincrement=True)
     update_key = Column(String, nullable=False, unique=True)
     update_id = Column(String, nullable=False)
     payload = Column(JSONB, nullable=False)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False)
     updated_at = Column(TIMESTAMP(timezone=True), nullable=False)
 

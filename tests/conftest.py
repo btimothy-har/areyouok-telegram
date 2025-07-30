@@ -8,12 +8,23 @@ from unittest.mock import MagicMock
 from unittest.mock import create_autospec
 from unittest.mock import patch
 
+import pydantic_ai
 import pytest
 import telegram
 
 from areyouok_telegram.data import Sessions
 
 DEFAULT_DATETIME = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
+
+
+@pytest.fixture(autouse=True)
+def prevent_model_requests():
+    """Prevent accidental requests to real LLM models during testing."""
+    # This global setting prevents any real model requests
+    pydantic_ai.models.ALLOW_MODEL_REQUESTS = False
+    yield
+    # Reset to default after test
+    pydantic_ai.models.ALLOW_MODEL_REQUESTS = True
 
 
 @pytest.fixture(autouse=True)
@@ -143,6 +154,7 @@ def mock_update_empty():
     mock_update.update_id = 1
     mock_update.message = None
     mock_update.edited_message = None
+    mock_update.message_reaction = None
     mock_update.effective_user = None
     mock_update.effective_chat = None
 
@@ -172,6 +184,47 @@ def mock_update_private_chat_edited_message(mock_update_empty, mock_edited_priva
 
 
 @pytest.fixture
+def mock_reaction_type_emoji():
+    """Create a mock ReactionTypeEmoji object."""
+    mock_reaction = MagicMock()
+    mock_reaction.type = "emoji"
+    mock_reaction.emoji = "❤️"
+    return mock_reaction
+
+
+@pytest.fixture
+def mock_message_reaction(mock_user, mock_private_chat, mock_reaction_type_emoji):
+    """Create a mock telegram.MessageReactionUpdated object."""
+    mock_reaction = create_autospec(telegram.MessageReactionUpdated, spec_set=True, instance=True)
+
+    mock_reaction.chat = mock_private_chat
+    mock_reaction.message_id = 123
+    mock_reaction.user = mock_user
+    mock_reaction.date = DEFAULT_DATETIME
+
+    # Mock old and new reactions as tuples of ReactionType objects
+    old_reaction_type = MagicMock()
+    old_reaction_type.type = "emoji"
+    old_reaction_type.emoji = "👍"
+
+    mock_reaction.old_reaction = (old_reaction_type,)
+    mock_reaction.new_reaction = (mock_reaction_type_emoji,)
+
+    return mock_reaction
+
+
+@pytest.fixture
+def mock_update_message_reaction(mock_update_empty, mock_message_reaction):
+    """Create a mock telegram.Update object with message reaction."""
+
+    mock_update_empty.message_reaction = mock_message_reaction
+    mock_update_empty.effective_user = mock_message_reaction.user
+    mock_update_empty.effective_chat = mock_message_reaction.chat
+
+    return mock_update_empty
+
+
+@pytest.fixture
 def mock_session():
     """Create a mock Sessions object."""
 
@@ -180,11 +233,13 @@ def mock_session():
     mock_session.last_user_message = DEFAULT_DATETIME
     mock_session.last_bot_message = None
     mock_session.last_user_activity = DEFAULT_DATETIME
+    mock_session.last_bot_activity = None
     mock_session.session_end = None
     mock_session.message_count = None
     mock_session.new_message = AsyncMock()
-    mock_session.new_user_activity = AsyncMock()
+    mock_session.new_activity = AsyncMock()
     mock_session.close_session = AsyncMock()
     mock_session.get_messages = AsyncMock()
+    mock_session.has_bot_responded = False
 
     return mock_session

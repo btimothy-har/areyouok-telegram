@@ -16,3 +16,11 @@ class NoEditedMessageError(BaseHandlerError):
     def __init__(self, update_id):
         super().__init__(f"Expected to receive an edited message in update: {update_id}")
         self.update_id = update_id
+
+
+class NoMessageReactionError(BaseHandlerError):
+    """Raised when a message reaction is expected but not found."""
+
+    def __init__(self, update_id):
+        super().__init__(f"Expected to receive a message reaction in update: {update_id}")
+        self.update_id = update_id

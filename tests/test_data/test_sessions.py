@@ -3,14 +3,13 @@
 import hashlib
 from datetime import UTC
 from datetime import datetime
+from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
-import pytest
 from freezegun import freeze_time
 from sqlalchemy import select
 
-from areyouok_telegram.data.sessions import InvalidMessageTypeError
 from areyouok_telegram.data.sessions import Sessions
 
 
@@ -195,13 +194,12 @@ class TestSessionsNewMessage:
         """Test recording first user message."""
         # Create a session instance
         session = Sessions()
-        session.last_user_activity = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
         session.message_count = None
 
         new_timestamp = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
 
         # Record user message
-        await session.new_message(new_timestamp, "user")
+        await session.new_message(new_timestamp, is_user=True)
 
         # Verify updates
         assert session.last_user_message == new_timestamp
@@ -213,13 +211,12 @@ class TestSessionsNewMessage:
         """Test recording user message with existing message count."""
         # Create a session instance with existing message count
         session = Sessions()
-        session.last_user_activity = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
         session.message_count = 5
 
         new_timestamp = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
 
         # Record user message
-        await session.new_message(new_timestamp, "user")
+        await session.new_message(new_timestamp, is_user=True)
 
         # Verify updates
         assert session.last_user_message == new_timestamp
@@ -230,48 +227,127 @@ class TestSessionsNewMessage:
         """Test recording bot message doesn't increment user count."""
         # Create a session instance
         session = Sessions()
-        session.last_user_activity = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
         session.last_user_message = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
         session.message_count = 3
 
         new_timestamp = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
 
         # Record bot message
-        await session.new_message(new_timestamp, "bot")
+        await session.new_message(new_timestamp, is_user=False)
 
         # Verify updates
         assert session.last_bot_message == new_timestamp
-        assert session.last_user_activity == new_timestamp
+        assert session.last_bot_activity == new_timestamp
         assert session.message_count == 3  # Should not increment for bot messages
         assert session.last_user_message == datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)  # Unchanged
 
-    async def test_new_message_invalid_type(self):
-        """Test that invalid message_type raises InvalidMessageTypeError."""
+    async def test_new_message_calls_new_activity(self):
+        """Test that new_message calls new_activity internally."""
         session = Sessions()
         new_timestamp = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
 
-        with pytest.raises(InvalidMessageTypeError, match="Invalid message_type: invalid. Must be 'user' or 'bot'."):
-            await session.new_message(new_timestamp, "invalid")  # type: ignore
+        # Mock new_activity to verify it's called
+        with patch.object(session, "new_activity", new=AsyncMock()) as mock_activity:
+            await session.new_message(new_timestamp, is_user=True)
+
+            # Verify new_activity was called
+            mock_activity.assert_called_once_with(new_timestamp, is_user=True)
+
+    async def test_new_message_timestamp_only_increases_user(self):
+        """Test that user message timestamps only increase, never decrease."""
+        session = Sessions()
+
+        # Set initial timestamps
+        early_time = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
+        late_time = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
+
+        # Record a user message with late timestamp
+        await session.new_message(late_time, is_user=True)
+        assert session.last_user_message == late_time
+        assert session.last_user_activity == late_time
+
+        # Try to record a user message with earlier timestamp
+        await session.new_message(early_time, is_user=True)
+
+        # Timestamps should not decrease
+        assert session.last_user_message == late_time  # Should stay at late_time
+        assert session.last_user_activity == late_time  # Should stay at late_time
+        assert session.message_count == 2  # But message count should still increment
+
+    async def test_new_message_timestamp_only_increases_bot(self):
+        """Test that bot message timestamps only increase, never decrease."""
+        session = Sessions()
+
+        # Set initial timestamps
+        early_time = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
+        late_time = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
+
+        # Record a bot message with late timestamp
+        await session.new_message(late_time, is_user=False)
+        assert session.last_bot_message == late_time
+        assert session.last_bot_activity == late_time
+
+        # Try to record a bot message with earlier timestamp
+        await session.new_message(early_time, is_user=False)
+
+        # Timestamps should not decrease
+        assert session.last_bot_message == late_time  # Should stay at late_time
+        assert session.last_bot_activity == late_time  # Should stay at late_time
 
 
-class TestSessionsNewUserActivity:
-    """Test the new_user_activity method."""
+class TestSessionsNewActivity:
+    """Test the new_activity method."""
 
-    async def test_new_user_activity_no_count_increment(self):
+    async def test_new_activity_user_no_count_increment(self):
         """Test recording user activity without incrementing message count."""
         # Create a session instance
         session = Sessions()
-        session.last_user_activity = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
         session.message_count = 5
 
         new_timestamp = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
 
         # Record user activity (like edit)
-        await session.new_user_activity(new_timestamp)
+        await session.new_activity(new_timestamp, is_user=True)
 
         # Verify only activity timestamp updated
         assert session.last_user_activity == new_timestamp
         assert session.message_count == 5  # Should remain unchanged
+
+    async def test_new_activity_bot(self):
+        """Test recording bot activity."""
+        # Create a session instance
+        session = Sessions()
+
+        new_timestamp = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
+
+        # Record bot activity
+        await session.new_activity(new_timestamp, is_user=False)
+
+        # Verify only bot activity timestamp updated
+        assert session.last_bot_activity == new_timestamp
+        assert session.last_user_activity is None  # User activity should not be set
+
+    async def test_new_activity_timestamp_only_increases(self):
+        """Test that activity timestamps only increase."""
+        session = Sessions()
+
+        early_time = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
+        late_time = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
+
+        # Set user activity to late time
+        await session.new_activity(late_time, is_user=True)
+        assert session.last_user_activity == late_time
+
+        # Try to set earlier time
+        await session.new_activity(early_time, is_user=True)
+        assert session.last_user_activity == late_time  # Should stay at late_time
+
+        # Same for bot activity
+        await session.new_activity(late_time, is_user=False)
+        assert session.last_bot_activity == late_time
+
+        await session.new_activity(early_time, is_user=False)
+        assert session.last_bot_activity == late_time  # Should stay at late_time
 
 
 class TestSessionsCloseSession:
@@ -361,44 +437,58 @@ class TestSessionsGetMessages:
 class TestSessionsHasBotResponded:
     """Test the has_bot_responded property."""
 
-    def test_has_bot_responded_no_bot_message(self):
-        """Test when bot has not sent any message."""
+    def test_has_bot_responded_no_bot_activity(self):
+        """Test when bot has not had any activity."""
         session = Sessions()
-        session.last_bot_message = None
-        session.last_user_message = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
+        session.last_bot_activity = None
+        session.last_user_activity = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
 
         assert session.has_bot_responded is False
 
-    def test_has_bot_responded_no_user_message(self):
-        """Test when there's no user message but bot has messaged."""
+    def test_has_bot_responded_no_user_activity(self):
+        """Test when there's no user activity but bot has been active."""
         session = Sessions()
-        session.last_bot_message = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
-        session.last_user_message = None
+        session.last_bot_activity = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
+        session.last_user_activity = None
 
         assert session.has_bot_responded is True
 
     def test_has_bot_responded_bot_after_user(self):
-        """Test when bot message is after user message."""
+        """Test when bot activity is after user activity."""
         session = Sessions()
-        session.last_user_message = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
-        session.last_bot_message = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
+        session.last_user_activity = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
+        session.last_bot_activity = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
 
         assert session.has_bot_responded is True
 
     def test_has_bot_responded_user_after_bot(self):
-        """Test when user message is after bot message."""
+        """Test when user activity is after bot activity."""
         session = Sessions()
-        session.last_bot_message = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
-        session.last_user_message = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
+        session.last_bot_activity = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
+        session.last_user_activity = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
 
         assert session.has_bot_responded is False
 
     def test_has_bot_responded_same_time(self):
-        """Test when messages have the same timestamp."""
+        """Test when activities have the same timestamp."""
         timestamp = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
         session = Sessions()
-        session.last_bot_message = timestamp
-        session.last_user_message = timestamp
+        session.last_bot_activity = timestamp
+        session.last_user_activity = timestamp
 
         # When timestamps are equal, bot has not responded after user
+        assert session.has_bot_responded is False
+
+    def test_has_bot_responded_with_messages_and_activities(self):
+        """Test has_bot_responded uses activity timestamps, not message timestamps."""
+        session = Sessions()
+        # User sent message early, bot sent message later
+        session.last_user_message = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
+        session.last_bot_message = datetime(2025, 1, 15, 10, 10, 0, tzinfo=UTC)
+
+        # But user had recent activity (like edit or reaction)
+        session.last_user_activity = datetime(2025, 1, 15, 10, 20, 0, tzinfo=UTC)
+        session.last_bot_activity = datetime(2025, 1, 15, 10, 10, 0, tzinfo=UTC)
+
+        # Bot has not responded to latest user activity
         assert session.has_bot_responded is False

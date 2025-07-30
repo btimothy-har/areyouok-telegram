@@ -99,3 +99,25 @@ def test_update_new_message_from_private_chat(mock_update_private_chat_new_messa
     assert (
         mock_update_private_chat_new_message.effective_chat.id == mock_update_private_chat_new_message.message.chat.id
     )
+
+
+def test_mock_message_reaction_fixture(mock_message_reaction):
+    """Test that mock_message_reaction fixture returns a proper Mock."""
+    # Check it's a Mock with telegram.MessageReactionUpdated spec
+    assert hasattr(mock_message_reaction, "_spec_class")
+    assert mock_message_reaction._spec_class == telegram.MessageReactionUpdated
+
+    # Test that __class__.__name__ returns the correct value
+    assert mock_message_reaction.__class__.__name__ == "MessageReactionUpdated"
+
+    # Test that isinstance works correctly
+    assert isinstance(mock_message_reaction, telegram.MessageReactionUpdated)
+
+    # Test fixture attributes
+    assert mock_message_reaction.message_id == 123
+    assert mock_message_reaction.user.id == 987654321
+    assert mock_message_reaction.chat.id == 123456789
+    assert len(mock_message_reaction.old_reaction) == 1
+    assert len(mock_message_reaction.new_reaction) == 1
+    assert mock_message_reaction.old_reaction[0].emoji == "👍"
+    assert mock_message_reaction.new_reaction[0].emoji == "❤️"
