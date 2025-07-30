@@ -38,7 +38,6 @@ class ConversationJob:
 
         Args:
             chat_id: The chat ID to process
-            delay_seconds: How long to wait before processing (default: 30 seconds)
         """
         self.chat_id = chat_id
 
@@ -54,13 +53,6 @@ class ConversationJob:
     @property
     def _id(self) -> str:
         return hashlib.md5(self.name.encode()).hexdigest()
-
-    @property
-    def sleep_time(self) -> float:
-        """Calculate exponential backoff sleep time based on run count."""
-        # TODO: Make max_sleep_time configurable per user (see issue #7)
-        max_sleep_time = 15
-        return min(2**self._run_count, max_sleep_time)
 
     async def _get_active_session(self, conn) -> Sessions | None:
         """Retrieve the active session for this chat."""
@@ -86,17 +78,7 @@ class ConversationJob:
                 return
 
             else:
-                # Fetch messages for the active session
-                action_taken = await self._generate_response(conn, context, chat_session)
-
-                # Exponential backoff when no action is taken
-                if not action_taken:
-                    logger.debug(f"No action taken for chat {self.chat_id}, sleeping for {self.sleep_time}s")
-                    await asyncio.sleep(self.sleep_time)
-
-                else:
-                    # Reset run count when action is taken
-                    self._run_count = 0
+                await self._generate_response(conn, context, chat_session)
 
     async def _generate_response(self, conn, context: ContextTypes.DEFAULT_TYPE, chat_session: Sessions) -> bool:
         """Process messages for this chat and send appropriate replies.
@@ -142,12 +124,12 @@ class ConversationJob:
             return False
 
         else:
-            if response_message:
-                await chat_session.new_activity(
-                    timestamp=response_message.date,
-                    activity_type="bot",
-                )
+            await chat_session.new_activity(
+                timestamp=self._run_timestamp,
+                activity_type="bot",
+            )
 
+            if response_message:
                 await Messages.new_or_update(
                     session=conn,
                     user_id=str(context.bot.id),  # Bot's user ID as the sender
@@ -165,14 +147,14 @@ class ConversationJob:
         return False
 
 
-async def schedule_conversation_job(context: ContextTypes.DEFAULT_TYPE, chat_id: int, delay_seconds: int = 5) -> None:
+async def schedule_conversation_job(context: ContextTypes.DEFAULT_TYPE, chat_id: int, interval: int = 10) -> None:
     """
     Schedule a conversation processing job for a specific chat.
 
     Args:
         context: The bot context
         chat_id: The chat ID to process
-        delay_seconds: How long to wait before processing (default: 5 seconds)
+        interval: The interval in seconds between job runs (default: 10 seconds)
     """
     processor = ConversationJob(chat_id)
 
@@ -186,8 +168,8 @@ async def schedule_conversation_job(context: ContextTypes.DEFAULT_TYPE, chat_id:
         # Schedule the job to run once after the specified delay
         context.job_queue.run_repeating(
             callback=processor.run,
-            interval=1,
-            first=delay_seconds,
+            interval=interval,
+            first=int(interval / 2),
             name=processor.name,
             chat_id=chat_id,
             job_kwargs={

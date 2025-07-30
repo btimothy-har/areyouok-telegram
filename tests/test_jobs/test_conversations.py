@@ -137,28 +137,6 @@ class TestConversationJob:
         expected_id = hashlib.md5(job.name.encode()).hexdigest()
         assert job._id == expected_id
 
-    def test_sleep_time_property(self):
-        """Test the sleep_time property with exponential backoff."""
-        job = ConversationJob("123456")
-
-        # Initial run count is 0
-        assert job.sleep_time == 1  # 2^0 = 1
-
-        job._run_count = 1
-        assert job.sleep_time == 2  # 2^1 = 2
-
-        job._run_count = 2
-        assert job.sleep_time == 4  # 2^2 = 4
-
-        job._run_count = 3
-        assert job.sleep_time == 8  # 2^3 = 8
-
-        job._run_count = 4
-        assert job.sleep_time == 15  # min(2^4=16, 15) = 15
-
-        job._run_count = 5
-        assert job.sleep_time == 15  # min(2^5=32, 15) = 15
-
     @pytest.mark.asyncio
     async def test_get_active_session(self):
         """Test the _get_active_session method."""
@@ -204,49 +182,22 @@ class TestConversationJob:
             mock_generate.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_run_with_action_taken(self, mock_job, mock_session, mock_async_database_session):
-        """Test run when action is taken (message sent)."""
-        mock_job._run_count = 5  # Set high run count
+    async def test_run_calls_generate_response(self, mock_job, mock_session, mock_async_database_session):
+        """Test run calls _generate_response when bot has not responded."""
         context = MagicMock()
 
         # Configure mock session with messages
         mock_session.has_bot_responded = False
         mock_session.get_messages = AsyncMock(return_value=[MagicMock()])
 
-        with patch.object(mock_job, "_generate_response", return_value=True) as mock_generate:
-            with patch("asyncio.sleep") as mock_sleep:
-                await mock_job.run(context)
+        with patch.object(mock_job, "_generate_response") as mock_generate:
+            await mock_job.run(context)
 
-                # Should reset run count when action taken
-                assert mock_job._run_count == 0
+            # Should increment run count
+            assert mock_job._run_count == 1
 
-                # Should not sleep
-                mock_sleep.assert_not_called()
-
-                # Should call generate_response
-                mock_generate.assert_called_once_with(mock_async_database_session, context, mock_session)
-
-    @pytest.mark.asyncio
-    async def test_run_with_no_action_taken(self, mock_job, mock_session):
-        """Test run when no action is taken."""
-        context = MagicMock()
-
-        # Configure mock session with messages
-        mock_session.has_bot_responded = False
-        mock_session.get_messages = AsyncMock(return_value=[MagicMock()])
-
-        with patch.object(mock_job, "_generate_response", return_value=False) as mock_generate:
-            with patch("asyncio.sleep") as mock_sleep:
-                await mock_job.run(context)
-
-                # Should increment run count
-                assert mock_job._run_count == 1
-
-                # Should sleep with exponential backoff
-                mock_sleep.assert_called_once_with(2)  # 2^1 = 2
-
-                # Should call generate_response
-                mock_generate.assert_called_once()
+            # Should call generate_response
+            mock_generate.assert_called_once_with(mock_async_database_session, context, mock_session)
 
     @pytest.mark.asyncio
     @pytest.mark.usefixtures("mock_input_message")
@@ -311,7 +262,7 @@ class TestConversationJob:
             )
 
             # Verify session activities were updated
-            mock_session.new_activity.assert_called_once_with(timestamp=bot_response.date, activity_type="bot")
+            mock_session.new_activity.assert_called_once_with(timestamp=mock_job._run_timestamp, activity_type="bot")
             mock_session.new_message.assert_called_once_with(timestamp=bot_response.date, message_type="bot")
 
     @pytest.mark.asyncio
@@ -370,7 +321,9 @@ class TestConversationJob:
             )
 
             # Verify session activity was updated
-            mock_session.new_activity.assert_called_once_with(timestamp=bot_response.date, activity_type="bot")
+            mock_session.new_activity.assert_called_once_with(timestamp=mock_job._run_timestamp, activity_type="bot")
+            # new_message should NOT be called for reactions
+            mock_session.new_message.assert_not_called()
 
     @pytest.mark.asyncio
     @pytest.mark.usefixtures("mock_input_message")
@@ -420,8 +373,10 @@ class TestConversationJob:
             # Verify no message was saved
             mock_new_or_update.assert_not_called()
 
-            # Verify no session activity was updated
-            mock_session.new_activity.assert_not_called()
+            # Verify session activity was still updated
+            mock_session.new_activity.assert_called_once_with(timestamp=mock_job._run_timestamp, activity_type="bot")
+            # new_message should NOT be called when no response
+            mock_session.new_message.assert_not_called()
 
     @pytest.mark.asyncio
     @pytest.mark.usefixtures("mock_input_message")
@@ -526,7 +481,7 @@ class TestScheduleConversationJob:
         if str(chat_id) in JOB_LOCK:
             del JOB_LOCK[str(chat_id)]
 
-        await schedule_conversation_job(context, chat_id, delay_seconds=10)
+        await schedule_conversation_job(context, chat_id, interval=10)
 
         # Should check for existing jobs
         context.job_queue.get_jobs_by_name.assert_called_once_with("conversation_processor:123456")
@@ -535,8 +490,8 @@ class TestScheduleConversationJob:
         context.job_queue.run_repeating.assert_called_once()
         call_args = context.job_queue.run_repeating.call_args
 
-        assert call_args.kwargs["interval"] == 1
-        assert call_args.kwargs["first"] == 10
+        assert call_args.kwargs["interval"] == 10
+        assert call_args.kwargs["first"] == 5
         assert call_args.kwargs["name"] == "conversation_processor:123456"
         assert call_args.kwargs["chat_id"] == 123456
         assert call_args.kwargs["job_kwargs"]["id"] == "conversation_processor:123456"
@@ -573,8 +528,9 @@ class TestScheduleConversationJob:
         if str(chat_id) in JOB_LOCK:
             del JOB_LOCK[str(chat_id)]
 
-        await schedule_conversation_job(context, chat_id, delay_seconds=60)
+        await schedule_conversation_job(context, chat_id, interval=60)
 
-        # Should schedule with custom delay
+        # Should schedule with custom interval
         call_args = context.job_queue.run_repeating.call_args
-        assert call_args.kwargs["first"] == 60
+        assert call_args.kwargs["interval"] == 60
+        assert call_args.kwargs["first"] == 30
