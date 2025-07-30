@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
+import pydantic_ai
 import pytest
-import telegram
 from telegram.constants import ReactionEmoji
 
 from areyouok_telegram.agent import AgentDependencies
@@ -19,6 +19,96 @@ from areyouok_telegram.jobs.conversations import JOB_LOCK
 from areyouok_telegram.jobs.conversations import ConversationJob
 from areyouok_telegram.jobs.conversations import schedule_conversation_job
 from areyouok_telegram.jobs.exceptions import NoActiveSessionError
+
+
+@pytest.fixture
+def mock_job(mock_session):
+    """Create a mock ConversationJob with pre-patched _get_active_session."""
+    job = ConversationJob("123456")
+
+    # Pre-patch _get_active_session to return the mock_session
+    with patch.object(job, "_get_active_session", return_value=mock_session):
+        yield job
+
+
+@pytest.fixture
+def mock_input_message():
+    """Create a mock message conversion that returns proper ModelMessage objects."""
+    with patch("areyouok_telegram.agent.convert_telegram_message_to_model_message") as mock_convert:
+        # Create a proper ModelRequest message
+        model_request = pydantic_ai.messages.ModelRequest(
+            parts=[
+                pydantic_ai.messages.UserPromptPart(
+                    content='{"text": "Hello", "message_id": "123", "timestamp": "0 seconds ago"}',
+                    timestamp=datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC),
+                    part_kind="user-prompt",
+                )
+            ],
+            kind="request",
+        )
+        mock_convert.return_value = model_request
+        yield mock_convert
+
+
+@pytest.fixture
+def mock_agent_run():
+    """Create a mock for areyouok_agent.run with configurable response."""
+    with patch("areyouok_telegram.agent.areyouok_agent.run") as mock_run:
+        # Default to TextResponse, but can be overridden in tests
+        mock_result = MagicMock()
+        mock_result.data = TextResponse(reasoning="Default test reasoning", message_text="Default test response")
+        mock_run.return_value = mock_result
+        yield mock_run
+
+
+@pytest.fixture
+def mock_text_response(mock_private_message):
+    """Create a mock TextResponse object."""
+    # Create a mock TextResponse with proper execute method
+    mock_response = MagicMock(spec=TextResponse)
+    mock_response.reasoning = "Default test reasoning"
+    mock_response.message_text = "Default test response"
+    mock_response.reply_to_message_id = None
+    mock_response.response_type = "TextResponse"
+
+    # Configure execute method to return proper telegram message
+    bot_message = mock_private_message
+    bot_message.date = datetime(2025, 1, 15, 10, 2, 0, tzinfo=UTC)
+    mock_response.execute = AsyncMock(return_value=bot_message)
+
+    return mock_response
+
+
+@pytest.fixture
+def mock_reaction_response(mock_message_reaction):
+    """Create a mock ReactionResponse object."""
+    # Create a mock ReactionResponse with proper execute method
+    mock_response = MagicMock(spec=ReactionResponse)
+    mock_response.reasoning = "Default test reasoning"
+    mock_response.react_to_message_id = "123"
+    mock_response.emoji = ReactionEmoji.THUMBS_UP
+    mock_response.response_type = "ReactionResponse"
+
+    # Configure execute method to return proper telegram reaction
+    bot_reaction = mock_message_reaction
+    bot_reaction.date = datetime(2025, 1, 15, 10, 2, 0, tzinfo=UTC)
+    mock_response.execute = AsyncMock(return_value=bot_reaction)
+
+    return mock_response
+
+
+@pytest.fixture
+def mock_do_nothing_response():
+    """Create a mock DoNothingResponse object."""
+    # Create a mock DoNothingResponse with proper execute method
+    mock_response = MagicMock(spec=DoNothingResponse)
+    mock_response.reasoning = "Default test reasoning"
+    mock_response.response_type = "DoNothingResponse"
+
+    # Configure execute method to return None
+    mock_response.execute = AsyncMock(return_value=None)
+
+    return mock_response
 
 
 class TestConversationJob:
@@ -88,106 +178,85 @@ class TestConversationJob:
         job = ConversationJob("123456")
         context = MagicMock()
 
-        with patch("areyouok_telegram.jobs.conversations.async_database_session") as mock_db:
-            mock_conn = AsyncMock()
-            mock_db.return_value.__aenter__.return_value = mock_conn
-
-            # No active session
-            with patch.object(job, "_get_active_session", return_value=None):
-                with pytest.raises(NoActiveSessionError) as exc_info:
-                    await job.run(context)
-
-                assert exc_info.value.chat_id == "123456"
-                assert job._run_count == 1
-
-    @pytest.mark.asyncio
-    async def test_run_bot_has_responded(self):
-        """Test run when bot has already responded."""
-        job = ConversationJob("123456")
-        context = MagicMock()
-
-        with patch("areyouok_telegram.jobs.conversations.async_database_session") as mock_db:
-            mock_conn = AsyncMock()
-            mock_db.return_value.__aenter__.return_value = mock_conn
-
-            # Mock active session where bot has responded
-            mock_session = MagicMock()
-            mock_session.has_bot_responded = True
-
-            with patch.object(job, "_get_active_session", return_value=mock_session):
+        # No active session
+        with patch.object(job, "_get_active_session", return_value=None):
+            with pytest.raises(NoActiveSessionError) as exc_info:
                 await job.run(context)
 
-                # Should increment run count
-                assert job._run_count == 1
-
-                # _generate_response should not be called since bot has responded
+            assert exc_info.value.chat_id == "123456"
+            assert job._run_count == 1
 
     @pytest.mark.asyncio
-    async def test_run_with_action_taken(self):
+    async def test_run_bot_has_responded(self, mock_job, mock_session):
+        """Test run when bot has already responded."""
+        context = MagicMock()
+
+        # Configure mock session where bot has responded
+        mock_session.has_bot_responded = True
+
+        with patch.object(mock_job, "_generate_response") as mock_generate:
+            await mock_job.run(context)
+
+            # Should increment run count
+            assert mock_job._run_count == 1
+
+            # _generate_response should not be called since bot has responded
+            mock_generate.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_run_with_action_taken(self, mock_job, mock_session, mock_async_database_session):
         """Test run when action is taken (message sent)."""
-        job = ConversationJob("123456")
-        job._run_count = 5  # Set high run count
+        mock_job._run_count = 5  # Set high run count
         context = MagicMock()
 
-        with patch("areyouok_telegram.jobs.conversations.async_database_session") as mock_db:
-            mock_conn = AsyncMock()
-            mock_db.return_value.__aenter__.return_value = mock_conn
+        # Configure mock session with messages
+        mock_session.has_bot_responded = False
+        mock_session.get_messages = AsyncMock(return_value=[MagicMock()])
 
-            # Mock active session with messages
-            mock_session = MagicMock()
-            mock_session.has_bot_responded = False
-            mock_session.get_messages = AsyncMock(return_value=[MagicMock()])
+        with patch.object(mock_job, "_generate_response", return_value=True) as mock_generate:
+            with patch("asyncio.sleep") as mock_sleep:
+                await mock_job.run(context)
 
-            with patch.object(job, "_get_active_session", return_value=mock_session):
-                with patch.object(job, "_generate_response", return_value=True) as mock_generate:
-                    with patch("asyncio.sleep") as mock_sleep:
-                        await job.run(context)
+                # Should reset run count when action taken
+                assert mock_job._run_count == 0
 
-                        # Should reset run count when action taken
-                        assert job._run_count == 0
+                # Should not sleep
+                mock_sleep.assert_not_called()
 
-                        # Should not sleep
-                        mock_sleep.assert_not_called()
-
-                        # Should call generate_response
-                        mock_generate.assert_called_once_with(mock_conn, context, mock_session)
+                # Should call generate_response
+                mock_generate.assert_called_once_with(mock_async_database_session, context, mock_session)
 
     @pytest.mark.asyncio
-    async def test_run_with_no_action_taken(self):
+    async def test_run_with_no_action_taken(self, mock_job, mock_session):
         """Test run when no action is taken."""
-        job = ConversationJob("123456")
         context = MagicMock()
 
-        with patch("areyouok_telegram.jobs.conversations.async_database_session") as mock_db:
-            mock_conn = AsyncMock()
-            mock_db.return_value.__aenter__.return_value = mock_conn
+        # Configure mock session with messages
+        mock_session.has_bot_responded = False
+        mock_session.get_messages = AsyncMock(return_value=[MagicMock()])
 
-            # Mock active session with messages
-            mock_session = MagicMock()
-            mock_session.has_bot_responded = False
-            mock_session.get_messages = AsyncMock(return_value=[MagicMock()])
+        with patch.object(mock_job, "_generate_response", return_value=False) as mock_generate:
+            with patch("asyncio.sleep") as mock_sleep:
+                await mock_job.run(context)
 
-            with patch.object(job, "_get_active_session", return_value=mock_session):
-                with patch.object(job, "_generate_response", return_value=False) as mock_generate:
-                    with patch("asyncio.sleep") as mock_sleep:
-                        await job.run(context)
+                # Should increment run count
+                assert mock_job._run_count == 1
 
-                        # Should increment run count
-                        assert job._run_count == 1
+                # Should sleep with exponential backoff
+                mock_sleep.assert_called_once_with(2)  # 2^1 = 2
 
-                        # Should sleep with exponential backoff
-                        mock_sleep.assert_called_once_with(2)  # 2^1 = 2
-
-                        # Should call generate_response
-                        mock_generate.assert_called_once()
+                # Should call generate_response
+                mock_generate.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_generate_response_with_text_response(self, mock_private_message, mock_session):
+    @pytest.mark.usefixtures("mock_input_message")
+    async def test_generate_response_with_text_response(
+        self, mock_job, mock_session, mock_agent_run, mock_text_response
+    ):
         """Test _generate_response when agent returns a TextResponse."""
-        job = ConversationJob("123456")
 
         # Use mock messages from fixtures
-        msg1 = mock_private_message
+        msg1 = MagicMock()
         msg1.date = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
         msg1.message_id = 100
 
@@ -199,8 +268,6 @@ class TestConversationJob:
 
         # Mock context
         context = MagicMock()
-        bot_response = mock_private_message  # Use fixture for bot response
-        bot_response.date = datetime(2025, 1, 15, 10, 2, 0, tzinfo=UTC)
         context.bot.id = 999999
 
         # Mock connection
@@ -209,66 +276,54 @@ class TestConversationJob:
         # Use mock session from fixture
         mock_session.get_messages = AsyncMock(return_value=messages)
 
-        # Mock agent response
-        text_response = TextResponse(
-            reasoning="User seems worried",
-            message_text="Are you ok? 🤔",
-            reply_to_message_id="101"
-        )
+        # Configure agent to return the mock TextResponse
+        mock_agent_run.return_value.data = mock_text_response
 
-        mock_agent_result = MagicMock()
-        mock_agent_result.data = text_response
+        # The mock_text_response fixture already provides the bot response
+        bot_response = mock_text_response.execute.return_value
 
-        with patch("areyouok_telegram.agent.areyouok_agent.run", return_value=mock_agent_result) as mock_agent_run:
-            with patch("areyouok_telegram.agent.convert_telegram_message_to_model_message"):
-                with patch.object(TextResponse, "execute", AsyncMock(return_value=bot_response)) as mock_execute:
-                    with patch("areyouok_telegram.data.Messages.new_or_update") as mock_new_or_update:
-                        result = await job._generate_response(conn, context, mock_session)
+        with patch("areyouok_telegram.data.Messages.new_or_update") as mock_new_or_update:
+            result = await mock_job._generate_response(conn, context, mock_session)
 
-                        assert result is True
-                        assert job._last_response == "TextResponse"
+            assert result is True
+            assert mock_job._last_response == "TextResponse"
 
-                        # Verify agent was called correctly
-                        mock_agent_run.assert_called_once()
-                        call_args = mock_agent_run.call_args
-                        assert len(call_args.kwargs["message_history"]) == 2
-                        assert isinstance(call_args.kwargs["deps"], AgentDependencies)
-                        assert call_args.kwargs["deps"].tg_chat_id == "123456"
+            # Verify agent was called correctly
+            mock_agent_run.assert_called_once()
+            call_args = mock_agent_run.call_args
+            assert len(call_args.kwargs["message_history"]) == 2
+            assert isinstance(call_args.kwargs["deps"], AgentDependencies)
+            assert call_args.kwargs["deps"].tg_chat_id == "123456"
 
-                        # Verify response was executed
-                        mock_execute.assert_called_once()
-                        execute_args = mock_execute.call_args
-                        assert execute_args.kwargs["db_connection"] == conn
-                        assert execute_args.kwargs["context"] == context
-                        assert execute_args.kwargs["chat_id"] == "123456"
+            # Verify response was executed
+            mock_text_response.execute.assert_called_once()
+            execute_args = mock_text_response.execute.call_args
+            assert execute_args.kwargs["db_connection"] == conn
+            assert execute_args.kwargs["context"] == context
+            assert execute_args.kwargs["chat_id"] == "123456"
 
-                        # Verify message was saved
-                        mock_new_or_update.assert_called_once_with(
-                            session=conn,
-                            user_id="999999",
-                            chat_id="123456",
-                            message=bot_response
-                        )
+            # Verify message was saved
+            mock_new_or_update.assert_called_once_with(
+                session=conn, user_id="999999", chat_id="123456", message=bot_response
+            )
 
-                        # Verify session activities were updated
-                        mock_session.new_activity.assert_called_once_with(
-                            timestamp=bot_response.date,
-                            activity_type="bot"
-                        )
-                        mock_session.new_message.assert_called_once_with(
-                            timestamp=bot_response.date,
-                            message_type="bot"
-                        )
+            # Verify session activities were updated
+            mock_session.new_activity.assert_called_once_with(timestamp=bot_response.date, activity_type="bot")
+            mock_session.new_message.assert_called_once_with(timestamp=bot_response.date, message_type="bot")
 
     @pytest.mark.asyncio
-    async def test_generate_response_with_reaction_response(self):
+    @pytest.mark.usefixtures("mock_input_message")
+    async def test_generate_response_with_reaction_response(
+        self, mock_job, mock_session, mock_agent_run, mock_reaction_response
+    ):
         """Test _generate_response when agent returns a ReactionResponse."""
-        job = ConversationJob("123456")
 
         # Mock messages
         message = MagicMock()
         message.date = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
         message.message_id = 100
+
+        messages = [message]
 
         # Mock context
         context = MagicMock()
@@ -277,63 +332,45 @@ class TestConversationJob:
         # Mock connection
         conn = AsyncMock()
 
-        # Mock active session
-        mock_session = MagicMock()
-        mock_session.get_messages = AsyncMock(return_value=[message])
-        mock_session.new_activity = AsyncMock()
+        # Use mock session from fixture
+        mock_session.get_messages = AsyncMock(return_value=messages)
 
-        # Mock agent response
-        reaction_response = ReactionResponse(
-            reasoning="User message is positive",
-            react_to_message_id="100",
-            emoji=ReactionEmoji.THUMBS_UP
-        )
+        # Configure agent to return the mock ReactionResponse
+        mock_agent_run.return_value.data = mock_reaction_response
 
-        # Mock reaction result
-        reaction_result = telegram.MessageReactionUpdated(
-            chat=MagicMock(),
-            message_id=100,
-            date=datetime(2025, 1, 15, 10, 2, 0, tzinfo=UTC),
-            old_reaction=(),
-            new_reaction=(telegram.ReactionTypeEmoji(emoji=ReactionEmoji.THUMBS_UP),),
-            user=MagicMock()
-        )
+        # The mock_reaction_response fixture already provides the bot response
+        bot_response = mock_reaction_response.execute.return_value
 
-        mock_agent_result = MagicMock()
-        mock_agent_result.data = reaction_response
+        with patch("areyouok_telegram.data.Messages.new_or_update") as mock_new_or_update:
+            result = await mock_job._generate_response(conn, context, mock_session)
 
-        with patch("areyouok_telegram.agent.areyouok_agent.run", return_value=mock_agent_result):
-            with patch("areyouok_telegram.agent.convert_telegram_message_to_model_message"):
-                with patch.object(ReactionResponse, "execute", AsyncMock(return_value=reaction_result)) as mock_execute:
-                    with patch("areyouok_telegram.data.Messages.new_or_update") as mock_new_or_update:
-                        result = await job._generate_response(conn, context, mock_session)
+            assert result is True
+            assert mock_job._last_response == "ReactionResponse"
 
-                        assert result is True
-                        assert job._last_response == "ReactionResponse"
+            # Verify agent was called correctly
+            mock_agent_run.assert_called_once()
+            call_args = mock_agent_run.call_args
+            assert len(call_args.kwargs["message_history"]) == 1
+            assert isinstance(call_args.kwargs["deps"], AgentDependencies)
+            assert call_args.kwargs["deps"].tg_chat_id == "123456"
 
-                        # Verify response was executed
-                        mock_execute.assert_called_once()
-                        execute_args = mock_execute.call_args
-                        assert execute_args.kwargs["db_connection"] == conn
-                        assert execute_args.kwargs["context"] == context
-                        assert execute_args.kwargs["chat_id"] == "123456"
+            # Verify response was executed
+            mock_reaction_response.execute.assert_called_once()
+            execute_args = mock_reaction_response.execute.call_args
+            assert execute_args.kwargs["db_connection"] == conn
+            assert execute_args.kwargs["context"] == context
+            assert execute_args.kwargs["chat_id"] == "123456"
 
-                        # Verify reaction was saved
-                        mock_new_or_update.assert_called_once_with(
-                            session=conn,
-                            user_id="999999",
-                            chat_id="123456",
-                            message=reaction_result
-                        )
+            # Verify reaction was saved
+            mock_new_or_update.assert_called_once_with(
+                session=conn, user_id="999999", chat_id="123456", message=bot_response
+            )
 
-                        # Verify session activity was updated
-                        mock_session.new_activity.assert_called_once_with(
-                            timestamp=reaction_result.date,
-                            activity_type="bot"
-                        )
+            # Verify session activity was updated
+            mock_session.new_activity.assert_called_once_with(timestamp=bot_response.date, activity_type="bot")
 
     @pytest.mark.asyncio
-    async def test_generate_response_with_do_nothing_response(self):
+    async def test_generate_response_with_do_nothing_response(self, mock_async_database_session):
         """Test _generate_response when agent returns a DoNothingResponse."""
         job = ConversationJob("123456")
 
@@ -344,8 +381,8 @@ class TestConversationJob:
         # Mock context
         context = MagicMock()
 
-        # Mock connection
-        conn = AsyncMock()
+        # Use mock database session from fixture
+        conn = mock_async_database_session
 
         # Mock active session
         mock_session = MagicMock()
@@ -353,9 +390,7 @@ class TestConversationJob:
         mock_session.new_activity = AsyncMock()
 
         # Mock agent response
-        do_nothing_response = DoNothingResponse(
-            reasoning="No response needed at this time"
-        )
+        do_nothing_response = DoNothingResponse(reasoning="No response needed at this time")
 
         mock_agent_result = MagicMock()
         mock_agent_result.data = do_nothing_response
@@ -379,13 +414,15 @@ class TestConversationJob:
                         mock_session.new_activity.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_generate_response_agent_failure(self):
+    @pytest.mark.usefixtures("mock_input_message")
+    async def test_generate_response_agent_failure(self, mock_job, mock_session, mock_agent_run):
         """Test _generate_response when agent fails."""
-        job = ConversationJob("123456")
 
         # Mock messages
         message = MagicMock()
         message.date = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
+
+        messages = [message]
 
         # Mock context
         context = MagicMock()
@@ -393,26 +430,33 @@ class TestConversationJob:
         # Mock connection
         conn = AsyncMock()
 
-        # Mock active session
-        mock_session = MagicMock()
-        mock_session.get_messages = AsyncMock(return_value=[message])
+        # Use mock session from fixture
+        mock_session.get_messages = AsyncMock(return_value=messages)
 
-        with patch("areyouok_telegram.agent.areyouok_agent.run", side_effect=Exception("Agent error")):
-            with patch("areyouok_telegram.agent.convert_telegram_message_to_model_message"):
-                result = await job._generate_response(conn, context, mock_session)
+        # Configure agent to fail
+        mock_agent_run.side_effect = Exception("Agent error")
 
-                assert result is False
-                # Last response should not be updated on failure
-                assert job._last_response is None
+        result = await mock_job._generate_response(conn, context, mock_session)
+
+        assert result is False
+        # Last response should not be updated on failure
+        assert mock_job._last_response is None
+
+        # Verify agent was called
+        mock_agent_run.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_generate_response_execution_failure(self):
+    @pytest.mark.usefixtures("mock_input_message")
+    async def test_generate_response_execution_failure(
+        self, mock_job, mock_session, mock_agent_run, mock_text_response
+    ):
         """Test _generate_response when response execution fails."""
-        job = ConversationJob("123456")
 
         # Mock messages
         message = MagicMock()
         message.date = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
+
+        messages = [message]
 
         # Mock context
         context = MagicMock()
@@ -420,27 +464,25 @@ class TestConversationJob:
         # Mock connection
         conn = AsyncMock()
 
-        # Mock active session
-        mock_session = MagicMock()
-        mock_session.get_messages = AsyncMock(return_value=[message])
+        # Use mock session from fixture
+        mock_session.get_messages = AsyncMock(return_value=messages)
 
-        # Mock agent response
-        text_response = TextResponse(
-            reasoning="Test",
-            message_text="Test message"
-        )
+        # Configure agent to return the mock TextResponse
+        mock_agent_run.return_value.data = mock_text_response
 
-        mock_agent_result = MagicMock()
-        mock_agent_result.data = text_response
+        # Configure text response execution to fail
+        mock_text_response.execute.side_effect = Exception("Network error")
 
-        with patch("areyouok_telegram.agent.areyouok_agent.run", return_value=mock_agent_result):
-            with patch("areyouok_telegram.agent.convert_telegram_message_to_model_message"):
-                with patch.object(TextResponse, "execute", AsyncMock(side_effect=Exception("Network error"))):
-                    result = await job._generate_response(conn, context, mock_session)
+        result = await mock_job._generate_response(conn, context, mock_session)
 
-                    assert result is False
-                    # Last response should be updated even if execution fails
-                    assert job._last_response == "TextResponse"
+        assert result is False
+        # Last response should be updated even if execution fails
+        assert mock_job._last_response == "TextResponse"
+
+        # Verify agent was called
+        mock_agent_run.assert_called_once()
+        # Verify execute was called
+        mock_text_response.execute.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_last_response_property(self):
