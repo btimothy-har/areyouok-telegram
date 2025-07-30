@@ -29,11 +29,11 @@ async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_
 
         if active_session:
             # Record new user message
-            await active_session.new_message(update.message.date, "user")
+            await active_session.new_message(update.message.date, is_user=True)
         else:
             # Create new session and record the first message
             new_session = await Sessions.create_session(session, chat_id, update.message.date)
-            await new_session.new_message(update.message.date, "user")
+            await new_session.new_message(update.message.date, is_user=True)
 
 
 async def on_edit_message(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):  # noqa: ARG001
@@ -52,7 +52,9 @@ async def on_edit_message(update: telegram.Update, context: ContextTypes.DEFAULT
         if active_session:
             # Only record user activity if the original message was sent after session start
             if update.edited_message.date >= active_session.session_start:
-                await active_session.new_user_activity(update.edited_message.edit_date or update.edited_message.date)
+                await active_session.new_activity(
+                    update.edited_message.edit_date or update.edited_message.date, is_user=True
+                )
             # If message is from before session start, don't record activity
         # If no active session, don't create one for edits
 
@@ -77,6 +79,6 @@ async def on_message_react(update: telegram.Update, context: ContextTypes.DEFAUL
         if active_session:
             # Only record user activity if the original message was sent after session start
             if update.message_reaction.date >= active_session.session_start:
-                await active_session.new_user_activity(update.message_reaction.date)
+                await active_session.new_activity(update.message_reaction.date, is_user=True)
             # If message is from before session start, don't record activity
         # If no active session, don't create one for edits

@@ -222,11 +222,13 @@ def mock_session():
     mock_session.last_user_message = DEFAULT_DATETIME
     mock_session.last_bot_message = None
     mock_session.last_user_activity = DEFAULT_DATETIME
+    mock_session.last_bot_activity = None
     mock_session.session_end = None
     mock_session.message_count = None
     mock_session.new_message = AsyncMock()
-    mock_session.new_user_activity = AsyncMock()
+    mock_session.new_activity = AsyncMock()
     mock_session.close_session = AsyncMock()
     mock_session.get_messages = AsyncMock()
+    mock_session.has_bot_responded = False
 
     return mock_session

@@ -156,9 +156,7 @@ class TestGlobalErrorHandler:
                 await on_error_event(None, mock_context)
 
                 # Should log error with different message
-                mock_logger.error.assert_called_once_with(
-                    "An error occurred but no update was provided.", exc_info=mock_context.error
-                )
+                mock_logger.error.assert_called_once_with("Test error with no update", exc_info=mock_context.error)
 
                 # Should still send developer notification
                 mock_context.bot.send_message.assert_called_once()

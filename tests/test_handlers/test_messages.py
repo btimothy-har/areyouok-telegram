@@ -46,7 +46,9 @@ class TestNewMessageHandler:
             mock_get_active.assert_called_once_with(
                 mock_async_database_session, str(mock_update_private_chat_new_message.effective_chat.id)
             )
-            mock_session.new_message.assert_called_once_with(mock_update_private_chat_new_message.message.date, "user")
+            mock_session.new_message.assert_called_once_with(
+                mock_update_private_chat_new_message.message.date, is_user=True
+            )
 
     @pytest.mark.asyncio
     async def test_on_new_message_without_existing_session(
@@ -87,7 +89,7 @@ class TestNewMessageHandler:
                 mock_update_private_chat_new_message.message.date,
             )
             mock_new_session.new_message.assert_called_once_with(
-                mock_update_private_chat_new_message.message.date, "user"
+                mock_update_private_chat_new_message.message.date, is_user=True
             )
 
     @pytest.mark.asyncio
@@ -136,8 +138,8 @@ class TestEditMessageHandler:
             mock_get_active.assert_called_once_with(
                 mock_async_database_session, str(mock_update_private_chat_edited_message.effective_chat.id)
             )
-            mock_session.new_user_activity.assert_called_once_with(
-                mock_update_private_chat_edited_message.edited_message.edit_date
+            mock_session.new_activity.assert_called_once_with(
+                mock_update_private_chat_edited_message.edited_message.edit_date, is_user=True
             )
 
     @pytest.mark.asyncio
@@ -169,7 +171,7 @@ class TestEditMessageHandler:
             mock_get_active.assert_called_once_with(
                 mock_async_database_session, str(mock_update_private_chat_edited_message.effective_chat.id)
             )
-            mock_session.new_user_activity.assert_not_called()
+            mock_session.new_activity.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_on_edit_message_without_active_session(
@@ -246,8 +248,8 @@ class TestMessageReactHandler:
             mock_get_active.assert_called_once_with(
                 mock_async_database_session, str(mock_update_message_reaction.effective_chat.id)
             )
-            mock_session.new_user_activity.assert_called_once_with(
-                mock_update_message_reaction.message_reaction.date
+            mock_session.new_activity.assert_called_once_with(
+                mock_update_message_reaction.message_reaction.date, is_user=True
             )
 
     @pytest.mark.asyncio
@@ -279,7 +281,7 @@ class TestMessageReactHandler:
             mock_get_active.assert_called_once_with(
                 mock_async_database_session, str(mock_update_message_reaction.effective_chat.id)
             )
-            mock_session.new_user_activity.assert_not_called()
+            mock_session.new_activity.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_on_message_react_without_active_session(

@@ -1,7 +1,6 @@
 import hashlib
 from datetime import UTC
 from datetime import datetime
-from typing import Literal
 from typing import Optional
 
 import telegram
@@ -18,13 +17,6 @@ from areyouok_telegram.data.messages import Messages
 from areyouok_telegram.data.utils import with_retry
 
 
-class InvalidMessageTypeError(ValueError):
-    """Raised when an invalid message type is provided."""
-
-    def __init__(self, message_type: str) -> None:
-        super().__init__(f"Invalid message_type: {message_type}. Must be 'user' or 'bot'.")
-
-
 class Sessions(Base):
     __tablename__ = "sessions"
     __table_args__ = {"schema": ENV}
@@ -36,6 +28,7 @@ class Sessions(Base):
     last_user_message = Column(TIMESTAMP(timezone=True), nullable=True)
     last_user_activity = Column(TIMESTAMP(timezone=True), nullable=True)
     last_bot_message = Column(TIMESTAMP(timezone=True), nullable=True)
+    last_bot_activity = Column(TIMESTAMP(timezone=True), nullable=True)
 
     message_count = Column(Integer, nullable=True)
 
@@ -44,13 +37,13 @@ class Sessions(Base):
     @property
     def has_bot_responded(self) -> bool:
         """Check if the bot has responded to the latest updates in the session."""
-        if not self.last_bot_message:
+        if not self.last_bot_activity:
             return False
 
-        if not self.last_user_message:
+        if not self.last_user_activity:
             return True
 
-        return self.last_bot_message > self.last_user_message
+        return self.last_bot_activity > self.last_user_activity
 
     @staticmethod
     def generate_session_key(chat_id: str, session_start: datetime) -> str:
@@ -98,24 +91,27 @@ class Sessions(Base):
         return new_session
 
     @with_retry()
-    async def new_message(self, timestamp: datetime, message_type: Literal["user", "bot"]) -> None:
+    async def new_message(self, timestamp: datetime, *, is_user: bool) -> None:
         """Record a new message in the session, updating appropriate timestamps."""
-        # Always update user activity timestamp
-        self.last_user_activity = max(self.last_user_activity, timestamp) if self.last_user_activity else timestamp
+        # Always update new activity timestamp
+        await self.new_activity(timestamp, is_user=is_user)
 
-        if message_type == "user":
+        if is_user:
             self.last_user_message = max(self.last_user_message, timestamp) if self.last_user_message else timestamp
             # Increment message count only for user messages
             self.message_count = self.message_count + 1 if self.message_count is not None else 1
-        elif message_type == "bot":
-            self.last_bot_message = max(self.last_bot_message, timestamp) if self.last_bot_message else timestamp
+
         else:
-            raise InvalidMessageTypeError(message_type)
+            self.last_bot_message = max(self.last_bot_message, timestamp) if self.last_bot_message else timestamp
 
     @with_retry()
-    async def new_user_activity(self, timestamp: datetime) -> None:
+    async def new_activity(self, timestamp: datetime, *, is_user: bool) -> None:
         """Record user activity (like edits) without incrementing message count."""
-        self.last_user_activity = timestamp
+        if is_user:
+            self.last_user_activity = max(self.last_user_activity, timestamp) if self.last_user_activity else timestamp
+
+        else:
+            self.last_bot_activity = max(self.last_bot_activity, timestamp) if self.last_bot_activity else timestamp
 
     @with_retry()
     async def close_session(self, session: AsyncSession) -> None:
