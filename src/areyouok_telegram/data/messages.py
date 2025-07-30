@@ -71,7 +71,7 @@ class Messages(Base):
         """Insert or update a message in the database."""
         now = datetime.now(UTC)
 
-        if not isinstance(message, (telegram.Message, telegram.MessageReactionUpdated)):
+        if not isinstance(message, MessageTypes):
             raise InvalidMessageTypeError(type(message).__name__)
 
         message_key = cls.generate_message_key(user_id, chat_id, message.message_id, message.__class__.__name__)
