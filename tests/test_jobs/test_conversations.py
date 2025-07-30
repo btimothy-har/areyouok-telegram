@@ -9,11 +9,9 @@ from unittest.mock import patch
 
 import pydantic_ai
 import pytest
-from pydantic_ai.models.test import TestModel
 from telegram.constants import ReactionEmoji
 
 from areyouok_telegram.agent import AgentDependencies
-from areyouok_telegram.agent import areyouok_agent
 from areyouok_telegram.agent.responses import DoNothingResponse
 from areyouok_telegram.agent.responses import ReactionResponse
 from areyouok_telegram.agent.responses import TextResponse
@@ -288,8 +286,7 @@ class TestConversationJob:
         bot_response = mock_text_response.execute.return_value
 
         with patch("areyouok_telegram.data.Messages.new_or_update") as mock_new_or_update:
-            with areyouok_agent.override(model=TestModel()):
-                result = await mock_job._generate_response(conn, context, mock_session)
+            result = await mock_job._generate_response(conn, context, mock_session)
 
             assert result is True
             assert mock_job._last_response == "TextResponse"
@@ -348,8 +345,7 @@ class TestConversationJob:
         bot_response = mock_reaction_response.execute.return_value
 
         with patch("areyouok_telegram.data.Messages.new_or_update") as mock_new_or_update:
-            with areyouok_agent.override(model=TestModel()):
-                result = await mock_job._generate_response(conn, context, mock_session)
+            result = await mock_job._generate_response(conn, context, mock_session)
 
             assert result is True
             assert mock_job._last_response == "ReactionResponse"
@@ -402,8 +398,7 @@ class TestConversationJob:
         mock_agent_run.return_value.data = mock_do_nothing_response
 
         with patch("areyouok_telegram.data.Messages.new_or_update") as mock_new_or_update:
-            with areyouok_agent.override(model=TestModel()):
-                result = await mock_job._generate_response(conn, context, mock_session)
+            result = await mock_job._generate_response(conn, context, mock_session)
 
             assert result is False
             assert mock_job._last_response == "DoNothingResponse"
@@ -451,8 +446,7 @@ class TestConversationJob:
         # Configure agent to fail
         mock_agent_run.side_effect = Exception("Agent error")
 
-        with areyouok_agent.override(model=TestModel()):
-            result = await mock_job._generate_response(conn, context, mock_session)
+        result = await mock_job._generate_response(conn, context, mock_session)
 
         assert result is False
         # Last response should not be updated on failure
@@ -489,8 +483,7 @@ class TestConversationJob:
         # Configure text response execution to fail
         mock_text_response.execute.side_effect = Exception("Network error")
 
-        with areyouok_agent.override(model=TestModel()):
-            result = await mock_job._generate_response(conn, context, mock_session)
+        result = await mock_job._generate_response(conn, context, mock_session)
 
         assert result is False
         # Last response should be updated even if execution fails
