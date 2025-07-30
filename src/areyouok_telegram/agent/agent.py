@@ -32,7 +32,7 @@ areyouok_agent = pydantic_ai.Agent(
         model_name="anthropic/claude-3.5-sonnet",
         provider=OpenRouterProvider(api_key=OPENROUTER_API_KEY),
     ),
-    result_type=AgentResponse,
+    output_type=AgentResponse,
     deps_type=AgentDependencies,
     name="areyouok_telegram_agent",
     end_strategy="exhaustive",
