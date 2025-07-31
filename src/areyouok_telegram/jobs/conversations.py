@@ -85,8 +85,8 @@ class ConversationJob:
             if chat_session.last_user_activity and (self._run_timestamp - chat_session.last_user_activity) > timedelta(
                 seconds=3600
             ):
-                logger.info(f"Stopping conversation job for chat {self.chat_id} due to inactivity.")
                 await self._stop(context)
+                logger.info(f"Stopped conversation job for chat {self.chat_id} due to inactivity.")
 
                 await chat_session.close_session(
                     session=conn,
@@ -139,7 +139,7 @@ class ConversationJob:
         else:
             await chat_session.new_activity(
                 timestamp=self._run_timestamp,
-                activity_type="bot",
+                is_user=False,  # This is a bot response
             )
 
             if response_message:
@@ -153,7 +153,7 @@ class ConversationJob:
                 if isinstance(response_message, telegram.Message):
                     await chat_session.new_message(
                         timestamp=response_message.date,
-                        message_type="bot",
+                        is_user=False,  # This is a bot response
                     )
                 return True
 
@@ -170,7 +170,7 @@ class ConversationJob:
                 return
 
             for job in existing_jobs:
-                await job.schedule_removal()
+                job.schedule_removal()
 
 
 async def schedule_conversation_job(context: ContextTypes.DEFAULT_TYPE, chat_id: int, interval: int = 10) -> None:
@@ -204,3 +204,4 @@ async def schedule_conversation_job(context: ContextTypes.DEFAULT_TYPE, chat_id:
                 "max_instances": 1,
             },
         )
+        logger.info(f"Scheduled conversation job for chat {chat_id} with interval {interval} seconds.")

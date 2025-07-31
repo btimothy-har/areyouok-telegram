@@ -103,21 +103,19 @@ class TestSessionsGetActiveSession:
         assert result is None
 
 
-class TestSessionsGetInactiveSessions:
-    """Test the get_inactive_sessions class method."""
+class TestSessionsGetAllActiveSessions:
+    """Test the get_all_active_sessions class method."""
 
-    async def test_get_inactive_sessions(self, mock_async_database_session):
-        """Test retrieving inactive sessions."""
-        cutoff_time = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
-
-        # Create mock inactive sessions
+    async def test_get_all_active_sessions(self, mock_async_database_session):
+        """Test retrieving all active sessions."""
+        # Create mock active sessions
         session1 = MagicMock(spec=Sessions)
-        session1.last_user_activity = datetime(2025, 1, 15, 9, 0, 0, tzinfo=UTC)
         session1.session_end = None
+        session1.chat_id = "123456"
 
         session2 = MagicMock(spec=Sessions)
-        session2.last_user_activity = datetime(2025, 1, 15, 8, 0, 0, tzinfo=UTC)
         session2.session_end = None
+        session2.chat_id = "789012"
 
         # Mock the query result
         mock_result = MagicMock()
@@ -127,7 +125,7 @@ class TestSessionsGetInactiveSessions:
         mock_async_database_session.execute.return_value = mock_result
 
         # Call the method
-        result = await Sessions.get_inactive_sessions(mock_async_database_session, cutoff_time)
+        result = await Sessions.get_all_active_sessions(mock_async_database_session)
 
         # Verify the result
         assert len(result) == 2
@@ -137,10 +135,8 @@ class TestSessionsGetInactiveSessions:
         # Verify the query was executed
         mock_async_database_session.execute.assert_called_once()
 
-    async def test_get_inactive_sessions_empty(self, mock_async_database_session):
-        """Test retrieving inactive sessions when none exist."""
-        cutoff_time = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
-
+    async def test_get_all_active_sessions_empty(self, mock_async_database_session):
+        """Test retrieving all active sessions when none exist."""
         # Mock no results
         mock_result = MagicMock()
         mock_scalars = MagicMock()
@@ -149,7 +145,7 @@ class TestSessionsGetInactiveSessions:
         mock_async_database_session.execute.return_value = mock_result
 
         # Call the method
-        result = await Sessions.get_inactive_sessions(mock_async_database_session, cutoff_time)
+        result = await Sessions.get_all_active_sessions(mock_async_database_session)
 
         # Verify empty result
         assert result == []

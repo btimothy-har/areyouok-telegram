@@ -18,12 +18,14 @@ from areyouok_telegram.setup import database_setup
 from areyouok_telegram.setup import logging_setup
 from areyouok_telegram.setup import setup_bot_description
 from areyouok_telegram.setup import setup_bot_name
+from areyouok_telegram.setup import setup_conversation_runners
 
 
 async def application_startup(application: Application):
     """Configure bot metadata on startup."""
     await setup_bot_name(application)
     await setup_bot_description(application)
+    await setup_conversation_runners(application)
 
 
 def create_application() -> Application:

@@ -51,45 +51,6 @@ class Sessions(Base):
         timestamp_str = session_start.isoformat()
         return hashlib.sha256(f"{chat_id}:{timestamp_str}".encode()).hexdigest()
 
-    @classmethod
-    @with_retry()
-    async def get_active_session(cls, session: AsyncSession, chat_id: str) -> Optional["Sessions"]:
-        """Get the active (non-closed) session for a chat."""
-        stmt = select(cls).where(cls.chat_id == chat_id).where(cls.session_end.is_(None))
-
-        result = await session.execute(stmt)
-        return result.scalar_one_or_none()
-
-    @classmethod
-    @with_retry()
-    async def get_inactive_sessions(cls, session: AsyncSession, cutoff_time: datetime) -> list["Sessions"]:
-        """Get all sessions that have been inactive since cutoff_time."""
-        stmt = (
-            select(cls)
-            .where(cls.session_end.is_(None))  # Only active sessions
-            .where(
-                (cls.last_user_activity.is_not(None)) & (cls.last_user_activity < cutoff_time)
-            )  # Inactive for more than cutoff (only if activity exists)
-        )
-
-        result = await session.execute(stmt)
-        return list(result.scalars().all())
-
-    @classmethod
-    @with_retry()
-    async def create_session(cls, session: AsyncSession, chat_id: str, timestamp: datetime) -> "Sessions":
-        """Create a new session for a chat."""
-        session_key = cls.generate_session_key(chat_id, timestamp)
-
-        new_session = cls(
-            session_key=session_key,
-            chat_id=chat_id,
-            session_start=timestamp,
-        )
-
-        session.add(new_session)
-        return new_session
-
     @with_retry()
     async def new_message(self, timestamp: datetime, *, is_user: bool) -> None:
         """Record a new message in the session, updating appropriate timestamps."""
@@ -129,3 +90,36 @@ class Sessions(Base):
         return await Messages.retrieve_by_chat(
             session=session, chat_id=self.chat_id, from_time=self.session_start, to_time=end_time
         )
+
+    @classmethod
+    @with_retry()
+    async def get_active_session(cls, session: AsyncSession, chat_id: str) -> Optional["Sessions"]:
+        """Get the active (non-closed) session for a chat."""
+        stmt = select(cls).where(cls.chat_id == chat_id).where(cls.session_end.is_(None))
+
+        result = await session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    @classmethod
+    @with_retry()
+    async def get_all_active_sessions(cls, session: AsyncSession) -> list["Sessions"]:
+        """Get all active (non-closed) sessions."""
+        stmt = select(cls).where(cls.session_end.is_(None))  # Only active sessions
+
+        result = await session.execute(stmt)
+        return list(result.scalars().all())
+
+    @classmethod
+    @with_retry()
+    async def create_session(cls, session: AsyncSession, chat_id: str, timestamp: datetime) -> "Sessions":
+        """Create a new session for a chat."""
+        session_key = cls.generate_session_key(chat_id, timestamp)
+
+        new_session = cls(
+            session_key=session_key,
+            chat_id=chat_id,
+            session_start=timestamp,
+        )
+
+        session.add(new_session)
+        return new_session

@@ -264,8 +264,8 @@ class TestConversationJob:
             )
 
             # Verify session activities were updated
-            mock_session.new_activity.assert_called_once_with(timestamp=mock_job._run_timestamp, activity_type="bot")
-            mock_session.new_message.assert_called_once_with(timestamp=bot_response.date, message_type="bot")
+            mock_session.new_activity.assert_called_once_with(timestamp=mock_job._run_timestamp, is_user=False)
+            mock_session.new_message.assert_called_once_with(timestamp=bot_response.date, is_user=False)
 
     @pytest.mark.asyncio
     @pytest.mark.usefixtures("mock_input_message")
@@ -323,7 +323,7 @@ class TestConversationJob:
             )
 
             # Verify session activity was updated
-            mock_session.new_activity.assert_called_once_with(timestamp=mock_job._run_timestamp, activity_type="bot")
+            mock_session.new_activity.assert_called_once_with(timestamp=mock_job._run_timestamp, is_user=False)
             # new_message should NOT be called for reactions
             mock_session.new_message.assert_not_called()
 
@@ -376,7 +376,7 @@ class TestConversationJob:
             mock_new_or_update.assert_not_called()
 
             # Verify session activity was still updated
-            mock_session.new_activity.assert_called_once_with(timestamp=mock_job._run_timestamp, activity_type="bot")
+            mock_session.new_activity.assert_called_once_with(timestamp=mock_job._run_timestamp, is_user=False)
             # new_message should NOT be called when no response
             mock_session.new_message.assert_not_called()
 
@@ -577,8 +577,10 @@ class TestConversationJob:
         context = MagicMock()
 
         # Mock existing jobs
-        mock_job1 = AsyncMock()
-        mock_job2 = AsyncMock()
+        mock_job1 = MagicMock()
+        mock_job1.schedule_removal = MagicMock()
+        mock_job2 = MagicMock()
+        mock_job2.schedule_removal = MagicMock()
         existing_jobs = [mock_job1, mock_job2]
 
         context.job_queue.get_jobs_by_name.return_value = existing_jobs
@@ -622,7 +624,8 @@ class TestConversationJob:
         job = ConversationJob("123456")
         context = MagicMock()
 
-        mock_job = AsyncMock()
+        mock_job = MagicMock()
+        mock_job.schedule_removal = MagicMock()
         context.job_queue.get_jobs_by_name.return_value = [mock_job]
 
         # Verify lock is used

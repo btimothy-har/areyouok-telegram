@@ -50,14 +50,16 @@ class TestApplicationStartup:
 
     @pytest.mark.asyncio
     async def test_application_startup_success(self, mock_application):
-        """Test successful application startup calls both setup functions."""
+        """Test successful application startup calls all setup functions."""
         # Arrange
         with (
             patch("areyouok_telegram.app.setup_bot_name") as mock_setup_name,
             patch("areyouok_telegram.app.setup_bot_description") as mock_setup_description,
+            patch("areyouok_telegram.app.setup_conversation_runners") as mock_setup_conversations,
         ):
             mock_setup_name.return_value = None
             mock_setup_description.return_value = None
+            mock_setup_conversations.return_value = None
 
             # Act
             await application_startup(mock_application)
@@ -65,6 +67,7 @@ class TestApplicationStartup:
             # Assert
             mock_setup_name.assert_called_once_with(mock_application)
             mock_setup_description.assert_called_once_with(mock_application)
+            mock_setup_conversations.assert_called_once_with(mock_application)
 
     @pytest.mark.asyncio
     async def test_application_startup_name_failure_propagates_exception(self, mock_application):
@@ -73,6 +76,7 @@ class TestApplicationStartup:
         with (
             patch("areyouok_telegram.app.setup_bot_name") as mock_setup_name,
             patch("areyouok_telegram.app.setup_bot_description") as mock_setup_description,
+            patch("areyouok_telegram.app.setup_conversation_runners") as mock_setup_conversations,
         ):
             mock_setup_name.side_effect = BotNameSetupError("Test Bot")
 
@@ -80,8 +84,9 @@ class TestApplicationStartup:
             with pytest.raises(BotNameSetupError):
                 await application_startup(mock_application)
 
-            # Should not call description setup if name setup fails
+            # Should not call subsequent setup functions if name setup fails
             mock_setup_description.assert_not_called()
+            mock_setup_conversations.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_application_startup_description_failure_propagates_exception(self, mock_application):
@@ -90,6 +95,7 @@ class TestApplicationStartup:
         with (
             patch("areyouok_telegram.app.setup_bot_name") as mock_setup_name,
             patch("areyouok_telegram.app.setup_bot_description") as mock_setup_description,
+            patch("areyouok_telegram.app.setup_conversation_runners") as mock_setup_conversations,
         ):
             mock_setup_name.return_value = None
             mock_setup_description.side_effect = BotDescriptionSetupError()
@@ -98,8 +104,9 @@ class TestApplicationStartup:
             with pytest.raises(BotDescriptionSetupError):
                 await application_startup(mock_application)
 
-            # Name setup should complete successfully
+            # Name setup should complete successfully, conversations should not be called
             mock_setup_name.assert_called_once_with(mock_application)
+            mock_setup_conversations.assert_not_called()
 
 
 class TestCreateApplication:
