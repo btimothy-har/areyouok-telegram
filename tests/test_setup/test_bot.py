@@ -109,13 +109,34 @@ class TestSetupBotName:
         mock_application = Mock()
         mock_bot = AsyncMock()
         mock_application.bot = mock_bot
+        mock_bot.get_me.return_value = Mock(first_name="Old Name")
         mock_bot.set_my_name.return_value = True
 
         # Act
         await setup_bot_name(mock_application)
 
         # Assert
+        mock_bot.get_me.assert_called_once()
         mock_bot.set_my_name.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_setup_bot_name_skips_if_already_set(self):
+        """Test bot name setup skips if name is already correct."""
+        # Arrange
+        expected_name = "Are You OK? [test]"
+        with patch("areyouok_telegram.setup.bot._generate_bot_name") as mock_generate_name:
+            mock_generate_name.return_value = expected_name
+            mock_application = Mock()
+            mock_bot = AsyncMock()
+            mock_application.bot = mock_bot
+            mock_bot.get_me.return_value = Mock(first_name=expected_name)
+
+            # Act
+            await setup_bot_name(mock_application)
+
+            # Assert
+            mock_bot.get_me.assert_called_once()
+            mock_bot.set_my_name.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_setup_bot_name_failure_raises_exception(self):
@@ -124,6 +145,7 @@ class TestSetupBotName:
         mock_application = Mock()
         mock_bot = AsyncMock()
         mock_application.bot = mock_bot
+        mock_bot.get_me.return_value = Mock(first_name="Old Name")
         mock_bot.set_my_name.return_value = False
 
         # Act & Assert
@@ -141,6 +163,7 @@ class TestSetupBotName:
             mock_application = Mock()
             mock_bot = AsyncMock()
             mock_application.bot = mock_bot
+            mock_bot.get_me.return_value = Mock(first_name="Old Name")
             mock_bot.set_my_name.return_value = True
 
             # Act
@@ -158,6 +181,7 @@ class TestSetupBotName:
         mock_job_queue = Mock()
         mock_application.bot = mock_bot
         mock_application.job_queue = mock_job_queue
+        mock_bot.get_me.return_value = Mock(first_name="Old Name")
 
         retry_after_seconds = 30
         retry_after_error = telegram.error.RetryAfter(retry_after_seconds)
@@ -185,6 +209,7 @@ class TestSetupBotName:
         mock_job_queue = Mock()
         mock_application.bot = mock_bot
         mock_application.job_queue = mock_job_queue
+        mock_bot.get_me.return_value = Mock(first_name="Old Name")
 
         retry_after_delta = timedelta(seconds=45)
         retry_after_error = telegram.error.RetryAfter(retry_after_delta)
@@ -214,6 +239,7 @@ class TestSetupBotDescription:
         mock_application = Mock()
         mock_bot = AsyncMock()
         mock_application.bot = mock_bot
+        mock_bot.get_my_short_description.return_value = Mock(short_description="Old Description")
         mock_bot.set_my_description.return_value = True
         mock_bot.set_my_short_description.return_value = True
 
@@ -221,8 +247,29 @@ class TestSetupBotDescription:
         await setup_bot_description(mock_application)
 
         # Assert
+        mock_bot.get_my_short_description.assert_called_once()
         mock_bot.set_my_description.assert_called_once()
         mock_bot.set_my_short_description.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_setup_bot_description_skips_if_already_set(self):
+        """Test bot description setup skips if description is already correct."""
+        # Arrange
+        expected_description = "Test description"
+        with patch("areyouok_telegram.setup.bot._generate_short_description") as mock_generate_desc:
+            mock_generate_desc.return_value = expected_description
+            mock_application = Mock()
+            mock_bot = AsyncMock()
+            mock_application.bot = mock_bot
+            mock_bot.get_my_short_description.return_value = Mock(short_description=expected_description)
+
+            # Act
+            await setup_bot_description(mock_application)
+
+            # Assert
+            mock_bot.get_my_short_description.assert_called_once()
+            mock_bot.set_my_description.assert_not_called()
+            mock_bot.set_my_short_description.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_setup_bot_description_failure_raises_exception(self):
@@ -231,6 +278,7 @@ class TestSetupBotDescription:
         mock_application = Mock()
         mock_bot = AsyncMock()
         mock_application.bot = mock_bot
+        mock_bot.get_my_short_description.return_value = Mock(short_description="Old Description")
         mock_bot.set_my_description.return_value = True
         mock_bot.set_my_short_description.return_value = False
 
@@ -249,6 +297,7 @@ class TestSetupBotDescription:
             mock_application = Mock()
             mock_bot = AsyncMock()
             mock_application.bot = mock_bot
+            mock_bot.get_my_short_description.return_value = Mock(short_description="Old Description")
             mock_bot.set_my_description.return_value = True
             mock_bot.set_my_short_description.return_value = True
 
@@ -268,6 +317,7 @@ class TestSetupBotDescription:
         mock_job_queue = Mock()
         mock_application.bot = mock_bot
         mock_application.job_queue = mock_job_queue
+        mock_bot.get_my_short_description.return_value = Mock(short_description="Old Description")
 
         retry_after_seconds = 45
         retry_after_error = telegram.error.RetryAfter(retry_after_seconds)
@@ -295,6 +345,7 @@ class TestSetupBotDescription:
         mock_job_queue = Mock()
         mock_application.bot = mock_bot
         mock_application.job_queue = mock_job_queue
+        mock_bot.get_my_short_description.return_value = Mock(short_description="Old Description")
 
         retry_after_delta = timedelta(seconds=120)
         retry_after_error = telegram.error.RetryAfter(retry_after_delta)

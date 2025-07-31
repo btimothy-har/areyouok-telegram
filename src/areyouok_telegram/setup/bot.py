@@ -38,10 +38,15 @@ def _generate_short_description():
 
 async def setup_bot_name(ctx: Application | ContextTypes.DEFAULT_TYPE):
     """Set the bot name with proper error handling."""
-    name = _generate_bot_name()
+    new_name = _generate_bot_name()
+
+    current_bot = await ctx.bot.get_me()
+    if current_bot.first_name == new_name:
+        logging.debug("Bot name is already set, skipping setup.")
+        return
 
     try:
-        success = await ctx.bot.set_my_name(name=name)
+        success = await ctx.bot.set_my_name(name=new_name)
     except telegram.error.RetryAfter as e:
         logging.warning(f"Rate limit exceeded while setting bot name, retrying after {e.retry_after} seconds.")
 
@@ -57,18 +62,24 @@ async def setup_bot_name(ctx: Application | ContextTypes.DEFAULT_TYPE):
         return
 
     if not success:
-        raise BotNameSetupError(name)
+        raise BotNameSetupError(new_name)
 
-    logging.debug(f"Bot name set to: {name}")
+    logging.debug(f"Bot name set to: {new_name}")
 
 
 async def setup_bot_description(ctx: Application | ContextTypes.DEFAULT_TYPE):
     """Set the bot description with proper error handling."""
-    description = _generate_short_description()
+    new_description = _generate_short_description()
+
+    current_description = await ctx.bot.get_my_short_description()
+
+    if current_description and current_description.short_description == new_description:
+        logging.debug("Bot description is already set, skipping setup.")
+        return
 
     try:
         # Attempt to set the bot description
-        success = await ctx.bot.set_my_description(description=description)
+        success = await ctx.bot.set_my_description(description=new_description)
     except telegram.error.RetryAfter as e:
         logging.warning(f"Rate limit exceeded while setting bot description, retrying after {e.retry_after} seconds.")
 
@@ -83,9 +94,9 @@ async def setup_bot_description(ctx: Application | ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    success = await ctx.bot.set_my_short_description(short_description=description)
+    success = await ctx.bot.set_my_short_description(short_description=new_description)
 
     if not success:
         raise BotDescriptionSetupError()
 
-    logging.debug(f"Bot description set to: {description}")
+    logging.debug(f"Bot description set to: {new_description}")
