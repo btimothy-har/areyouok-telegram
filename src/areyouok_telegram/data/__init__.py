@@ -2,6 +2,7 @@ from areyouok_telegram.data.chats import Chats
 from areyouok_telegram.data.connection import Base
 from areyouok_telegram.data.connection import async_database_session
 from areyouok_telegram.data.connection import async_engine
+from areyouok_telegram.data.context import Context
 from areyouok_telegram.data.messages import Messages
 from areyouok_telegram.data.messages import MessageTypes
 from areyouok_telegram.data.sessions import Sessions
@@ -19,5 +20,6 @@ __all__ = [
     "Chats",
     "Updates",
     "Users",
+    "Context",
     "with_retry",
 ]
