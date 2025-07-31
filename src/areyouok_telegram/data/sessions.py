@@ -114,10 +114,10 @@ class Sessions(Base):
             self.last_bot_activity = max(self.last_bot_activity, timestamp) if self.last_bot_activity else timestamp
 
     @with_retry()
-    async def close_session(self, session: AsyncSession) -> None:
+    async def close_session(self, session: AsyncSession, timestamp: datetime) -> None:
         """Close a session by setting session_end and message_count."""
         messages = await self.get_messages(session)
-        self.session_end = datetime.now(UTC)
+        self.session_end = timestamp
         self.message_count = len(messages)
 
     @with_retry()

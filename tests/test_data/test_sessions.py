@@ -353,9 +353,8 @@ class TestSessionsNewActivity:
 class TestSessionsCloseSession:
     """Test the close_session method."""
 
-    @freeze_time("2025-01-15 11:00:00", tz_offset=0)
-    async def test_close_session(self, mock_async_database_session):
-        """Test closing a session."""
+    async def test_close_session_with_timestamp(self, mock_async_database_session):
+        """Test closing a session with a specific timestamp."""
         # Create a session instance
         session = Sessions()
         session.chat_id = "123456"
@@ -364,12 +363,14 @@ class TestSessionsCloseSession:
 
         # Mock the get_messages method
         mock_messages = [MagicMock() for _ in range(10)]
-        with patch.object(session, "get_messages", return_value=mock_messages):
-            # Close the session
-            await session.close_session(mock_async_database_session)
 
-        # Verify the session was closed
-        assert session.session_end == datetime(2025, 1, 15, 11, 0, 0, tzinfo=UTC)
+        with patch.object(session, "get_messages", return_value=mock_messages):
+            # Close the session with specific timestamp
+            close_timestamp = datetime(2025, 1, 15, 11, 30, 0, tzinfo=UTC)
+            await session.close_session(mock_async_database_session, close_timestamp)
+
+        # Verify the session was closed with the provided timestamp
+        assert session.session_end == close_timestamp
         assert session.message_count == 10
 
 

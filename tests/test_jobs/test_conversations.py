@@ -3,12 +3,14 @@
 import hashlib
 from datetime import UTC
 from datetime import datetime
+from datetime import timedelta
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
 import pydantic_ai
 import pytest
+from freezegun import freeze_time
 from telegram.constants import ReactionEmoji
 
 from areyouok_telegram.agent import ChatAgentDependencies
@@ -463,6 +465,181 @@ class TestConversationJob:
 
         job._last_response = "ReactionResponse"
         assert job._last_response == "ReactionResponse"
+
+    @pytest.mark.asyncio
+    async def test_run_session_expires_no_user_activity(self, mock_job, mock_session):
+        """Test run when session expires due to no user activity."""
+        context = MagicMock()
+
+        # Configure mock session with no user activity
+        mock_session.has_bot_responded = False
+        mock_session.last_user_activity = None
+
+        with (
+            patch.object(mock_job, "_generate_response") as mock_generate,
+            patch.object(mock_job, "_stop") as mock_stop,
+        ):
+            await mock_job.run(context)
+
+            # Should process messages normally when no last_user_activity
+            mock_generate.assert_called_once()
+            mock_stop.assert_not_called()
+            mock_session.close_session.assert_not_called()
+
+    @pytest.mark.asyncio
+    @freeze_time("2025-07-31 12:00:00", tz_offset=0)
+    async def test_run_session_expires_after_one_hour(self, mock_job, mock_session):
+        """Test run when session expires after 1 hour of inactivity."""
+        context = MagicMock()
+
+        # Current time is frozen at 2025-07-31 12:00:00 UTC
+        current_time = datetime(2025, 7, 31, 12, 0, 0, tzinfo=UTC)
+
+        # Configure mock session with old user activity (more than 1 hour ago)
+        mock_session.has_bot_responded = False
+        mock_session.last_user_activity = current_time - timedelta(seconds=3601)  # 1 hour and 1 second ago
+
+        with (
+            patch.object(mock_job, "_generate_response") as mock_generate,
+            patch.object(mock_job, "_stop") as mock_stop,
+            patch("areyouok_telegram.jobs.conversations.async_database_session") as mock_db_session,
+        ):
+            mock_db_session.return_value.__aenter__.return_value = AsyncMock()
+
+            await mock_job.run(context)
+
+            # Should process messages first
+            mock_generate.assert_called_once()
+
+            # Should then stop the job and close the session
+            mock_stop.assert_called_once_with(context)
+            mock_session.close_session.assert_called_once_with(
+                session=mock_db_session.return_value.__aenter__.return_value,
+                timestamp=current_time,
+            )
+
+    @pytest.mark.asyncio
+    @freeze_time("2025-07-31 12:00:00", tz_offset=0)
+    async def test_run_session_not_expired_within_hour(self, mock_job, mock_session):
+        """Test run when session is still active within the 1-hour window."""
+        context = MagicMock()
+
+        # Current time is frozen at 2025-07-31 12:00:00 UTC
+        current_time = datetime(2025, 7, 31, 12, 0, 0, tzinfo=UTC)
+
+        # Configure mock session with recent user activity (within 1 hour)
+        mock_session.has_bot_responded = False
+        mock_session.last_user_activity = current_time - timedelta(seconds=3599)  # 59 minutes and 59 seconds ago
+
+        with (
+            patch.object(mock_job, "_generate_response") as mock_generate,
+            patch.object(mock_job, "_stop") as mock_stop,
+        ):
+            await mock_job.run(context)
+
+            # Should process messages normally
+            mock_generate.assert_called_once()
+
+            # Should NOT stop the job or close the session
+            mock_stop.assert_not_called()
+            mock_session.close_session.assert_not_called()
+
+    @pytest.mark.asyncio
+    @freeze_time("2025-07-31 12:00:00", tz_offset=0)
+    async def test_run_session_expires_exactly_one_hour(self, mock_job, mock_session):
+        """Test run when session expires exactly after 1 hour."""
+        context = MagicMock()
+
+        # Current time is frozen at 2025-07-31 12:00:00 UTC
+        current_time = datetime(2025, 7, 31, 12, 0, 0, tzinfo=UTC)
+
+        # Configure mock session with user activity exactly 1 hour ago
+        mock_session.has_bot_responded = False
+        mock_session.last_user_activity = current_time - timedelta(seconds=3600)  # Exactly 1 hour ago
+
+        with (
+            patch.object(mock_job, "_generate_response") as mock_generate,
+            patch.object(mock_job, "_stop") as mock_stop,
+        ):
+            await mock_job.run(context)
+
+            # Should process messages normally (boundary condition: not > 1 hour)
+            mock_generate.assert_called_once()
+
+            # Should NOT stop the job (3600 seconds is not > 3600)
+            mock_stop.assert_not_called()
+            mock_session.close_session.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_stop_job_success(self):
+        """Test _stop method successfully removes jobs."""
+        job = ConversationJob("123456")
+        context = MagicMock()
+
+        # Mock existing jobs
+        mock_job1 = AsyncMock()
+        mock_job2 = AsyncMock()
+        existing_jobs = [mock_job1, mock_job2]
+
+        context.job_queue.get_jobs_by_name.return_value = existing_jobs
+
+        # Clear any existing locks
+        if str(job.chat_id) in JOB_LOCK:
+            del JOB_LOCK[str(job.chat_id)]
+
+        await job._stop(context)
+
+        # Should check for existing jobs with correct name
+        context.job_queue.get_jobs_by_name.assert_called_once_with("conversation_processor:123456")
+
+        # Should schedule removal for all existing jobs
+        mock_job1.schedule_removal.assert_called_once()
+        mock_job2.schedule_removal.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_stop_job_no_existing_jobs(self):
+        """Test _stop method when no jobs exist."""
+        job = ConversationJob("123456")
+        context = MagicMock()
+
+        # No existing jobs
+        context.job_queue.get_jobs_by_name.return_value = []
+
+        # Clear any existing locks
+        if str(job.chat_id) in JOB_LOCK:
+            del JOB_LOCK[str(job.chat_id)]
+
+        await job._stop(context)
+
+        # Should check for existing jobs
+        context.job_queue.get_jobs_by_name.assert_called_once_with("conversation_processor:123456")
+
+        # No schedule_removal calls should be made (no jobs to remove)
+
+    @pytest.mark.asyncio
+    async def test_stop_job_with_job_lock(self):
+        """Test _stop method properly uses job lock for thread safety."""
+        job = ConversationJob("123456")
+        context = MagicMock()
+
+        mock_job = AsyncMock()
+        context.job_queue.get_jobs_by_name.return_value = [mock_job]
+
+        # Verify lock is used
+        lock_acquired = False
+        original_acquire = JOB_LOCK[str(job.chat_id)].acquire
+
+        async def mock_acquire():
+            nonlocal lock_acquired
+            lock_acquired = True
+            return await original_acquire()
+
+        with patch.object(JOB_LOCK[str(job.chat_id)], "acquire", side_effect=mock_acquire):
+            await job._stop(context)
+
+        # Lock should have been acquired
+        assert lock_acquired
+        mock_job.schedule_removal.assert_called_once()
 
 
 class TestScheduleConversationJob:

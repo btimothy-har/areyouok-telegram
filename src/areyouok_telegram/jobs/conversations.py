@@ -4,6 +4,7 @@ import logging
 from collections import defaultdict
 from datetime import UTC
 from datetime import datetime
+from datetime import timedelta
 
 import telegram
 from telegram.ext import ContextTypes
@@ -80,6 +81,18 @@ class ConversationJob:
             else:
                 await self._generate_response(conn, context, chat_session)
 
+            # If the last user activity was more than an hour ago, stop the job
+            if chat_session.last_user_activity and (self._run_timestamp - chat_session.last_user_activity) > timedelta(
+                seconds=3600
+            ):
+                logger.info(f"Stopping conversation job for chat {self.chat_id} due to inactivity.")
+                await self._stop(context)
+
+                await chat_session.close_session(
+                    session=conn,
+                    timestamp=self._run_timestamp,
+                )
+
     async def _generate_response(self, conn, context: ContextTypes.DEFAULT_TYPE, chat_session: Sessions) -> bool:
         """Process messages for this chat and send appropriate replies.
 
@@ -145,6 +158,19 @@ class ConversationJob:
                 return True
 
         return False
+
+    async def _stop(self, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Stop the conversation job for this chat."""
+        logger.info(f"Stopping conversation job for chat {self.chat_id}")
+
+        async with JOB_LOCK[str(self.chat_id)]:
+            existing_jobs = context.job_queue.get_jobs_by_name(self.name)
+            if not existing_jobs:
+                logger.debug(f"No existing job found for chat {self.chat_id}, nothing to stop.")
+                return
+
+            for job in existing_jobs:
+                await job.schedule_removal()
 
 
 async def schedule_conversation_job(context: ContextTypes.DEFAULT_TYPE, chat_id: int, interval: int = 10) -> None:
