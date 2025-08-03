@@ -615,6 +615,170 @@ class TestMessagesRetrieveByChat:
         # Verify the result is empty
         assert result == []
 
+    async def test_retrieve_by_chat_uses_retrieve_raw_by_chat(
+        self, mock_async_database_session, mock_message_record1, mock_message_record2
+    ):
+        """Test that retrieve_by_chat uses retrieve_raw_by_chat internally."""
+        chat_id = "123456"
+        from_time = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
+        to_time = datetime(2025, 1, 15, 11, 0, 0, tzinfo=UTC)
+        limit = 5
+
+        # Mock raw messages that would be returned by retrieve_raw_by_chat
+        raw_messages = [mock_message_record1, mock_message_record2]
+
+        # Mock retrieve_raw_by_chat to return our mock records
+        with patch.object(Messages, "retrieve_raw_by_chat", return_value=raw_messages) as mock_raw_method:
+            # Call retrieve_by_chat
+            result = await Messages.retrieve_by_chat(
+                mock_async_database_session, chat_id, from_time=from_time, to_time=to_time, limit=limit
+            )
+
+            # Verify retrieve_raw_by_chat was called with the same parameters
+            mock_raw_method.assert_called_once_with(mock_async_database_session, chat_id, from_time, to_time, limit)
+
+            # Verify to_telegram_object was called on each raw message
+            mock_message_record1.to_telegram_object.assert_called_once()
+            mock_message_record2.to_telegram_object.assert_called_once()
+
+            # Verify the result contains telegram objects
+            assert len(result) == 2
+            assert result[0] == mock_message_record1.to_telegram_object.return_value
+            assert result[1] == mock_message_record2.to_telegram_object.return_value
+
+
+class TestMessagesRetrieveRawByChat:
+    """Test the retrieve_raw_by_chat class method."""
+
+    async def test_retrieve_raw_by_chat_basic(
+        self, mock_async_database_session, mock_message_record1, mock_message_record2
+    ):
+        """Test retrieving raw message models by chat ID."""
+        chat_id = "123456"
+
+        # Mock the query result
+        mock_result = MagicMock()
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = [mock_message_record1, mock_message_record2]
+        mock_result.scalars.return_value = mock_scalars
+        mock_async_database_session.execute.return_value = mock_result
+
+        # Call the method
+        result = await Messages.retrieve_raw_by_chat(mock_async_database_session, chat_id)
+
+        # Verify the query was executed
+        mock_async_database_session.execute.assert_called_once()
+        stmt = mock_async_database_session.execute.call_args[0][0]
+
+        # Check that the statement filters by chat_id
+        assert isinstance(stmt, type(select(Messages)))
+
+        # Verify to_telegram_object was NOT called (raw method returns models)
+        mock_message_record1.to_telegram_object.assert_not_called()
+        mock_message_record2.to_telegram_object.assert_not_called()
+
+        # Verify the result contains the raw SQLAlchemy models
+        assert len(result) == 2
+        assert result[0] == mock_message_record1
+        assert result[1] == mock_message_record2
+
+    async def test_retrieve_raw_by_chat_with_time_range(self, mock_async_database_session):
+        """Test retrieving raw messages with time range filters."""
+        chat_id = "123456"
+        from_time = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
+        to_time = datetime(2025, 1, 15, 11, 0, 0, tzinfo=UTC)
+
+        # Mock empty result
+        mock_result = MagicMock()
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = []
+        mock_result.scalars.return_value = mock_scalars
+        mock_async_database_session.execute.return_value = mock_result
+
+        # Call the method with time range
+        result = await Messages.retrieve_raw_by_chat(
+            mock_async_database_session, chat_id, from_time=from_time, to_time=to_time
+        )
+
+        # Verify the query was executed
+        mock_async_database_session.execute.assert_called_once()
+
+        # Verify empty result
+        assert result == []
+
+    async def test_retrieve_raw_by_chat_with_limit(self, mock_async_database_session, mock_message_record1):
+        """Test retrieving raw messages with limit."""
+        chat_id = "123456"
+        limit = 10
+
+        # Mock result with one message
+        mock_result = MagicMock()
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = [mock_message_record1]
+        mock_result.scalars.return_value = mock_scalars
+        mock_async_database_session.execute.return_value = mock_result
+
+        # Call the method with limit
+        result = await Messages.retrieve_raw_by_chat(mock_async_database_session, chat_id, limit=limit)
+
+        # Verify the query was executed
+        mock_async_database_session.execute.assert_called_once()
+
+        # Verify to_telegram_object was NOT called
+        mock_message_record1.to_telegram_object.assert_not_called()
+
+        # Verify the result contains the raw model
+        assert len(result) == 1
+        assert result[0] == mock_message_record1
+
+    async def test_retrieve_raw_by_chat_no_messages(self, mock_async_database_session):
+        """Test retrieving raw messages when none exist."""
+        chat_id = "nonexistent"
+
+        # Mock empty result
+        mock_result = MagicMock()
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = []
+        mock_result.scalars.return_value = mock_scalars
+        mock_async_database_session.execute.return_value = mock_result
+
+        # Call the method
+        result = await Messages.retrieve_raw_by_chat(mock_async_database_session, chat_id)
+
+        # Verify the result is empty
+        assert result == []
+
+    async def test_retrieve_raw_by_chat_all_parameters(self, mock_async_database_session, mock_message_record1):
+        """Test retrieving raw messages with all parameters specified."""
+        chat_id = "123456"
+        from_time = datetime(2025, 1, 15, 9, 0, 0, tzinfo=UTC)
+        to_time = datetime(2025, 1, 15, 12, 0, 0, tzinfo=UTC)
+        limit = 5
+
+        # Mock result
+        mock_result = MagicMock()
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = [mock_message_record1]
+        mock_result.scalars.return_value = mock_scalars
+        mock_async_database_session.execute.return_value = mock_result
+
+        # Call the method with all parameters
+        result = await Messages.retrieve_raw_by_chat(
+            mock_async_database_session, chat_id, from_time=from_time, to_time=to_time, limit=limit
+        )
+
+        # Verify the query was executed
+        mock_async_database_session.execute.assert_called_once()
+
+        # Verify the result
+        assert len(result) == 1
+        assert result[0] == mock_message_record1
+
+    async def test_retrieve_raw_by_chat_with_retry_decorator(self, mock_async_database_session):
+        """Test that retrieve_raw_by_chat method has the with_retry decorator."""
+        # Verify the method has been wrapped by with_retry
+        assert hasattr(Messages.retrieve_raw_by_chat, "__wrapped__")
+
 
 class TestMessagesDelete:
     """Test the delete instance method."""

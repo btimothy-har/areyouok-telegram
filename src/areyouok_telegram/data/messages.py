@@ -155,6 +155,20 @@ class Messages(Base):
         limit: int | None = None,
     ) -> list[MessageTypes]:
         """Retrieve messages by chat_id and optional time range, returning telegram.Message objects."""
+        messages = await cls.retrieve_raw_by_chat(session, chat_id, from_time, to_time, limit)
+        return [msg.to_telegram_object() for msg in messages]
+
+    @classmethod
+    @with_retry()
+    async def retrieve_raw_by_chat(
+        cls,
+        session: AsyncSession,
+        chat_id: str,
+        from_time: datetime | None = None,
+        to_time: datetime | None = None,
+        limit: int | None = None,
+    ) -> list["Messages"]:
+        """Retrieve messages by chat_id and optional time range, returning SQLAlchemy Messages models."""
         stmt = select(cls).where(cls.chat_id == chat_id)
 
         if from_time:
@@ -171,4 +185,4 @@ class Messages(Base):
         result = await session.execute(stmt)
         messages = result.scalars().all()
 
-        return [msg.to_telegram_object() for msg in messages]
+        return list(messages)
