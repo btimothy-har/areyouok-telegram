@@ -111,6 +111,15 @@ class Sessions(Base):
 
     @classmethod
     @with_retry()
+    async def get_all_inactive_sessions(cls, session: AsyncSession, since: datetime) -> list["Sessions"]:
+        """Get all inactive (closed) sessions that ended after the given timestamp."""
+        stmt = select(cls).where(cls.session_end.is_not(None)).where(cls.session_end >= since)
+
+        result = await session.execute(stmt)
+        return list(result.scalars().all())
+
+    @classmethod
+    @with_retry()
     async def create_session(cls, session: AsyncSession, chat_id: str, timestamp: datetime) -> "Sessions":
         """Create a new session for a chat."""
         session_key = cls.generate_session_key(chat_id, timestamp)
