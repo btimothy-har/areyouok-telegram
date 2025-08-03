@@ -111,9 +111,25 @@ class Sessions(Base):
 
     @classmethod
     @with_retry()
-    async def get_all_inactive_sessions(cls, session: AsyncSession, since: datetime) -> list["Sessions"]:
-        """Get all inactive (closed) sessions that ended after the given timestamp."""
-        stmt = select(cls).where(cls.session_end.is_not(None)).where(cls.session_end >= since)
+    async def get_all_inactive_sessions(
+        cls, session: AsyncSession, from_dt: datetime, to_dt: datetime
+    ) -> list["Sessions"]:
+        """Get all inactive (closed) sessions that ended within the given time range.
+
+        Args:
+            session: The database session to use for the query.
+            from_dt: The start of the time range (inclusive).
+            to_dt: The end of the time range (exclusive).
+
+        Returns:
+            A list of Sessions that ended >= from_dt and < to_dt.
+        """
+        stmt = (
+            select(cls)
+            .where(cls.session_end.is_not(None))
+            .where(cls.session_end >= from_dt)
+            .where(cls.session_end < to_dt)
+        )
 
         result = await session.execute(stmt)
         return list(result.scalars().all())
