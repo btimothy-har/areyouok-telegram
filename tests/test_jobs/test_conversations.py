@@ -674,7 +674,10 @@ class TestScheduleConversationJob:
         assert call_args.kwargs["first"] == 5
         assert call_args.kwargs["name"] == "conversation_processor:123456"
         assert call_args.kwargs["chat_id"] == 123456
-        assert call_args.kwargs["job_kwargs"]["id"] == "conversation_processor:123456"
+        # The job ID should be the MD5 hash of the job name
+        import hashlib
+        expected_id = hashlib.md5("conversation_processor:123456".encode()).hexdigest()
+        assert call_args.kwargs["job_kwargs"]["id"] == expected_id
         assert call_args.kwargs["job_kwargs"]["coalesce"] is True
         assert call_args.kwargs["job_kwargs"]["max_instances"] == 1
 

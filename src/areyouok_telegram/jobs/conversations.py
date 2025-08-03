@@ -199,7 +199,7 @@ async def schedule_conversation_job(context: ContextTypes.DEFAULT_TYPE, chat_id:
             name=processor.name,
             chat_id=chat_id,
             job_kwargs={
-                "id": processor.name,
+                "id": processor._id,
                 "coalesce": True,
                 "max_instances": 1,
             },

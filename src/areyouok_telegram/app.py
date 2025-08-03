@@ -19,6 +19,7 @@ from areyouok_telegram.setup import logging_setup
 from areyouok_telegram.setup import restore_active_sessions
 from areyouok_telegram.setup import setup_bot_description
 from areyouok_telegram.setup import setup_bot_name
+from areyouok_telegram.setup import start_session_cleanups
 
 
 async def application_startup(application: Application):
@@ -26,6 +27,7 @@ async def application_startup(application: Application):
     await setup_bot_name(application)
     await setup_bot_description(application)
     await restore_active_sessions(application)
+    await start_session_cleanups(application)
 
 
 def create_application() -> Application:
