@@ -13,14 +13,14 @@ import pytest
 from freezegun import freeze_time
 from telegram.constants import ReactionEmoji
 
-from areyouok_telegram.agent import ChatAgentDependencies
-from areyouok_telegram.agent.responses import DoNothingResponse
-from areyouok_telegram.agent.responses import ReactionResponse
-from areyouok_telegram.agent.responses import TextResponse
 from areyouok_telegram.jobs.conversations import JOB_LOCK
 from areyouok_telegram.jobs.conversations import ConversationJob
 from areyouok_telegram.jobs.conversations import schedule_conversation_job
 from areyouok_telegram.jobs.exceptions import NoActiveSessionError
+from areyouok_telegram.llms.chat import ChatAgentDependencies
+from areyouok_telegram.llms.chat.responses import DoNothingResponse
+from areyouok_telegram.llms.chat.responses import ReactionResponse
+from areyouok_telegram.llms.chat.responses import TextResponse
 
 
 @pytest.fixture
@@ -36,7 +36,7 @@ def mock_job(mock_session):
 @pytest.fixture
 def mock_input_message():
     """Create a mock message conversion that returns proper ModelMessage objects."""
-    with patch("areyouok_telegram.agent.convert_telegram_message_to_model_message") as mock_convert:
+    with patch("areyouok_telegram.llms.chat.convert_telegram_message_to_model_message") as mock_convert:
         # Create a proper ModelRequest message
         model_request = pydantic_ai.messages.ModelRequest(
             parts=[
@@ -55,7 +55,7 @@ def mock_input_message():
 @pytest.fixture
 def mock_agent_run():
     """Create a mock for chat_agent.run with configurable response."""
-    with patch("areyouok_telegram.agent.chat_agent.run") as mock_run:
+    with patch("areyouok_telegram.llms.chat.chat_agent.run") as mock_run:
         # Default to TextResponse, but can be overridden in tests
         mock_result = MagicMock()
         mock_result.data = TextResponse(reasoning="Default test reasoning", message_text="Default test response")
@@ -674,9 +674,10 @@ class TestScheduleConversationJob:
         assert call_args.kwargs["first"] == 5
         assert call_args.kwargs["name"] == "conversation_processor:123456"
         assert call_args.kwargs["chat_id"] == 123456
+
         # The job ID should be the MD5 hash of the job name
-        import hashlib
-        expected_id = hashlib.md5("conversation_processor:123456".encode()).hexdigest()
+
+        expected_id = hashlib.md5(b"conversation_processor:123456").hexdigest()
         assert call_args.kwargs["job_kwargs"]["id"] == expected_id
         assert call_args.kwargs["job_kwargs"]["coalesce"] is True
         assert call_args.kwargs["job_kwargs"]["max_instances"] == 1

@@ -5,13 +5,13 @@ import pydantic_ai
 import telegram
 from telegram.ext import ContextTypes
 
-from areyouok_telegram.agent import exceptions
-from areyouok_telegram.agent.chat import ChatAgentDependencies
-from areyouok_telegram.agent.chat import chat_agent
-from areyouok_telegram.agent.responses import AgentResponse
-from areyouok_telegram.agent.responses import ReactionResponse
-from areyouok_telegram.agent.responses import TextResponse
 from areyouok_telegram.data import MessageTypes
+from areyouok_telegram.llms.chat import exceptions
+from areyouok_telegram.llms.chat.agent import ChatAgentDependencies
+from areyouok_telegram.llms.chat.agent import chat_agent
+from areyouok_telegram.llms.chat.responses import AgentResponse
+from areyouok_telegram.llms.chat.responses import ReactionResponse
+from areyouok_telegram.llms.chat.responses import TextResponse
 
 from .utils import _telegram_message_to_model_message
 from .utils import _telegram_reaction_to_model_message

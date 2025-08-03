@@ -16,14 +16,14 @@ from pydantic_ai.models.test import TestModel
 from pydantic_ai.usage import Usage
 from telegram.constants import ReactionEmoji
 
-from areyouok_telegram.agent import ChatAgentDependencies
-from areyouok_telegram.agent import chat_agent
-from areyouok_telegram.agent.chat import validate_agent_response
-from areyouok_telegram.agent.exceptions import InvalidMessageError
-from areyouok_telegram.agent.exceptions import ReactToSelfError
-from areyouok_telegram.agent.responses import AgentResponse
-from areyouok_telegram.agent.responses import ReactionResponse
-from areyouok_telegram.agent.responses import TextResponse
+from areyouok_telegram.llms.chat import ChatAgentDependencies
+from areyouok_telegram.llms.chat import chat_agent
+from areyouok_telegram.llms.chat.agent import validate_agent_response
+from areyouok_telegram.llms.chat.exceptions import InvalidMessageError
+from areyouok_telegram.llms.chat.exceptions import ReactToSelfError
+from areyouok_telegram.llms.chat.responses import AgentResponse
+from areyouok_telegram.llms.chat.responses import ReactionResponse
+from areyouok_telegram.llms.chat.responses import TextResponse
 
 
 @pytest.fixture

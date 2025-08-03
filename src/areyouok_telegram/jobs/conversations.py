@@ -9,14 +9,14 @@ from datetime import timedelta
 import telegram
 from telegram.ext import ContextTypes
 
-from areyouok_telegram.agent import AgentResponse
-from areyouok_telegram.agent import ChatAgentDependencies
-from areyouok_telegram.agent import chat_agent
-from areyouok_telegram.agent import convert_telegram_message_to_model_message
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database_session
 from areyouok_telegram.jobs.exceptions import NoActiveSessionError
+from areyouok_telegram.llms.chat import AgentResponse
+from areyouok_telegram.llms.chat import ChatAgentDependencies
+from areyouok_telegram.llms.chat import chat_agent
+from areyouok_telegram.llms.chat import convert_telegram_message_to_model_message
 
 logger = logging.getLogger(__name__)
 

@@ -10,8 +10,8 @@ from unittest.mock import MagicMock
 import telegram
 from pydantic_ai import messages
 
-from areyouok_telegram.agent.utils import _telegram_message_to_model_message
-from areyouok_telegram.agent.utils import _telegram_reaction_to_model_message
+from areyouok_telegram.llms.chat.utils import _telegram_message_to_model_message
+from areyouok_telegram.llms.chat.utils import _telegram_reaction_to_model_message
 
 
 class TestTelegramMessageToModelMessage:

@@ -3,8 +3,8 @@
 import pytest
 from pydantic_ai import ModelRetry
 
-from areyouok_telegram.agent.exceptions import InvalidMessageError
-from areyouok_telegram.agent.exceptions import ReactToSelfError
+from areyouok_telegram.llms.chat.exceptions import InvalidMessageError
+from areyouok_telegram.llms.chat.exceptions import ReactToSelfError
 
 
 class TestInvalidMessageError:
