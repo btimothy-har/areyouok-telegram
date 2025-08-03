@@ -187,6 +187,17 @@ class TestMessagesProperties:
             telegram.Message.de_json.assert_called_once_with(messages_record.payload, None)
             assert result == mock_telegram_msg
 
+    def test_to_telegram_object_with_soft_deleted_message(self):
+        """Test to_telegram_object returns None for soft-deleted messages."""
+        messages_record = Messages()
+        messages_record.message_type = "Message"
+        messages_record.payload = None  # Soft deleted
+
+        result = messages_record.to_telegram_object()
+
+        # Should return None for soft-deleted messages
+        assert result is None
+
 
 class TestMessagesNewOrUpdate:
     """Test the new_or_update method of the Messages class."""
@@ -615,6 +626,29 @@ class TestMessagesRetrieveByChat:
         # Verify the result is empty
         assert result == []
 
+    async def test_retrieve_by_chat_excludes_soft_deleted(self, mock_async_database_session):
+        """Test retrieving messages excludes soft-deleted ones."""
+        chat_id = "123456"
+
+        # Create mock messages, one soft-deleted
+        mock_message = MagicMock()
+        mock_message.payload = {"text": "Active message"}
+        mock_message.to_telegram_object.return_value = MagicMock(spec=telegram.Message)
+
+        # Mock result with only non-deleted message
+        mock_result = MagicMock()
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = [mock_message]
+        mock_result.scalars.return_value = mock_scalars
+        mock_async_database_session.execute.return_value = mock_result
+
+        # Call the method
+        result = await Messages.retrieve_by_chat(mock_async_database_session, chat_id)
+
+        # Verify only one message returned (soft-deleted excluded by query)
+        assert len(result) == 1
+        assert result[0] == mock_message.to_telegram_object.return_value
+
     async def test_retrieve_by_chat_uses_retrieve_raw_by_chat(
         self, mock_async_database_session, mock_message_record1, mock_message_record2
     ):
@@ -783,103 +817,87 @@ class TestMessagesRetrieveRawByChat:
 class TestMessagesDelete:
     """Test the delete instance method."""
 
-    async def test_delete_existing_message(self, mock_async_database_session):
-        """Test deleting an existing message returns True."""
-        # Create a Messages instance
+    async def test_delete_existing_message(self):
+        """Test soft deleting a message with payload returns True."""
+        # Create a Messages instance with payload
         message = Messages()
         message.message_key = "test_key_123"
-
-        # Mock the execute result to indicate 1 row was deleted
-        mock_result = MagicMock()
-        mock_result.rowcount = 1
-        mock_async_database_session.execute.return_value = mock_result
+        message.payload = {"message_id": 123, "text": "Test message"}
 
         # Call the delete method
-        result = await message.delete(mock_async_database_session)
+        result = await message.delete()
 
-        # Verify the execute was called once
-        mock_async_database_session.execute.assert_called_once()
-
-        # Verify it returned True (message was deleted)
+        # Verify it returned True (message was soft deleted)
         assert result is True
 
-        # Verify the delete statement structure
-        stmt = mock_async_database_session.execute.call_args[0][0]
-        # The statement should be a delete statement
-        assert stmt.table.name == "messages"
+        # Verify the payload was set to None
+        assert message.payload is None
 
-    async def test_delete_nonexistent_message(self, mock_async_database_session):
-        """Test deleting a non-existent message returns False."""
-        # Create a Messages instance
+    async def test_delete_already_deleted_message(self):
+        """Test deleting an already soft-deleted message returns False."""
+        # Create a Messages instance with no payload (already soft deleted)
         message = Messages()
-        message.message_key = "nonexistent_key"
-
-        # Mock the execute result to indicate 0 rows were deleted
-        mock_result = MagicMock()
-        mock_result.rowcount = 0
-        mock_async_database_session.execute.return_value = mock_result
+        message.message_key = "already_deleted_key"
+        message.payload = None
 
         # Call the delete method
-        result = await message.delete(mock_async_database_session)
+        result = await message.delete()
 
-        # Verify the execute was called once
-        mock_async_database_session.execute.assert_called_once()
-
-        # Verify it returned False (message was not found)
+        # Verify it returned False (message was already deleted)
         assert result is False
 
-    async def test_delete_uses_message_key(self, mock_async_database_session):
-        """Test that delete method uses the message_key for deletion."""
-        # Create a Messages instance with specific key
+        # Verify the payload is still None
+        assert message.payload is None
+
+    async def test_delete_preserves_metadata(self):
+        """Test that delete preserves message metadata while clearing payload."""
+        # Create a Messages instance with full data
         message = Messages()
         message.message_key = "unique_test_key_456"
-
-        # Mock the execute result
-        mock_result = MagicMock()
-        mock_result.rowcount = 1
-        mock_async_database_session.execute.return_value = mock_result
+        message.message_id = "12345"
+        message.message_type = "Message"
+        message.user_id = "user123"
+        message.chat_id = "chat456"
+        message.payload = {"message_id": 12345, "text": "Test message"}
 
         # Call the delete method
-        await message.delete(mock_async_database_session)
+        result = await message.delete()
 
-        # Get the statement that was executed
-        stmt = mock_async_database_session.execute.call_args[0][0]
+        # Verify it returned True
+        assert result is True
 
-        # Compile the statement to inspect the WHERE clause
-        compiled = stmt.compile()
-        # The WHERE clause should use the message_key
-        assert "message_key" in str(compiled)
+        # Verify only payload was cleared, other fields remain intact
+        assert message.payload is None
+        assert message.message_key == "unique_test_key_456"
+        assert message.message_id == "12345"
+        assert message.message_type == "Message"
+        assert message.user_id == "user123"
+        assert message.chat_id == "chat456"
 
-    async def test_delete_multiple_messages_independently(self, mock_async_database_session):
+    async def test_delete_multiple_messages_independently(self):
         """Test deleting multiple messages independently."""
         # Create multiple Messages instances
         message1 = Messages()
         message1.message_key = "key1"
+        message1.payload = {"text": "Message 1"}
 
         message2 = Messages()
         message2.message_key = "key2"
-
-        # Mock different results for each delete
-        mock_result1 = MagicMock()
-        mock_result1.rowcount = 1  # First message exists and is deleted
-
-        mock_result2 = MagicMock()
-        mock_result2.rowcount = 0  # Second message doesn't exist
-
-        mock_async_database_session.execute.side_effect = [mock_result1, mock_result2]
+        message2.payload = None  # Already soft deleted
 
         # Delete both messages
-        result1 = await message1.delete(mock_async_database_session)
-        result2 = await message2.delete(mock_async_database_session)
-
-        # Verify both executes were called
-        assert mock_async_database_session.execute.call_count == 2
+        result1 = await message1.delete()
+        result2 = await message2.delete()
 
         # Verify results
-        assert result1 is True  # First message was deleted
-        assert result2 is False  # Second message didn't exist
+        assert result1 is True  # First message was soft deleted
+        assert result2 is False  # Second message was already deleted
 
-    async def test_delete_with_retry_decorator(self, mock_async_database_session):
+        # Verify payloads
+        assert message1.payload is None
+        assert message2.payload is None
+
+    async def test_delete_with_retry_decorator(self):
         """Test that delete method has the with_retry decorator."""
         # Create a Messages instance
         message = Messages()
@@ -890,29 +908,11 @@ class TestMessagesDelete:
 
         # Also verify the method works correctly
         message.message_key = "test_key"
-
-        # Mock the execute result
-        mock_result = MagicMock()
-        mock_result.rowcount = 1
-        mock_async_database_session.execute.return_value = mock_result
+        message.payload = {"text": "Test message"}
 
         # Call the delete method
-        result = await message.delete(mock_async_database_session)
+        result = await message.delete()
 
         # Verify it still works as expected
         assert result is True
-
-    async def test_delete_handles_database_error(self, mock_async_database_session):
-        """Test that delete method propagates database errors."""
-        # Create a Messages instance
-        message = Messages()
-        message.message_key = "test_key"
-
-        # Mock the execute to raise an exception
-        mock_async_database_session.execute.side_effect = Exception("Database connection error")
-
-        # Verify the exception is propagated
-        with pytest.raises(Exception) as exc_info:
-            await message.delete(mock_async_database_session)
-
-        assert str(exc_info.value) == "Database connection error"
+        assert message.payload is None
