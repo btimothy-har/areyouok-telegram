@@ -7,15 +7,15 @@ from unittest.mock import patch
 import pytest
 from telegram.ext import Application
 
-from areyouok_telegram.setup.conversations import setup_conversation_runners
+from areyouok_telegram.setup.conversations import restore_active_sessions
 
 
 class TestSetupConversationRunners:
-    """Test the setup_conversation_runners function."""
+    """Test the restore_active_sessions function."""
 
     @pytest.mark.asyncio
     async def test_setup_conversation_runners_with_active_sessions(self):
-        """Test setup_conversation_runners schedules jobs for active sessions."""
+        """Test restore_active_sessions schedules jobs for active sessions."""
         # Arrange
         mock_context = MagicMock(spec=Application)
 
@@ -37,7 +37,7 @@ class TestSetupConversationRunners:
             mock_schedule_job.return_value = AsyncMock()  # Return an awaitable
 
             # Act
-            await setup_conversation_runners(mock_context)
+            await restore_active_sessions(mock_context)
 
             # Assert
             mock_get_sessions.assert_called_once_with(mock_db_session.return_value.__aenter__.return_value)
@@ -49,7 +49,7 @@ class TestSetupConversationRunners:
 
     @pytest.mark.asyncio
     async def test_setup_conversation_runners_no_active_sessions(self):
-        """Test setup_conversation_runners handles no active sessions gracefully."""
+        """Test restore_active_sessions handles no active sessions gracefully."""
         # Arrange
         mock_context = MagicMock(spec=Application)
 
@@ -64,7 +64,7 @@ class TestSetupConversationRunners:
             mock_get_sessions.return_value = []  # No active sessions
 
             # Act
-            await setup_conversation_runners(mock_context)
+            await restore_active_sessions(mock_context)
 
             # Assert
             mock_get_sessions.assert_called_once_with(mock_db_session.return_value.__aenter__.return_value)

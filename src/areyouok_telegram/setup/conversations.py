@@ -9,7 +9,7 @@ from areyouok_telegram.data import async_database_session
 from areyouok_telegram.jobs.conversations import schedule_conversation_job
 
 
-async def setup_conversation_runners(ctx: Application | ContextTypes.DEFAULT_TYPE):
+async def restore_active_sessions(ctx: Application | ContextTypes.DEFAULT_TYPE):
     """Setup conversation jobs for active chats on startup."""
     async with async_database_session() as session:
         # Fetch all active sessions

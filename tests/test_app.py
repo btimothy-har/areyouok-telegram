@@ -55,7 +55,7 @@ class TestApplicationStartup:
         with (
             patch("areyouok_telegram.app.setup_bot_name") as mock_setup_name,
             patch("areyouok_telegram.app.setup_bot_description") as mock_setup_description,
-            patch("areyouok_telegram.app.setup_conversation_runners") as mock_setup_conversations,
+            patch("areyouok_telegram.app.restore_active_sessions") as mock_setup_conversations,
         ):
             mock_setup_name.return_value = None
             mock_setup_description.return_value = None
@@ -76,7 +76,7 @@ class TestApplicationStartup:
         with (
             patch("areyouok_telegram.app.setup_bot_name") as mock_setup_name,
             patch("areyouok_telegram.app.setup_bot_description") as mock_setup_description,
-            patch("areyouok_telegram.app.setup_conversation_runners") as mock_setup_conversations,
+            patch("areyouok_telegram.app.restore_active_sessions") as mock_setup_conversations,
         ):
             mock_setup_name.side_effect = BotNameSetupError("Test Bot")
 
@@ -95,7 +95,7 @@ class TestApplicationStartup:
         with (
             patch("areyouok_telegram.app.setup_bot_name") as mock_setup_name,
             patch("areyouok_telegram.app.setup_bot_description") as mock_setup_description,
-            patch("areyouok_telegram.app.setup_conversation_runners") as mock_setup_conversations,
+            patch("areyouok_telegram.app.restore_active_sessions") as mock_setup_conversations,
         ):
             mock_setup_name.return_value = None
             mock_setup_description.side_effect = BotDescriptionSetupError()
