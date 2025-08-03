@@ -719,22 +719,22 @@ class TestMessagesDelete:
         """Test that delete method has the with_retry decorator."""
         # Create a Messages instance
         message = Messages()
-        
+
         # Verify the delete method has been wrapped by with_retry
         # The with_retry decorator adds __wrapped__ attribute to the original function
         assert hasattr(message.delete, "__wrapped__")
-        
+
         # Also verify the method works correctly
         message.message_key = "test_key"
-        
+
         # Mock the execute result
         mock_result = MagicMock()
         mock_result.rowcount = 1
         mock_async_database_session.execute.return_value = mock_result
-        
+
         # Call the delete method
         result = await message.delete(mock_async_database_session)
-        
+
         # Verify it still works as expected
         assert result is True
 

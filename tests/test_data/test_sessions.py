@@ -157,7 +157,7 @@ class TestSessionsGetAllInactiveSessions:
     async def test_get_all_inactive_sessions_after_timestamp(self, mock_async_database_session):
         """Test retrieving inactive sessions that ended after a given timestamp."""
         since_time = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
-        
+
         # Create mock inactive sessions with different end times
         session1 = MagicMock(spec=Sessions)
         session1.session_end = datetime(2025, 1, 15, 11, 0, 0, tzinfo=UTC)  # After since_time
@@ -190,7 +190,7 @@ class TestSessionsGetAllInactiveSessions:
     async def test_get_all_inactive_sessions_empty(self, mock_async_database_session):
         """Test retrieving inactive sessions when none exist after the given timestamp."""
         since_time = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
-        
+
         # Mock no results
         mock_result = MagicMock()
         mock_scalars = MagicMock()
@@ -207,7 +207,7 @@ class TestSessionsGetAllInactiveSessions:
     async def test_get_all_inactive_sessions_exact_timestamp(self, mock_async_database_session):
         """Test that sessions ending exactly at the since timestamp are included."""
         since_time = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
-        
+
         # Create a session that ended exactly at since_time
         session = MagicMock(spec=Sessions)
         session.session_end = since_time  # Exactly at since_time
@@ -230,7 +230,7 @@ class TestSessionsGetAllInactiveSessions:
     async def test_get_all_inactive_sessions_excludes_active(self, mock_async_database_session):
         """Test that active sessions (session_end is None) are never included."""
         since_time = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
-        
+
         # The query should filter out any sessions where session_end is None
         # So we'll mock an empty result to verify the query logic
         mock_result = MagicMock()
@@ -244,7 +244,7 @@ class TestSessionsGetAllInactiveSessions:
 
         # Verify the query was executed with proper filters
         mock_async_database_session.execute.assert_called_once()
-        
+
         # The result should be empty
         assert result == []
 
