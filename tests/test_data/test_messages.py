@@ -774,7 +774,7 @@ class TestMessagesRetrieveRawByChat:
         assert len(result) == 1
         assert result[0] == mock_message_record1
 
-    async def test_retrieve_raw_by_chat_with_retry_decorator(self, mock_async_database_session):
+    async def test_retrieve_raw_by_chat_with_retry_decorator(self):
         """Test that retrieve_raw_by_chat method has the with_retry decorator."""
         # Verify the method has been wrapped by with_retry
         assert hasattr(Messages.retrieve_raw_by_chat, "__wrapped__")

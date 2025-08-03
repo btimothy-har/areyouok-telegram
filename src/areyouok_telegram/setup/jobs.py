@@ -25,13 +25,15 @@ async def restore_active_sessions(ctx: Application | ContextTypes.DEFAULT_TYPE):
             logging.info("No active sessions found, skipping conversation job setup.")
             return
 
-        await asyncio.gather(*[
-            schedule_conversation_job(
-                context=ctx,
-                chat_id=s.chat_id,
-            )
-            for s in active_sessions
-        ])
+        await asyncio.gather(
+            *[
+                schedule_conversation_job(
+                    context=ctx,
+                    chat_id=s.chat_id,
+                )
+                for s in active_sessions
+            ]
+        )
 
 
 async def start_session_cleanups(ctx: Application | ContextTypes.DEFAULT_TYPE):
