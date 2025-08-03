@@ -6,6 +6,7 @@ import telegram
 from sqlalchemy import Column
 from sqlalchemy import Integer
 from sqlalchemy import String
+from sqlalchemy import delete as sql_delete
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import TIMESTAMP
@@ -58,6 +59,21 @@ class Messages(Base):
     def to_telegram_object(self) -> MessageTypes:
         """Convert the database record to a Telegram message object."""
         return self.message_type_obj.de_json(self.payload, None)
+
+    @with_retry()
+    async def delete(self, session: AsyncSession) -> bool:
+        """Delete the message record from the database.
+
+        Returns:
+            bool: True if the message was deleted, False if it didn't exist.
+        """
+        # Use delete statement directly for efficiency
+        stmt = sql_delete(self.__class__).where(self.__class__.message_key == self.message_key)
+
+        result = await session.execute(stmt)
+
+        # Return whether any rows were affected
+        return result.rowcount > 0
 
     @classmethod
     @with_retry()
