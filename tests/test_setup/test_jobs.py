@@ -7,7 +7,7 @@ from unittest.mock import patch
 import pytest
 from telegram.ext import Application
 
-from areyouok_telegram.setup.conversations import restore_active_sessions
+from areyouok_telegram.setup.jobs import restore_active_sessions
 
 
 class TestSetupConversationRunners:
@@ -27,9 +27,9 @@ class TestSetupConversationRunners:
         active_sessions = [mock_session1, mock_session2]
 
         with (
-            patch("areyouok_telegram.setup.conversations.async_database_session") as mock_db_session,
-            patch("areyouok_telegram.setup.conversations.Sessions.get_all_active_sessions") as mock_get_sessions,
-            patch("areyouok_telegram.setup.conversations.schedule_conversation_job") as mock_schedule_job,
+            patch("areyouok_telegram.setup.jobs.async_database_session") as mock_db_session,
+            patch("areyouok_telegram.setup.jobs.Sessions.get_all_active_sessions") as mock_get_sessions,
+            patch("areyouok_telegram.setup.jobs.schedule_conversation_job") as mock_schedule_job,
         ):
             # Configure mocks
             mock_db_session.return_value.__aenter__.return_value = AsyncMock()
@@ -54,9 +54,9 @@ class TestSetupConversationRunners:
         mock_context = MagicMock(spec=Application)
 
         with (
-            patch("areyouok_telegram.setup.conversations.async_database_session") as mock_db_session,
-            patch("areyouok_telegram.setup.conversations.Sessions.get_all_active_sessions") as mock_get_sessions,
-            patch("areyouok_telegram.setup.conversations.schedule_conversation_job") as mock_schedule_job,
+            patch("areyouok_telegram.setup.jobs.async_database_session") as mock_db_session,
+            patch("areyouok_telegram.setup.jobs.Sessions.get_all_active_sessions") as mock_get_sessions,
+            patch("areyouok_telegram.setup.jobs.schedule_conversation_job") as mock_schedule_job,
             patch("logging.info") as mock_logging,
         ):
             # Configure mocks
