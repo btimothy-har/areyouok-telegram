@@ -1,7 +1,6 @@
-import asyncio
-import logging
 import traceback
 
+import logfire
 import telegram
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
@@ -13,33 +12,44 @@ from areyouok_telegram.data import Users
 from areyouok_telegram.data import async_database_session
 from areyouok_telegram.jobs import schedule_conversation_job
 
-logger = logging.getLogger(__name__)
-
 
 async def on_new_update(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):
-    async with async_database_session() as session:
-        await Updates.new_or_upsert(session, update=update)
+    with logfire.span(
+        f"Processing update {update.update_id}",
+        chat_id=update.effective_chat.id if update.effective_chat else None,
+        user_id=update.effective_user.id if update.effective_user else None,
+    ):
+        async with async_database_session() as session:
+            if update.effective_user:
+                await Users.new_or_update(session=session, user=update.effective_user)
+                logfire.debug("Update User saved.")
 
-        update_tasks = []
-        if update.effective_user:
-            update_tasks.append(asyncio.create_task(Users.new_or_update(session=session, user=update.effective_user)))
+            if update.effective_chat:
+                await Chats.new_or_update(session=session, chat=update.effective_chat)
+                logfire.debug("Update Chat saved.")
 
-        if update.effective_chat:
-            update_tasks.append(asyncio.create_task(Chats.new_or_update(session=session, chat=update.effective_chat)))
+                # Schedule conversation job for any update with a chat
+                await schedule_conversation_job(context=context, chat_id=str(update.effective_chat.id))
 
-            # Schedule conversation job for any update with a chat
-            conversation_job = schedule_conversation_job(context=context, chat_id=str(update.effective_chat.id))
-            update_tasks.append(asyncio.create_task(conversation_job))
-
-        await asyncio.gather(*update_tasks)
+        logfire.debug(
+            "Update successfully processed.",
+            update_id=update.update_id,
+            chat_id=update.effective_chat.id if update.effective_chat else None,
+            user_id=update.effective_user.id if update.effective_user else None,
+        )
 
 
 async def on_error_event(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Log the error and send a telegram message to notify the developer."""
+
     if not update:
-        logger.error(str(context.error), exc_info=context.error)
+        logfire.error(str(context.error), _exc_info=context.error)
     else:
-        logger.error(f"Exception while handling an update: {update.update_id}", exc_info=context.error)
+        logfire.error(f"Exception while handling an update: {update.update_id}", _exc_info=context.error)
+
+        # Store update only for debugging
+        async with async_database_session() as session:
+            await Updates.new_or_upsert(session, update=update)
 
     if DEVELOPER_CHAT_ID:
         tb_list = traceback.format_exception(None, context.error, context.error.__traceback__)

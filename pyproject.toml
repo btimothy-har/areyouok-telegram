@@ -18,6 +18,7 @@ dependencies = [
     "logfire~=4.0.0",
     "dspy~=2.6.27",
     "pydantic-ai~=0.4.7",
+    "pydantic-ai[logfire]",
 ]
 
 [dependency-groups]
@@ -77,6 +78,9 @@ select = [
 combine-as-imports = true
 force-single-line = true
 detect-same-package = true
+
+[tool.logfire]
+ignore_no_config=true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

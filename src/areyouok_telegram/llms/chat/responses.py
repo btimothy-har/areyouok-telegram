@@ -1,8 +1,8 @@
-import logging
 from abc import abstractmethod
 from datetime import UTC
 from datetime import datetime
 
+import logfire
 import pydantic
 import telegram
 import tenacity
@@ -11,8 +11,6 @@ from telegram.ext import ContextTypes
 
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data.connection import AsyncSessionLocal
-
-logger = logging.getLogger(__name__)
 
 
 def retry_response():
@@ -76,11 +74,11 @@ class TextResponse(BaseAgentResponse):
                 reply_parameters=reply_parameters,
             )
         except Exception:
-            logger.exception(f"Failed to send text reply to chat {chat_id}")
+            logfire.exception(f"Failed to send text reply to chat {chat_id}")
             raise
 
         else:
-            logger.debug(f"Text reply sent to chat {chat_id}: {self.message_text}")
+            logfire.debug(f"Text reply sent to chat {chat_id}: {self.message_text}")
             return reply_message
 
 
@@ -108,12 +106,12 @@ class ReactionResponse(BaseAgentResponse):
             )
 
         except Exception:
-            logger.exception(f"Failed to send reaction to message {self.react_to_message_id} in chat {chat_id}")
+            logfire.exception(f"Failed to send reaction to message {self.react_to_message_id} in chat {chat_id}")
             raise
 
         else:
             if react_sent:
-                logger.debug(f"Reaction sent to message {self.react_to_message_id} in chat {chat_id}: {self.emoji}")
+                logfire.debug(f"Reaction sent to message {self.react_to_message_id} in chat {chat_id}: {self.emoji}")
 
                 # Manually create MessageReactionUpdated object as Telegram API does not return it
                 reaction_message = telegram.MessageReactionUpdated(
@@ -134,7 +132,7 @@ class DoNothingResponse(BaseAgentResponse):
 
     async def execute(self, db_connection: AsyncSessionLocal, context: ContextTypes.DEFAULT_TYPE, chat_id: str) -> None:  # noqa: ARG002
         """Execute the do-nothing action."""
-        logger.debug(f"DoNothingResponse executed for chat {chat_id}. No action taken.")
+        logfire.debug(f"DoNothingResponse executed for chat {chat_id}. No action taken.")
         return None
 
 

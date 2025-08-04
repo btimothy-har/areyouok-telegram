@@ -18,7 +18,7 @@ def logging_setup():
 
     controlled_environments = ["production", "staging"]
 
-    logging.basicConfig(level=logging.INFO, handlers=[logfire.LogfireLoggingHandler()])
+    logging.getLogger().addHandler(logfire.LogfireLoggingHandler())
 
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("LiteLLM").setLevel(logging.WARNING)
@@ -38,6 +38,8 @@ def logging_setup():
         console = logfire.ConsoleOptions(
             span_style="show-parents",
             show_project_link=False,
+            min_log_level="debug" if ENV == "development" else "info",
+            verbose=True,
         )
 
     logfire.configure(
@@ -52,4 +54,6 @@ def logging_setup():
         scrubbing=False,
     )
 
-    logger.info("Logging setup complete.")
+    logfire.log_slow_async_callbacks(slow_duration=0.25)
+
+    logfire.info("Logging setup complete.")
