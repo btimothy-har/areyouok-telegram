@@ -2,9 +2,8 @@ import pydantic
 import pydantic_ai
 from pydantic_ai.models.fallback import FallbackModel
 from pydantic_ai.models.openai import OpenAIModel
-from pydantic_ai.providers.openrouter import OpenRouterProvider
 
-from areyouok_telegram.config import OPENROUTER_API_KEY
+from areyouok_telegram.llms.utils import openrouter_provider
 from areyouok_telegram.llms.utils import pydantic_ai_instrumentation
 
 LIFE_SITUATION_DESC = """
@@ -125,7 +124,7 @@ agent_models = FallbackModel(
     OpenAIModel(model_name="gpt-4.1-mini-2025-04-14"),
     OpenAIModel(
         model_name="openai/gpt-4.1-mini",
-        provider=OpenRouterProvider(api_key=OPENROUTER_API_KEY),
+        provider=openrouter_provider,
     ),
 )
 

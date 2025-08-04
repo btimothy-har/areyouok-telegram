@@ -2,11 +2,15 @@
 
 import telegram
 from pydantic_ai.models.instrumented import InstrumentationSettings
+from pydantic_ai.providers.openrouter import OpenRouterProvider
 
 from areyouok_telegram.config import ENV
+from areyouok_telegram.config import OPENROUTER_API_KEY
 from areyouok_telegram.data import MessageTypes
 
 pydantic_ai_instrumentation = InstrumentationSettings(include_content=True if ENV == "development" else False)
+
+openrouter_provider = OpenRouterProvider(api_key=OPENROUTER_API_KEY)
 
 
 def telegram_message_to_dict(message: MessageTypes, ts_reference) -> dict:

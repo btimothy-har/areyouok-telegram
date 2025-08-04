@@ -4,17 +4,14 @@ import pydantic_ai
 from pydantic_ai.models.anthropic import AnthropicModel
 from pydantic_ai.models.fallback import FallbackModel
 from pydantic_ai.models.openai import OpenAIModel
-from pydantic_ai.providers.anthropic import AnthropicProvider
-from pydantic_ai.providers.openrouter import OpenRouterProvider
 from telegram.ext import ContextTypes
 
-from areyouok_telegram.config import ANTHROPIC_API_KEY
-from areyouok_telegram.config import OPENROUTER_API_KEY
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data.connection import AsyncSessionLocal
 from areyouok_telegram.llms.chat.exceptions import InvalidMessageError
 from areyouok_telegram.llms.chat.exceptions import ReactToSelfError
 from areyouok_telegram.llms.chat.responses import AgentResponse
+from areyouok_telegram.llms.utils import openrouter_provider
 from areyouok_telegram.llms.utils import pydantic_ai_instrumentation
 
 
@@ -30,13 +27,10 @@ class ChatAgentDependencies:
 
 
 agent_models = FallbackModel(
-    AnthropicModel(
-        model_name="claude-sonnet-4-20250514",
-        provider=AnthropicProvider(api_key=ANTHROPIC_API_KEY),
-    ),
+    AnthropicModel(model_name="claude-sonnet-4-20250514"),
     OpenAIModel(
         model_name="anthropic/claude-sonnet-4",
-        provider=OpenRouterProvider(api_key=OPENROUTER_API_KEY),
+        provider=openrouter_provider,
     ),
 )
 
