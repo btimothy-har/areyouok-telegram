@@ -24,11 +24,11 @@ class AnonymizationModule(dspy.Module):
         result = dspy.Prediction(
             anonymized_text=anonymized_text.anonymized_text,
         )
-        
+
         # Preserve LLM usage data
         if hasattr(anonymized_text, "get_lm_usage"):
             usage = anonymized_text.get_lm_usage()
             if usage:
                 result.set_lm_usage(usage)
-        
+
         return result

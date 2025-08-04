@@ -128,11 +128,11 @@ class DynamicContextCompression(dspy.Module):
         result = dspy.Prediction(
             context=context,
         )
-        
+
         # Preserve LLM usage data from the compression prediction
         if hasattr(compression, "get_lm_usage"):
             usage = compression.get_lm_usage()
             if usage:
                 result.set_lm_usage(usage)
-        
+
         return result

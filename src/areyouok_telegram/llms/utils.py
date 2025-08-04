@@ -4,7 +4,6 @@ import json
 from datetime import UTC
 from datetime import datetime
 from typing import Any
-from typing import Dict
 
 import dspy
 import pydantic_ai
@@ -36,9 +35,9 @@ def telegram_message_to_dict(message: MessageTypes, ts_reference) -> dict:
     elif isinstance(message, telegram.MessageReactionUpdated):
         # Handle reactions, assuming only emoji reactions for simplicity
         # TODO: Handle custom and paid reactions
-        reaction_string = ", ".join(
-            [r.emoji for r in message.new_reaction if r.type == telegram.constants.ReactionType.EMOJI]
-        )
+        reaction_string = ", ".join([
+            r.emoji for r in message.new_reaction if r.type == telegram.constants.ReactionType.EMOJI
+        ])
         return {
             "reaction": reaction_string,
             "to_message_id": str(message.message_id),
@@ -119,28 +118,28 @@ def _telegram_reaction_to_model_message(
 def merge_dspy_usage_data(*predictions: dspy.Prediction) -> dict[str, Any]:
     """
     Merge LLM usage data from multiple dspy predictions.
-    
+
     Args:
         *predictions: Variable number of dspy.Prediction objects
-        
+
     Returns:
         Merged usage dictionary with accumulated token counts
     """
     total_usage = {}
-    
+
     for pred in predictions:
         if hasattr(pred, "get_lm_usage"):
             usage = pred.get_lm_usage()
             if usage:
-                _accumulate_usage(total_usage, usage)
-    
+                _accumulate_dspy_usage(total_usage, usage)
+
     return total_usage
 
 
-def _accumulate_usage(total: dict[str, Any], new: dict[str, Any]) -> None:
+def _accumulate_dspy_usage(total: dict[str, Any], new: dict[str, Any]) -> None:
     """
     Accumulate usage data from new into total (in-place).
-    
+
     Args:
         total: Dictionary to accumulate into (modified in-place)
         new: New usage data to add
@@ -155,12 +154,12 @@ def _accumulate_usage(total: dict[str, Any], new: dict[str, Any]) -> None:
                 "completion_tokens_details": {},
                 "prompt_tokens_details": {},
             }
-        
+
         # Accumulate token counts
         for token_type in ["completion_tokens", "prompt_tokens", "total_tokens"]:
             if token_type in model_usage:
                 total[model_name][token_type] += model_usage.get(token_type, 0)
-        
+
         # For details, keep the latest non-None values
         for detail_key in ["completion_tokens_details", "prompt_tokens_details"]:
             if detail_key in model_usage and model_usage[detail_key]:
