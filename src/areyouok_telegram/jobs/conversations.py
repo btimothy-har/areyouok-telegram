@@ -24,6 +24,7 @@ from areyouok_telegram.llms.chat import ChatAgentDependencies
 from areyouok_telegram.llms.chat import chat_agent
 
 from .utils import convert_telegram_message_to_model_message
+from .utils import get_unsupported_media_from_messages
 
 JOB_LOCK = defaultdict(asyncio.Lock)
 
@@ -123,14 +124,10 @@ class ConversationJob:
             pydantic_ai.messages.ModelResponse(
                 parts=[
                     pydantic_ai.messages.TextPart(
-                        content=json.dumps(
-                            {
-                                "timestamp": (
-                                    f"{(self._run_timestamp - context.created_at).total_seconds()} seconds ago"
-                                ),
-                                "content": f"Summary of prior conversation:\n\n{context.content}",
-                            }
-                        ),
+                        content=json.dumps({
+                            "timestamp": (f"{(self._run_timestamp - context.created_at).total_seconds()} seconds ago"),
+                            "content": f"Summary of prior conversation:\n\n{context.content}",
+                        }),
                         part_kind="text",
                     )
                 ],
@@ -140,21 +137,6 @@ class ConversationJob:
             for context in last_context
         ]
 
-    async def _get_session_model_messages(self, conn, session: Sessions) -> list[pydantic_ai.messages.ModelMessage]:
-        messages = await session.get_messages(conn)
-        messages.sort(key=lambda msg: msg.date)  # Sort messages by date
-
-        model_messages = [
-            await convert_telegram_message_to_model_message(
-                conn=conn,
-                message=msg,
-                ts_reference=self._run_timestamp,
-                is_user=msg.from_user and msg.from_user.id != self.bot_id,
-            )
-            for msg in messages
-        ]
-        return model_messages
-
     async def _generate_response(self, conn, context: ContextTypes.DEFAULT_TYPE, chat_session: Sessions) -> bool:
         """Process messages for this chat and send appropriate replies.
 
@@ -163,7 +145,37 @@ class ConversationJob:
         """
 
         last_context = await self._get_chat_context(conn)
-        session_messages = await self._get_session_model_messages(conn, chat_session)
+
+        # Get all messages from the session
+        messages = await chat_session.get_messages(conn)
+        messages.sort(key=lambda msg: msg.date)  # Sort messages by date
+
+        # Convert messages to model messages
+        session_messages = [
+            await convert_telegram_message_to_model_message(
+                conn=conn,
+                message=msg,
+                ts_reference=self._run_timestamp,
+                is_user=msg.from_user and msg.from_user.id != self.bot_id,
+            )
+            for msg in messages
+        ]
+
+        # Check for unsupported media only in messages since last bot activity
+        unsupported_media = await get_unsupported_media_from_messages(
+            conn, messages, since_timestamp=chat_session.last_bot_activity
+        )
+
+        # Create status message for unsupported media
+        status_message = None
+        if unsupported_media:
+            unique_types = list(set(unsupported_media))
+            if len(unique_types) == 1:
+                status_message = f"The user sent a {unique_types[0]} file, but you can only view images and PDFs."
+            else:
+                status_message = (
+                    f"The user sent {', '.join(unique_types)} files, but you can only view images and PDFs."
+                )
 
         try:
             agent_run_payload = await chat_agent.run(
@@ -171,8 +183,10 @@ class ConversationJob:
                 deps=ChatAgentDependencies(
                     tg_context=context,
                     tg_chat_id=self.chat_id,
+                    tg_session_id=chat_session.session_key,
                     last_response_type=self._last_response,
                     db_connection=conn,
+                    status_message=status_message,
                 ),
             )
 
@@ -258,7 +272,20 @@ class ConversationJob:
             logfire.debug(f"Context already exists for session {chat_session.session_key}, skipping compression.")
             return
 
-        session_messages = await self._get_session_model_messages(conn, chat_session)
+        # Get all messages from the session
+        messages = await chat_session.get_messages(conn)
+        messages.sort(key=lambda msg: msg.date)  # Sort messages by date
+
+        # Convert messages to model messages
+        session_messages = [
+            await convert_telegram_message_to_model_message(
+                conn=conn,
+                message=msg,
+                ts_reference=self._run_timestamp,
+                is_user=msg.from_user and msg.from_user.id != self.bot_id,
+            )
+            for msg in messages
+        ]
 
         try:
             context_run_payload = await context_compression_agent.run(message_history=session_messages)

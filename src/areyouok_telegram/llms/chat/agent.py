@@ -6,10 +6,15 @@ from pydantic_ai.models.fallback import FallbackModel
 from pydantic_ai.models.openai import OpenAIModel
 from telegram.ext import ContextTypes
 
+from areyouok_telegram.data import LLMUsage
 from areyouok_telegram.data import Messages
+from areyouok_telegram.data import async_database_session
 from areyouok_telegram.data.connection import AsyncSessionLocal
+from areyouok_telegram.llms.analytics import ContentCheckDependencies
+from areyouok_telegram.llms.analytics import content_check_agent
 from areyouok_telegram.llms.chat.exceptions import InvalidMessageError
 from areyouok_telegram.llms.chat.exceptions import ReactToSelfError
+from areyouok_telegram.llms.chat.exceptions import UnacknowledgedImportantMessageError
 from areyouok_telegram.llms.chat.responses import AgentResponse
 from areyouok_telegram.llms.utils import openrouter_provider
 from areyouok_telegram.llms.utils import pydantic_ai_instrumentation
@@ -22,15 +27,26 @@ class ChatAgentDependencies:
     # TODO: Add user preferences so we have context
     tg_context: ContextTypes.DEFAULT_TYPE
     tg_chat_id: str
+    tg_session_id: str
     last_response_type: str
     db_connection: AsyncSessionLocal
+    status_message: str | None = None
 
+
+model_settings = pydantic_ai.settings.ModelSettings(
+    temperature=0.6,
+    parallel_tool_calls=True,
+)
 
 agent_models = FallbackModel(
-    AnthropicModel(model_name="claude-sonnet-4-20250514"),
+    AnthropicModel(
+        model_name="claude-sonnet-4-20250514",
+        settings=model_settings,
+    ),
     OpenAIModel(
         model_name="anthropic/claude-sonnet-4",
         provider=openrouter_provider,
+        settings=model_settings,
     ),
 )
 
@@ -41,6 +57,7 @@ chat_agent = pydantic_ai.Agent(
     name="areyouok_telegram_agent",
     end_strategy="exhaustive",
     instrument=pydantic_ai_instrumentation,
+    retries=3,
 )
 
 
@@ -104,6 +121,13 @@ In addition to the current chat history, you are also provided with:
 <last_response>
 You last decided to: {ctx.deps.last_response_type}
 </last_response>
+
+<important_message_for_user>
+{ctx.deps.status_message if ctx.deps.status_message else "None"}
+
+If there is an important message for the user (not "None"), you MUST acknowledge it in your response to the user \
+    in a supportive and understanding way.
+</important_message_for_user>
     """
 
 
@@ -123,5 +147,28 @@ async def validate_agent_response(
 
         if message.from_user.id == ctx.deps.tg_context.bot.id:
             raise ReactToSelfError(data.react_to_message_id)
+
+    if ctx.deps.status_message:
+        if data.response_type != "TextResponse":
+            raise UnacknowledgedImportantMessageError(ctx.deps.status_message)
+        else:
+            content_check = await content_check_agent.run(
+                user_prompt=data.message_text,
+                deps=ContentCheckDependencies(
+                    check_content_exists=ctx.deps.status_message,
+                ),
+            )
+
+            async with async_database_session() as conn:
+                await LLMUsage.track_pydantic_usage(
+                    session=conn,
+                    chat_id=ctx.deps.tg_chat_id,
+                    session_id=ctx.deps.tg_session_id,
+                    agent=content_check_agent,
+                    data=content_check.usage(),
+                )
+
+            if not content_check.output.check_pass:
+                raise UnacknowledgedImportantMessageError(ctx.deps.status_message)
 
     return data

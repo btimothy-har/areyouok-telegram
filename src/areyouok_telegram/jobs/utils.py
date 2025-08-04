@@ -27,7 +27,6 @@ async def _telegram_message_to_model_message(
     conn, message: telegram.Message, ts_reference: datetime, *, is_user: bool = False
 ) -> pydantic_ai.messages.ModelMessage:
     """Convert a Telegram message to a model request or response."""
-
     media_files = await MediaFiles.get_by_message_id(
         conn, chat_id=str(message.chat.id), message_id=str(message.message_id)
     )
@@ -46,8 +45,9 @@ async def _telegram_message_to_model_message(
                 )
             elif m.mime_type.startswith("text/"):
                 user_content.append(m.bytes_data.decode("utf-8"))
+            # Don't include unsupported media types in content
 
-        return pydantic_ai.messages.ModelRequest(
+        model_message = pydantic_ai.messages.ModelRequest(
             parts=[
                 pydantic_ai.messages.UserPromptPart(
                     content=user_content if len(user_content) > 1 else user_content[0],
@@ -58,11 +58,59 @@ async def _telegram_message_to_model_message(
             kind="request",
         )
     else:
-        return pydantic_ai.messages.ModelResponse(
+        model_message = pydantic_ai.messages.ModelResponse(
             parts=[pydantic_ai.messages.TextPart(content=json.dumps(msg_dict), part_kind="text")],
             timestamp=message.date,
             kind="response",
         )
+
+    return model_message
+
+
+async def get_unsupported_media_from_messages(
+    conn, messages: list[telegram.Message], since_timestamp: datetime | None = None
+) -> list[str]:
+    """Get list of unsupported media types from messages.
+
+    Args:
+        conn: Database connection
+        messages: List of telegram messages to check
+        since_timestamp: Only check messages after this timestamp
+
+    Returns:
+        List of unsupported media type names (e.g., ["video", "audio"])
+    """
+    unsupported_media = []
+
+    for message in messages:
+        # Skip messages before the timestamp if provided
+        if since_timestamp and message.date <= since_timestamp:
+            continue
+
+        # Only check user messages
+        if not message.from_user:
+            continue
+
+        media_files = await MediaFiles.get_by_message_id(
+            conn, chat_id=str(message.chat.id), message_id=str(message.message_id)
+        )
+
+        for m in media_files:
+            # Skip supported media types
+            if m.mime_type.startswith("image/") or m.mime_type == "application/pdf":
+                continue
+            elif m.mime_type.startswith("text/"):
+                continue
+
+            # Track unsupported media types
+            if m.mime_type.startswith("video/"):
+                unsupported_media.append("video")
+            elif m.mime_type.startswith("audio/"):
+                unsupported_media.append("audio")
+            else:
+                unsupported_media.append(m.mime_type)
+
+    return unsupported_media
 
 
 async def _telegram_reaction_to_model_message(

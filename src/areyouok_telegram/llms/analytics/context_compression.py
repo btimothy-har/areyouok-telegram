@@ -120,11 +120,17 @@ class ContextTemplate(pydantic.BaseModel):
         )
 
 
+model_settings = pydantic_ai.settings.ModelSettings(temperature=0.4)
+
 agent_models = FallbackModel(
-    OpenAIModel(model_name="gpt-4.1-mini-2025-04-14"),
+    OpenAIModel(
+        model_name="gpt-4.1-mini-2025-04-14",
+        settings=model_settings,
+    ),
     OpenAIModel(
         model_name="openai/gpt-4.1-mini",
         provider=openrouter_provider,
+        settings=model_settings,
     ),
 )
 
