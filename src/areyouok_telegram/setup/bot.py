@@ -1,9 +1,9 @@
 """Bot metadata and configuration."""
 
-import logging
 from datetime import timedelta
 from importlib.metadata import version
 
+import logfire
 import telegram
 from telegram.ext import Application
 from telegram.ext import ContextTypes
@@ -11,8 +11,6 @@ from telegram.ext import ContextTypes
 from areyouok_telegram.config import ENV
 from areyouok_telegram.setup.exceptions import BotDescriptionSetupError
 from areyouok_telegram.setup.exceptions import BotNameSetupError
-
-logger = logging.getLogger(__name__)
 
 
 def package_version():
@@ -42,16 +40,19 @@ async def setup_bot_name(ctx: Application | ContextTypes.DEFAULT_TYPE):
 
     current_bot = await ctx.bot.get_me()
     if current_bot.first_name == new_name:
-        logging.debug("Bot name is already set, skipping setup.")
+        logfire.debug("Bot name is already set, skipping setup.")
         return
 
     try:
         success = await ctx.bot.set_my_name(name=new_name)
-    except telegram.error.RetryAfter as e:
-        logging.warning(f"Rate limit exceeded while setting bot name, retrying after {e.retry_after} seconds.")
 
+    except telegram.error.RetryAfter as e:
         # Convert retry_after to timedelta if it's not already
         retry_after_delta = e.retry_after if isinstance(e.retry_after, timedelta) else timedelta(seconds=e.retry_after)
+
+        logfire.warning(
+            f"Rate limit exceeded while setting bot name; Retry after {retry_after_delta.total_seconds()} seconds."
+        )
 
         # Retry after the specified time
         ctx.job_queue.run_once(
@@ -64,7 +65,7 @@ async def setup_bot_name(ctx: Application | ContextTypes.DEFAULT_TYPE):
     if not success:
         raise BotNameSetupError(new_name)
 
-    logging.debug(f"Bot name set to: {new_name}")
+    logfire.debug(f"Bot name set to: {new_name}")
 
 
 async def setup_bot_description(ctx: Application | ContextTypes.DEFAULT_TYPE):
@@ -74,17 +75,20 @@ async def setup_bot_description(ctx: Application | ContextTypes.DEFAULT_TYPE):
     current_description = await ctx.bot.get_my_short_description()
 
     if current_description and current_description.short_description == new_description:
-        logging.debug("Bot description is already set, skipping setup.")
+        logfire.debug("Bot description is already set, skipping setup.")
         return
 
     try:
         # Attempt to set the bot description
         success = await ctx.bot.set_my_description(description=new_description)
     except telegram.error.RetryAfter as e:
-        logging.warning(f"Rate limit exceeded while setting bot description, retrying after {e.retry_after} seconds.")
-
         # Convert retry_after to timedelta if it's not already
         retry_after_delta = e.retry_after if isinstance(e.retry_after, timedelta) else timedelta(seconds=e.retry_after)
+
+        logfire.warning(
+            "Rate limit exceeded while setting bot description; "
+            f"Retry after {retry_after_delta.total_seconds()} seconds."
+        )
 
         # Retry after the specified time
         ctx.job_queue.run_once(
@@ -99,4 +103,4 @@ async def setup_bot_description(ctx: Application | ContextTypes.DEFAULT_TYPE):
     if not success:
         raise BotDescriptionSetupError()
 
-    logging.debug(f"Bot description set to: {new_description}")
+    logfire.debug(f"Bot description set to: {new_description}")

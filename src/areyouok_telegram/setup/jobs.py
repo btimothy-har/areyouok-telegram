@@ -1,9 +1,9 @@
 import asyncio
-import logging
 from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
 
+import logfire
 from telegram.ext import Application
 from telegram.ext import ContextTypes
 
@@ -11,8 +11,6 @@ from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database_session
 from areyouok_telegram.jobs import SessionCleanupJob
 from areyouok_telegram.jobs import schedule_conversation_job
-
-logger = logging.getLogger(__name__)
 
 
 async def restore_active_sessions(ctx: Application | ContextTypes.DEFAULT_TYPE):
@@ -22,18 +20,18 @@ async def restore_active_sessions(ctx: Application | ContextTypes.DEFAULT_TYPE):
         active_sessions = await Sessions.get_all_active_sessions(session)
 
         if not active_sessions:
-            logging.info("No active sessions found, skipping conversation job setup.")
+            logfire.info("No active sessions found, skipping conversation job setup.")
             return
 
-        await asyncio.gather(
-            *[
-                schedule_conversation_job(
-                    context=ctx,
-                    chat_id=s.chat_id,
-                )
-                for s in active_sessions
-            ]
-        )
+        await asyncio.gather(*[
+            schedule_conversation_job(
+                context=ctx,
+                chat_id=s.chat_id,
+            )
+            for s in active_sessions
+        ])
+
+    logfire.info(f"Restored {len(active_sessions)} active sessions.")
 
 
 async def start_session_cleanups(ctx: Application | ContextTypes.DEFAULT_TYPE):
@@ -57,4 +55,4 @@ async def start_session_cleanups(ctx: Application | ContextTypes.DEFAULT_TYPE):
         },
     )
 
-    logger.info(f"Scheduled session cleanup job to run every 15 minutes starting at {start_time.isoformat()}")
+    logfire.info(f"Session cleanup job scheduled to run every 15 minutes starting at {start_time.isoformat()}")

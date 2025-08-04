@@ -1,14 +1,11 @@
 """Database setup and initialization."""
 
-import logging
-
+import logfire
 from sqlalchemy import create_engine
 from sqlalchemy.schema import CreateSchema
 
 from areyouok_telegram.config import ENV
 from areyouok_telegram.config import PG_CONNECTION_STRING
-
-logger = logging.getLogger(__name__)
 
 
 def database_setup():
@@ -25,4 +22,4 @@ def database_setup():
         # Create all tables in the specified schema
         Base.metadata.create_all(conn)
 
-    logger.info(f"Database setup complete. All tables created in schema '{ENV}'.")
+    logfire.info(f"Database setup complete. All tables created in schema '{ENV}'.")
