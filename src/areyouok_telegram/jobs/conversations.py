@@ -17,11 +17,13 @@ from areyouok_telegram.data import Messages
 from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database_session
 from areyouok_telegram.jobs.exceptions import NoActiveSessionError
-from areyouok_telegram.llms.analytics import DynamicContextCompression
+from areyouok_telegram.llms.analytics import ContextTemplate
+from areyouok_telegram.llms.analytics import context_compression_agent
 from areyouok_telegram.llms.chat import AgentResponse
 from areyouok_telegram.llms.chat import ChatAgentDependencies
 from areyouok_telegram.llms.chat import chat_agent
-from areyouok_telegram.llms.utils import convert_telegram_message_to_model_message
+
+from .utils import convert_telegram_message_to_model_message
 
 JOB_LOCK = defaultdict(asyncio.Lock)
 
@@ -44,6 +46,7 @@ class ConversationJob:
             chat_id: The chat ID to process
         """
         self.chat_id = chat_id
+        self.bot_id = None  # This will be set when the job is run
 
         self._last_response = None
         self._run_timestamp = datetime.now(UTC)
@@ -58,15 +61,12 @@ class ConversationJob:
     def _id(self) -> str:
         return hashlib.md5(self.name.encode()).hexdigest()
 
-    async def _get_active_session(self, conn) -> Sessions | None:
-        """Retrieve the active session for this chat."""
-        return await Sessions.get_active_session(conn, self.chat_id)
-
     async def run(self, context: ContextTypes.DEFAULT_TYPE) -> None:  # noqa: ARG002
         """Process conversation for this chat."""
 
         self._run_count += 1
         self._run_timestamp = datetime.now(UTC)
+        self.bot_id = context.bot.id  # Set the bot ID for this run
 
         logfire.debug(f"Running conversation job for chat {self.chat_id}. Run count: {self._run_count}")
 
@@ -103,6 +103,54 @@ class ConversationJob:
 
                     await self._stop(context)
 
+    async def _get_active_session(self, conn) -> Sessions | None:
+        """Retrieve the active session for this chat."""
+        return await Sessions.get_active_session(conn, self.chat_id)
+
+    async def _get_chat_context(self, conn) -> list[pydantic_ai.messages.ModelMessage]:
+        last_context = await Context.retrieve_context_by_chat(
+            session=conn,
+            chat_id=self.chat_id,
+            ctype="session",
+        )
+
+        if last_context:
+            last_context.sort(key=lambda c: c.created_at)
+
+        last_context = last_context or []
+
+        return [
+            pydantic_ai.messages.ModelResponse(
+                parts=[
+                    pydantic_ai.messages.TextPart(
+                        content=json.dumps({
+                            "timestamp": (f"{(self._run_timestamp - context.created_at).total_seconds()} seconds ago"),
+                            "content": f"Summary of prior conversation:\n\n{context.content}",
+                        }),
+                        part_kind="text",
+                    )
+                ],
+                timestamp=context.created_at,
+                kind="response",
+            )
+            for context in last_context
+        ]
+
+    async def _get_session_model_messages(self, conn, session: Sessions) -> list[pydantic_ai.messages.ModelMessage]:
+        messages = await session.get_messages(conn)
+        messages.sort(key=lambda msg: msg.date)  # Sort messages by date
+
+        model_messages = [
+            await convert_telegram_message_to_model_message(
+                conn=conn,
+                message=msg,
+                ts_reference=self._run_timestamp,
+                is_user=msg.from_user and msg.from_user.id != self.bot_id,
+            )
+            for msg in messages
+        ]
+        return model_messages
+
     async def _generate_response(self, conn, context: ContextTypes.DEFAULT_TYPE, chat_session: Sessions) -> bool:
         """Process messages for this chat and send appropriate replies.
 
@@ -110,43 +158,12 @@ class ConversationJob:
             bool: True if action was taken (message sent), False otherwise
         """
 
-        last_context = await Context.retrieve_context_by_chat(
-            session=conn,
-            chat_id=self.chat_id,
-            ctype="session",
-        )
-
-        last_context.sort(key=lambda c: c.created_at)  # Sort by creation time
-
-        context_content = [
-            pydantic_ai.messages.ModelResponse(
-                parts=[
-                    pydantic_ai.messages.TextPart(
-                        content=json.dumps(
-                            {
-                                "timestamp": (
-                                    f"{(context.created_at - self._run_timestamp).total_seconds()} seconds ago"
-                                ),
-                                "content": f"Summary of prior conversation:\n\n{context.content}",
-                            }
-                        ),
-                        part_kind="text",
-                    )
-                ],
-            )
-            for context in last_context
-        ]
-
-        messages = await chat_session.get_messages(conn)
-        messages.sort(key=lambda msg: msg.date)  # Sort messages by date
-
-        context_content.extend(
-            [convert_telegram_message_to_model_message(context, msg, self._run_timestamp) for msg in messages]
-        )
+        last_context = await self._get_chat_context(conn)
+        session_messages = await self._get_session_model_messages(conn, chat_session)
 
         try:
             agent_run_payload = await chat_agent.run(
-                message_history=context_content,
+                message_history=last_context + session_messages,
                 deps=ChatAgentDependencies(
                     tg_context=context,
                     tg_chat_id=self.chat_id,
@@ -227,8 +244,6 @@ class ConversationJob:
         Uses it's own database connection to avoid conflicts with other jobs.
         """
 
-        context_compression = DynamicContextCompression()
-
         context = await Context.get_by_session_id(
             session=conn,
             session_id=chat_session.session_key,
@@ -239,28 +254,32 @@ class ConversationJob:
             logfire.debug(f"Context already exists for session {chat_session.session_key}, skipping compression.")
             return
 
-        messages = await chat_session.get_messages(conn)
-        messages.sort(key=lambda msg: msg.date)
+        session_messages = await self._get_session_model_messages(conn, chat_session)
 
-        result = await asyncio.to_thread(
-            context_compression,
-            messages=messages,
-        )
+        try:
+            context_run_payload = await context_compression_agent.run(message_history=session_messages)
+            context_report: ContextTemplate = context_run_payload.data
+
+        except Exception:
+            logfire.exception(
+                f"Failed to compress context for chat {self.chat_id} with session key {chat_session.session_key}."
+            )
+            return
 
         await Context.new_or_update(
             session=conn,
             chat_id=self.chat_id,
             session_id=chat_session.session_key,
             ctype="session",
-            content=result.context,
+            content=context_report.content,
         )
 
-        await LLMUsage.track_dspy_usage(
+        await LLMUsage.track_pydantic_usage(
             session=conn,
             chat_id=self.chat_id,
             session_id=chat_session.session_key,
-            usage_type=context_compression,
-            data=result.get_lm_usage(),
+            agent=context_compression_agent,
+            data=context_run_payload.usage(),
         )
         logfire.info(f"Compressed session context for chat {self.chat_id} with session key {chat_session.session_key}.")
 

@@ -1,10 +1,11 @@
-from datetime import UTC
-from datetime import datetime
+import pydantic
+import pydantic_ai
+from pydantic_ai.models.fallback import FallbackModel
+from pydantic_ai.models.openai import OpenAIModel
+from pydantic_ai.providers.openrouter import OpenRouterProvider
 
-import dspy
-
-from areyouok_telegram.data import MessageTypes
-from areyouok_telegram.llms.utils import telegram_message_to_dict
+from areyouok_telegram.config import OPENROUTER_API_KEY
+from areyouok_telegram.llms.utils import pydantic_ai_instrumentation
 
 LIFE_SITUATION_DESC = """
 The person's immediate life circumstances and ongoing challenges that form the backdrop of their need for support. \
@@ -81,58 +82,72 @@ CONTEXT_TEMPLATE = """
 """
 
 
-class _SessionContextCompression(dspy.Signature):
-    """
-    Compress the context of the provided chat session, summarizing only the essential elements that are \
-    necessary for an AI Agent to continue the conversation effectively.
+class ContextTemplate(pydantic.BaseModel):
+    """Model for context template used in session compression."""
 
-    You are provided with 7 fields, each representing a different aspect of the session context. \
-    Analyze the provided messages and extract the relevant information for each field.
+    life_situation: str = pydantic.Field(
+        description=LIFE_SITUATION_DESC,
+    )
+    connection: str = pydantic.Field(
+        description=CONNECTION_DESC,
+    )
+    personal_context: str = pydantic.Field(
+        description=PERSONAL_CONTEXT_DESC,
+    )
+    conversation: str = pydantic.Field(
+        description=CONVERSATION_DESC,
+    )
+    practical_matters: str = pydantic.Field(
+        description=PRACTICAL_MATTERS_DESC,
+    )
+    feedback: str = pydantic.Field(
+        description=FEEDBACK_DESC,
+    )
+    others: str = pydantic.Field(
+        description="Any other relevant information that does not fit into the above categories.",
+    )
 
-    Where there is no relevant information, provide "No relevant information." as your response.
-
-    Output your summary in plain text.
-    """
-
-    messages: list[str] = dspy.InputField(desc="Chronological messages in the session between the Agent and the user.")
-
-    life_situation: str = dspy.OutputField(desc=LIFE_SITUATION_DESC)
-    connection: str = dspy.OutputField(desc=CONNECTION_DESC)
-    personal_context: str = dspy.OutputField(desc=PERSONAL_CONTEXT_DESC)
-    conversation: str = dspy.OutputField(desc=CONVERSATION_DESC)
-    practical_matters: str = dspy.OutputField(desc=PRACTICAL_MATTERS_DESC)
-    feedback: str = dspy.OutputField(desc=FEEDBACK_DESC)
-    others: str = dspy.OutputField(desc="Any other relevant information that does not fit into the above categories.")
-
-
-class DynamicContextCompression(dspy.Module):
-    def __init__(self):
-        self.analysis = dspy.ChainOfThought(_SessionContextCompression)
-
-    def forward(self, messages: list[MessageTypes]) -> dspy.Prediction:
-        now = datetime.now(UTC)
-
-        message_data = [telegram_message_to_dict(message, ts_reference=now) for message in messages]
-        compression = self.analysis(messages=message_data)
-
-        context = CONTEXT_TEMPLATE.format(
-            life_situation=compression.life_situation,
-            connection=compression.connection,
-            personal_context=compression.personal_context,
-            conversation=compression.conversation,
-            practical_matters=compression.practical_matters,
-            feedback=compression.feedback,
-            others=compression.others,
+    @property
+    def content(self) -> str:
+        """Return the context template as a formatted string."""
+        return CONTEXT_TEMPLATE.format(
+            life_situation=self.life_situation,
+            connection=self.connection,
+            personal_context=self.personal_context,
+            conversation=self.conversation,
+            practical_matters=self.practical_matters,
+            feedback=self.feedback,
+            others=self.others,
         )
 
-        result = dspy.Prediction(
-            context=context,
-        )
 
-        # Preserve LLM usage data from the compression prediction
-        if hasattr(compression, "get_lm_usage"):
-            usage = compression.get_lm_usage()
-            if usage:
-                result.set_lm_usage(usage)
+agent_models = FallbackModel(
+    OpenAIModel(model_name="gpt-4.1-mini-2025-04-14"),
+    OpenAIModel(
+        model_name="openai/gpt-4.1-mini",
+        provider=OpenRouterProvider(api_key=OPENROUTER_API_KEY),
+    ),
+)
 
-        return result
+context_compression_agent = pydantic_ai.Agent(
+    model=agent_models,
+    output_type=ContextTemplate,
+    name="context_compression_agent",
+    end_strategy="exhaustive",
+    instrument=pydantic_ai_instrumentation,
+)
+
+
+@context_compression_agent.instructions
+def context_compression_instructions() -> str:
+    return """
+You are a context compression assistant for a support chat system.
+
+Your task is to compress the context of the provided chat session, summarizing only the essential elements that \
+are necessary for an AI Agent to continue the conversation effectively.
+
+You are provided with 7 fields, each representing a different aspect of the session context. \
+Analyze the provided messages and extract the relevant information for each field.
+
+Where there is no relevant information, provide "No relevant information." as your response.
+"""

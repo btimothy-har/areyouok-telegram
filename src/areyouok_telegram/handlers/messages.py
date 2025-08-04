@@ -9,6 +9,8 @@ from areyouok_telegram.handlers.exceptions import NoEditedMessageError
 from areyouok_telegram.handlers.exceptions import NoMessageError
 from areyouok_telegram.handlers.exceptions import NoMessageReactionError
 
+from .utils import extract_media_from_telegram_message
+
 
 async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):  # noqa: ARG001
     if not update.message:
@@ -23,7 +25,10 @@ async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_
             await Messages.new_or_update(
                 session, user_id=update.effective_user.id, chat_id=update.effective_chat.id, message=update.message
             )
+
             logfire.debug("New message saved.")
+
+            await extract_media_from_telegram_message(session, update.message)
 
             # Handle session management
             chat_id = str(update.effective_chat.id)

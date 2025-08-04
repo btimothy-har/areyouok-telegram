@@ -1,8 +1,6 @@
 from datetime import UTC
 from datetime import datetime
-from typing import Any
 
-import dspy
 import logfire
 import pydantic_ai
 from sqlalchemy import Column
@@ -86,55 +84,3 @@ class LLMUsage(Base):
             return 0
 
         return result.rowcount
-
-    @classmethod
-    @with_retry()
-    async def track_dspy_usage(
-        cls,
-        session: AsyncSession,
-        chat_id: str,
-        session_id: str,
-        usage_type: dspy.Module,
-        data: dict[str, Any],
-    ) -> int:
-        """Log usage data from dspy in the database."""
-
-        try:
-            now = datetime.now(UTC)
-            values_list = []
-
-            for model, usage in data.items():
-                # OpenRouter models show up as "openai/openai/gpt-4.1"
-                # The unique identifier is the double-prefixed model name
-                if model.count("/") == 2:
-                    model_name = model.split("/", 1)[1]
-                    provider = model_name.split("/", 1)[0]
-                else:
-                    model_name = model
-                    provider = model.split("/", 1)[0]
-
-                values_list.append(
-                    {
-                        "chat_id": str(chat_id),
-                        "session_id": session_id,
-                        "timestamp": now,
-                        "usage_type": f"dspy.{usage_type.__class__.__name__}",
-                        "model": model_name,
-                        "provider": provider,
-                        "input_tokens": usage.get("prompt_tokens", 0),
-                        "output_tokens": usage.get("completion_tokens", 0),
-                    }
-                )
-
-            if values_list:
-                stmt = pg_insert(cls).values(values_list)
-                result = await session.execute(stmt)
-                return result.rowcount
-
-        except Exception as e:
-            # Catch exceptions here to avoid breaking application flow
-            # This is a best-effort logging, so we log the exception but don't raise it
-            logfire.exception(f"Failed to insert dspy usage record: {e}")
-            return 0
-
-        return 0
