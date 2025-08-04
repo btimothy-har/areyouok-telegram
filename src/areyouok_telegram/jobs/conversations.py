@@ -1,21 +1,26 @@
 import asyncio
 import hashlib
+import json
 import logging
 from collections import defaultdict
 from datetime import UTC
 from datetime import datetime
+from datetime import timedelta
 
+import pydantic_ai
 import telegram
 from telegram.ext import ContextTypes
 
-from areyouok_telegram.agent import AgentResponse
-from areyouok_telegram.agent import ChatAgentDependencies
-from areyouok_telegram.agent import chat_agent
-from areyouok_telegram.agent import convert_telegram_message_to_model_message
+from areyouok_telegram.data import Context
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database_session
 from areyouok_telegram.jobs.exceptions import NoActiveSessionError
+from areyouok_telegram.llms.analytics import DynamicContextCompression
+from areyouok_telegram.llms.chat import AgentResponse
+from areyouok_telegram.llms.chat import ChatAgentDependencies
+from areyouok_telegram.llms.chat import chat_agent
+from areyouok_telegram.llms.utils import convert_telegram_message_to_model_message
 
 logger = logging.getLogger(__name__)
 
@@ -75,10 +80,24 @@ class ConversationJob:
 
             elif chat_session.has_bot_responded:
                 logger.debug(f"No new updates in {self.chat_id}, skipping processing.")
-                return
 
             else:
                 await self._generate_response(conn, context, chat_session)
+                return
+
+            # If the last user activity was more than an hour ago, stop the job
+            if chat_session.last_user_activity and (self._run_timestamp - chat_session.last_user_activity) > timedelta(
+                seconds=60 * 60  # 1 hour
+            ):
+                await self._compress_session_context(conn, chat_session)
+
+                await chat_session.close_session(
+                    session=conn,
+                    timestamp=self._run_timestamp,
+                )
+
+                await self._stop(context)
+                logger.info(f"Stopped conversation job for chat {self.chat_id} due to inactivity.")
 
     async def _generate_response(self, conn, context: ContextTypes.DEFAULT_TYPE, chat_session: Sessions) -> bool:
         """Process messages for this chat and send appropriate replies.
@@ -86,14 +105,44 @@ class ConversationJob:
         Returns:
             bool: True if action was taken (message sent), False otherwise
         """
+
+        last_context = await Context.retrieve_context_by_chat(
+            session=conn,
+            chat_id=self.chat_id,
+            ctype="session",
+        )
+
+        last_context.sort(key=lambda c: c.created_at)  # Sort by creation time
+
+        context_content = [
+            pydantic_ai.messages.ModelResponse(
+                parts=[
+                    pydantic_ai.messages.TextPart(
+                        content=json.dumps(
+                            {
+                                "timestamp": (
+                                    f"{(context.created_at - self._run_timestamp).total_seconds()} seconds ago"
+                                ),
+                                "content": f"Summary of prior conversation:\n\n{context.content}",
+                            }
+                        ),
+                        part_kind="text",
+                    )
+                ],
+            )
+            for context in last_context
+        ]
+
         messages = await chat_session.get_messages(conn)
         messages.sort(key=lambda msg: msg.date)  # Sort messages by date
 
+        context_content.extend(
+            [convert_telegram_message_to_model_message(context, msg, self._run_timestamp) for msg in messages]
+        )
+
         try:
             agent_run_payload = await chat_agent.run(
-                message_history=[
-                    convert_telegram_message_to_model_message(context, msg, self._run_timestamp) for msg in messages
-                ],
+                message_history=context_content,
                 deps=ChatAgentDependencies(
                     tg_context=context,
                     tg_chat_id=self.chat_id,
@@ -126,7 +175,7 @@ class ConversationJob:
         else:
             await chat_session.new_activity(
                 timestamp=self._run_timestamp,
-                activity_type="bot",
+                is_user=False,  # This is a bot response
             )
 
             if response_message:
@@ -140,11 +189,58 @@ class ConversationJob:
                 if isinstance(response_message, telegram.Message):
                     await chat_session.new_message(
                         timestamp=response_message.date,
-                        message_type="bot",
+                        is_user=False,  # This is a bot response
                     )
                 return True
 
         return False
+
+    async def _stop(self, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Stop the conversation job for this chat."""
+        logger.info(f"Stopping conversation job for chat {self.chat_id}")
+
+        async with JOB_LOCK[str(self.chat_id)]:
+            existing_jobs = context.job_queue.get_jobs_by_name(self.name)
+            if not existing_jobs:
+                logger.debug(f"No existing job found for chat {self.chat_id}, nothing to stop.")
+                return
+
+            for job in existing_jobs:
+                job.schedule_removal()
+
+    async def _compress_session_context(self, conn, chat_session: Sessions) -> None:
+        """
+        Compress the session context for this chat.
+        Uses it's own database connection to avoid conflicts with other jobs.
+        """
+
+        context_compression = DynamicContextCompression()
+
+        context = await Context.get_by_session_id(
+            session=conn,
+            session_id=chat_session.session_key,
+            ctype="session",
+        )
+
+        if context:
+            logger.debug(f"Context already exists for session {chat_session.session_key}, skipping compression.")
+            return
+
+        messages = await chat_session.get_messages(conn)
+        messages.sort(key=lambda msg: msg.date)
+
+        result = await asyncio.to_thread(
+            context_compression.forward,
+            messages=messages,
+        )
+
+        await Context.new_or_update(
+            session=conn,
+            chat_id=self.chat_id,
+            session_id=chat_session.session_key,
+            ctype="session",
+            content=result.context,
+        )
 
 
 async def schedule_conversation_job(context: ContextTypes.DEFAULT_TYPE, chat_id: int, interval: int = 10) -> None:
@@ -173,8 +269,9 @@ async def schedule_conversation_job(context: ContextTypes.DEFAULT_TYPE, chat_id:
             name=processor.name,
             chat_id=chat_id,
             job_kwargs={
-                "id": processor.name,
+                "id": processor._id,
                 "coalesce": True,
                 "max_instances": 1,
             },
         )
+        logger.info(f"Scheduled conversation job for chat {chat_id} with interval {interval} seconds.")

@@ -6,12 +6,12 @@ from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.providers.openrouter import OpenRouterProvider
 from telegram.ext import ContextTypes
 
-from areyouok_telegram.agent.exceptions import InvalidMessageError
-from areyouok_telegram.agent.exceptions import ReactToSelfError
-from areyouok_telegram.agent.responses import AgentResponse
 from areyouok_telegram.config import OPENROUTER_API_KEY
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data.connection import AsyncSessionLocal
+from areyouok_telegram.llms.chat.exceptions import InvalidMessageError
+from areyouok_telegram.llms.chat.exceptions import ReactToSelfError
+from areyouok_telegram.llms.chat.responses import AgentResponse
 
 logger = logging.getLogger(__name__)
 

@@ -34,7 +34,7 @@ class Messages(Base):
     message_type = Column(String, nullable=False)
     user_id = Column(String, nullable=False)
     chat_id = Column(String, nullable=False)
-    payload = Column(JSONB, nullable=False)
+    payload = Column(JSONB, nullable=True)
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False)
@@ -55,9 +55,29 @@ class Messages(Base):
         else:
             raise InvalidMessageTypeError(self.message_type)
 
-    def to_telegram_object(self) -> MessageTypes:
-        """Convert the database record to a Telegram message object."""
+    def to_telegram_object(self) -> MessageTypes | None:
+        """Convert the database record to a Telegram message object.
+
+        Returns None if the message has been soft deleted (payload is None).
+        """
+        if self.payload is None:
+            return None
         return self.message_type_obj.de_json(self.payload, None)
+
+    @with_retry()
+    async def delete(self) -> bool:
+        """Soft delete the message by clearing its payload.
+
+        Returns:
+            bool: True if the message was soft deleted, False if it was already deleted.
+        """
+        # Check if already soft deleted
+        if self.payload is None:
+            return False
+
+        # Clear the payload directly on the instance
+        self.payload = None
+        return True
 
     @classmethod
     @with_retry()
@@ -110,6 +130,7 @@ class Messages(Base):
             cls.message_id == message_id,
             cls.chat_id == chat_id,
             cls.message_type == "Message",
+            cls.payload.isnot(None),  # Exclude soft-deleted messages
         )
 
         result = await session.execute(stmt)
@@ -120,11 +141,19 @@ class Messages(Base):
                 cls.message_id == message_id,
                 cls.chat_id == chat_id,
                 cls.message_type == "MessageReactionUpdated",
+                cls.payload.isnot(None),  # Exclude soft-deleted reactions
             )
             reaction_result = await session.execute(stmt)
             reactions = reaction_result.scalars().all()
 
-            return message.to_telegram_object(), [r.to_telegram_object() for r in reactions]
+            # Convert reactions, filtering out any that return None
+            reaction_objects = []
+            for r in reactions:
+                obj = r.to_telegram_object()
+                if obj is not None:
+                    reaction_objects.append(obj)
+
+            return message.to_telegram_object(), reaction_objects
 
         return None, None
 
@@ -139,7 +168,24 @@ class Messages(Base):
         limit: int | None = None,
     ) -> list[MessageTypes]:
         """Retrieve messages by chat_id and optional time range, returning telegram.Message objects."""
-        stmt = select(cls).where(cls.chat_id == chat_id)
+        messages = await cls.retrieve_raw_by_chat(session, chat_id, from_time, to_time, limit)
+        return [msg.to_telegram_object() for msg in messages]
+
+    @classmethod
+    @with_retry()
+    async def retrieve_raw_by_chat(
+        cls,
+        session: AsyncSession,
+        chat_id: str,
+        from_time: datetime | None = None,
+        to_time: datetime | None = None,
+        limit: int | None = None,
+    ) -> list["Messages"]:
+        """Retrieve messages by chat_id and optional time range, returning SQLAlchemy Messages models."""
+        stmt = select(cls).where(
+            cls.chat_id == chat_id,
+            cls.payload.isnot(None),  # Exclude soft-deleted messages
+        )
 
         if from_time:
             stmt = stmt.where(cls.created_at >= from_time)
@@ -155,4 +201,4 @@ class Messages(Base):
         result = await session.execute(stmt)
         messages = result.scalars().all()
 
-        return [msg.to_telegram_object() for msg in messages]
+        return list(messages)

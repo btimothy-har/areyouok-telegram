@@ -8,9 +8,9 @@ import pytest
 import telegram
 from telegram.constants import ReactionEmoji
 
-from areyouok_telegram.agent.responses import DoNothingResponse
-from areyouok_telegram.agent.responses import ReactionResponse
-from areyouok_telegram.agent.responses import TextResponse
+from areyouok_telegram.llms.chat.responses import DoNothingResponse
+from areyouok_telegram.llms.chat.responses import ReactionResponse
+from areyouok_telegram.llms.chat.responses import TextResponse
 
 
 class TestTextResponse:

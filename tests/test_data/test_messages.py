@@ -187,6 +187,17 @@ class TestMessagesProperties:
             telegram.Message.de_json.assert_called_once_with(messages_record.payload, None)
             assert result == mock_telegram_msg
 
+    def test_to_telegram_object_with_soft_deleted_message(self):
+        """Test to_telegram_object returns None for soft-deleted messages."""
+        messages_record = Messages()
+        messages_record.message_type = "Message"
+        messages_record.payload = None  # Soft deleted
+
+        result = messages_record.to_telegram_object()
+
+        # Should return None for soft-deleted messages
+        assert result is None
+
 
 class TestMessagesNewOrUpdate:
     """Test the new_or_update method of the Messages class."""
@@ -389,7 +400,7 @@ class TestMessagesRetrieveMessageById:
     """Test the retrieve_message_by_id class method."""
 
     async def test_retrieve_message_by_id_with_reactions(self, mock_async_database_session, mock_message_record1):
-        """Test retrieving a message by ID that has reactions."""
+        """Test retrieving a message by ID that has reactions (including soft-deleted ones)."""
         message_id = "123"
         chat_id = "456"
 
@@ -397,17 +408,20 @@ class TestMessagesRetrieveMessageById:
         mock_message_result = MagicMock()
         mock_message_result.scalar_one_or_none.return_value = mock_message_record1
 
-        # Mock reaction records
+        # Mock reaction records - mix of active and soft-deleted
         mock_reaction_record1 = MagicMock()
         mock_reaction_record1.to_telegram_object.return_value = MagicMock(spec=telegram.MessageReactionUpdated)
 
         mock_reaction_record2 = MagicMock()
-        mock_reaction_record2.to_telegram_object.return_value = MagicMock(spec=telegram.MessageReactionUpdated)
+        mock_reaction_record2.to_telegram_object.return_value = None  # Soft-deleted reaction
+
+        mock_reaction_record3 = MagicMock()
+        mock_reaction_record3.to_telegram_object.return_value = MagicMock(spec=telegram.MessageReactionUpdated)
 
         # Mock the reactions query result
         mock_reaction_result = MagicMock()
         mock_reaction_scalars = MagicMock()
-        mock_reaction_scalars.all.return_value = [mock_reaction_record1, mock_reaction_record2]
+        mock_reaction_scalars.all.return_value = [mock_reaction_record1, mock_reaction_record2, mock_reaction_record3]
         mock_reaction_result.scalars.return_value = mock_reaction_scalars
 
         # Configure session to return different results for different queries
@@ -419,16 +433,17 @@ class TestMessagesRetrieveMessageById:
         # Verify two queries were executed (message + reactions)
         assert mock_async_database_session.execute.call_count == 2
 
-        # Verify to_telegram_object was called for message and reactions
+        # Verify to_telegram_object was called for message and all reactions
         mock_message_record1.to_telegram_object.assert_called_once()
         mock_reaction_record1.to_telegram_object.assert_called_once()
         mock_reaction_record2.to_telegram_object.assert_called_once()
+        mock_reaction_record3.to_telegram_object.assert_called_once()
 
-        # Verify the results
+        # Verify the results - soft-deleted reaction is filtered out
         assert message == mock_message_record1.to_telegram_object.return_value
-        assert len(reactions) == 2
+        assert len(reactions) == 2  # Only 2 active reactions
         assert reactions[0] == mock_reaction_record1.to_telegram_object.return_value
-        assert reactions[1] == mock_reaction_record2.to_telegram_object.return_value
+        assert reactions[1] == mock_reaction_record3.to_telegram_object.return_value
 
     async def test_retrieve_message_by_id_without_reactions(self, mock_async_database_session, mock_message_record1):
         """Test retrieving a message by ID that has no reactions."""
@@ -614,3 +629,294 @@ class TestMessagesRetrieveByChat:
 
         # Verify the result is empty
         assert result == []
+
+    async def test_retrieve_by_chat_excludes_soft_deleted(self, mock_async_database_session):
+        """Test retrieving messages excludes soft-deleted ones."""
+        chat_id = "123456"
+
+        # Create mock messages, one soft-deleted
+        mock_message = MagicMock()
+        mock_message.payload = {"text": "Active message"}
+        mock_message.to_telegram_object.return_value = MagicMock(spec=telegram.Message)
+
+        # Mock result with only non-deleted message
+        mock_result = MagicMock()
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = [mock_message]
+        mock_result.scalars.return_value = mock_scalars
+        mock_async_database_session.execute.return_value = mock_result
+
+        # Call the method
+        result = await Messages.retrieve_by_chat(mock_async_database_session, chat_id)
+
+        # Verify only one message returned (soft-deleted excluded by query)
+        assert len(result) == 1
+        assert result[0] == mock_message.to_telegram_object.return_value
+
+    async def test_retrieve_by_chat_uses_retrieve_raw_by_chat(
+        self, mock_async_database_session, mock_message_record1, mock_message_record2
+    ):
+        """Test that retrieve_by_chat uses retrieve_raw_by_chat internally."""
+        chat_id = "123456"
+        from_time = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
+        to_time = datetime(2025, 1, 15, 11, 0, 0, tzinfo=UTC)
+        limit = 5
+
+        # Mock raw messages that would be returned by retrieve_raw_by_chat
+        raw_messages = [mock_message_record1, mock_message_record2]
+
+        # Mock retrieve_raw_by_chat to return our mock records
+        with patch.object(Messages, "retrieve_raw_by_chat", return_value=raw_messages) as mock_raw_method:
+            # Call retrieve_by_chat
+            result = await Messages.retrieve_by_chat(
+                mock_async_database_session, chat_id, from_time=from_time, to_time=to_time, limit=limit
+            )
+
+            # Verify retrieve_raw_by_chat was called with the same parameters
+            mock_raw_method.assert_called_once_with(mock_async_database_session, chat_id, from_time, to_time, limit)
+
+            # Verify to_telegram_object was called on each raw message
+            mock_message_record1.to_telegram_object.assert_called_once()
+            mock_message_record2.to_telegram_object.assert_called_once()
+
+            # Verify the result contains telegram objects
+            assert len(result) == 2
+            assert result[0] == mock_message_record1.to_telegram_object.return_value
+            assert result[1] == mock_message_record2.to_telegram_object.return_value
+
+
+class TestMessagesRetrieveRawByChat:
+    """Test the retrieve_raw_by_chat class method."""
+
+    async def test_retrieve_raw_by_chat_basic(
+        self, mock_async_database_session, mock_message_record1, mock_message_record2
+    ):
+        """Test retrieving raw message models by chat ID."""
+        chat_id = "123456"
+
+        # Mock the query result
+        mock_result = MagicMock()
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = [mock_message_record1, mock_message_record2]
+        mock_result.scalars.return_value = mock_scalars
+        mock_async_database_session.execute.return_value = mock_result
+
+        # Call the method
+        result = await Messages.retrieve_raw_by_chat(mock_async_database_session, chat_id)
+
+        # Verify the query was executed
+        mock_async_database_session.execute.assert_called_once()
+        stmt = mock_async_database_session.execute.call_args[0][0]
+
+        # Check that the statement filters by chat_id
+        assert isinstance(stmt, type(select(Messages)))
+
+        # Verify to_telegram_object was NOT called (raw method returns models)
+        mock_message_record1.to_telegram_object.assert_not_called()
+        mock_message_record2.to_telegram_object.assert_not_called()
+
+        # Verify the result contains the raw SQLAlchemy models
+        assert len(result) == 2
+        assert result[0] == mock_message_record1
+        assert result[1] == mock_message_record2
+
+    async def test_retrieve_raw_by_chat_with_time_range(self, mock_async_database_session):
+        """Test retrieving raw messages with time range filters."""
+        chat_id = "123456"
+        from_time = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
+        to_time = datetime(2025, 1, 15, 11, 0, 0, tzinfo=UTC)
+
+        # Mock empty result
+        mock_result = MagicMock()
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = []
+        mock_result.scalars.return_value = mock_scalars
+        mock_async_database_session.execute.return_value = mock_result
+
+        # Call the method with time range
+        result = await Messages.retrieve_raw_by_chat(
+            mock_async_database_session, chat_id, from_time=from_time, to_time=to_time
+        )
+
+        # Verify the query was executed
+        mock_async_database_session.execute.assert_called_once()
+
+        # Verify empty result
+        assert result == []
+
+    async def test_retrieve_raw_by_chat_with_limit(self, mock_async_database_session, mock_message_record1):
+        """Test retrieving raw messages with limit."""
+        chat_id = "123456"
+        limit = 10
+
+        # Mock result with one message
+        mock_result = MagicMock()
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = [mock_message_record1]
+        mock_result.scalars.return_value = mock_scalars
+        mock_async_database_session.execute.return_value = mock_result
+
+        # Call the method with limit
+        result = await Messages.retrieve_raw_by_chat(mock_async_database_session, chat_id, limit=limit)
+
+        # Verify the query was executed
+        mock_async_database_session.execute.assert_called_once()
+
+        # Verify to_telegram_object was NOT called
+        mock_message_record1.to_telegram_object.assert_not_called()
+
+        # Verify the result contains the raw model
+        assert len(result) == 1
+        assert result[0] == mock_message_record1
+
+    async def test_retrieve_raw_by_chat_no_messages(self, mock_async_database_session):
+        """Test retrieving raw messages when none exist."""
+        chat_id = "nonexistent"
+
+        # Mock empty result
+        mock_result = MagicMock()
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = []
+        mock_result.scalars.return_value = mock_scalars
+        mock_async_database_session.execute.return_value = mock_result
+
+        # Call the method
+        result = await Messages.retrieve_raw_by_chat(mock_async_database_session, chat_id)
+
+        # Verify the result is empty
+        assert result == []
+
+    async def test_retrieve_raw_by_chat_all_parameters(self, mock_async_database_session, mock_message_record1):
+        """Test retrieving raw messages with all parameters specified."""
+        chat_id = "123456"
+        from_time = datetime(2025, 1, 15, 9, 0, 0, tzinfo=UTC)
+        to_time = datetime(2025, 1, 15, 12, 0, 0, tzinfo=UTC)
+        limit = 5
+
+        # Mock result
+        mock_result = MagicMock()
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = [mock_message_record1]
+        mock_result.scalars.return_value = mock_scalars
+        mock_async_database_session.execute.return_value = mock_result
+
+        # Call the method with all parameters
+        result = await Messages.retrieve_raw_by_chat(
+            mock_async_database_session, chat_id, from_time=from_time, to_time=to_time, limit=limit
+        )
+
+        # Verify the query was executed
+        mock_async_database_session.execute.assert_called_once()
+
+        # Verify the result
+        assert len(result) == 1
+        assert result[0] == mock_message_record1
+
+    async def test_retrieve_raw_by_chat_with_retry_decorator(self):
+        """Test that retrieve_raw_by_chat method has the with_retry decorator."""
+        # Verify the method has been wrapped by with_retry
+        assert hasattr(Messages.retrieve_raw_by_chat, "__wrapped__")
+
+
+class TestMessagesDelete:
+    """Test the delete instance method."""
+
+    async def test_delete_existing_message(self):
+        """Test soft deleting a message with payload returns True."""
+        # Create a Messages instance with payload
+        message = Messages()
+        message.message_key = "test_key_123"
+        message.payload = {"message_id": 123, "text": "Test message"}
+
+        # Call the delete method
+        result = await message.delete()
+
+        # Verify it returned True (message was soft deleted)
+        assert result is True
+
+        # Verify the payload was set to None
+        assert message.payload is None
+
+    async def test_delete_already_deleted_message(self):
+        """Test deleting an already soft-deleted message returns False."""
+        # Create a Messages instance with no payload (already soft deleted)
+        message = Messages()
+        message.message_key = "already_deleted_key"
+        message.payload = None
+
+        # Call the delete method
+        result = await message.delete()
+
+        # Verify it returned False (message was already deleted)
+        assert result is False
+
+        # Verify the payload is still None
+        assert message.payload is None
+
+    async def test_delete_preserves_metadata(self):
+        """Test that delete preserves message metadata while clearing payload."""
+        # Create a Messages instance with full data
+        message = Messages()
+        message.message_key = "unique_test_key_456"
+        message.message_id = "12345"
+        message.message_type = "Message"
+        message.user_id = "user123"
+        message.chat_id = "chat456"
+        message.payload = {"message_id": 12345, "text": "Test message"}
+
+        # Call the delete method
+        result = await message.delete()
+
+        # Verify it returned True
+        assert result is True
+
+        # Verify only payload was cleared, other fields remain intact
+        assert message.payload is None
+        assert message.message_key == "unique_test_key_456"
+        assert message.message_id == "12345"
+        assert message.message_type == "Message"
+        assert message.user_id == "user123"
+        assert message.chat_id == "chat456"
+
+    async def test_delete_multiple_messages_independently(self):
+        """Test deleting multiple messages independently."""
+        # Create multiple Messages instances
+        message1 = Messages()
+        message1.message_key = "key1"
+        message1.payload = {"text": "Message 1"}
+
+        message2 = Messages()
+        message2.message_key = "key2"
+        message2.payload = None  # Already soft deleted
+
+        # Delete both messages
+        result1 = await message1.delete()
+        result2 = await message2.delete()
+
+        # Verify results
+        assert result1 is True  # First message was soft deleted
+        assert result2 is False  # Second message was already deleted
+
+        # Verify payloads
+        assert message1.payload is None
+        assert message2.payload is None
+
+    async def test_delete_with_retry_decorator(self):
+        """Test that delete method has the with_retry decorator."""
+        # Create a Messages instance
+        message = Messages()
+
+        # Verify the delete method has been wrapped by with_retry
+        # The with_retry decorator adds __wrapped__ attribute to the original function
+        assert hasattr(message.delete, "__wrapped__")
+
+        # Also verify the method works correctly
+        message.message_key = "test_key"
+        message.payload = {"text": "Test message"}
+
+        # Call the delete method
+        result = await message.delete()
+
+        # Verify it still works as expected
+        assert result is True
+        assert message.payload is None
