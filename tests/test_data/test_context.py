@@ -351,3 +351,209 @@ class TestContextModel:
         # Note: The actual schema value depends on the ENV at import time
         assert "schema" in Context.__table_args__
         assert isinstance(Context.__table_args__["schema"], str)
+
+    @pytest.mark.asyncio
+    async def test_get_by_session_id_success(self, mock_async_database_session):
+        """Test getting contexts by session_id."""
+        session_id = "session-123"
+
+        # Create mock contexts
+        context1 = MagicMock(spec=Context)
+        context1.id = 1
+        context1.session_id = session_id
+        context1.type = "session"
+
+        context2 = MagicMock(spec=Context)
+        context2.id = 2
+        context2.session_id = session_id
+        context2.type = "user"
+
+        # Mock the query result
+        mock_result = MagicMock()
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = [context1, context2]
+        mock_result.scalars.return_value = mock_scalars
+        mock_async_database_session.execute.return_value = mock_result
+
+        # Call the method
+        result = await Context.get_by_session_id(
+            session=mock_async_database_session,
+            session_id=session_id,
+        )
+
+        # Verify the result
+        assert len(result) == 2
+        assert result[0] == context1
+        assert result[1] == context2
+
+        # Verify the query was executed
+        mock_async_database_session.execute.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_by_session_id_with_type_filter(self, mock_async_database_session):
+        """Test getting contexts by session_id with type filter."""
+        session_id = "session-123"
+        ctype = "session"
+
+        # Create mock context
+        context = MagicMock(spec=Context)
+        context.id = 1
+        context.session_id = session_id
+        context.type = ctype
+
+        # Mock the query result
+        mock_result = MagicMock()
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = [context]
+        mock_result.scalars.return_value = mock_scalars
+        mock_async_database_session.execute.return_value = mock_result
+
+        # Call the method
+        result = await Context.get_by_session_id(
+            session=mock_async_database_session,
+            session_id=session_id,
+            ctype=ctype,
+        )
+
+        # Verify the result
+        assert len(result) == 1
+        assert result[0] == context
+
+        # Verify the query was executed
+        mock_async_database_session.execute.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_by_session_id_invalid_type(self, mock_async_database_session):
+        """Test get_by_session_id raises error for invalid type."""
+        with pytest.raises(InvalidContextTypeError) as exc_info:
+            await Context.get_by_session_id(
+                session=mock_async_database_session,
+                session_id="session-123",
+                ctype="invalid_type",
+            )
+
+        assert exc_info.value.context_type == "invalid_type"
+
+    @pytest.mark.asyncio
+    async def test_get_by_session_id_no_results(self, mock_async_database_session):
+        """Test get_by_session_id returns None when no results."""
+        session_id = "session-123"
+
+        # Mock no results
+        mock_result = MagicMock()
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = []
+        mock_result.scalars.return_value = mock_scalars
+        mock_async_database_session.execute.return_value = mock_result
+
+        # Call the method
+        result = await Context.get_by_session_id(
+            session=mock_async_database_session,
+            session_id=session_id,
+        )
+
+        # Should return None when no results
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_get_by_chat_id_success(self, mock_async_database_session):
+        """Test getting contexts by chat_id."""
+        chat_id = "123456"
+
+        # Create mock contexts
+        context1 = MagicMock(spec=Context)
+        context1.id = 1
+        context1.chat_id = chat_id
+        context1.type = "session"
+
+        context2 = MagicMock(spec=Context)
+        context2.id = 2
+        context2.chat_id = chat_id
+        context2.type = "user"
+
+        # Mock the query result
+        mock_result = MagicMock()
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = [context1, context2]
+        mock_result.scalars.return_value = mock_scalars
+        mock_async_database_session.execute.return_value = mock_result
+
+        # Call the method
+        result = await Context.get_by_chat_id(
+            session=mock_async_database_session,
+            chat_id=chat_id,
+        )
+
+        # Verify the result
+        assert len(result) == 2
+        assert result[0] == context1
+        assert result[1] == context2
+
+        # Verify the query was executed
+        mock_async_database_session.execute.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_by_chat_id_with_type_filter(self, mock_async_database_session):
+        """Test getting contexts by chat_id with type filter."""
+        chat_id = "123456"
+        ctype = "session"
+
+        # Create mock context
+        context = MagicMock(spec=Context)
+        context.id = 1
+        context.chat_id = chat_id
+        context.type = ctype
+
+        # Mock the query result
+        mock_result = MagicMock()
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = [context]
+        mock_result.scalars.return_value = mock_scalars
+        mock_async_database_session.execute.return_value = mock_result
+
+        # Call the method
+        result = await Context.get_by_chat_id(
+            session=mock_async_database_session,
+            chat_id=chat_id,
+            ctype=ctype,
+        )
+
+        # Verify the result
+        assert len(result) == 1
+        assert result[0] == context
+
+        # Verify the query was executed
+        mock_async_database_session.execute.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_by_chat_id_invalid_type(self, mock_async_database_session):
+        """Test get_by_chat_id raises error for invalid type."""
+        with pytest.raises(InvalidContextTypeError) as exc_info:
+            await Context.get_by_chat_id(
+                session=mock_async_database_session,
+                chat_id="123456",
+                ctype="invalid_type",
+            )
+
+        assert exc_info.value.context_type == "invalid_type"
+
+    @pytest.mark.asyncio
+    async def test_get_by_chat_id_no_results(self, mock_async_database_session):
+        """Test get_by_chat_id returns None when no results."""
+        chat_id = "123456"
+
+        # Mock no results
+        mock_result = MagicMock()
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = []
+        mock_result.scalars.return_value = mock_scalars
+        mock_async_database_session.execute.return_value = mock_result
+
+        # Call the method
+        result = await Context.get_by_chat_id(
+            session=mock_async_database_session,
+            chat_id=chat_id,
+        )
+
+        # Should return None when no results
+        assert result is None

@@ -33,9 +33,9 @@ def telegram_message_to_dict(message: MessageTypes, ts_reference) -> dict:
     elif isinstance(message, telegram.MessageReactionUpdated):
         # Handle reactions, assuming only emoji reactions for simplicity
         # TODO: Handle custom and paid reactions
-        reaction_string = ", ".join([
-            r.emoji for r in message.new_reaction if r.type == telegram.constants.ReactionType.EMOJI
-        ])
+        reaction_string = ", ".join(
+            [r.emoji for r in message.new_reaction if r.type == telegram.constants.ReactionType.EMOJI]
+        )
         return {
             "reaction": reaction_string,
             "to_message_id": str(message.message_id),

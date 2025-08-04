@@ -400,7 +400,7 @@ class TestMessagesRetrieveMessageById:
     """Test the retrieve_message_by_id class method."""
 
     async def test_retrieve_message_by_id_with_reactions(self, mock_async_database_session, mock_message_record1):
-        """Test retrieving a message by ID that has reactions."""
+        """Test retrieving a message by ID that has reactions (including soft-deleted ones)."""
         message_id = "123"
         chat_id = "456"
 
@@ -408,17 +408,20 @@ class TestMessagesRetrieveMessageById:
         mock_message_result = MagicMock()
         mock_message_result.scalar_one_or_none.return_value = mock_message_record1
 
-        # Mock reaction records
+        # Mock reaction records - mix of active and soft-deleted
         mock_reaction_record1 = MagicMock()
         mock_reaction_record1.to_telegram_object.return_value = MagicMock(spec=telegram.MessageReactionUpdated)
 
         mock_reaction_record2 = MagicMock()
-        mock_reaction_record2.to_telegram_object.return_value = MagicMock(spec=telegram.MessageReactionUpdated)
+        mock_reaction_record2.to_telegram_object.return_value = None  # Soft-deleted reaction
+
+        mock_reaction_record3 = MagicMock()
+        mock_reaction_record3.to_telegram_object.return_value = MagicMock(spec=telegram.MessageReactionUpdated)
 
         # Mock the reactions query result
         mock_reaction_result = MagicMock()
         mock_reaction_scalars = MagicMock()
-        mock_reaction_scalars.all.return_value = [mock_reaction_record1, mock_reaction_record2]
+        mock_reaction_scalars.all.return_value = [mock_reaction_record1, mock_reaction_record2, mock_reaction_record3]
         mock_reaction_result.scalars.return_value = mock_reaction_scalars
 
         # Configure session to return different results for different queries
@@ -430,16 +433,17 @@ class TestMessagesRetrieveMessageById:
         # Verify two queries were executed (message + reactions)
         assert mock_async_database_session.execute.call_count == 2
 
-        # Verify to_telegram_object was called for message and reactions
+        # Verify to_telegram_object was called for message and all reactions
         mock_message_record1.to_telegram_object.assert_called_once()
         mock_reaction_record1.to_telegram_object.assert_called_once()
         mock_reaction_record2.to_telegram_object.assert_called_once()
+        mock_reaction_record3.to_telegram_object.assert_called_once()
 
-        # Verify the results
+        # Verify the results - soft-deleted reaction is filtered out
         assert message == mock_message_record1.to_telegram_object.return_value
-        assert len(reactions) == 2
+        assert len(reactions) == 2  # Only 2 active reactions
         assert reactions[0] == mock_reaction_record1.to_telegram_object.return_value
-        assert reactions[1] == mock_reaction_record2.to_telegram_object.return_value
+        assert reactions[1] == mock_reaction_record3.to_telegram_object.return_value
 
     async def test_retrieve_message_by_id_without_reactions(self, mock_async_database_session, mock_message_record1):
         """Test retrieving a message by ID that has no reactions."""

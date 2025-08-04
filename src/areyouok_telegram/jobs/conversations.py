@@ -118,10 +118,14 @@ class ConversationJob:
             pydantic_ai.messages.ModelResponse(
                 parts=[
                     pydantic_ai.messages.TextPart(
-                        content=json.dumps({
-                            "timestamp": f"{(context.created_at - self._run_timestamp).total_seconds()} seconds ago",
-                            "content": f"Summary of prior conversation:\n\n{context.content}",
-                        }),
+                        content=json.dumps(
+                            {
+                                "timestamp": (
+                                    f"{(context.created_at - self._run_timestamp).total_seconds()} seconds ago"
+                                ),
+                                "content": f"Summary of prior conversation:\n\n{context.content}",
+                            }
+                        ),
                         part_kind="text",
                     )
                 ],
@@ -132,9 +136,9 @@ class ConversationJob:
         messages = await chat_session.get_messages(conn)
         messages.sort(key=lambda msg: msg.date)  # Sort messages by date
 
-        context_content.extend([
-            convert_telegram_message_to_model_message(context, msg, self._run_timestamp) for msg in messages
-        ])
+        context_content.extend(
+            [convert_telegram_message_to_model_message(context, msg, self._run_timestamp) for msg in messages]
+        )
 
         try:
             agent_run_payload = await chat_agent.run(

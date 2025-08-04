@@ -36,7 +36,7 @@ def mock_job(mock_session):
 @pytest.fixture
 def mock_input_message():
     """Create a mock message conversion that returns proper ModelMessage objects."""
-    with patch("areyouok_telegram.llms.chat.convert_telegram_message_to_model_message") as mock_convert:
+    with patch("areyouok_telegram.llms.utils.convert_telegram_message_to_model_message") as mock_convert:
         # Create a proper ModelRequest message
         model_request = pydantic_ai.messages.ModelRequest(
             parts=[
@@ -173,8 +173,14 @@ class TestConversationJob:
 
         # Configure mock session where bot has responded
         mock_session.has_bot_responded = True
+        mock_session.last_user_activity = None  # No user activity check needed
 
-        with patch.object(mock_job, "_generate_response") as mock_generate:
+        with (
+            patch.object(mock_job, "_generate_response") as mock_generate,
+            patch("areyouok_telegram.jobs.conversations.async_database_session") as mock_db_session,
+        ):
+            mock_db_session.return_value.__aenter__.return_value = AsyncMock()
+
             await mock_job.run(context)
 
             # Should increment run count
@@ -238,7 +244,13 @@ class TestConversationJob:
         # The mock_text_response fixture already provides the bot response
         bot_response = mock_text_response.execute.return_value
 
-        with patch("areyouok_telegram.data.Messages.new_or_update") as mock_new_or_update:
+        with (
+            patch("areyouok_telegram.data.Messages.new_or_update") as mock_new_or_update,
+            patch("areyouok_telegram.data.Context.retrieve_context_by_chat") as mock_retrieve_context,
+        ):
+            # Mock no previous context
+            mock_retrieve_context.return_value = []
+
             result = await mock_job._generate_response(conn, context, mock_session)
 
             assert result is True
@@ -297,7 +309,13 @@ class TestConversationJob:
         # The mock_reaction_response fixture already provides the bot response
         bot_response = mock_reaction_response.execute.return_value
 
-        with patch("areyouok_telegram.data.Messages.new_or_update") as mock_new_or_update:
+        with (
+            patch("areyouok_telegram.data.Messages.new_or_update") as mock_new_or_update,
+            patch("areyouok_telegram.data.Context.retrieve_context_by_chat") as mock_retrieve_context,
+        ):
+            # Mock no previous context
+            mock_retrieve_context.return_value = []
+
             result = await mock_job._generate_response(conn, context, mock_session)
 
             assert result is True
@@ -352,7 +370,13 @@ class TestConversationJob:
         # Configure agent to return the mock DoNothingResponse
         mock_agent_run.return_value.data = mock_do_nothing_response
 
-        with patch("areyouok_telegram.data.Messages.new_or_update") as mock_new_or_update:
+        with (
+            patch("areyouok_telegram.data.Messages.new_or_update") as mock_new_or_update,
+            patch("areyouok_telegram.data.Context.retrieve_context_by_chat") as mock_retrieve_context,
+        ):
+            # Mock no previous context
+            mock_retrieve_context.return_value = []
+
             result = await mock_job._generate_response(conn, context, mock_session)
 
             assert result is False
@@ -403,7 +427,11 @@ class TestConversationJob:
         # Configure agent to fail
         mock_agent_run.side_effect = Exception("Agent error")
 
-        result = await mock_job._generate_response(conn, context, mock_session)
+        with patch("areyouok_telegram.data.Context.retrieve_context_by_chat") as mock_retrieve_context:
+            # Mock no previous context
+            mock_retrieve_context.return_value = []
+
+            result = await mock_job._generate_response(conn, context, mock_session)
 
         assert result is False
         # Last response should not be updated on failure
@@ -440,7 +468,11 @@ class TestConversationJob:
         # Configure text response execution to fail
         mock_text_response.execute.side_effect = Exception("Network error")
 
-        result = await mock_job._generate_response(conn, context, mock_session)
+        with patch("areyouok_telegram.data.Context.retrieve_context_by_chat") as mock_retrieve_context:
+            # Mock no previous context
+            mock_retrieve_context.return_value = []
+
+            result = await mock_job._generate_response(conn, context, mock_session)
 
         assert result is False
         # Last response should be updated even if execution fails
@@ -496,26 +528,31 @@ class TestConversationJob:
         current_time = datetime(2025, 7, 31, 12, 0, 0, tzinfo=UTC)
 
         # Configure mock session with old user activity (more than 1 hour ago)
-        mock_session.has_bot_responded = False
+        mock_session.has_bot_responded = True  # Bot has responded, so we check for expiry
         mock_session.last_user_activity = current_time - timedelta(seconds=3601)  # 1 hour and 1 second ago
 
         with (
             patch.object(mock_job, "_generate_response") as mock_generate,
             patch.object(mock_job, "_stop") as mock_stop,
+            patch.object(mock_job, "_compress_session_context") as mock_compress,
             patch("areyouok_telegram.jobs.conversations.async_database_session") as mock_db_session,
         ):
-            mock_db_session.return_value.__aenter__.return_value = AsyncMock()
+            mock_conn = AsyncMock()
+            mock_db_session.return_value.__aenter__.return_value = mock_conn
 
             await mock_job.run(context)
 
-            # Should process messages first
-            mock_generate.assert_called_once()
+            # Should NOT call generate_response since session expired
+            mock_generate.assert_not_called()
+
+            # Should compress session context before closing
+            mock_compress.assert_called_once_with(mock_conn, mock_session)
 
             # Should then stop the job and close the session
             mock_stop.assert_called_once_with(context)
             mock_session.close_session.assert_called_once_with(
-                session=mock_db_session.return_value.__aenter__.return_value,
-                timestamp=current_time,
+                session=mock_conn,
+                timestamp=mock_job._run_timestamp,
             )
 
     @pytest.mark.asyncio
@@ -528,7 +565,7 @@ class TestConversationJob:
         current_time = datetime(2025, 7, 31, 12, 0, 0, tzinfo=UTC)
 
         # Configure mock session with recent user activity (within 1 hour)
-        mock_session.has_bot_responded = False
+        mock_session.has_bot_responded = True  # Bot has responded, so we check for expiry
         mock_session.last_user_activity = current_time - timedelta(seconds=3599)  # 59 minutes and 59 seconds ago
 
         with (
@@ -537,10 +574,10 @@ class TestConversationJob:
         ):
             await mock_job.run(context)
 
-            # Should process messages normally
-            mock_generate.assert_called_once()
+            # Should NOT call generate_response since bot has already responded
+            mock_generate.assert_not_called()
 
-            # Should NOT stop the job or close the session
+            # Should NOT stop the job or close the session (still within 1 hour)
             mock_stop.assert_not_called()
             mock_session.close_session.assert_not_called()
 
@@ -554,7 +591,7 @@ class TestConversationJob:
         current_time = datetime(2025, 7, 31, 12, 0, 0, tzinfo=UTC)
 
         # Configure mock session with user activity exactly 1 hour ago
-        mock_session.has_bot_responded = False
+        mock_session.has_bot_responded = True  # Bot has responded, so we check for expiry
         mock_session.last_user_activity = current_time - timedelta(seconds=3600)  # Exactly 1 hour ago
 
         with (
@@ -563,8 +600,8 @@ class TestConversationJob:
         ):
             await mock_job.run(context)
 
-            # Should process messages normally (boundary condition: not > 1 hour)
-            mock_generate.assert_called_once()
+            # Should NOT call generate_response since bot has already responded
+            mock_generate.assert_not_called()
 
             # Should NOT stop the job (3600 seconds is not > 3600)
             mock_stop.assert_not_called()
@@ -643,6 +680,107 @@ class TestConversationJob:
         # Lock should have been acquired
         assert lock_acquired
         mock_job.schedule_removal.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_compress_session_context_success(self):
+        """Test _compress_session_context successfully compresses and saves context."""
+        job = ConversationJob("123456")
+
+        # Mock database connection
+        conn = AsyncMock()
+
+        # Mock session
+        mock_session = MagicMock()
+        mock_session.session_key = "session-123"
+        mock_session.get_messages = AsyncMock()
+
+        # Mock messages
+        msg1 = MagicMock()
+        msg1.date = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
+        msg1.text = "Hello"
+
+        msg2 = MagicMock()
+        msg2.date = datetime(2025, 1, 15, 10, 1, 0, tzinfo=UTC)
+        msg2.text = "How are you?"
+
+        mock_session.get_messages.return_value = [msg1, msg2]
+
+        with (
+            patch("areyouok_telegram.jobs.conversations.Context.get_by_session_id") as mock_get_context,
+            patch("areyouok_telegram.jobs.conversations.Context.new_or_update") as mock_new_context,
+            patch("areyouok_telegram.jobs.conversations.DynamicContextCompression") as mock_compression_class,
+            patch("areyouok_telegram.jobs.conversations.asyncio.to_thread") as mock_to_thread,
+        ):
+            # No existing context
+            mock_get_context.return_value = None
+
+            # Mock compression result
+            mock_compression = MagicMock()
+            mock_compression_class.return_value = mock_compression
+
+            mock_result = MagicMock()
+            mock_result.context = "Compressed context summary"
+            mock_to_thread.return_value = mock_result
+
+            await job._compress_session_context(conn, mock_session)
+
+            # Should check for existing context
+            mock_get_context.assert_called_once_with(
+                session=conn,
+                session_id="session-123",
+                ctype="session",
+            )
+
+            # Should get messages and compress them
+            mock_session.get_messages.assert_called_once_with(conn)
+            mock_to_thread.assert_called_once_with(
+                mock_compression.forward,
+                messages=[msg1, msg2],  # Should be sorted by date
+            )
+
+            # Should save new context
+            mock_new_context.assert_called_once_with(
+                session=conn,
+                chat_id="123456",
+                session_id="session-123",
+                ctype="session",
+                content="Compressed context summary",
+            )
+
+    @pytest.mark.asyncio
+    async def test_compress_session_context_existing_context(self):
+        """Test _compress_session_context skips when context already exists."""
+        job = ConversationJob("123456")
+
+        # Mock database connection
+        conn = AsyncMock()
+
+        # Mock session
+        mock_session = MagicMock()
+        mock_session.session_key = "session-123"
+
+        with (
+            patch("areyouok_telegram.jobs.conversations.Context.get_by_session_id") as mock_get_context,
+            patch("areyouok_telegram.jobs.conversations.Context.new_or_update") as mock_new_context,
+            patch("areyouok_telegram.jobs.conversations.DynamicContextCompression") as mock_compression_class,
+        ):
+            # Existing context found
+            mock_get_context.return_value = MagicMock()
+
+            await job._compress_session_context(conn, mock_session)
+
+            # Should check for existing context
+            mock_get_context.assert_called_once_with(
+                session=conn,
+                session_id="session-123",
+                ctype="session",
+            )
+
+            # Compression class is instantiated but not used
+            mock_compression_class.assert_called_once()
+            # Should NOT save anything or get messages
+            mock_new_context.assert_not_called()
+            mock_session.get_messages.assert_not_called()
 
 
 class TestScheduleConversationJob:
