@@ -123,10 +123,14 @@ class ConversationJob:
             pydantic_ai.messages.ModelResponse(
                 parts=[
                     pydantic_ai.messages.TextPart(
-                        content=json.dumps({
-                            "timestamp": (f"{(self._run_timestamp - context.created_at).total_seconds()} seconds ago"),
-                            "content": f"Summary of prior conversation:\n\n{context.content}",
-                        }),
+                        content=json.dumps(
+                            {
+                                "timestamp": (
+                                    f"{(self._run_timestamp - context.created_at).total_seconds()} seconds ago"
+                                ),
+                                "content": f"Summary of prior conversation:\n\n{context.content}",
+                            }
+                        ),
                         part_kind="text",
                     )
                 ],
