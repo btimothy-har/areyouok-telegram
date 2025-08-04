@@ -30,9 +30,11 @@ class TestLoggingSetup:
         logging_setup()
 
         # Assert
-        mock_logging.basicConfig.assert_called_once_with(
-            level=mock_logging.INFO, handlers=[mock_logfire.LogfireLoggingHandler()]
-        )
+        # Check that the root logger gets the handler
+        mock_logging.getLogger.assert_any_call()
+        # Get the mock for the root logger
+        root_logger = mock_logging.getLogger.return_value
+        root_logger.addHandler.assert_called_once_with(mock_logfire.LogfireLoggingHandler.return_value)
 
     def test_logging_setup_configures_third_party_loggers(self, mock_logging):
         """Test logging setup sets appropriate levels for third-party loggers."""
@@ -59,6 +61,7 @@ class TestLoggingSetup:
             revision="abc123",
         )
         mock_logfire.configure.assert_called_once()
+        mock_logfire.log_slow_async_callbacks.assert_called_once_with(slow_duration=0.25)
 
     @patch("areyouok_telegram.setup.logging.ENV", "development")
     @patch("areyouok_telegram.setup.logging.LOGFIRE_TOKEN", "test_token")
@@ -71,7 +74,10 @@ class TestLoggingSetup:
         mock_logfire.ConsoleOptions.assert_called_once_with(
             span_style="show-parents",
             show_project_link=False,
+            min_log_level="debug",
+            verbose=True,
         )
+        mock_logfire.log_slow_async_callbacks.assert_called_once_with(slow_duration=0.25)
 
     @patch("areyouok_telegram.setup.logging.LOGFIRE_TOKEN", None)
     def test_logging_setup_without_logfire_token(self, mock_logfire):
@@ -83,6 +89,7 @@ class TestLoggingSetup:
         # Verify logfire.configure is called with send_to_logfire=False
         _, kwargs = mock_logfire.configure.call_args
         assert kwargs["send_to_logfire"] is False
+        mock_logfire.log_slow_async_callbacks.assert_called_once_with(slow_duration=0.25)
 
     @patch("areyouok_telegram.setup.logging.ENV", "staging")
     @patch("areyouok_telegram.setup.logging.GITHUB_REPOSITORY", None)
@@ -94,6 +101,7 @@ class TestLoggingSetup:
         # Assert
         # Should not create CodeSource when GITHUB_REPOSITORY is None
         mock_logfire.CodeSource.assert_not_called()
+        mock_logfire.log_slow_async_callbacks.assert_called_once_with(slow_duration=0.25)
 
     def test_logging_setup_includes_service_version(self, mock_logfire):
         """Test logging setup includes the correct service version."""
@@ -108,3 +116,20 @@ class TestLoggingSetup:
             # Assert
             _, kwargs = mock_logfire.configure.call_args
             assert kwargs["service_version"] == expected_version
+            mock_logfire.log_slow_async_callbacks.assert_called_once_with(slow_duration=0.25)
+
+    @patch("areyouok_telegram.setup.logging.ENV", "test")
+    @patch("areyouok_telegram.setup.logging.LOGFIRE_TOKEN", "test_token")
+    def test_logging_setup_non_development_environment(self, mock_logfire):
+        """Test logging setup for non-development environment with console output."""
+        # Act
+        logging_setup()
+
+        # Assert
+        mock_logfire.ConsoleOptions.assert_called_once_with(
+            span_style="show-parents",
+            show_project_link=False,
+            min_log_level="info",
+            verbose=True,
+        )
+        mock_logfire.log_slow_async_callbacks.assert_called_once_with(slow_duration=0.25)

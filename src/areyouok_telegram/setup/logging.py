@@ -38,7 +38,7 @@ def logging_setup():
         console = logfire.ConsoleOptions(
             span_style="show-parents",
             show_project_link=False,
-            min_log_level="debug",
+            min_log_level="debug" if ENV == "development" else "info",
             verbose=True,
         )
 
@@ -53,5 +53,7 @@ def logging_setup():
         distributed_tracing=False,
         scrubbing=False,
     )
+
+    logfire.log_slow_async_callbacks(slow_duration=0.25)
 
     logfire.info("Logging setup complete.")

@@ -9,6 +9,7 @@ from sqlalchemy import String
 from sqlalchemy.dialects.postgresql import TIMESTAMP
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql import select
 
 from areyouok_telegram.config import ENV
 from areyouok_telegram.data.connection import Base
@@ -54,3 +55,11 @@ class Users(Base):
         )
 
         await session.execute(stmt)
+
+    @classmethod
+    @with_retry()
+    async def get_by_id(cls, session: AsyncSession, user_id: str) -> "Users | None":
+        """Retrieve a user by their ID."""
+        stmt = select(cls).where(cls.user_id == user_id)
+        result = await session.execute(stmt)
+        return result.scalars().first()
