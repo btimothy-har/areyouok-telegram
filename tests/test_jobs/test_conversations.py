@@ -734,7 +734,7 @@ class TestConversationJob:
             # Should get messages and compress them
             mock_session.get_messages.assert_called_once_with(conn)
             mock_to_thread.assert_called_once_with(
-                mock_compression.forward,
+                mock_compression,
                 messages=[msg1, msg2],  # Should be sorted by date
             )
 

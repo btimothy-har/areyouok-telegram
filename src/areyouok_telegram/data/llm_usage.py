@@ -113,16 +113,18 @@ class LLMUsage(Base):
                     model_name = model
                     provider = model.split("/", 1)[0]
 
-                values_list.append({
-                    "chat_id": str(chat_id),
-                    "session_id": session_id,
-                    "timestamp": now,
-                    "usage_type": f"dspy.{usage_type.__class__.__name__}",
-                    "model": model_name,
-                    "provider": provider,
-                    "input_tokens": usage.get("prompt_tokens", 0),
-                    "output_tokens": usage.get("completion_tokens", 0),
-                })
+                values_list.append(
+                    {
+                        "chat_id": str(chat_id),
+                        "session_id": session_id,
+                        "timestamp": now,
+                        "usage_type": f"dspy.{usage_type.__class__.__name__}",
+                        "model": model_name,
+                        "provider": provider,
+                        "input_tokens": usage.get("prompt_tokens", 0),
+                        "output_tokens": usage.get("completion_tokens", 0),
+                    }
+                )
 
             if values_list:
                 stmt = pg_insert(cls).values(values_list)

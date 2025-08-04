@@ -128,7 +128,7 @@ class TestDynamicContextCompression:
         mock_prediction.practical_matters = "Test matters"
         mock_prediction.feedback = "Test feedback"
         mock_prediction.others = "Test others"
-        
+
         # Add usage data to the mock prediction
         usage_data = {
             "openai/gpt-4": {
@@ -140,13 +140,13 @@ class TestDynamicContextCompression:
             }
         }
         mock_prediction.get_lm_usage.return_value = usage_data
-        
+
         mock_analysis.return_value = mock_prediction
         mock_chain_of_thought.return_value = mock_analysis
-        
+
         compressor = DynamicContextCompression()
         result = compressor.forward(mock_messages)
-        
+
         # Verify the result has usage data
         assert isinstance(result, dspy.Prediction)
         assert hasattr(result, "get_lm_usage")

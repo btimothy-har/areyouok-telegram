@@ -2,9 +2,6 @@ up:
 	uv sync
 
 test:
-	uv run pytest .
-
-test-cov:
 	uv run pytest --cov=areyouok_telegram --cov-report=term-missing .
 
 lint:
