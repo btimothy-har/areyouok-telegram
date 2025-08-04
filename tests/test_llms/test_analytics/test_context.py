@@ -114,3 +114,40 @@ class TestDynamicContextCompression:
         mock_analysis.assert_called_once()
         call_args = mock_analysis.call_args
         assert call_args.kwargs["messages"] == []
+
+    @patch("areyouok_telegram.llms.analytics.context.dspy.ChainOfThought")
+    def test_forward_preserves_usage_data(self, mock_chain_of_thought, mock_messages):
+        """Test that forward method preserves LLM usage data."""
+        # Mock the ChainOfThought result with usage data
+        mock_analysis = MagicMock()
+        mock_prediction = MagicMock()
+        mock_prediction.life_situation = "Test situation"
+        mock_prediction.connection = "Test connection"
+        mock_prediction.personal_context = "Test context"
+        mock_prediction.conversation = "Test conversation"
+        mock_prediction.practical_matters = "Test matters"
+        mock_prediction.feedback = "Test feedback"
+        mock_prediction.others = "Test others"
+        
+        # Add usage data to the mock prediction
+        usage_data = {
+            "openai/gpt-4": {
+                "completion_tokens": 100,
+                "prompt_tokens": 200,
+                "total_tokens": 300,
+                "completion_tokens_details": {"test": "data"},
+                "prompt_tokens_details": {"test": "data"},
+            }
+        }
+        mock_prediction.get_lm_usage.return_value = usage_data
+        
+        mock_analysis.return_value = mock_prediction
+        mock_chain_of_thought.return_value = mock_analysis
+        
+        compressor = DynamicContextCompression()
+        result = compressor.forward(mock_messages)
+        
+        # Verify the result has usage data
+        assert isinstance(result, dspy.Prediction)
+        assert hasattr(result, "get_lm_usage")
+        assert result.get_lm_usage() == usage_data

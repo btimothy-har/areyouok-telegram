@@ -3,7 +3,10 @@
 import json
 from datetime import UTC
 from datetime import datetime
+from typing import Any
+from typing import Dict
 
+import dspy
 import pydantic_ai
 import telegram
 from telegram.ext import ContextTypes
@@ -111,3 +114,54 @@ def _telegram_reaction_to_model_message(
             timestamp=reaction.date,
             kind="response",
         )
+
+
+def merge_dspy_usage_data(*predictions: dspy.Prediction) -> dict[str, Any]:
+    """
+    Merge LLM usage data from multiple dspy predictions.
+    
+    Args:
+        *predictions: Variable number of dspy.Prediction objects
+        
+    Returns:
+        Merged usage dictionary with accumulated token counts
+    """
+    total_usage = {}
+    
+    for pred in predictions:
+        if hasattr(pred, "get_lm_usage"):
+            usage = pred.get_lm_usage()
+            if usage:
+                _accumulate_usage(total_usage, usage)
+    
+    return total_usage
+
+
+def _accumulate_usage(total: dict[str, Any], new: dict[str, Any]) -> None:
+    """
+    Accumulate usage data from new into total (in-place).
+    
+    Args:
+        total: Dictionary to accumulate into (modified in-place)
+        new: New usage data to add
+    """
+    for model_name, model_usage in new.items():
+        if model_name not in total:
+            # First time seeing this model, initialize with zeros
+            total[model_name] = {
+                "completion_tokens": 0,
+                "prompt_tokens": 0,
+                "total_tokens": 0,
+                "completion_tokens_details": {},
+                "prompt_tokens_details": {},
+            }
+        
+        # Accumulate token counts
+        for token_type in ["completion_tokens", "prompt_tokens", "total_tokens"]:
+            if token_type in model_usage:
+                total[model_name][token_type] += model_usage.get(token_type, 0)
+        
+        # For details, keep the latest non-None values
+        for detail_key in ["completion_tokens_details", "prompt_tokens_details"]:
+            if detail_key in model_usage and model_usage[detail_key]:
+                total[model_name][detail_key] = model_usage[detail_key]
