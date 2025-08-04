@@ -21,6 +21,7 @@ def logging_setup():
     logging.basicConfig(level=logging.INFO, handlers=[logfire.LogfireLoggingHandler()])
 
     logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("LiteLLM").setLevel(logging.WARNING)
     logging.getLogger("apscheduler.scheduler").setLevel(logging.ERROR)
     logging.getLogger("apscheduler.executors.default").setLevel(logging.WARNING)
 

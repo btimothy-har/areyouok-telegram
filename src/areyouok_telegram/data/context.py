@@ -64,6 +64,52 @@ class Context(Base):
 
     @classmethod
     @with_retry()
+    async def get_by_session_id(
+        cls,
+        session: AsyncSession,
+        session_id: str,
+        ctype: str | None = None,
+    ) -> list["Context"] | None:
+        """Retrieve a context by session_id, optionally filtered by type."""
+
+        if ctype and ctype not in VALID_CONTEXT_TYPES:
+            raise InvalidContextTypeError(ctype)
+
+        stmt = select(cls).where(cls.session_id == session_id)
+
+        if ctype:
+            stmt = stmt.where(cls.type == ctype)
+
+        result = await session.execute(stmt)
+        contexts = result.scalars().all()
+
+        return contexts if contexts else None
+
+    @classmethod
+    @with_retry()
+    async def get_by_chat_id(
+        cls,
+        session: AsyncSession,
+        chat_id: str,
+        ctype: str | None = None,
+    ) -> list["Context"] | None:
+        """Retrieve a context by chat_id, optionally filtered by type."""
+
+        if ctype and ctype not in VALID_CONTEXT_TYPES:
+            raise InvalidContextTypeError(ctype)
+
+        stmt = select(cls).where(cls.chat_id == chat_id)
+
+        if ctype:
+            stmt = stmt.where(cls.type == ctype)
+
+        result = await session.execute(stmt)
+        contexts = result.scalars().all()
+
+        return contexts if contexts else None
+
+    @classmethod
+    @with_retry()
     async def retrieve_context_by_chat(
         cls,
         session: AsyncSession,

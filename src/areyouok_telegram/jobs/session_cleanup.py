@@ -87,7 +87,7 @@ class SessionCleanupJob:
 
             ct = 0
             for msg in messages:
-                deleted = await msg.delete(session=conn)
+                deleted = await msg.delete()
                 ct += 1 if deleted else 0
 
         return ct
