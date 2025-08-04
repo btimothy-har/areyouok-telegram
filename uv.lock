@@ -165,7 +165,7 @@ dependencies = [
     { name = "logfire" },
     { name = "psycopg2" },
     { name = "pydantic" },
-    { name = "pydantic-ai" },
+    { name = "pydantic-ai", extra = ["logfire"] },
     { name = "python-dotenv" },
     { name = "python-telegram-bot", extra = ["job-queue"] },
     { name = "sqlalchemy" },
@@ -194,6 +194,7 @@ requires-dist = [
     { name = "psycopg2", specifier = "~=2.9.10" },
     { name = "pydantic", specifier = "~=2.11.7" },
     { name = "pydantic-ai", specifier = "~=0.4.7" },
+    { name = "pydantic-ai", extras = ["logfire"] },
     { name = "python-dotenv", specifier = "==1.1.1" },
     { name = "python-telegram-bot", specifier = "~=22.3" },
     { name = "python-telegram-bot", extras = ["job-queue"] },
@@ -1707,6 +1708,11 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/b2/88/598d1e0eac500525391f54ef9baccdd5267d2b27d743e39d6c9cfae19eb5/pydantic_ai-0.4.7.tar.gz", hash = "sha256:456cfd5d1e8c94da25e78f75dc29997b308d8b06a79dad7b09175f2e71cade2d", size = 43549424, upload-time = "2025-07-24T21:47:48.947Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/28/d5/f8a7dd3e9082b6c3907191e1a43991889be4ec4a701097f2068d01705808/pydantic_ai-0.4.7-py3-none-any.whl", hash = "sha256:3624595b542fe13d7b48a4aaedc6eac567424be9e8788697accacc986cb7a2e6", size = 10180, upload-time = "2025-07-24T21:47:40.28Z" },
+]
+
+[package.optional-dependencies]
+logfire = [
+    { name = "logfire" },
 ]
 
 [[package]]

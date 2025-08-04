@@ -1,17 +1,14 @@
-import asyncio
 import hashlib
-import logging
 from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
 
+import logfire
 from telegram.ext import ContextTypes
 
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database_session
-
-logger = logging.getLogger(__name__)
 
 
 class SessionCleanupJob:
@@ -57,18 +54,22 @@ class SessionCleanupJob:
             )
 
             if not sessions:
-                logger.info("No inactive sessions found for cleanup.")
+                logfire.debug("No inactive sessions found for cleanup.")
                 return
 
-        logger.info(f"Cleaning up {len(sessions)} inactive sessions since {cleanup_since.isoformat()}.")
-        cleanup = await asyncio.gather(*[self._cleanup_session(session) for session in sessions])
+        with logfire.span(
+            f"Cleaning up {len(sessions)} inactive sessions since {cleanup_since.isoformat()}",
+        ):
+            total_deleted = 0
 
-        total_deleted = sum(cleanup)
+            for session in sessions:
+                deleted_count = await self._cleanup_session(session)
+                total_deleted += deleted_count
 
-        logger.info(f"Session cleanup completed. Deleted {total_deleted} messages from {len(sessions)} sessions.")
+            logfire.info(f"Session cleanup completed. Deleted {total_deleted} messages from {len(sessions)} sessions.")
 
-        # Update the last cleanup timestamp
-        self.last_cleanup_timestamp = runtime
+            # Update the last cleanup timestamp
+            self.last_cleanup_timestamp = runtime
 
     async def _cleanup_session(self, chat_session: Sessions) -> bool:
         """Process messages for this chat and send appropriate replies.
@@ -89,5 +90,7 @@ class SessionCleanupJob:
             for msg in messages:
                 deleted = await msg.delete()
                 ct += 1 if deleted else 0
+
+        logfire.info(f"Cleaned up {ct} messages for session {chat_session.session_id} in chat {chat_session.chat_id}.")
 
         return ct

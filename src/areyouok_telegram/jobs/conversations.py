@@ -1,12 +1,12 @@
 import asyncio
 import hashlib
 import json
-import logging
 from collections import defaultdict
 from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
 
+import logfire
 import pydantic_ai
 import telegram
 from telegram.ext import ContextTypes
@@ -21,8 +21,6 @@ from areyouok_telegram.llms.chat import AgentResponse
 from areyouok_telegram.llms.chat import ChatAgentDependencies
 from areyouok_telegram.llms.chat import chat_agent
 from areyouok_telegram.llms.utils import convert_telegram_message_to_model_message
-
-logger = logging.getLogger(__name__)
 
 JOB_LOCK = defaultdict(asyncio.Lock)
 
@@ -69,7 +67,7 @@ class ConversationJob:
         self._run_count += 1
         self._run_timestamp = datetime.now(UTC)
 
-        logger.info(f"Processing conversation for chat {self.chat_id}. Run count: {self._run_count}")
+        logfire.debug(f"Running conversation job for chat {self.chat_id}. Run count: {self._run_count}")
 
         async with async_database_session() as conn:
             chat_session = await self._get_active_session(conn)
@@ -79,7 +77,7 @@ class ConversationJob:
                 raise NoActiveSessionError(self.chat_id)
 
             elif chat_session.has_bot_responded:
-                logger.debug(f"No new updates in {self.chat_id}, skipping processing.")
+                logfire.debug(f"No new updates in {self.chat_id}, skipping processing.")
 
             else:
                 await self._generate_response(conn, context, chat_session)
@@ -89,15 +87,20 @@ class ConversationJob:
             if chat_session.last_user_activity and (self._run_timestamp - chat_session.last_user_activity) > timedelta(
                 seconds=60 * 60  # 1 hour
             ):
-                await self._compress_session_context(conn, chat_session)
+                with logfire.span(
+                    f"Terminating chat session {self.chat_id} due to inactivity.",
+                    last_user_activity=chat_session.last_user_activity,
+                    run_timestamp=self._run_timestamp,
+                    inactivity_duration=(self._run_timestamp - chat_session.last_user_activity).total_seconds(),
+                ):
+                    await self._compress_session_context(conn, chat_session)
 
-                await chat_session.close_session(
-                    session=conn,
-                    timestamp=self._run_timestamp,
-                )
+                    await chat_session.close_session(
+                        session=conn,
+                        timestamp=self._run_timestamp,
+                    )
 
-                await self._stop(context)
-                logger.info(f"Stopped conversation job for chat {self.chat_id} due to inactivity.")
+                    await self._stop(context)
 
     async def _generate_response(self, conn, context: ContextTypes.DEFAULT_TYPE, chat_session: Sessions) -> bool:
         """Process messages for this chat and send appropriate replies.
@@ -155,7 +158,7 @@ class ConversationJob:
 
         except Exception:
             # TODO: Handle LLM errors
-            logger.exception(f"Failed to generate response for chat {self.chat_id}")
+            logfire.exception(f"Failed to generate response for chat {self.chat_id}")
             return False
 
         try:
@@ -169,7 +172,7 @@ class ConversationJob:
 
         except Exception:
             # TODO: Handle response execution errors
-            logger.exception(f"Failed to execute response for chat {self.chat_id}")
+            logfire.exception(f"Failed to execute response for chat {self.chat_id}")
             return False
 
         else:
@@ -197,16 +200,16 @@ class ConversationJob:
 
     async def _stop(self, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Stop the conversation job for this chat."""
-        logger.info(f"Stopping conversation job for chat {self.chat_id}")
-
         async with JOB_LOCK[str(self.chat_id)]:
             existing_jobs = context.job_queue.get_jobs_by_name(self.name)
             if not existing_jobs:
-                logger.debug(f"No existing job found for chat {self.chat_id}, nothing to stop.")
+                logfire.warning(f"No existing job found for chat {self.chat_id}, nothing to stop.")
                 return
 
             for job in existing_jobs:
                 job.schedule_removal()
+
+        logfire.info(f"Stopped conversation job for chat {self.chat_id} due to inactivity.")
 
     async def _compress_session_context(self, conn, chat_session: Sessions) -> None:
         """
@@ -223,7 +226,7 @@ class ConversationJob:
         )
 
         if context:
-            logger.debug(f"Context already exists for session {chat_session.session_key}, skipping compression.")
+            logfire.debug(f"Context already exists for session {chat_session.session_key}, skipping compression.")
             return
 
         messages = await chat_session.get_messages(conn)
@@ -241,6 +244,7 @@ class ConversationJob:
             ctype="session",
             content=result.context,
         )
+        logfire.info(f"Compressed session context for chat {self.chat_id} with session key {chat_session.session_key}.")
 
 
 async def schedule_conversation_job(context: ContextTypes.DEFAULT_TYPE, chat_id: int, interval: int = 10) -> None:
@@ -258,7 +262,7 @@ async def schedule_conversation_job(context: ContextTypes.DEFAULT_TYPE, chat_id:
         # Check if a job already exists for this chat
         existing_jobs = context.job_queue.get_jobs_by_name(processor.name)
         if existing_jobs:
-            logger.debug(f"Job already scheduled for chat {chat_id}, skipping.")
+            logfire.debug(f"Job already scheduled for chat {chat_id}, skipping.")
             return
 
         # Schedule the job to run once after the specified delay
@@ -274,4 +278,4 @@ async def schedule_conversation_job(context: ContextTypes.DEFAULT_TYPE, chat_id:
                 "max_instances": 1,
             },
         )
-        logger.info(f"Scheduled conversation job for chat {chat_id} with interval {interval} seconds.")
+        logfire.info(f"Scheduled conversation job for chat {chat_id} with interval {interval} seconds.")

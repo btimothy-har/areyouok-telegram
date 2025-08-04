@@ -1,7 +1,7 @@
-import logging
 from dataclasses import dataclass
 
 import pydantic_ai
+from pydantic_ai.models.instrumented import InstrumentationSettings
 from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.providers.openrouter import OpenRouterProvider
 from telegram.ext import ContextTypes
@@ -12,8 +12,6 @@ from areyouok_telegram.data.connection import AsyncSessionLocal
 from areyouok_telegram.llms.chat.exceptions import InvalidMessageError
 from areyouok_telegram.llms.chat.exceptions import ReactToSelfError
 from areyouok_telegram.llms.chat.responses import AgentResponse
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -36,6 +34,7 @@ chat_agent = pydantic_ai.Agent(
     deps_type=ChatAgentDependencies,
     name="areyouok_telegram_agent",
     end_strategy="exhaustive",
+    instrument=InstrumentationSettings(include_content=False),
 )
 
 
