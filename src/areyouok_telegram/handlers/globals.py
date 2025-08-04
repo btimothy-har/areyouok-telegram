@@ -14,29 +14,32 @@ from areyouok_telegram.jobs import schedule_conversation_job
 
 
 async def on_new_update(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):
-    with logfire.span(
-        f"Processing update {update.update_id}",
+    async with async_database_session() as session:
+        if update.effective_user:
+            await Users.new_or_update(session=session, user=update.effective_user)
+            logfire.debug(
+                "Update User saved.",
+                update_id=update.update_id,
+                user_id=update.effective_user.id,
+            )
+
+        if update.effective_chat:
+            await Chats.new_or_update(session=session, chat=update.effective_chat)
+            logfire.debug(
+                "Update Chat saved.",
+                update_id=update.update_id,
+                chat_id=update.effective_chat.id,
+            )
+
+            # Schedule conversation job for any update with a chat
+            await schedule_conversation_job(context=context, chat_id=str(update.effective_chat.id))
+
+    logfire.debug(
+        "Update successfully processed.",
+        update_id=update.update_id,
         chat_id=update.effective_chat.id if update.effective_chat else None,
         user_id=update.effective_user.id if update.effective_user else None,
-    ):
-        async with async_database_session() as session:
-            if update.effective_user:
-                await Users.new_or_update(session=session, user=update.effective_user)
-                logfire.debug("Update User saved.")
-
-            if update.effective_chat:
-                await Chats.new_or_update(session=session, chat=update.effective_chat)
-                logfire.debug("Update Chat saved.")
-
-                # Schedule conversation job for any update with a chat
-                await schedule_conversation_job(context=context, chat_id=str(update.effective_chat.id))
-
-        logfire.debug(
-            "Update successfully processed.",
-            update_id=update.update_id,
-            chat_id=update.effective_chat.id if update.effective_chat else None,
-            user_id=update.effective_user.id if update.effective_user else None,
-        )
+    )
 
 
 async def on_error_event(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> None:

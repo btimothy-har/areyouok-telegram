@@ -16,11 +16,19 @@ class AnonymizationModule(dspy.Module):
     def __init__(self):
         self.anonymizer = dspy.ChainOfThought(TextAnonymizer)
 
-    def forward(self, text: str) -> str:
+    def forward(self, text: str) -> dspy.Prediction:
         """Anonymize the given text."""
 
         anonymized_text = self.anonymizer(text=text)
 
-        return dspy.Prediction(
+        result = dspy.Prediction(
             anonymized_text=anonymized_text.anonymized_text,
         )
+
+        # Preserve LLM usage data
+        if hasattr(anonymized_text, "get_lm_usage"):
+            usage = anonymized_text.get_lm_usage()
+            if usage:
+                result.set_lm_usage(usage)
+
+        return result

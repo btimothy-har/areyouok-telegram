@@ -1,0 +1,140 @@
+from datetime import UTC
+from datetime import datetime
+from typing import Any
+
+import dspy
+import logfire
+import pydantic_ai
+from sqlalchemy import Column
+from sqlalchemy import Index
+from sqlalchemy import Integer
+from sqlalchemy import String
+from sqlalchemy.dialects.postgresql import TIMESTAMP
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from areyouok_telegram.config import ENV
+from areyouok_telegram.data.connection import Base
+from areyouok_telegram.data.utils import with_retry
+
+
+class LLMUsage(Base):
+    __tablename__ = "llm_usage"
+    __table_args__ = (
+        Index("idx_llm_usage_chat_id", "chat_id"),
+        Index("idx_llm_usage_session_id", "session_id"),
+        Index("idx_llm_usage_timestamp", "timestamp"),
+        Index("idx_llm_usage_chat_timestamp", "chat_id", "timestamp"),
+        {"schema": ENV},
+    )
+
+    chat_id = Column(String, nullable=False)
+    session_id = Column(String, nullable=False)
+    timestamp = Column(TIMESTAMP(timezone=True), nullable=False)
+    usage_type = Column(String, nullable=False)
+
+    model = Column(String, nullable=False)
+    provider = Column(String, nullable=False)
+    input_tokens = Column(Integer, nullable=False, default=0)
+    output_tokens = Column(Integer, nullable=False, default=0)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    @classmethod
+    @with_retry()
+    async def track_pydantic_usage(
+        cls,
+        session: AsyncSession,
+        chat_id: str,
+        session_id: str,
+        agent: pydantic_ai.Agent,
+        data: pydantic_ai.usage.Usage,
+    ) -> int:
+        """Log usage data from pydantic in the database."""
+
+        if agent.model.model_name.startswith("fallback:"):
+            model = agent.model.models[0]
+        else:
+            model = agent.model
+
+        if model.model_name.count("/") == 0:
+            # If the model name does not contain a provider prefix, prefix the system
+            model_name = f"{model.system}/{model.model_name}"
+        else:
+            model_name = model.model_name
+
+        try:
+            now = datetime.now(UTC)
+
+            stmt = pg_insert(cls).values(
+                chat_id=str(chat_id),
+                session_id=session_id,
+                timestamp=now,
+                usage_type=f"pydantic.{agent.name}",
+                model=model_name,
+                provider=model_name.split("/", 1)[0],
+                input_tokens=data.request_tokens,
+                output_tokens=data.response_tokens,
+            )
+
+            result = await session.execute(stmt)
+
+        # Catch exceptions here to avoid breaking application flow
+        # This is a best-effort logging, so we log the exception but don't raise it
+        except Exception as e:
+            logfire.exception(f"Failed to insert pydantic usage record: {e}")
+            return 0
+
+        return result.rowcount
+
+    @classmethod
+    @with_retry()
+    async def track_dspy_usage(
+        cls,
+        session: AsyncSession,
+        chat_id: str,
+        session_id: str,
+        usage_type: dspy.Module,
+        data: dict[str, Any],
+    ) -> int:
+        """Log usage data from dspy in the database."""
+
+        try:
+            now = datetime.now(UTC)
+            values_list = []
+
+            for model, usage in data.items():
+                # OpenRouter models show up as "openai/openai/gpt-4.1"
+                # The unique identifier is the double-prefixed model name
+                if model.count("/") == 2:
+                    model_name = model.split("/", 1)[1]
+                    provider = model_name.split("/", 1)[0]
+                else:
+                    model_name = model
+                    provider = model.split("/", 1)[0]
+
+                values_list.append(
+                    {
+                        "chat_id": str(chat_id),
+                        "session_id": session_id,
+                        "timestamp": now,
+                        "usage_type": f"dspy.{usage_type.__class__.__name__}",
+                        "model": model_name,
+                        "provider": provider,
+                        "input_tokens": usage.get("prompt_tokens", 0),
+                        "output_tokens": usage.get("completion_tokens", 0),
+                    }
+                )
+
+            if values_list:
+                stmt = pg_insert(cls).values(values_list)
+                result = await session.execute(stmt)
+                return result.rowcount
+
+        except Exception as e:
+            # Catch exceptions here to avoid breaking application flow
+            # This is a best-effort logging, so we log the exception but don't raise it
+            logfire.exception(f"Failed to insert dspy usage record: {e}")
+            return 0
+
+        return 0

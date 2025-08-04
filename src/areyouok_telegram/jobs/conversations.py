@@ -12,6 +12,7 @@ import telegram
 from telegram.ext import ContextTypes
 
 from areyouok_telegram.data import Context
+from areyouok_telegram.data import LLMUsage
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database_session
@@ -195,6 +196,15 @@ class ConversationJob:
                         is_user=False,  # This is a bot response
                     )
                 return True
+        finally:
+            # Track LLM usage for this chat
+            await LLMUsage.track_pydantic_usage(
+                session=conn,
+                chat_id=self.chat_id,
+                session_id=chat_session.session_key,
+                agent=chat_agent,
+                data=agent_run_payload.usage(),
+            )
 
         return False
 
@@ -233,7 +243,7 @@ class ConversationJob:
         messages.sort(key=lambda msg: msg.date)
 
         result = await asyncio.to_thread(
-            context_compression.forward,
+            context_compression,
             messages=messages,
         )
 
@@ -243,6 +253,14 @@ class ConversationJob:
             session_id=chat_session.session_key,
             ctype="session",
             content=result.context,
+        )
+
+        await LLMUsage.track_dspy_usage(
+            session=conn,
+            chat_id=self.chat_id,
+            session_id=chat_session.session_key,
+            usage_type=context_compression,
+            data=result.get_lm_usage(),
         )
         logfire.info(f"Compressed session context for chat {self.chat_id} with session key {chat_session.session_key}.")
 
