@@ -48,7 +48,7 @@ def transcribe_voice_data_sync(voice_data: bytes) -> str:
             audio_file.name = "segment.mp3"
 
             transcription = client.audio.transcriptions.create(
-                model="whisper-1",
+                model="gpt-4o-transcribe",
                 file=audio_file,
                 response_format="text",
                 language="en",
