@@ -176,7 +176,7 @@ class ConversationJob:
                 ),
             )
 
-            agent_response: AgentResponse = agent_run_payload.data
+            agent_response: AgentResponse = agent_run_payload.output
 
         except Exception:
             # TODO: Handle LLM errors
@@ -262,7 +262,7 @@ class ConversationJob:
 
         try:
             context_run_payload = await context_compression_agent.run(message_history=session_messages)
-            context_report: ContextTemplate = context_run_payload.data
+            context_report: ContextTemplate = context_run_payload.output
 
         except Exception:
             logfire.exception(

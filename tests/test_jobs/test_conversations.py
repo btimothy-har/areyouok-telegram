@@ -17,6 +17,7 @@ from areyouok_telegram.jobs.conversations import JOB_LOCK
 from areyouok_telegram.jobs.conversations import ConversationJob
 from areyouok_telegram.jobs.conversations import schedule_conversation_job
 from areyouok_telegram.jobs.exceptions import NoActiveSessionError
+from areyouok_telegram.llms.analytics import ContextTemplate
 from areyouok_telegram.llms.chat import ChatAgentDependencies
 from areyouok_telegram.llms.chat.responses import DoNothingResponse
 from areyouok_telegram.llms.chat.responses import ReactionResponse
@@ -36,7 +37,7 @@ def mock_job(mock_session):
 @pytest.fixture
 def mock_input_message():
     """Create a mock message conversion that returns proper ModelMessage objects."""
-    with patch("areyouok_telegram.llms.utils.convert_telegram_message_to_model_message") as mock_convert:
+    with patch("areyouok_telegram.jobs.utils.convert_telegram_message_to_model_message") as mock_convert:
         # Create a proper ModelRequest message
         model_request = pydantic_ai.messages.ModelRequest(
             parts=[
@@ -58,7 +59,7 @@ def mock_agent_run():
     with patch("areyouok_telegram.llms.chat.chat_agent.run") as mock_run:
         # Default to TextResponse, but can be overridden in tests
         mock_result = MagicMock()
-        mock_result.data = TextResponse(reasoning="Default test reasoning", message_text="Default test response")
+        mock_result.output = TextResponse(reasoning="Default test reasoning", message_text="Default test response")
         mock_run.return_value = mock_result
         yield mock_run
 
@@ -111,6 +112,20 @@ def mock_do_nothing_response():
     mock_response.execute = AsyncMock(return_value=None)
 
     return mock_response
+
+
+@pytest.fixture
+def mock_context_template():
+    """Create a mock ContextTemplate object."""
+    return ContextTemplate(
+        life_situation="User is experiencing work stress",
+        connection="User prefers direct communication",
+        personal_context="User values work-life balance",
+        conversation="User discussing workplace challenges",
+        practical_matters="User seeking advice on time management",
+        feedback="User appreciates practical suggestions",
+        others="No additional context",
+    )
 
 
 class TestConversationJob:
@@ -215,7 +230,7 @@ class TestConversationJob:
         """Test _generate_response when agent returns a TextResponse."""
 
         # Mock agent run to return a TextResponse
-        mock_agent_run.return_value.data = mock_text_response
+        mock_agent_run.return_value.output = mock_text_response
 
         # Use mock messages from fixtures
         msg1 = MagicMock()
@@ -239,7 +254,7 @@ class TestConversationJob:
         mock_session.get_messages = AsyncMock(return_value=messages)
 
         # Configure agent to return the mock TextResponse
-        mock_agent_run.return_value.data = mock_text_response
+        mock_agent_run.return_value.output = mock_text_response
 
         # The mock_text_response fixture already provides the bot response
         bot_response = mock_text_response.execute.return_value
@@ -304,7 +319,7 @@ class TestConversationJob:
         mock_session.get_messages = AsyncMock(return_value=messages)
 
         # Configure agent to return the mock ReactionResponse
-        mock_agent_run.return_value.data = mock_reaction_response
+        mock_agent_run.return_value.output = mock_reaction_response
 
         # The mock_reaction_response fixture already provides the bot response
         bot_response = mock_reaction_response.execute.return_value
@@ -368,7 +383,7 @@ class TestConversationJob:
         mock_session.get_messages = AsyncMock(return_value=messages)
 
         # Configure agent to return the mock DoNothingResponse
-        mock_agent_run.return_value.data = mock_do_nothing_response
+        mock_agent_run.return_value.output = mock_do_nothing_response
 
         with (
             patch("areyouok_telegram.data.Messages.new_or_update") as mock_new_or_update,
@@ -463,7 +478,7 @@ class TestConversationJob:
         mock_session.get_messages = AsyncMock(return_value=messages)
 
         # Configure agent to return the mock TextResponse
-        mock_agent_run.return_value.data = mock_text_response
+        mock_agent_run.return_value.output = mock_text_response
 
         # Configure text response execution to fail
         mock_text_response.execute.side_effect = Exception("Network error")
@@ -682,7 +697,7 @@ class TestConversationJob:
         mock_job.schedule_removal.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_compress_session_context_success(self):
+    async def test_compress_session_context_success(self, mock_context_template):
         """Test _compress_session_context successfully compresses and saves context."""
         job = ConversationJob("123456")
 
@@ -708,19 +723,16 @@ class TestConversationJob:
         with (
             patch("areyouok_telegram.jobs.conversations.Context.get_by_session_id") as mock_get_context,
             patch("areyouok_telegram.jobs.conversations.Context.new_or_update") as mock_new_context,
-            patch("areyouok_telegram.jobs.conversations.DynamicContextCompression") as mock_compression_class,
-            patch("areyouok_telegram.jobs.conversations.asyncio.to_thread") as mock_to_thread,
+            patch("areyouok_telegram.jobs.conversations.context_compression_agent.run") as mock_agent_run,
         ):
             # No existing context
             mock_get_context.return_value = None
 
-            # Mock compression result
-            mock_compression = MagicMock()
-            mock_compression_class.return_value = mock_compression
-
-            mock_result = MagicMock()
-            mock_result.context = "Compressed context summary"
-            mock_to_thread.return_value = mock_result
+            # Mock agent run result
+            mock_agent_result = MagicMock()
+            mock_agent_result.output = mock_context_template
+            mock_agent_result.usage = MagicMock(return_value={})
+            mock_agent_run.return_value = mock_agent_result
 
             await job._compress_session_context(conn, mock_session)
 
@@ -731,21 +743,19 @@ class TestConversationJob:
                 ctype="session",
             )
 
-            # Should get messages and compress them
+            # Should get messages and run compression agent
             mock_session.get_messages.assert_called_once_with(conn)
-            mock_to_thread.assert_called_once_with(
-                mock_compression,
-                messages=[msg1, msg2],  # Should be sorted by date
-            )
+            mock_agent_run.assert_called_once()
 
             # Should save new context
-            mock_new_context.assert_called_once_with(
-                session=conn,
-                chat_id="123456",
-                session_id="session-123",
-                ctype="session",
-                content="Compressed context summary",
-            )
+            mock_new_context.assert_called_once()
+            call_args = mock_new_context.call_args
+            assert call_args.kwargs["session"] == conn
+            assert call_args.kwargs["chat_id"] == "123456"
+            assert call_args.kwargs["session_id"] == "session-123"
+            assert call_args.kwargs["ctype"] == "session"
+            # Content should be the formatted template
+            assert "User is experiencing work stress" in call_args.kwargs["content"]
 
     @pytest.mark.asyncio
     async def test_compress_session_context_existing_context(self):
@@ -762,7 +772,7 @@ class TestConversationJob:
         with (
             patch("areyouok_telegram.jobs.conversations.Context.get_by_session_id") as mock_get_context,
             patch("areyouok_telegram.jobs.conversations.Context.new_or_update") as mock_new_context,
-            patch("areyouok_telegram.jobs.conversations.DynamicContextCompression") as mock_compression_class,
+            patch("areyouok_telegram.jobs.conversations.context_compression_agent.run") as mock_agent_run,
         ):
             # Existing context found
             mock_get_context.return_value = MagicMock()
@@ -776,11 +786,10 @@ class TestConversationJob:
                 ctype="session",
             )
 
-            # Compression class is instantiated but not used
-            mock_compression_class.assert_called_once()
-            # Should NOT save anything or get messages
+            # Should NOT save anything, get messages, or run compression
             mock_new_context.assert_not_called()
             mock_session.get_messages.assert_not_called()
+            mock_agent_run.assert_not_called()
 
 
 class TestScheduleConversationJob:

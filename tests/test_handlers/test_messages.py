@@ -30,6 +30,7 @@ class TestNewMessageHandler:
         with (
             patch("areyouok_telegram.data.Messages.new_or_update") as mock_messages_new_or_update,
             patch("areyouok_telegram.data.Sessions.get_active_session", return_value=mock_session) as mock_get_active,
+            patch("areyouok_telegram.handlers.messages.extract_media_from_telegram_message") as mock_extract_media,
         ):
             # Act
             await on_new_message(mock_update_private_chat_new_message, mock_context)
@@ -40,6 +41,11 @@ class TestNewMessageHandler:
                 user_id=mock_update_private_chat_new_message.effective_user.id,
                 chat_id=mock_update_private_chat_new_message.effective_chat.id,
                 message=mock_update_private_chat_new_message.message,
+            )
+
+            # Verify media extraction was called
+            mock_extract_media.assert_called_once_with(
+                mock_async_database_session, mock_update_private_chat_new_message.message
             )
 
             # Verify session management
@@ -67,6 +73,7 @@ class TestNewMessageHandler:
             patch(
                 "areyouok_telegram.data.Sessions.create_session", return_value=mock_new_session
             ) as mock_create_session,
+            patch("areyouok_telegram.handlers.messages.extract_media_from_telegram_message") as mock_extract_media,
         ):
             # Act
             await on_new_message(mock_update_private_chat_new_message, mock_context)
@@ -77,6 +84,11 @@ class TestNewMessageHandler:
                 user_id=mock_update_private_chat_new_message.effective_user.id,
                 chat_id=mock_update_private_chat_new_message.effective_chat.id,
                 message=mock_update_private_chat_new_message.message,
+            )
+
+            # Verify media extraction was called
+            mock_extract_media.assert_called_once_with(
+                mock_async_database_session, mock_update_private_chat_new_message.message
             )
 
             # Verify session management
