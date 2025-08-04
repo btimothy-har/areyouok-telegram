@@ -163,10 +163,13 @@ dependencies = [
     { name = "dspy" },
     { name = "greenlet" },
     { name = "logfire" },
+    { name = "openai" },
     { name = "psycopg2" },
     { name = "pydantic" },
     { name = "pydantic-ai", extra = ["logfire"] },
+    { name = "pydub" },
     { name = "python-dotenv" },
+    { name = "python-magic" },
     { name = "python-telegram-bot", extra = ["job-queue"] },
     { name = "sqlalchemy" },
     { name = "tenacity" },
@@ -191,11 +194,14 @@ requires-dist = [
     { name = "dspy", specifier = "~=2.6.27" },
     { name = "greenlet" },
     { name = "logfire", specifier = "~=4.0.0" },
+    { name = "openai", specifier = "~=1.92.0" },
     { name = "psycopg2", specifier = "~=2.9.10" },
     { name = "pydantic", specifier = "~=2.11.7" },
     { name = "pydantic-ai", specifier = "~=0.4.7" },
     { name = "pydantic-ai", extras = ["logfire"] },
+    { name = "pydub", specifier = "~=0.25.1" },
     { name = "python-dotenv", specifier = "==1.1.1" },
+    { name = "python-magic", specifier = "~=0.4.27" },
     { name = "python-telegram-bot", specifier = "~=22.3" },
     { name = "python-telegram-bot", extras = ["job-queue"] },
     { name = "sqlalchemy", specifier = "~=2.0.41" },
@@ -1355,7 +1361,7 @@ wheels = [
 
 [[package]]
 name = "openai"
-version = "1.97.1"
+version = "1.92.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -1367,9 +1373,9 @@ dependencies = [
     { name = "tqdm" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a6/57/1c471f6b3efb879d26686d31582997615e969f3bb4458111c9705e56332e/openai-1.97.1.tar.gz", hash = "sha256:a744b27ae624e3d4135225da9b1c89c107a2a7e5bc4c93e5b7b5214772ce7a4e", size = 494267, upload-time = "2025-07-22T13:10:12.607Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/8b/bd/6c123e53d6727dc39086346df1161c8b6bb50e4cc0f2e9075cae909049b6/openai-1.92.3.tar.gz", hash = "sha256:6b707bc926a9fffab262dbd1eb4be29c36d627b9012633a66ccdbe2d615a9532", size = 485647, upload-time = "2025-06-27T17:06:55.96Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ee/35/412a0e9c3f0d37c94ed764b8ac7adae2d834dbd20e69f6aca582118e0f55/openai-1.97.1-py3-none-any.whl", hash = "sha256:4e96bbdf672ec3d44968c9ea39d2c375891db1acc1794668d8149d5fa6000606", size = 764380, upload-time = "2025-07-22T13:10:10.689Z" },
+    { url = "https://files.pythonhosted.org/packages/ea/60/4956baa677a569a247336c7edff4b3b6aab7a54119e2342d391d1d370446/openai-1.92.3-py3-none-any.whl", hash = "sha256:979f00c097d023a28f22c63373a646a675e4b9e1fad586e2424bf7274a2689f2", size = 753350, upload-time = "2025-06-27T17:06:53.547Z" },
 ]
 
 [[package]]
@@ -1867,6 +1873,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pydub"
+version = "0.25.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/fe/9a/e6bca0eed82db26562c73b5076539a4a08d3cffd19c3cc5913a3e61145fd/pydub-0.25.1.tar.gz", hash = "sha256:980a33ce9949cab2a569606b65674d748ecbca4f0796887fd6f46173a7b0d30f", size = 38326, upload-time = "2021-03-10T02:09:54.659Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a6/53/d78dc063216e62fc55f6b2eebb447f6a4b0a59f55c8406376f76bf959b08/pydub-0.25.1-py2.py3-none-any.whl", hash = "sha256:65617e33033874b59d87db603aa1ed450633288aefead953b30bded59cb599a6", size = 32327, upload-time = "2021-03-10T02:09:53.503Z" },
+]
+
+[[package]]
 name = "pygments"
 version = "2.19.2"
 source = { registry = "https://pypi.org/simple" }
@@ -1948,6 +1963,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/f6/b0/4bc07ccd3572a2f9df7e6782f52b0c6c90dcbb803ac4a167702d7d0dfe1e/python_dotenv-1.1.1.tar.gz", hash = "sha256:a8a6399716257f45be6a007360200409fce5cda2661e3dec71d23dc15f6189ab", size = 41978, upload-time = "2025-06-24T04:21:07.341Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/5f/ed/539768cf28c661b5b068d66d96a2f155c4971a5d55684a514c1a0e0dec2f/python_dotenv-1.1.1-py3-none-any.whl", hash = "sha256:31f23644fe2602f88ff55e1f5c79ba497e01224ee7737937930c448e4d0e24dc", size = 20556, upload-time = "2025-06-24T04:21:06.073Z" },
+]
+
+[[package]]
+name = "python-magic"
+version = "0.4.27"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/da/db/0b3e28ac047452d079d375ec6798bf76a036a08182dbb39ed38116a49130/python-magic-0.4.27.tar.gz", hash = "sha256:c1ba14b08e4a5f5c31a302b7721239695b2f0f058d125bd5ce1ee36b9d9d3c3b", size = 14677, upload-time = "2022-06-07T20:16:59.508Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6c/73/9f872cb81fc5c3bb48f7227872c28975f998f3e7c2b1c16e95e6432bbb90/python_magic-0.4.27-py2.py3-none-any.whl", hash = "sha256:c212960ad306f700aa0d01e5d7a325d20548ff97eb9920dcd29513174f0294d3", size = 13840, upload-time = "2022-06-07T20:16:57.763Z" },
 ]
 
 [[package]]
