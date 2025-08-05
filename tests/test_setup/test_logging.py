@@ -43,10 +43,12 @@ class TestLoggingSetup:
 
         # Assert
         mock_logging.getLogger.assert_any_call("httpx")
+        mock_logging.getLogger.assert_any_call("LiteLLM")
         mock_logging.getLogger.assert_any_call("apscheduler.scheduler")
         mock_logging.getLogger.assert_any_call("apscheduler.executors.default")
 
     @patch("areyouok_telegram.setup.logging.ENV", "production")
+    @patch("areyouok_telegram.setup.logging.CONTROLLED_ENV", ["staging", "production", "staging", "research"])
     @patch("areyouok_telegram.setup.logging.GITHUB_REPOSITORY", "user/repo")
     @patch("areyouok_telegram.setup.logging.GITHUB_SHA", "abc123")
     @patch("areyouok_telegram.setup.logging.LOGFIRE_TOKEN", "test_token")
@@ -61,6 +63,9 @@ class TestLoggingSetup:
             revision="abc123",
         )
         mock_logfire.configure.assert_called_once()
+        # Verify console=False (None) for controlled environments
+        _, kwargs = mock_logfire.configure.call_args
+        assert kwargs["console"] is False
         mock_logfire.log_slow_async_callbacks.assert_called_once_with(slow_duration=0.25)
 
     @patch("areyouok_telegram.setup.logging.ENV", "development")
@@ -92,6 +97,7 @@ class TestLoggingSetup:
         mock_logfire.log_slow_async_callbacks.assert_called_once_with(slow_duration=0.25)
 
     @patch("areyouok_telegram.setup.logging.ENV", "staging")
+    @patch("areyouok_telegram.setup.logging.CONTROLLED_ENV", ["staging", "production", "staging", "research"])
     @patch("areyouok_telegram.setup.logging.GITHUB_REPOSITORY", None)
     def test_logging_setup_staging_without_github_info(self, mock_logfire):
         """Test logging setup in staging environment without GitHub repository info."""
@@ -101,6 +107,8 @@ class TestLoggingSetup:
         # Assert
         # Should not create CodeSource when GITHUB_REPOSITORY is None
         mock_logfire.CodeSource.assert_not_called()
+        # Should not create ConsoleOptions for controlled environments
+        mock_logfire.ConsoleOptions.assert_not_called()
         mock_logfire.log_slow_async_callbacks.assert_called_once_with(slow_duration=0.25)
 
     def test_logging_setup_includes_service_version(self, mock_logfire):
@@ -119,17 +127,22 @@ class TestLoggingSetup:
             mock_logfire.log_slow_async_callbacks.assert_called_once_with(slow_duration=0.25)
 
     @patch("areyouok_telegram.setup.logging.ENV", "test")
+    @patch("areyouok_telegram.setup.logging.CONTROLLED_ENV", ["staging", "production", "staging", "research"])
     @patch("areyouok_telegram.setup.logging.LOGFIRE_TOKEN", "test_token")
-    def test_logging_setup_non_development_environment(self, mock_logfire):
-        """Test logging setup for non-development environment with console output."""
+    def test_logging_setup_non_controlled_environment(self, mock_logfire):
+        """Test logging setup for non-controlled environment (not in CONTROLLED_ENV) with console output."""
         # Act
         logging_setup()
 
         # Assert
+        # Since "test" is not in CONTROLLED_ENV, should create ConsoleOptions
         mock_logfire.ConsoleOptions.assert_called_once_with(
             span_style="show-parents",
             show_project_link=False,
-            min_log_level="info",
+            min_log_level="debug",
             verbose=True,
         )
+        # Should configure with min_level="info" for non-development environments
+        _, kwargs = mock_logfire.configure.call_args
+        assert kwargs["min_level"] == "info"
         mock_logfire.log_slow_async_callbacks.assert_called_once_with(slow_duration=0.25)
