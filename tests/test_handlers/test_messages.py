@@ -134,6 +134,7 @@ class TestEditMessageHandler:
         with (
             patch("areyouok_telegram.data.Messages.new_or_update") as mock_messages_new_or_update,
             patch("areyouok_telegram.data.Sessions.get_active_session", return_value=mock_session) as mock_get_active,
+            patch("areyouok_telegram.handlers.messages.extract_media_from_telegram_message") as mock_extract_media,
         ):
             # Act
             await on_edit_message(mock_update_private_chat_edited_message, mock_context)
@@ -144,6 +145,11 @@ class TestEditMessageHandler:
                 user_id=mock_update_private_chat_edited_message.effective_user.id,
                 chat_id=mock_update_private_chat_edited_message.effective_chat.id,
                 message=mock_update_private_chat_edited_message.edited_message,
+            )
+
+            # Verify media extraction was called
+            mock_extract_media.assert_called_once_with(
+                mock_async_database_session, mock_update_private_chat_edited_message.edited_message
             )
 
             # Verify session was extended with edit_date
@@ -167,6 +173,7 @@ class TestEditMessageHandler:
         with (
             patch("areyouok_telegram.data.Messages.new_or_update") as mock_messages_new_or_update,
             patch("areyouok_telegram.data.Sessions.get_active_session", return_value=mock_session) as mock_get_active,
+            patch("areyouok_telegram.handlers.messages.extract_media_from_telegram_message") as mock_extract_media,
         ):
             # Act
             await on_edit_message(mock_update_private_chat_edited_message, mock_context)
@@ -177,6 +184,11 @@ class TestEditMessageHandler:
                 user_id=mock_update_private_chat_edited_message.effective_user.id,
                 chat_id=mock_update_private_chat_edited_message.effective_chat.id,
                 message=mock_update_private_chat_edited_message.edited_message,
+            )
+
+            # Verify media extraction was called
+            mock_extract_media.assert_called_once_with(
+                mock_async_database_session, mock_update_private_chat_edited_message.edited_message
             )
 
             # Verify session was NOT extended (old message)
@@ -196,6 +208,7 @@ class TestEditMessageHandler:
             patch("areyouok_telegram.data.Messages.new_or_update") as mock_messages_new_or_update,
             patch("areyouok_telegram.data.Sessions.get_active_session", return_value=None) as mock_get_active,
             patch("areyouok_telegram.data.Sessions.create_session") as mock_create_session,
+            patch("areyouok_telegram.handlers.messages.extract_media_from_telegram_message") as mock_extract_media,
         ):
             # Act
             await on_edit_message(mock_update_private_chat_edited_message, mock_context)
@@ -207,6 +220,9 @@ class TestEditMessageHandler:
                 chat_id=mock_update_private_chat_edited_message.effective_chat.id,
                 message=mock_update_private_chat_edited_message.edited_message,
             )
+
+            # Verify media extraction was NOT called (no active session)
+            mock_extract_media.assert_not_called()
 
             # Verify no session was created for edits
             mock_get_active.assert_called_once_with(

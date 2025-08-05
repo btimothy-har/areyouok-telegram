@@ -1,3 +1,5 @@
+import asyncio
+
 import logfire
 import telegram
 from telegram.ext import ContextTypes
@@ -25,10 +27,9 @@ async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_
             await Messages.new_or_update(
                 session, user_id=update.effective_user.id, chat_id=update.effective_chat.id, message=update.message
             )
-
             logfire.debug("New message saved.")
 
-            await extract_media_from_telegram_message(session, update.message)
+            extract_media = asyncio.create_task(extract_media_from_telegram_message(session, update.message))
 
             # Handle session management
             chat_id = str(update.effective_chat.id)
@@ -43,6 +44,8 @@ async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_
                 new_session = await Sessions.create_session(session, chat_id, update.message.date)
                 await new_session.new_message(update.message.date, is_user=True)
                 logfire.debug("New session started.")
+
+            await extract_media
 
 
 async def on_edit_message(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):  # noqa: ARG001
@@ -70,6 +73,8 @@ async def on_edit_message(update: telegram.Update, context: ContextTypes.DEFAULT
                 logfire.debug("No active session found for edited message, skipping session activity.")
                 return
 
+            extract_media = asyncio.create_task(extract_media_from_telegram_message(session, update.edited_message))
+
             # Only record user activity if the original message was sent after session start
             if update.edited_message.date >= active_session.session_start:
                 await active_session.new_activity(
@@ -82,6 +87,8 @@ async def on_edit_message(update: telegram.Update, context: ContextTypes.DEFAULT
                     message_id=update.edited_message.message_id,
                     session_start=active_session.session_start,
                 )
+
+            await extract_media
 
 
 async def on_message_react(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):  # noqa: ARG001
