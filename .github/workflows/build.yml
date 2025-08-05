@@ -1,7 +1,15 @@
-name: Build Image
+name: Build
 
 on:
   push:
+    paths:
+      - "src/**"
+      - ".github/workflows/build.yml"
+      - ".dockerignore"
+      - ".python-version"
+      - "Dockerfile"
+      - "pyproject.toml"
+      - "uv.lock"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -11,7 +19,7 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
-  build-and-publish:
+  build:
     runs-on: ubuntu-latest
     permissions:
       contents: read
