@@ -40,7 +40,7 @@ class Context(Base):
     @with_retry()
     async def new_or_update(
         cls,
-        session: AsyncSession,
+        db_conn: AsyncSession,
         chat_id: str,
         session_id: str,
         ctype: str,
@@ -60,13 +60,13 @@ class Context(Base):
             created_at=now,
         )
 
-        await session.execute(stmt)
+        await db_conn.execute(stmt)
 
     @classmethod
     @with_retry()
     async def get_by_session_id(
         cls,
-        session: AsyncSession,
+        db_conn: AsyncSession,
         session_id: str,
         ctype: str | None = None,
     ) -> list["Context"] | None:
@@ -80,7 +80,7 @@ class Context(Base):
         if ctype:
             stmt = stmt.where(cls.type == ctype)
 
-        result = await session.execute(stmt)
+        result = await db_conn.execute(stmt)
         contexts = result.scalars().all()
 
         return contexts if contexts else None
@@ -89,7 +89,7 @@ class Context(Base):
     @with_retry()
     async def get_by_chat_id(
         cls,
-        session: AsyncSession,
+        db_conn: AsyncSession,
         chat_id: str,
         ctype: str | None = None,
     ) -> list["Context"] | None:
@@ -103,7 +103,7 @@ class Context(Base):
         if ctype:
             stmt = stmt.where(cls.type == ctype)
 
-        result = await session.execute(stmt)
+        result = await db_conn.execute(stmt)
         contexts = result.scalars().all()
 
         return contexts if contexts else None
@@ -112,7 +112,7 @@ class Context(Base):
     @with_retry()
     async def retrieve_context_by_chat(
         cls,
-        session: AsyncSession,
+        db_conn: AsyncSession,
         chat_id: str,
         ctype: str | None = None,
         limit: int = 3,
@@ -129,7 +129,7 @@ class Context(Base):
 
         stmt = stmt.order_by(cls.created_at.desc()).limit(limit)
 
-        result = await session.execute(stmt)
+        result = await db_conn.execute(stmt)
         contexts = result.scalars().all()
 
         return contexts if contexts else None

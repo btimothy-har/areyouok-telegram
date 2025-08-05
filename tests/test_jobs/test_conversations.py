@@ -89,6 +89,11 @@ def mock_agent_run():
         # Default to TextResponse, but can be overridden in tests
         mock_result = MagicMock()
         mock_result.output = TextResponse(reasoning="Default test reasoning", message_text="Default test response")
+        # Mock the usage() method that returns usage statistics
+        mock_usage = MagicMock()
+        mock_usage.request_tokens = 100
+        mock_usage.response_tokens = 50
+        mock_result.usage.return_value = mock_usage
         mock_run.return_value = mock_result
         yield mock_run
 
@@ -329,7 +334,7 @@ class TestConversationJob:
 
             # Verify message was saved
             mock_new_or_update.assert_called_once_with(
-                session=conn, user_id="999999", chat_id="123456", message=bot_response
+                db_conn=conn, user_id="999999", chat_id="123456", message=bot_response
             )
 
             # Verify session activities were updated
@@ -400,7 +405,7 @@ class TestConversationJob:
 
             # Verify reaction was saved
             mock_new_or_update.assert_called_once_with(
-                session=conn, user_id="999999", chat_id="123456", message=bot_response
+                db_conn=conn, user_id="999999", chat_id="123456", message=bot_response
             )
 
             # Verify session activity was updated
@@ -636,7 +641,7 @@ class TestConversationJob:
             # Should then stop the job and close the session
             mock_stop.assert_called_once_with(context)
             mock_session.close_session.assert_called_once_with(
-                session=mock_conn,
+                db_conn=mock_conn,
                 timestamp=mock_job._run_timestamp,
             )
 
@@ -808,7 +813,7 @@ class TestConversationJob:
 
             # Should check for existing context
             mock_get_context.assert_called_once_with(
-                session=conn,
+                db_conn=conn,
                 session_id="session-123",
                 ctype="session",
             )
@@ -820,7 +825,7 @@ class TestConversationJob:
             # Should save new context
             mock_new_context.assert_called_once()
             call_args = mock_new_context.call_args
-            assert call_args.kwargs["session"] == conn
+            assert call_args.kwargs["db_conn"] == conn
             assert call_args.kwargs["chat_id"] == "123456"
             assert call_args.kwargs["session_id"] == "session-123"
             assert call_args.kwargs["ctype"] == "session"
@@ -851,7 +856,7 @@ class TestConversationJob:
 
             # Should check for existing context
             mock_get_context.assert_called_once_with(
-                session=conn,
+                db_conn=conn,
                 session_id="session-123",
                 ctype="session",
             )

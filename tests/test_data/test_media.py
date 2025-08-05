@@ -61,7 +61,7 @@ class TestMediaFiles:
             mock_from_buffer.return_value = "image/jpeg"
 
             await MediaFiles.create_file(
-                session=async_database_connection,
+                db_conn=async_database_connection,
                 file_id="test_123",
                 file_unique_id="test_unique_123",
                 chat_id="123456",

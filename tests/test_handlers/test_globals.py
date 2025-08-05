@@ -40,7 +40,7 @@ class TestGlobalUpdateHandler:
             await on_new_update(mock_update_empty, mock_context)
 
             mock_users_update.assert_called_once_with(
-                session=async_database_connection, user=mock_update_empty.effective_user
+                db_conn=async_database_connection, user=mock_update_empty.effective_user
             )
             mock_chats_update.assert_not_called()
 
@@ -63,7 +63,7 @@ class TestGlobalUpdateHandler:
 
             mock_users_update.assert_not_called()
             mock_chats_update.assert_called_once_with(
-                session=async_database_connection, chat=mock_update_empty.effective_chat
+                db_conn=async_database_connection, chat=mock_update_empty.effective_chat
             )
             mock_schedule_job.assert_called_once_with(
                 context=mock_context, chat_id=str(mock_update_empty.effective_chat.id)
@@ -90,10 +90,10 @@ class TestGlobalUpdateHandler:
             await on_new_update(mock_update_private_chat_new_message, mock_context)
 
             mock_users_update.assert_called_once_with(
-                session=async_database_connection, user=mock_update_private_chat_new_message.effective_user
+                db_conn=async_database_connection, user=mock_update_private_chat_new_message.effective_user
             )
             mock_chats_update.assert_called_once_with(
-                session=async_database_connection, chat=mock_update_private_chat_new_message.effective_chat
+                db_conn=async_database_connection, chat=mock_update_private_chat_new_message.effective_chat
             )
             mock_schedule_job.assert_called_once_with(
                 context=mock_context, chat_id=str(mock_update_private_chat_new_message.effective_chat.id)

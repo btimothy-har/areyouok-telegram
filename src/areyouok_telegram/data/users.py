@@ -31,7 +31,7 @@ class Users(Base):
 
     @classmethod
     @with_retry()
-    async def new_or_update(cls, session: AsyncSession, user: telegram.User):
+    async def new_or_update(cls, db_conn: AsyncSession, user: telegram.User):
         """Insert or update a user in the database."""
         now = datetime.now(UTC)
 
@@ -54,12 +54,12 @@ class Users(Base):
             },
         )
 
-        await session.execute(stmt)
+        await db_conn.execute(stmt)
 
     @classmethod
     @with_retry()
-    async def get_by_id(cls, session: AsyncSession, user_id: str) -> "Users | None":
+    async def get_by_id(cls, db_conn: AsyncSession, user_id: str) -> "Users | None":
         """Retrieve a user by their ID."""
         stmt = select(cls).where(cls.user_id == user_id)
-        result = await session.execute(stmt)
+        result = await db_conn.execute(stmt)
         return result.scalars().first()

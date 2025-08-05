@@ -14,9 +14,9 @@ from areyouok_telegram.jobs import schedule_conversation_job
 
 
 async def on_new_update(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):
-    async with async_database() as session:
+    async with async_database() as db_conn:
         if update.effective_user:
-            await Users.new_or_update(session=session, user=update.effective_user)
+            await Users.new_or_update(db_conn=db_conn, user=update.effective_user)
             logfire.debug(
                 "Update User saved.",
                 update_id=update.update_id,
@@ -24,7 +24,7 @@ async def on_new_update(update: telegram.Update, context: ContextTypes.DEFAULT_T
             )
 
         if update.effective_chat:
-            await Chats.new_or_update(session=session, chat=update.effective_chat)
+            await Chats.new_or_update(db_conn=db_conn, chat=update.effective_chat)
             logfire.debug(
                 "Update Chat saved.",
                 update_id=update.update_id,
@@ -51,8 +51,8 @@ async def on_error_event(update: telegram.Update, context: ContextTypes.DEFAULT_
         logfire.error(f"Exception while handling an update: {update.update_id}", _exc_info=context.error)
 
         # Store update only for debugging
-        async with async_database() as session:
-            await Updates.new_or_upsert(session, update=update)
+        async with async_database() as db_conn:
+            await Updates.new_or_upsert(db_conn, update=update)
 
     if DEVELOPER_CHAT_ID:
         tb_list = traceback.format_exception(None, context.error, context.error.__traceback__)

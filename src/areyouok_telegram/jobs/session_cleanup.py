@@ -52,11 +52,11 @@ class SessionCleanupJob:
             since=cleanup_since,
             runtime=runtime,
         ):
-            async with async_database() as conn:
+            async with async_database() as db_conn:
                 # Fetch all inactive sessions that ended after the last cleanup timestamp
                 # We only want sessions that have been inactive for at least 10 minutes as a safety margin
                 sessions = await Sessions.get_all_inactive_sessions(
-                    conn, from_dt=cleanup_since, to_dt=runtime - timedelta(minutes=10)
+                    db_conn, from_dt=cleanup_since, to_dt=runtime - timedelta(minutes=10)
                 )
 
                 if not sessions:
@@ -87,9 +87,9 @@ class SessionCleanupJob:
         """
 
         # Run this using a separate connector to avoid collisions
-        async with async_database() as conn:
+        async with async_database() as db_conn:
             messages = await Messages.retrieve_raw_by_chat(
-                session=conn,
+                db_conn=db_conn,
                 chat_id=chat_session.chat_id,
                 to_time=chat_session.session_end,
             )

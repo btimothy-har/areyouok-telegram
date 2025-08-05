@@ -66,13 +66,13 @@ def transcribe_voice_data_sync(voice_data: bytes) -> str:
 
 
 async def extract_media_from_telegram_message(
-    session: AsyncSession,
+    db_conn: AsyncSession,
     message: telegram.Message,
 ) -> int:
     """Process media files from a Telegram message.
 
     Args:
-        session: Database session
+        db_conn: Database connection
         message: Telegram message object
 
     Returns:
@@ -121,7 +121,7 @@ async def extract_media_from_telegram_message(
 
             # Pass individual attributes to create_file
             await MediaFiles.create_file(
-                session=session,
+                db_conn=db_conn,
                 file_id=file.file_id,
                 file_unique_id=file.file_unique_id,
                 chat_id=str(message.chat.id),
@@ -146,7 +146,7 @@ async def extract_media_from_telegram_message(
                         # Store the transcription as a text file
                         transcription_bytes = transcription.encode("utf-8")
                         await MediaFiles.create_file(
-                            session=session,
+                            db_conn=db_conn,
                             file_id=f"{file.file_id}_transcription",
                             file_unique_id=f"{file.file_unique_id}_transcription",
                             chat_id=str(message.chat.id),

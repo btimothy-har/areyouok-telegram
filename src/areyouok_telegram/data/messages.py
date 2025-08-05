@@ -83,7 +83,7 @@ class Messages(Base):
     @with_retry()
     async def new_or_update(
         cls,
-        session: AsyncSession,
+        db_conn: AsyncSession,
         user_id: str,
         chat_id: str,
         message: MessageTypes,
@@ -115,13 +115,13 @@ class Messages(Base):
             },
         )
 
-        await session.execute(stmt)
+        await db_conn.execute(stmt)
 
     @classmethod
     @with_retry()
     async def retrieve_message_by_id(
         cls,
-        session: AsyncSession,
+        db_conn: AsyncSession,
         message_id: str,
         chat_id: str,
     ) -> tuple[telegram.Message | None, list[telegram.MessageReactionUpdated] | None]:
@@ -133,7 +133,7 @@ class Messages(Base):
             cls.payload.isnot(None),  # Exclude soft-deleted messages
         )
 
-        result = await session.execute(stmt)
+        result = await db_conn.execute(stmt)
         message = result.scalar_one_or_none()
 
         if message:
@@ -143,7 +143,7 @@ class Messages(Base):
                 cls.message_type == "MessageReactionUpdated",
                 cls.payload.isnot(None),  # Exclude soft-deleted reactions
             )
-            reaction_result = await session.execute(stmt)
+            reaction_result = await db_conn.execute(stmt)
             reactions = reaction_result.scalars().all()
 
             # Convert reactions, filtering out any that return None
@@ -161,21 +161,21 @@ class Messages(Base):
     @with_retry()
     async def retrieve_by_chat(
         cls,
-        session: AsyncSession,
+        db_conn: AsyncSession,
         chat_id: str,
         from_time: datetime | None = None,
         to_time: datetime | None = None,
         limit: int | None = None,
     ) -> list[MessageTypes]:
         """Retrieve messages by chat_id and optional time range, returning telegram.Message objects."""
-        messages = await cls.retrieve_raw_by_chat(session, chat_id, from_time, to_time, limit)
+        messages = await cls.retrieve_raw_by_chat(db_conn, chat_id, from_time, to_time, limit)
         return [msg.to_telegram_object() for msg in messages]
 
     @classmethod
     @with_retry()
     async def retrieve_raw_by_chat(
         cls,
-        session: AsyncSession,
+        db_conn: AsyncSession,
         chat_id: str,
         from_time: datetime | None = None,
         to_time: datetime | None = None,
@@ -198,7 +198,7 @@ class Messages(Base):
         if limit:
             stmt = stmt.limit(limit)
 
-        result = await session.execute(stmt)
+        result = await db_conn.execute(stmt)
         messages = result.scalars().all()
 
         return list(messages)

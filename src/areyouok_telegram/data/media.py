@@ -55,42 +55,42 @@ class MediaFiles(Base):
 
     @classmethod
     @with_retry()
-    async def get_by_file_id(cls, session: AsyncSession, file_id: str) -> Optional["MediaFiles"]:
+    async def get_by_file_id(cls, db_conn: AsyncSession, file_id: str) -> Optional["MediaFiles"]:
         """Retrieve media by file_id and update last_accessed_at."""
         stmt = select(cls).where(cls.file_id == file_id)
-        result = await session.execute(stmt)
+        result = await db_conn.execute(stmt)
         media = result.scalar_one_or_none()
 
         # Update last_accessed_at if media was found
         if media:
-            await cls.update_last_accessed(session, [media.id])
+            await cls.update_last_accessed(db_conn, [media.id])
 
         return media
 
     @classmethod
     @with_retry()
-    async def get_by_message_id(cls, session: AsyncSession, chat_id: str, message_id: str) -> list["MediaFiles"]:
+    async def get_by_message_id(cls, db_conn: AsyncSession, chat_id: str, message_id: str) -> list["MediaFiles"]:
         """Retrieve all media files by chat_id and message_id and update last_accessed_at."""
         stmt = select(cls).where((cls.chat_id == chat_id) & (cls.message_id == message_id))
-        result = await session.execute(stmt)
+        result = await db_conn.execute(stmt)
         media_files = result.scalars().all()
 
         # Update last_accessed_at for all found media files
         if media_files:
             media_ids = [media.id for media in media_files]
-            await cls.update_last_accessed(session, media_ids)
+            await cls.update_last_accessed(db_conn, media_ids)
 
         return media_files
 
     @classmethod
     @with_retry()
     async def get_agent_compatible_media(
-        cls, session: AsyncSession, chat_id: str, message_id: str
+        cls, db_conn: AsyncSession, chat_id: str, message_id: str
     ) -> list["MediaFiles"]:
         """Retrieve media files that are compatible with the agent (images and PDFs only).
 
         Args:
-            session: Database session
+            db_conn: Database connection
             chat_id: Chat ID
             message_id: Message ID
 
@@ -98,7 +98,7 @@ class MediaFiles(Base):
             List of media files that can be processed by the agent
         """
         # Get all media for the message
-        all_media = await cls.get_by_message_id(session, chat_id, message_id)
+        all_media = await cls.get_by_message_id(db_conn, chat_id, message_id)
 
         # Filter to only include images and PDFs that Anthropic can process
         return [
@@ -111,7 +111,7 @@ class MediaFiles(Base):
     @with_retry()
     async def create_file(
         cls,
-        session: AsyncSession,
+        db_conn: AsyncSession,
         file_id: str,
         file_unique_id: str,
         chat_id: str,
@@ -122,7 +122,7 @@ class MediaFiles(Base):
         """Create a media file entry.
 
         Args:
-            session: Database session
+            db_conn: Database connection
             file_id: Telegram file ID
             file_unique_id: Telegram unique file ID
             chat_id: Chat ID where the file was sent
@@ -158,19 +158,19 @@ class MediaFiles(Base):
             },
         )
 
-        await session.execute(stmt)
+        await db_conn.execute(stmt)
 
     @classmethod
     @with_retry()
-    async def update_last_accessed(cls, session: AsyncSession, media_ids: list[int]) -> None:
+    async def update_last_accessed(cls, db_conn: AsyncSession, media_ids: list[int]) -> None:
         """Update last_accessed_at timestamp for given media IDs.
 
         Args:
-            session: Database session
+            db_conn: Database connection
             media_ids: List of media record IDs to update
         """
         if not media_ids:
             return
 
         stmt = update(cls).where(cls.id.in_(media_ids)).values(last_accessed_at=datetime.now(UTC))
-        await session.execute(stmt)
+        await db_conn.execute(stmt)

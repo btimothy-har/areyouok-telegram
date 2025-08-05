@@ -42,7 +42,7 @@ class LLMUsage(Base):
     @with_retry()
     async def track_pydantic_usage(
         cls,
-        session: AsyncSession,
+        db_conn: AsyncSession,
         chat_id: str,
         session_id: str,
         agent: pydantic_ai.Agent,
@@ -75,7 +75,7 @@ class LLMUsage(Base):
                 output_tokens=data.response_tokens,
             )
 
-            result = await session.execute(stmt)
+            result = await db_conn.execute(stmt)
 
         # Catch exceptions here to avoid breaking application flow
         # This is a best-effort logging, so we log the exception but don't raise it

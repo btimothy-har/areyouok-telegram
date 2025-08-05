@@ -80,49 +80,49 @@ class Sessions(Base):
             self.last_bot_activity = max(self.last_bot_activity, timestamp) if self.last_bot_activity else timestamp
 
     @with_retry()
-    async def close_session(self, session: AsyncSession, timestamp: datetime) -> None:
+    async def close_session(self, db_conn: AsyncSession, timestamp: datetime) -> None:
         """Close a session by setting session_end and message_count."""
-        messages = await self.get_messages(session)
+        messages = await self.get_messages(db_conn)
         self.session_end = timestamp
         self.message_count = len(messages)
 
     @with_retry()
-    async def get_messages(self, session: AsyncSession) -> list[telegram.Message]:
+    async def get_messages(self, db_conn: AsyncSession) -> list[telegram.Message]:
         """Retrieve all messages from this session."""
         # Determine the end time - either session_end or current time for active sessions
         end_time = self.session_end if self.session_end else datetime.now(UTC)
 
         return await Messages.retrieve_by_chat(
-            session=session, chat_id=self.chat_id, from_time=self.session_start, to_time=end_time
+            db_conn=db_conn, chat_id=self.chat_id, from_time=self.session_start, to_time=end_time
         )
 
     @classmethod
     @with_retry()
-    async def get_active_session(cls, session: AsyncSession, chat_id: str) -> Optional["Sessions"]:
+    async def get_active_session(cls, db_conn: AsyncSession, chat_id: str) -> Optional["Sessions"]:
         """Get the active (non-closed) session for a chat."""
         stmt = select(cls).where(cls.chat_id == chat_id).where(cls.session_end.is_(None))
 
-        result = await session.execute(stmt)
+        result = await db_conn.execute(stmt)
         return result.scalar_one_or_none()
 
     @classmethod
     @with_retry()
-    async def get_all_active_sessions(cls, session: AsyncSession) -> list["Sessions"]:
+    async def get_all_active_sessions(cls, db_conn: AsyncSession) -> list["Sessions"]:
         """Get all active (non-closed) sessions."""
         stmt = select(cls).where(cls.session_end.is_(None))  # Only active sessions
 
-        result = await session.execute(stmt)
+        result = await db_conn.execute(stmt)
         return list(result.scalars().all())
 
     @classmethod
     @with_retry()
     async def get_all_inactive_sessions(
-        cls, session: AsyncSession, from_dt: datetime, to_dt: datetime
+        cls, db_conn: AsyncSession, from_dt: datetime, to_dt: datetime
     ) -> list["Sessions"]:
         """Get all inactive (closed) sessions that ended within the given time range.
 
         Args:
-            session: The database session to use for the query.
+            db_conn: The database connection to use for the query.
             from_dt: The start of the time range (inclusive).
             to_dt: The end of the time range (exclusive).
 
@@ -136,12 +136,12 @@ class Sessions(Base):
             .where(cls.session_end < to_dt)
         )
 
-        result = await session.execute(stmt)
+        result = await db_conn.execute(stmt)
         return list(result.scalars().all())
 
     @classmethod
     @with_retry()
-    async def create_session(cls, session: AsyncSession, chat_id: str, timestamp: datetime) -> "Sessions":
+    async def create_session(cls, db_conn: AsyncSession, chat_id: str, timestamp: datetime) -> "Sessions":
         """Create a new session for a chat."""
         session_key = cls.generate_session_key(chat_id, timestamp)
 
@@ -151,5 +151,5 @@ class Sessions(Base):
             session_start=timestamp,
         )
 
-        session.add(new_session)
+        db_conn.add(new_session)
         return new_session

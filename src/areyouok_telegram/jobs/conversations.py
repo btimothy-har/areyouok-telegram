@@ -101,7 +101,7 @@ class ConversationJob:
                             await self._compress_session_context(conn, chat_session)
 
                             await chat_session.close_session(
-                                session=conn,
+                                db_conn=conn,
                                 timestamp=self._run_timestamp,
                             )
 
@@ -113,7 +113,7 @@ class ConversationJob:
 
     async def _get_chat_context(self, conn) -> list[pydantic_ai.messages.ModelMessage]:
         last_context = await Context.retrieve_context_by_chat(
-            session=conn,
+            db_conn=conn,
             chat_id=self.chat_id,
             ctype="session",
         )
@@ -127,14 +127,10 @@ class ConversationJob:
             pydantic_ai.messages.ModelResponse(
                 parts=[
                     pydantic_ai.messages.TextPart(
-                        content=json.dumps(
-                            {
-                                "timestamp": (
-                                    f"{(self._run_timestamp - context.created_at).total_seconds()} seconds ago"
-                                ),
-                                "content": f"Summary of prior conversation:\n\n{context.content}",
-                            }
-                        ),
+                        content=json.dumps({
+                            "timestamp": (f"{(self._run_timestamp - context.created_at).total_seconds()} seconds ago"),
+                            "content": f"Summary of prior conversation:\n\n{context.content}",
+                        }),
                         part_kind="text",
                     )
                 ],
@@ -166,7 +162,7 @@ class ConversationJob:
             # Convert messages to model messages
             session_messages = [
                 await convert_telegram_message_to_model_message(
-                    conn=conn,
+                    db_conn=conn,
                     message=msg,
                     ts_reference=self._run_timestamp,
                     is_user=msg.from_user and msg.from_user.id != self.bot_id,
@@ -234,7 +230,7 @@ class ConversationJob:
 
                 if response_message:
                     await Messages.new_or_update(
-                        session=conn,
+                        db_conn=conn,
                         user_id=str(context.bot.id),  # Bot's user ID as the sender
                         chat_id=self.chat_id,
                         message=response_message,
@@ -246,15 +242,15 @@ class ConversationJob:
                             is_user=False,  # This is a bot response
                         )
                     return True
-            finally:
-                # Track LLM usage for this chat
-                await LLMUsage.track_pydantic_usage(
-                    session=conn,
-                    chat_id=self.chat_id,
-                    session_id=chat_session.session_key,
-                    agent=chat_agent,
-                    data=agent_run_payload.usage(),
-                )
+
+            # Track LLM usage for this chat
+            await LLMUsage.track_pydantic_usage(
+                db_conn=conn,
+                chat_id=self.chat_id,
+                session_id=chat_session.session_key,
+                agent=chat_agent,
+                data=agent_run_payload.usage(),
+            )
 
         return False
 
@@ -278,7 +274,7 @@ class ConversationJob:
         """
 
         context = await Context.get_by_session_id(
-            session=conn,
+            db_conn=conn,
             session_id=chat_session.session_key,
             ctype="session",
         )
@@ -297,7 +293,7 @@ class ConversationJob:
         # Convert messages to model messages
         session_messages = [
             await convert_telegram_message_to_model_message(
-                conn=conn,
+                db_conn=conn,
                 message=msg,
                 ts_reference=self._run_timestamp,
                 is_user=msg.from_user and msg.from_user.id != self.bot_id,
@@ -316,7 +312,7 @@ class ConversationJob:
             return
 
         await Context.new_or_update(
-            session=conn,
+            db_conn=conn,
             chat_id=self.chat_id,
             session_id=chat_session.session_key,
             ctype="session",
@@ -324,7 +320,7 @@ class ConversationJob:
         )
 
         await LLMUsage.track_pydantic_usage(
-            session=conn,
+            db_conn=conn,
             chat_id=self.chat_id,
             session_id=chat_session.session_key,
             agent=context_compression_agent,
@@ -347,7 +343,7 @@ async def schedule_conversation_job(context: ContextTypes.DEFAULT_TYPE, chat_id:
         # Check if a job already exists for this chat
         existing_jobs = context.job_queue.get_jobs_by_name(processor.name)
         if existing_jobs:
-            logfire.debug(f"Job already scheduled for chat {chat_id}, skipping.")
+            logfire.debug(f"Job already scheduled for chat {str(chat_id)}, skipping.")
             return
 
         # Schedule the job to run once after the specified delay

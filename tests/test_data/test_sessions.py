@@ -574,7 +574,7 @@ class TestSessionsGetMessages:
 
             # Verify the correct time range was used
             mock_retrieve.assert_called_once_with(
-                session=async_database_connection,
+                db_conn=async_database_connection,
                 chat_id="123456",
                 from_time=datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC),
                 to_time=datetime(2025, 1, 15, 11, 0, 0, tzinfo=UTC),  # Current time for active session
@@ -602,7 +602,7 @@ class TestSessionsGetMessages:
 
             # Verify the correct time range was used
             mock_retrieve.assert_called_once_with(
-                session=async_database_connection,
+                db_conn=async_database_connection,
                 chat_id="123456",
                 from_time=datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC),
                 to_time=datetime(2025, 1, 15, 10, 45, 0, tzinfo=UTC),  # Session end time

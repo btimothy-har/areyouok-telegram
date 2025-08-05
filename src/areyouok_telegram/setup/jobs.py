@@ -15,9 +15,9 @@ from areyouok_telegram.jobs import schedule_conversation_job
 
 async def restore_active_sessions(ctx: Application | ContextTypes.DEFAULT_TYPE):
     """Setup conversation jobs for active chats on startup."""
-    async with async_database() as session:
+    async with async_database() as db_conn:
         # Fetch all active sessions
-        active_sessions = await Sessions.get_all_active_sessions(session)
+        active_sessions = await Sessions.get_all_active_sessions(db_conn)
 
         if not active_sessions:
             logfire.info("No active sessions found, skipping conversation job setup.")

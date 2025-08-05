@@ -4,12 +4,12 @@ import pydantic_ai
 from pydantic_ai.models.anthropic import AnthropicModel
 from pydantic_ai.models.fallback import FallbackModel
 from pydantic_ai.models.openai import OpenAIModel
+from sqlalchemy.ext.asyncio import AsyncSession
 from telegram.ext import ContextTypes
 
 from areyouok_telegram.data import LLMUsage
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data import async_database
-from sqlalchemy.ext.asyncio import AsyncSession
 from areyouok_telegram.llms.analytics import ContentCheckDependencies
 from areyouok_telegram.llms.analytics import ContentCheckResponse
 from areyouok_telegram.llms.analytics import content_check_agent
@@ -138,7 +138,7 @@ async def validate_agent_response(
 ) -> AgentResponse:
     if data.response_type == "ReactionResponse":
         message, _ = await Messages.retrieve_message_by_id(
-            session=ctx.deps.db_connection,
+            db_conn=ctx.deps.db_connection,
             message_id=data.react_to_message_id,
             chat_id=ctx.deps.tg_chat_id,
         )

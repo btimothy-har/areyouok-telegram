@@ -30,7 +30,7 @@ class Chats(Base):
 
     @classmethod
     @with_retry()
-    async def new_or_update(cls, session: AsyncSession, chat: telegram.Chat):
+    async def new_or_update(cls, db_conn: AsyncSession, chat: telegram.Chat):
         """Insert or update a chat in the database."""
         now = datetime.now(UTC)
 
@@ -52,4 +52,4 @@ class Chats(Base):
                 "updated_at": stmt.excluded.updated_at,
             },
         )
-        await session.execute(stmt)
+        await db_conn.execute(stmt)

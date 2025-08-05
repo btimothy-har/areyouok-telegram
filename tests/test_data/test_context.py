@@ -30,7 +30,7 @@ class TestContextNewOrUpdate:
 
         # Call the method
         await Context.new_or_update(
-            session=async_database_connection,
+            db_conn=async_database_connection,
             chat_id=chat_id,
             session_id=session_id,
             ctype=ctype,
@@ -55,7 +55,7 @@ class TestContextNewOrUpdate:
         # Should raise InvalidContextTypeError
         with pytest.raises(InvalidContextTypeError) as exc_info:
             await Context.new_or_update(
-                session=async_database_connection,
+                db_conn=async_database_connection,
                 chat_id=chat_id,
                 session_id=session_id,
                 ctype=ctype,
@@ -83,7 +83,7 @@ class TestContextNewOrUpdate:
 
         # Should not raise error even with integer chat_id
         await Context.new_or_update(
-            session=async_database_connection,
+            db_conn=async_database_connection,
             chat_id=chat_id,
             session_id=session_id,
             ctype=ctype,
@@ -105,7 +105,7 @@ class TestContextNewOrUpdate:
         # Test each valid context type
         for ctype in VALID_CONTEXT_TYPES:
             await Context.new_or_update(
-                session=async_database_connection,
+                db_conn=async_database_connection,
                 chat_id=chat_id,
                 session_id=session_id,
                 ctype=ctype,
@@ -146,7 +146,7 @@ class TestContextRetrieveByChat:
 
         # Call the method
         result = await Context.retrieve_context_by_chat(
-            session=async_database_connection,
+            db_conn=async_database_connection,
             chat_id=chat_id,
         )
 
@@ -179,7 +179,7 @@ class TestContextRetrieveByChat:
 
         # Call the method
         result = await Context.retrieve_context_by_chat(
-            session=async_database_connection,
+            db_conn=async_database_connection,
             chat_id=chat_id,
             ctype=ctype,
         )
@@ -215,7 +215,7 @@ class TestContextRetrieveByChat:
 
         # Call the method
         result = await Context.retrieve_context_by_chat(
-            session=async_database_connection,
+            db_conn=async_database_connection,
             chat_id=chat_id,
             limit=limit,
         )
@@ -240,7 +240,7 @@ class TestContextRetrieveByChat:
 
         # Call the method
         result = await Context.retrieve_context_by_chat(
-            session=async_database_connection,
+            db_conn=async_database_connection,
             chat_id=chat_id,
         )
 
@@ -256,7 +256,7 @@ class TestContextRetrieveByChat:
         # Should raise InvalidContextTypeError
         with pytest.raises(InvalidContextTypeError) as exc_info:
             await Context.retrieve_context_by_chat(
-                session=async_database_connection,
+                db_conn=async_database_connection,
                 chat_id=chat_id,
                 ctype=ctype,
             )
@@ -288,7 +288,7 @@ class TestContextRetrieveByChat:
 
         # Call the method without specifying limit
         result = await Context.retrieve_context_by_chat(
-            session=async_database_connection,
+            db_conn=async_database_connection,
             chat_id=chat_id,
         )
 
@@ -377,7 +377,7 @@ class TestContextModel:
 
         # Call the method
         result = await Context.get_by_session_id(
-            session=async_database_connection,
+            db_conn=async_database_connection,
             session_id=session_id,
         )
 
@@ -410,7 +410,7 @@ class TestContextModel:
 
         # Call the method
         result = await Context.get_by_session_id(
-            session=async_database_connection,
+            db_conn=async_database_connection,
             session_id=session_id,
             ctype=ctype,
         )
@@ -427,7 +427,7 @@ class TestContextModel:
         """Test get_by_session_id raises error for invalid type."""
         with pytest.raises(InvalidContextTypeError) as exc_info:
             await Context.get_by_session_id(
-                session=async_database_connection,
+                db_conn=async_database_connection,
                 session_id="session-123",
                 ctype="invalid_type",
             )
@@ -448,7 +448,7 @@ class TestContextModel:
 
         # Call the method
         result = await Context.get_by_session_id(
-            session=async_database_connection,
+            db_conn=async_database_connection,
             session_id=session_id,
         )
 
@@ -480,7 +480,7 @@ class TestContextModel:
 
         # Call the method
         result = await Context.get_by_chat_id(
-            session=async_database_connection,
+            db_conn=async_database_connection,
             chat_id=chat_id,
         )
 
@@ -513,7 +513,7 @@ class TestContextModel:
 
         # Call the method
         result = await Context.get_by_chat_id(
-            session=async_database_connection,
+            db_conn=async_database_connection,
             chat_id=chat_id,
             ctype=ctype,
         )
@@ -530,7 +530,7 @@ class TestContextModel:
         """Test get_by_chat_id raises error for invalid type."""
         with pytest.raises(InvalidContextTypeError) as exc_info:
             await Context.get_by_chat_id(
-                session=async_database_connection,
+                db_conn=async_database_connection,
                 chat_id="123456",
                 ctype="invalid_type",
             )
@@ -551,7 +551,7 @@ class TestContextModel:
 
         # Call the method
         result = await Context.get_by_chat_id(
-            session=async_database_connection,
+            db_conn=async_database_connection,
             chat_id=chat_id,
         )
 

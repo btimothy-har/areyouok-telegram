@@ -25,17 +25,17 @@ async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_
         chat_id=update.effective_chat.id,
         user_id=update.effective_user.id,
     ):
-        async with async_database() as session:
+        async with async_database() as db_conn:
             # Save the message
             with logfire.span(
                 "Saving new message to database.",
                 _span_name="handlers.messages.on_new_message.save_message",
             ):
                 await Messages.new_or_update(
-                    session, user_id=update.effective_user.id, chat_id=update.effective_chat.id, message=update.message
+                    db_conn, user_id=update.effective_user.id, chat_id=update.effective_chat.id, message=update.message
                 )
 
-            extract_media = asyncio.create_task(extract_media_from_telegram_message(session, update.message))
+            extract_media = asyncio.create_task(extract_media_from_telegram_message(db_conn, update.message))
 
             with logfire.span(
                 "Logging session activity.",
@@ -43,7 +43,7 @@ async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_
             ):
                 # Handle session management
                 chat_id = str(update.effective_chat.id)
-                active_session = await Sessions.get_active_session(session, chat_id)
+                active_session = await Sessions.get_active_session(db_conn, chat_id)
 
                 if active_session:
                     # Record new user message
@@ -51,7 +51,7 @@ async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_
                     logfire.info("Session activity recorded.")
                 else:
                     # Create new session and record the first message
-                    new_session = await Sessions.create_session(session, chat_id, update.message.date)
+                    new_session = await Sessions.create_session(db_conn, chat_id, update.message.date)
                     await new_session.new_message(update.message.date, is_user=True)
                     logfire.info("New session started.")
 
@@ -69,28 +69,28 @@ async def on_edit_message(update: telegram.Update, context: ContextTypes.DEFAULT
         chat_id=update.effective_chat.id,
         user_id=update.effective_user.id,
     ):
-        async with async_database() as session:
+        async with async_database() as db_conn:
             # Save the edited message
             with logfire.span(
                 "Saving edited message to database.",
                 _span_name="handlers.messages.on_edit_message.save_message",
             ):
                 await Messages.new_or_update(
-                    session,
+                    db_conn,
                     user_id=update.effective_user.id,
                     chat_id=update.effective_chat.id,
                     message=update.edited_message,
                 )
 
             # Handle session management for edits
-            active_session = await Sessions.get_active_session(session, str(update.effective_chat.id))
+            active_session = await Sessions.get_active_session(db_conn, str(update.effective_chat.id))
 
             if not active_session:
                 logfire.info("No active session found for edited message, skipping session activity.")
                 return
 
             # Only extract media if there's an active session
-            extract_media = asyncio.create_task(extract_media_from_telegram_message(session, update.edited_message))
+            extract_media = asyncio.create_task(extract_media_from_telegram_message(db_conn, update.edited_message))
 
             with logfire.span(
                 "Logging session activity.",
@@ -123,14 +123,14 @@ async def on_message_react(update: telegram.Update, context: ContextTypes.DEFAUL
         message_id=update.message_reaction.message_id,
         chat_id=update.effective_chat.id,
     ):
-        async with async_database() as session:
+        async with async_database() as db_conn:
             # Save the reaction
             with logfire.span(
                 "Saving message reaction to database.",
                 _span_name="handlers.messages.on_message_react.save_reaction",
             ):
                 await Messages.new_or_update(
-                    session,
+                    db_conn,
                     user_id=update.effective_user.id,
                     chat_id=update.effective_chat.id,
                     message=update.message_reaction,
@@ -141,7 +141,7 @@ async def on_message_react(update: telegram.Update, context: ContextTypes.DEFAUL
                 _span_name="handlers.messages.on_message_react.log_session_activity",
             ):
                 # Handle session management for reactions
-                active_session = await Sessions.get_active_session(session, str(update.effective_chat.id))
+                active_session = await Sessions.get_active_session(db_conn, str(update.effective_chat.id))
 
                 if not active_session:
                     logfire.info("No active session found for message reaction, skipping session activity.")

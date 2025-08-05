@@ -6,11 +6,11 @@ import logfire
 import pydantic
 import telegram
 import tenacity
+from sqlalchemy.ext.asyncio import AsyncSession
 from telegram.constants import ReactionEmoji
 from telegram.ext import ContextTypes
 
 from areyouok_telegram.data import Messages
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 def retry_response():

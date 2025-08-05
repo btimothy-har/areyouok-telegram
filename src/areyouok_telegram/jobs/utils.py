@@ -11,7 +11,7 @@ from areyouok_telegram.llms.utils import telegram_message_to_dict
 
 
 async def convert_telegram_message_to_model_message(
-    conn, message: MessageTypes, ts_reference: datetime | None = None, *, is_user: bool = False
+    db_conn, message: MessageTypes, ts_reference: datetime | None = None, *, is_user: bool = False
 ) -> pydantic_ai.messages.ModelMessage:
     """Helper function to convert a Telegram message/reaction to a model request or response."""
     ts_reference = ts_reference or datetime.now(UTC)
@@ -20,15 +20,15 @@ async def convert_telegram_message_to_model_message(
         return await _telegram_reaction_to_model_message(message, ts_reference, is_user=is_user)
 
     if isinstance(message, telegram.Message):
-        return await _telegram_message_to_model_message(conn, message, ts_reference, is_user=is_user)
+        return await _telegram_message_to_model_message(db_conn, message, ts_reference, is_user=is_user)
 
 
 async def _telegram_message_to_model_message(
-    conn, message: telegram.Message, ts_reference: datetime, *, is_user: bool = False
+    db_conn, message: telegram.Message, ts_reference: datetime, *, is_user: bool = False
 ) -> pydantic_ai.messages.ModelMessage:
     """Convert a Telegram message to a model request or response."""
     media_files = await MediaFiles.get_by_message_id(
-        conn, chat_id=str(message.chat.id), message_id=str(message.message_id)
+        db_conn, chat_id=str(message.chat.id), message_id=str(message.message_id)
     )
     msg_dict = telegram_message_to_dict(message, ts_reference)
 
@@ -68,7 +68,7 @@ async def _telegram_message_to_model_message(
 
 
 async def get_unsupported_media_from_messages(
-    conn, messages: list[telegram.Message], since_timestamp: datetime | None = None
+    db_conn, messages: list[telegram.Message], since_timestamp: datetime | None = None
 ) -> list[str]:
     """Get list of unsupported media types from messages
 
@@ -76,7 +76,7 @@ async def get_unsupported_media_from_messages(
     We "soft pass" audio as we transcribe audio content before sending to the model.
 
     Args:
-        conn: Database connection
+        db_conn: Database connection
         messages: List of telegram messages to check
         since_timestamp: Only check messages after this timestamp
 
@@ -95,7 +95,7 @@ async def get_unsupported_media_from_messages(
             continue
 
         media_files = await MediaFiles.get_by_message_id(
-            conn, chat_id=str(message.chat.id), message_id=str(message.message_id)
+            db_conn, chat_id=str(message.chat.id), message_id=str(message.message_id)
         )
 
         for m in media_files:

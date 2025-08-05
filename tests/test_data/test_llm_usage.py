@@ -22,7 +22,7 @@ async def test_track_pydantic_usage(async_database_connection):
 
     # Track usage
     result = await LLMUsage.track_pydantic_usage(
-        session=async_database_connection,
+        db_conn=async_database_connection,
         chat_id="test_chat_123",
         session_id="test_session_456",
         agent=mock_agent,
@@ -57,7 +57,7 @@ async def test_track_pydantic_usage_fallback_model(async_database_connection):
 
     # Track usage
     result = await LLMUsage.track_pydantic_usage(
-        session=async_database_connection,
+        db_conn=async_database_connection,
         chat_id="test_chat_fallback",
         session_id="test_session_fallback",
         agent=mock_agent,
@@ -86,7 +86,7 @@ async def test_track_pydantic_usage_model_without_provider(async_database_connec
 
     # Track usage
     result = await LLMUsage.track_pydantic_usage(
-        session=async_database_connection,
+        db_conn=async_database_connection,
         chat_id="test_chat_no_provider",
         session_id="test_session_no_provider",
         agent=mock_agent,
@@ -114,7 +114,7 @@ async def test_track_usage_error_handling(async_database_connection):
 
     # This should not raise an exception
     result = await LLMUsage.track_pydantic_usage(
-        session=async_database_connection,
+        db_conn=async_database_connection,
         chat_id="test_chat_error",
         session_id="test_session_error",
         agent=mock_agent,

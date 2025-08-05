@@ -218,7 +218,7 @@ class TestSessionCleanupJob:
 
             # Should use the connection for message retrieval
             mock_retrieve.assert_called_once_with(
-                session=mock_conn,
+                db_conn=mock_conn,
                 chat_id="123456",
                 to_time=session.session_end,
             )
