@@ -988,7 +988,7 @@ class TestConversationJob:
                     # Extract just the content part after "Summary of prior conversation:\n\n"
                     content = json_content["content"]
                     if content.startswith("Summary of prior conversation:\n\n"):
-                        content = content[len("Summary of prior conversation:\n\n"):]
+                        content = content[len("Summary of prior conversation:\n\n") :]
                     context_contents.append(content)
 
             # Should be sorted by created_at
@@ -1036,7 +1036,10 @@ class TestConversationJob:
 
             # Mock multiple unsupported media types with duplicates (no audio since it's now supported)
             mock_get_unsupported_media.return_value = [
-                "video/mp4", "application/msword", "video/webm", "application/msword"
+                "video/mp4",
+                "application/msword",
+                "video/webm",
+                "application/msword",
             ]
 
             result = await mock_job._generate_response(conn, context, mock_session)
