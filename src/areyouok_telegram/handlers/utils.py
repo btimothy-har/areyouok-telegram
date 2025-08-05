@@ -1,6 +1,7 @@
 import asyncio
 from io import BytesIO
 
+import logfire
 import openai
 import telegram
 from pydub import AudioSegment
@@ -78,71 +79,81 @@ async def extract_media_from_telegram_message(
         int: Number of media files processed
     """
     media_files = []
-    if message.photo:
-        photo_file = await message.photo[-1].get_file()
-        media_files.append(photo_file)
 
-    if message.sticker:
-        sticker_file = await message.sticker.get_file()
-        media_files.append(sticker_file)
+    with logfire.span("Extracting media from message", message_id=message.message_id, chat_id=message.chat.id):
+        if message.photo:
+            photo_file = await message.photo[-1].get_file()
+            media_files.append(photo_file)
 
-    if message.document:
-        document_file = await message.document.get_file()
-        media_files.append(document_file)
+        if message.sticker:
+            sticker_file = await message.sticker.get_file()
+            media_files.append(sticker_file)
 
-    if message.animation:
-        animation_file = await message.animation.get_file()
-        media_files.append(animation_file)
+        if message.document:
+            document_file = await message.document.get_file()
+            media_files.append(document_file)
 
-    if message.video:
-        video_file = await message.video.get_file()
-        media_files.append(video_file)
+        if message.animation:
+            animation_file = await message.animation.get_file()
+            media_files.append(animation_file)
 
-    if message.video_note:
-        video_note_file = await message.video_note.get_file()
-        media_files.append(video_note_file)
+        if message.video:
+            video_file = await message.video.get_file()
+            media_files.append(video_file)
 
-    if message.voice:
-        voice_file = await message.voice.get_file()
-        media_files.append(voice_file)
+        if message.video_note:
+            video_note_file = await message.video_note.get_file()
+            media_files.append(video_note_file)
 
-    processed_count = 0
-    for file in media_files:
-        # Download file content as bytes
-        content_bytes = await file.download_as_bytearray()
+        if message.voice:
+            voice_file = await message.voice.get_file()
+            media_files.append(voice_file)
 
-        # Pass individual attributes to create_file
-        await MediaFiles.create_file(
-            session=session,
-            file_id=file.file_id,
-            file_unique_id=file.file_unique_id,
-            chat_id=str(message.chat.id),
-            message_id=str(message.id),
-            file_size=file.file_size,
-            content_bytes=bytes(content_bytes),
+        processed_count = 0
+        for file in media_files:
+            # Download file content as bytes
+            content_bytes = await file.download_as_bytearray()
+
+            # Pass individual attributes to create_file
+            await MediaFiles.create_file(
+                session=session,
+                file_id=file.file_id,
+                file_unique_id=file.file_unique_id,
+                chat_id=str(message.chat.id),
+                message_id=str(message.id),
+                file_size=file.file_size,
+                content_bytes=bytes(content_bytes),
+            )
+            processed_count += 1
+
+            # For voice messages, also create a transcription
+            if message.voice and file.file_unique_id == message.voice.file_unique_id:
+                logfire.debug("Found audio, transcribing...", file_id=file.file_id, chat_id=message.chat.id)
+                try:
+                    # Transcribe the voice message in a separate thread
+                    transcription = await asyncio.to_thread(transcribe_voice_data_sync, bytes(content_bytes))
+
+                    # Store the transcription as a text file
+                    transcription_bytes = transcription.encode("utf-8")
+                    await MediaFiles.create_file(
+                        session=session,
+                        file_id=f"{file.file_id}_transcription",
+                        file_unique_id=f"{file.file_unique_id}_transcription",
+                        chat_id=str(message.chat.id),
+                        message_id=str(message.id),
+                        file_size=len(transcription_bytes),
+                        content_bytes=transcription_bytes,
+                    )
+                    processed_count += 1
+                except VoiceNotProcessableError:
+                    # If transcription fails, we still have the original voice file
+                    pass
+
+        logfire.debug(
+            f"Processed {processed_count} media files from message",
+            message_id=message.message_id,
+            chat_id=message.chat.id,
+            processed_count=processed_count,
         )
-        processed_count += 1
-
-        # For voice messages, also create a transcription
-        if message.voice and file.file_unique_id == message.voice.file_unique_id:
-            try:
-                # Transcribe the voice message in a separate thread
-                transcription = await asyncio.to_thread(transcribe_voice_data_sync, bytes(content_bytes))
-
-                # Store the transcription as a text file
-                transcription_bytes = transcription.encode("utf-8")
-                await MediaFiles.create_file(
-                    session=session,
-                    file_id=f"{file.file_id}_transcription",
-                    file_unique_id=f"{file.file_unique_id}_transcription",
-                    chat_id=str(message.chat.id),
-                    message_id=str(message.id),
-                    file_size=len(transcription_bytes),
-                    content_bytes=transcription_bytes,
-                )
-                processed_count += 1
-            except VoiceNotProcessableError:
-                # If transcription fails, we still have the original voice file
-                pass
 
     return processed_count
