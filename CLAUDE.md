@@ -8,8 +8,7 @@ This project uses `uv` for Python package management. All commands should be run
 
 - **Setup dependencies**: `make up` or `uv sync`
 - **Run the application**: `make run` or `uv run -m areyouok_telegram.main`
-- **Run tests**: `make test` or `uv run pytest .`
-- **Run tests with coverage**: `make test-cov` or `uv run pytest --cov=areyouok_telegram --cov-report=term-missing .`
+- **Run tests (with coverage by default)**: `make test` or `uv run pytest .` or `uv run pytest --cov=areyouok_telegram --cov-report=term-missing .`
 - **Lint code**: `make lint` or `uv run ruff check . && uv run ruff format --check .`
 - **Fix linting issues**: `make fix` or `uv run ruff check --fix . && uv run ruff format .`
 
