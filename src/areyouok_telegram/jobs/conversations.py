@@ -84,29 +84,28 @@ class ConversationJob:
                     await self._generate_response(conn, context, chat_session)
                     return
 
-                inactivity_duration = self._run_timestamp - chat_session.last_user_activity
-
                 # If the last user activity was more than an hour ago, stop the job
-                if chat_session.last_user_activity and inactivity_duration > timedelta(
-                    seconds=60 * 60  # 1 hour
-                ):
-                    with logfire.span(
-                        "Terminating chat session due to inactivity.",
-                        _span_name="jobs.conversations.stop_inactive_session",
-                        chat_id=self.chat_id,
-                        session_key=chat_session.session_id,
-                        last_user_activity=chat_session.last_user_activity,
-                        run_timestamp=self._run_timestamp,
-                        inactivity_duration=inactivity_duration.total_seconds(),
-                    ):
-                        await self._compress_session_context(conn, chat_session)
+                if chat_session.last_user_activity:
+                    inactivity_duration = self._run_timestamp - chat_session.last_user_activity
 
-                        await chat_session.close_session(
-                            session=conn,
-                            timestamp=self._run_timestamp,
-                        )
+                    if inactivity_duration > timedelta(seconds=60 * 60):  # 1 hour
+                        with logfire.span(
+                            "Terminating chat session due to inactivity.",
+                            _span_name="jobs.conversations.stop_inactive_session",
+                            chat_id=self.chat_id,
+                            session_key=chat_session.session_id,
+                            last_user_activity=chat_session.last_user_activity,
+                            run_timestamp=self._run_timestamp,
+                            inactivity_duration=inactivity_duration.total_seconds(),
+                        ):
+                            await self._compress_session_context(conn, chat_session)
 
-                        await self._stop(context)
+                            await chat_session.close_session(
+                                session=conn,
+                                timestamp=self._run_timestamp,
+                            )
+
+                            await self._stop(context)
 
     async def _get_active_session(self, conn) -> Sessions | None:
         """Retrieve the active session for this chat."""

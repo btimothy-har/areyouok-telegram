@@ -155,12 +155,11 @@ async def extract_media_from_telegram_message(
                             content_bytes=transcription_bytes,
                         )
                         processed_count += 1
+                        logfire.info(f"Transcription is {len(transcription)} characters long.", chat_id=message.chat.id)
 
                     except VoiceNotProcessableError:
                         # If transcription fails, we still have the original voice file
                         pass
-
-                    logfire.info(f"Transcription is {len(transcription)} characters long.", chat_id=message.chat.id)
 
         logfire.info(
             f"Processed {processed_count} media files from message",

@@ -82,19 +82,20 @@ async def on_edit_message(update: telegram.Update, context: ContextTypes.DEFAULT
                     message=update.edited_message,
                 )
 
+            # Handle session management for edits
+            active_session = await Sessions.get_active_session(session, str(update.effective_chat.id))
+
+            if not active_session:
+                logfire.info("No active session found for edited message, skipping session activity.")
+                return
+
+            # Only extract media if there's an active session
             extract_media = asyncio.create_task(extract_media_from_telegram_message(session, update.edited_message))
 
             with logfire.span(
                 "Logging session activity.",
                 _span_name="handlers.messages.on_edit_message.log_session_activity",
             ):
-                # Handle session management for edits
-                active_session = await Sessions.get_active_session(session, str(update.effective_chat.id))
-
-                if not active_session:
-                    logfire.info("No active session found for edited message, skipping session activity.")
-                    return
-
                 # Only record user activity if the original message was sent after session start
                 if update.edited_message.date >= active_session.session_start:
                     await active_session.new_activity(
@@ -119,7 +120,6 @@ async def on_message_react(update: telegram.Update, context: ContextTypes.DEFAUL
     with logfire.span(
         "Message reaction received.",
         _span_name="handlers.messages.on_message_react",
-        message_reaction_id=update.message_reaction.message_reaction_id,
         message_id=update.message_reaction.message_id,
         chat_id=update.effective_chat.id,
     ):
