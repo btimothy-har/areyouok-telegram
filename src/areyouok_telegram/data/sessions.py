@@ -35,6 +35,11 @@ class Sessions(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
 
     @property
+    def session_id(self) -> str:
+        """Return the unique session ID, which is the session key."""
+        return self.session_key
+
+    @property
     def has_bot_responded(self) -> bool:
         """Check if the bot has responded to the latest updates in the session."""
         if not self.last_bot_activity:
