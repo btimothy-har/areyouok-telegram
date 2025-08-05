@@ -16,11 +16,14 @@ class ContentCheckDependencies:
     check_content_exists: str
 
 
-class CheckResponse(pydantic.BaseModel):
+class ContentCheckResponse(pydantic.BaseModel):
     """Model for context template used in session compression."""
 
     check_pass: bool = pydantic.Field(
         description="Indicates whether the content check passed.",
+    )
+    feedback: str = pydantic.Field(
+        description="Your feedback on the content check, including any suggestions for improvement.",
     )
 
 
@@ -41,7 +44,7 @@ agent_models = FallbackModel(
 
 content_check_agent = pydantic_ai.Agent(
     model=agent_models,
-    output_type=CheckResponse,
+    output_type=ContentCheckResponse,
     name="content_check_agent",
     end_strategy="exhaustive",
     instrument=pydantic_ai_instrumentation,
@@ -56,4 +59,7 @@ Validate that the provided message adheres to the following instruction:
 "{ctx.deps.check_content_exists}"
 
 The message need not be explicitly adherent, as long as it implies a similar meaning or intent.
+
+If the message does not adhere to the instruction, provide feedback on how it can be improved.
+If the message adheres to the instruction, return "No Feedback Needed" as feedback.
     """

@@ -11,6 +11,7 @@ from areyouok_telegram.data import Messages
 from areyouok_telegram.data import async_database_session
 from areyouok_telegram.data.connection import AsyncSessionLocal
 from areyouok_telegram.llms.analytics import ContentCheckDependencies
+from areyouok_telegram.llms.analytics import ContentCheckResponse
 from areyouok_telegram.llms.analytics import content_check_agent
 from areyouok_telegram.llms.chat.exceptions import InvalidMessageError
 from areyouok_telegram.llms.chat.exceptions import ReactToSelfError
@@ -30,7 +31,7 @@ class ChatAgentDependencies:
     tg_session_id: str
     last_response_type: str
     db_connection: AsyncSessionLocal
-    status_message: str | None = None
+    instruction: str | None = None
 
 
 model_settings = pydantic_ai.settings.ModelSettings(
@@ -123,7 +124,7 @@ You last decided to: {ctx.deps.last_response_type}
 </last_response>
 
 <important_message_for_user>
-{ctx.deps.status_message if ctx.deps.status_message else "None"}
+{ctx.deps.instruction if ctx.deps.instruction else "None"}
 
 If there is an important message for the user (not "None"), you MUST acknowledge it in your response to the user \
     in a supportive and understanding way.
@@ -148,16 +149,19 @@ async def validate_agent_response(
         if message.from_user.id == ctx.deps.tg_context.bot.id:
             raise ReactToSelfError(data.react_to_message_id)
 
-    if ctx.deps.status_message:
+    if ctx.deps.instruction:
         if data.response_type != "TextResponse":
-            raise UnacknowledgedImportantMessageError(ctx.deps.status_message)
+            raise UnacknowledgedImportantMessageError(ctx.deps.instruction)
+
         else:
-            content_check = await content_check_agent.run(
+            content_check_run = await content_check_agent.run(
                 user_prompt=data.message_text,
                 deps=ContentCheckDependencies(
-                    check_content_exists=ctx.deps.status_message,
+                    check_content_exists=ctx.deps.instruction,
                 ),
             )
+
+            content_check: ContentCheckResponse = content_check_run.output
 
             async with async_database_session() as conn:
                 await LLMUsage.track_pydantic_usage(
@@ -165,10 +169,10 @@ async def validate_agent_response(
                     chat_id=ctx.deps.tg_chat_id,
                     session_id=ctx.deps.tg_session_id,
                     agent=content_check_agent,
-                    data=content_check.usage(),
+                    data=content_check_run.usage(),
                 )
 
-            if not content_check.output.check_pass:
-                raise UnacknowledgedImportantMessageError(ctx.deps.status_message)
+            if not content_check.check_pass:
+                raise UnacknowledgedImportantMessageError(ctx.deps.instruction, content_check.feedback)
 
     return data

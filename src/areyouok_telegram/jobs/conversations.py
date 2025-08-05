@@ -166,14 +166,14 @@ class ConversationJob:
             conn, messages, since_timestamp=chat_session.last_bot_activity
         )
 
-        # Create status message for unsupported media
-        status_message = None
+        # Create instruction message for unsupported media
+        media_instruction = None
         if unsupported_media:
             unique_types = list(set(unsupported_media))
             if len(unique_types) == 1:
-                status_message = f"The user sent a {unique_types[0]} file, but you can only view images and PDFs."
+                media_instruction = f"The user sent a {unique_types[0]} file, but you can only view images and PDFs."
             else:
-                status_message = (
+                media_instruction = (
                     f"The user sent {', '.join(unique_types)} files, but you can only view images and PDFs."
                 )
 
@@ -186,7 +186,7 @@ class ConversationJob:
                     tg_session_id=chat_session.session_key,
                     last_response_type=self._last_response,
                     db_connection=conn,
-                    status_message=status_message,
+                    instruction=media_instruction,
                 ),
             )
 

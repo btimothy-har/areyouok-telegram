@@ -20,6 +20,7 @@ class ReactToSelfError(pydantic_ai.ModelRetry):
 class UnacknowledgedImportantMessageError(pydantic_ai.ModelRetry):
     """Exception raised when an important message is not acknowledged."""
 
-    def __init__(self, message: str):
-        super().__init__(f"Important message not acknowledged: {message}")
+    def __init__(self, message: str, feedback: str = ""):
+        super().__init__(f"Important message not acknowledged: {message}. {feedback}")
         self.message = message
+        self.feedback = feedback
