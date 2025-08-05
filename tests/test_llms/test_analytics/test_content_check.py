@@ -6,9 +6,6 @@ Testing Strategy:
 3. Different scenarios: Test various content validation scenarios
 """
 
-from unittest.mock import MagicMock
-from unittest.mock import patch
-
 import pytest
 from pydantic_ai import RunContext
 from pydantic_ai.models.test import TestModel
@@ -58,7 +55,10 @@ class TestContentCheckAgent:
         )
 
         result = await content_check_agent.run(
-            user_prompt="I see you've uploaded a video file. I can only view images and PDFs, so I won't be able to see the video content.",
+            user_prompt=(
+                "I see you've uploaded a video file. I can only view images and PDFs, so I won't be able "
+                "to see the video content."
+            ),
             deps=test_deps,
         )
 
@@ -93,7 +93,9 @@ class TestContentCheckAgent:
         )
 
         result = await content_check_agent.run(
-            user_prompt="Thanks for sharing that video. Could you describe what's in it since I can't view video files?",
+            user_prompt=(
+                "Thanks for sharing that video. Could you describe what's in it since I can't view video files?"
+            ),
             deps=test_deps,
         )
 
@@ -128,10 +130,8 @@ class TestContentCheckInstructions:
     def test_instructions_generation(self):
         """Test that instructions are generated correctly."""
         # Create mock context
-        test_deps = ContentCheckDependencies(
-            check_content_exists="Test instruction content"
-        )
-        
+        test_deps = ContentCheckDependencies(check_content_exists="Test instruction content")
+
         ctx = RunContext(
             deps=test_deps,
             messages=[],
@@ -154,9 +154,12 @@ class TestContentCheckInstructions:
         """Test instructions with complex check content."""
         # Create mock context with complex instruction
         test_deps = ContentCheckDependencies(
-            check_content_exists="The user sent video/mp4, audio/mpeg, and application/msword files, but you can only view images and PDFs."
+            check_content_exists=(
+                "The user sent video/mp4, audio/mpeg, and application/msword files, "
+                "but you can only view images and PDFs."
+            )
         )
-        
+
         ctx = RunContext(
             deps=test_deps,
             messages=[],
@@ -177,10 +180,8 @@ class TestContentCheckInstructions:
     def test_instructions_formatting(self):
         """Test that instructions are properly formatted."""
         # Create mock context
-        test_deps = ContentCheckDependencies(
-            check_content_exists="Simple check"
-        )
-        
+        test_deps = ContentCheckDependencies(check_content_exists="Simple check")
+
         ctx = RunContext(
             deps=test_deps,
             messages=[],
@@ -213,9 +214,7 @@ class TestContentCheckIntegration:
     @pytest.mark.asyncio
     async def test_agent_with_empty_prompt(self):
         """Test agent behavior with empty user prompt."""
-        test_deps = ContentCheckDependencies(
-            check_content_exists="The user sent a file."
-        )
+        test_deps = ContentCheckDependencies(check_content_exists="The user sent a file.")
 
         result = await content_check_agent.run(
             user_prompt="",
@@ -231,20 +230,14 @@ class TestContentCheckIntegration:
     async def test_response_model_fields(self):
         """Test ContentCheckResponse model fields."""
         # Create a response instance
-        response = ContentCheckResponse(
-            check_pass=True,
-            feedback="No Feedback Needed"
-        )
+        response = ContentCheckResponse(check_pass=True, feedback="No Feedback Needed")
 
         # Verify fields
         assert response.check_pass is True
         assert response.feedback == "No Feedback Needed"
 
         # Test with failure case
-        response_fail = ContentCheckResponse(
-            check_pass=False,
-            feedback="You should acknowledge the uploaded files."
-        )
+        response_fail = ContentCheckResponse(check_pass=False, feedback="You should acknowledge the uploaded files.")
 
         assert response_fail.check_pass is False
         assert "acknowledge" in response_fail.feedback
