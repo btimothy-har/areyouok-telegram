@@ -80,7 +80,12 @@ async def extract_media_from_telegram_message(
     """
     media_files = []
 
-    with logfire.span("Extracting media from message", message_id=message.message_id, chat_id=message.chat.id):
+    with logfire.span(
+        "Extracting media from message",
+        _span_name="handlers.utils.extract_media_from_telegram_message",
+        message_id=message.message_id,
+        chat_id=message.chat.id,
+    ):
         if message.photo:
             photo_file = await message.photo[-1].get_file()
             media_files.append(photo_file)
@@ -128,28 +133,35 @@ async def extract_media_from_telegram_message(
 
             # For voice messages, also create a transcription
             if message.voice and file.file_unique_id == message.voice.file_unique_id:
-                logfire.debug("Found audio, transcribing...", file_id=file.file_id, chat_id=message.chat.id)
-                try:
-                    # Transcribe the voice message in a separate thread
-                    transcription = await asyncio.to_thread(transcribe_voice_data_sync, bytes(content_bytes))
+                with logfire.span(
+                    "Transcribing detected audio",
+                    _span_name="handlers.utils.extract_media_from_telegram_message.transcribe_voice",
+                    file_id=file.file_id,
+                    chat_id=message.chat.id,
+                ):
+                    try:
+                        # Transcribe the voice message in a separate thread
+                        transcription = await asyncio.to_thread(transcribe_voice_data_sync, bytes(content_bytes))
 
-                    # Store the transcription as a text file
-                    transcription_bytes = transcription.encode("utf-8")
-                    await MediaFiles.create_file(
-                        session=session,
-                        file_id=f"{file.file_id}_transcription",
-                        file_unique_id=f"{file.file_unique_id}_transcription",
-                        chat_id=str(message.chat.id),
-                        message_id=str(message.id),
-                        file_size=len(transcription_bytes),
-                        content_bytes=transcription_bytes,
-                    )
-                    processed_count += 1
-                except VoiceNotProcessableError:
-                    # If transcription fails, we still have the original voice file
-                    pass
+                        # Store the transcription as a text file
+                        transcription_bytes = transcription.encode("utf-8")
+                        await MediaFiles.create_file(
+                            session=session,
+                            file_id=f"{file.file_id}_transcription",
+                            file_unique_id=f"{file.file_unique_id}_transcription",
+                            chat_id=str(message.chat.id),
+                            message_id=str(message.id),
+                            file_size=len(transcription_bytes),
+                            content_bytes=transcription_bytes,
+                        )
+                        processed_count += 1
+                        logfire.info(f"Transcription is {len(transcription)} characters long.", chat_id=message.chat.id)
 
-        logfire.debug(
+                    except VoiceNotProcessableError:
+                        # If transcription fails, we still have the original voice file
+                        pass
+
+        logfire.info(
             f"Processed {processed_count} media files from message",
             message_id=message.message_id,
             chat_id=message.chat.id,

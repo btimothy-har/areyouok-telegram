@@ -46,30 +46,38 @@ class SessionCleanupJob:
         else:
             cleanup_since = self.last_cleanup_timestamp
 
-        async with async_database_session() as conn:
-            # Fetch all inactive sessions that ended after the last cleanup timestamp
-            # We only want sessions that have been inactive for at least 10 minutes as a safety margin
-            sessions = await Sessions.get_all_inactive_sessions(
-                conn, from_dt=cleanup_since, to_dt=runtime - timedelta(minutes=10)
-            )
-
-            if not sessions:
-                logfire.debug("No inactive sessions found for cleanup.")
-                return
-
         with logfire.span(
-            f"Cleaning up {len(sessions)} inactive sessions since {cleanup_since.isoformat()}",
+            "Session cleanup job running",
+            _span_name="jobs.session_cleanup.run",
+            since=cleanup_since,
+            runtime=runtime,
         ):
-            total_deleted = 0
+            async with async_database_session() as conn:
+                # Fetch all inactive sessions that ended after the last cleanup timestamp
+                # We only want sessions that have been inactive for at least 10 minutes as a safety margin
+                sessions = await Sessions.get_all_inactive_sessions(
+                    conn, from_dt=cleanup_since, to_dt=runtime - timedelta(minutes=10)
+                )
 
-            for session in sessions:
-                deleted_count = await self._cleanup_session(session)
-                total_deleted += deleted_count
+                if not sessions:
+                    logfire.debug("No inactive sessions found for cleanup.")
+                    return
 
-            logfire.info(f"Session cleanup completed. Deleted {total_deleted} messages from {len(sessions)} sessions.")
+            with logfire.span(
+                f"Cleaning up {len(sessions)} inactive sessions since {cleanup_since.isoformat()}",
+            ):
+                total_deleted = 0
 
-            # Update the last cleanup timestamp
-            self.last_cleanup_timestamp = runtime
+                for session in sessions:
+                    deleted_count = await self._cleanup_session(session)
+                    total_deleted += deleted_count
+
+                logfire.info(
+                    f"Session cleanup completed. Deleted {total_deleted} messages from {len(sessions)} sessions."
+                )
+
+                # Update the last cleanup timestamp
+                self.last_cleanup_timestamp = runtime
 
     async def _cleanup_session(self, chat_session: Sessions) -> bool:
         """Process messages for this chat and send appropriate replies.
