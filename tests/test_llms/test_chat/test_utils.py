@@ -279,7 +279,7 @@ class TestTelegramMessageToModelMessage:
     """Test suite for _telegram_message_to_model_message function."""
 
     @pytest.mark.asyncio
-    async def test_user_message_to_model_request(self, mock_async_database_session):
+    async def test_user_message_to_model_request(self, async_database_connection):
         """Test converting a user message to ModelRequest."""
         # Create mock message
         mock_message = MagicMock(spec=telegram.Message)
@@ -296,7 +296,7 @@ class TestTelegramMessageToModelMessage:
 
         # Convert message
         result = await _telegram_message_to_model_message(
-            mock_async_database_session, mock_message, ts_reference, is_user=True
+            async_database_connection, mock_message, ts_reference, is_user=True
         )
 
         # Verify result is ModelRequest
@@ -311,7 +311,7 @@ class TestTelegramMessageToModelMessage:
         assert content["timestamp"] == "300 seconds ago"
 
     @pytest.mark.asyncio
-    async def test_bot_message_to_model_response(self, mock_async_database_session):
+    async def test_bot_message_to_model_response(self, async_database_connection):
         """Test converting a bot message to ModelResponse."""
         # Create mock message
         mock_message = MagicMock(spec=telegram.Message)
@@ -328,7 +328,7 @@ class TestTelegramMessageToModelMessage:
 
         # Convert message (is_user=False for bot messages)
         result = await _telegram_message_to_model_message(
-            mock_async_database_session, mock_message, ts_reference, is_user=False
+            async_database_connection, mock_message, ts_reference, is_user=False
         )
 
         # Verify result is ModelResponse
@@ -343,7 +343,7 @@ class TestTelegramMessageToModelMessage:
         assert content_data["timestamp"] == "180 seconds ago"
 
     @pytest.mark.asyncio
-    async def test_message_from_none_user(self, mock_async_database_session):
+    async def test_message_from_none_user(self, async_database_connection):
         """Test handling message with None from_user."""
         # Create mock message with None from_user
         mock_message = MagicMock(spec=telegram.Message)
@@ -359,14 +359,14 @@ class TestTelegramMessageToModelMessage:
 
         # Convert message as user message
         result = await _telegram_message_to_model_message(
-            mock_async_database_session, mock_message, ts_reference, is_user=True
+            async_database_connection, mock_message, ts_reference, is_user=True
         )
 
         # Should still return valid ModelRequest
         assert isinstance(result, messages.ModelRequest)
 
     @pytest.mark.asyncio
-    async def test_timing_calculation_accuracy(self, mock_async_database_session):
+    async def test_timing_calculation_accuracy(self, async_database_connection):
         """Test accurate timestamp calculation in various scenarios."""
         # Create mock message
         mock_message = MagicMock(spec=telegram.Message)
@@ -385,7 +385,7 @@ class TestTelegramMessageToModelMessage:
 
         for ts_ref, expected_timestamp in test_cases:
             result = await _telegram_message_to_model_message(
-                mock_async_database_session, mock_message, ts_ref, is_user=True
+                async_database_connection, mock_message, ts_ref, is_user=True
             )
             content = json.loads(result.parts[0].content)
             assert content["timestamp"] == expected_timestamp
@@ -395,7 +395,7 @@ class TestTelegramReactionToModelMessage:
     """Test suite for _telegram_reaction_to_model_message function."""
 
     @pytest.mark.asyncio
-    async def test_user_reaction_to_model_request(self, mock_async_database_session):  # noqa: ARG002
+    async def test_user_reaction_to_model_request(self, async_database_connection):  # noqa: ARG002
         """Test converting a user reaction to ModelRequest."""
         # Create mock reaction
         mock_reaction = MagicMock(spec=telegram.MessageReactionUpdated)
@@ -428,7 +428,7 @@ class TestTelegramReactionToModelMessage:
         assert content["timestamp"] == "300 seconds ago"
 
     @pytest.mark.asyncio
-    async def test_bot_reaction_to_model_response(self, mock_async_database_session):  # noqa: ARG002
+    async def test_bot_reaction_to_model_response(self, async_database_connection):  # noqa: ARG002
         """Test converting a bot reaction to ModelResponse."""
         # Create mock reaction from bot
         mock_reaction = MagicMock(spec=telegram.MessageReactionUpdated)
@@ -461,7 +461,7 @@ class TestTelegramReactionToModelMessage:
         assert content_data["timestamp"] == "180 seconds ago"
 
     @pytest.mark.asyncio
-    async def test_multiple_emoji_reactions(self, mock_async_database_session):  # noqa: ARG002
+    async def test_multiple_emoji_reactions(self, async_database_connection):  # noqa: ARG002
         """Test handling multiple emoji reactions."""
         # Create mock reaction with multiple emojis
         mock_reaction = MagicMock(spec=telegram.MessageReactionUpdated)
@@ -494,7 +494,7 @@ class TestTelegramReactionToModelMessage:
         assert content["reaction"] == "❤️, 🔥, 👏"
 
     @pytest.mark.asyncio
-    async def test_non_emoji_reactions_filtered(self, mock_async_database_session):  # noqa: ARG002
+    async def test_non_emoji_reactions_filtered(self, async_database_connection):  # noqa: ARG002
         """Test that non-emoji reactions are filtered out."""
         # Create mock reaction with mixed types
         mock_reaction = MagicMock(spec=telegram.MessageReactionUpdated)
@@ -523,7 +523,7 @@ class TestTelegramReactionToModelMessage:
         assert content["reaction"] == "❤️"  # Only emoji, not custom
 
     @pytest.mark.asyncio
-    async def test_reaction_from_none_user(self, mock_async_database_session):  # noqa: ARG002
+    async def test_reaction_from_none_user(self, async_database_connection):  # noqa: ARG002
         """Test handling reaction with None user."""
         # Create mock reaction with None user
         mock_reaction = MagicMock(spec=telegram.MessageReactionUpdated)
@@ -552,7 +552,7 @@ class TestConvertTelegramMessageToModelMessage:
     """Test suite for convert_telegram_message_to_model_message public function."""
 
     @pytest.mark.asyncio
-    async def test_convert_message_without_ts_reference(self, mock_async_database_session):
+    async def test_convert_message_without_ts_reference(self, async_database_connection):
         """Test converting message without providing ts_reference."""
         # Create mock message
         mock_message = MagicMock(spec=telegram.Message)
@@ -563,15 +563,13 @@ class TestConvertTelegramMessageToModelMessage:
         mock_message.chat.id = 123456
 
         # Convert without ts_reference (should use current time)
-        result = await convert_telegram_message_to_model_message(
-            mock_async_database_session, mock_message, is_user=True
-        )
+        result = await convert_telegram_message_to_model_message(async_database_connection, mock_message, is_user=True)
 
         # Should return valid ModelRequest
         assert isinstance(result, messages.ModelRequest)
 
     @pytest.mark.asyncio
-    async def test_convert_reaction_with_ts_reference(self, mock_async_database_session):  # noqa: ARG002
+    async def test_convert_reaction_with_ts_reference(self, async_database_connection):  # noqa: ARG002
         """Test converting reaction with ts_reference."""
         # Create mock reaction
         mock_reaction = MagicMock(spec=telegram.MessageReactionUpdated)
@@ -589,7 +587,7 @@ class TestConvertTelegramMessageToModelMessage:
 
         # Convert with ts_reference
         result = await convert_telegram_message_to_model_message(
-            mock_async_database_session, mock_reaction, ts_reference, is_user=False
+            async_database_connection, mock_reaction, ts_reference, is_user=False
         )
 
         # Should return valid ModelResponse
@@ -598,7 +596,7 @@ class TestConvertTelegramMessageToModelMessage:
         assert content["timestamp"] == "300 seconds ago"
 
     @pytest.mark.asyncio
-    async def test_convert_handles_message_and_reaction_types(self, mock_async_database_session):
+    async def test_convert_handles_message_and_reaction_types(self, async_database_connection):
         """Test that convert function properly routes messages and reactions."""
         # Test with Message
         mock_message = MagicMock(spec=telegram.Message)
@@ -609,7 +607,7 @@ class TestConvertTelegramMessageToModelMessage:
         mock_message.chat.id = 123456
 
         result_message = await convert_telegram_message_to_model_message(
-            mock_async_database_session, mock_message, is_user=True
+            async_database_connection, mock_message, is_user=True
         )
         assert isinstance(result_message, messages.ModelRequest)
 
@@ -623,6 +621,6 @@ class TestConvertTelegramMessageToModelMessage:
         mock_reaction.new_reaction = (emoji_reaction,)
 
         result_reaction = await convert_telegram_message_to_model_message(
-            mock_async_database_session, mock_reaction, is_user=False
+            async_database_connection, mock_reaction, is_user=False
         )
         assert isinstance(result_reaction, messages.ModelResponse)

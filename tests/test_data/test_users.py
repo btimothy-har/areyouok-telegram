@@ -71,16 +71,16 @@ class TestUsersNewOrUpdate:
     """Test the new_or_update method of the Users class."""
 
     @freeze_time("2025-01-15 10:30:00", tz_offset=0)
-    async def test_insert_new_regular_user(self, mock_async_database_session, mock_regular_user):
+    async def test_insert_new_regular_user(self, async_database_connection, mock_regular_user):
         """Test inserting a new regular user record."""
         # Call the method
-        await Users.new_or_update(mock_async_database_session, mock_regular_user)
+        await Users.new_or_update(async_database_connection, mock_regular_user)
 
         # Verify the session.execute was called once
-        mock_async_database_session.execute.assert_called_once()
+        async_database_connection.execute.assert_called_once()
 
         # Get the statement that was executed
-        stmt = mock_async_database_session.execute.call_args[0][0]
+        stmt = async_database_connection.execute.call_args[0][0]
 
         # Verify it's an insert statement
         assert isinstance(stmt, type(pg_insert(Users)))
@@ -97,12 +97,12 @@ class TestUsersNewOrUpdate:
         assert values["updated_at"] == datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
 
     @freeze_time("2025-01-15 10:30:00", tz_offset=0)
-    async def test_insert_new_premium_user(self, mock_async_database_session, mock_premium_user):
+    async def test_insert_new_premium_user(self, async_database_connection, mock_premium_user):
         """Test inserting a new premium user record."""
-        await Users.new_or_update(mock_async_database_session, mock_premium_user)
+        await Users.new_or_update(async_database_connection, mock_premium_user)
 
-        mock_async_database_session.execute.assert_called_once()
-        stmt = mock_async_database_session.execute.call_args[0][0]
+        async_database_connection.execute.assert_called_once()
+        stmt = async_database_connection.execute.call_args[0][0]
 
         assert isinstance(stmt, type(pg_insert(Users)))
         assert stmt.table.name == "users"
@@ -114,12 +114,12 @@ class TestUsersNewOrUpdate:
         assert values["is_premium"] is True
 
     @freeze_time("2025-01-15 10:30:00", tz_offset=0)
-    async def test_insert_new_bot_user(self, mock_async_database_session, mock_bot_user):
+    async def test_insert_new_bot_user(self, async_database_connection, mock_bot_user):
         """Test inserting a new bot user record."""
-        await Users.new_or_update(mock_async_database_session, mock_bot_user)
+        await Users.new_or_update(async_database_connection, mock_bot_user)
 
-        mock_async_database_session.execute.assert_called_once()
-        stmt = mock_async_database_session.execute.call_args[0][0]
+        async_database_connection.execute.assert_called_once()
+        stmt = async_database_connection.execute.call_args[0][0]
 
         assert isinstance(stmt, type(pg_insert(Users)))
         assert stmt.table.name == "users"
@@ -131,12 +131,12 @@ class TestUsersNewOrUpdate:
         assert values["is_premium"] is False  # Should default to False when None
 
     @freeze_time("2025-01-15 10:30:00", tz_offset=0)
-    async def test_insert_user_no_language_none_premium(self, mock_async_database_session, mock_user_no_language):
+    async def test_insert_user_no_language_none_premium(self, async_database_connection, mock_user_no_language):
         """Test inserting a user with None language and premium values."""
-        await Users.new_or_update(mock_async_database_session, mock_user_no_language)
+        await Users.new_or_update(async_database_connection, mock_user_no_language)
 
-        mock_async_database_session.execute.assert_called_once()
-        stmt = mock_async_database_session.execute.call_args[0][0]
+        async_database_connection.execute.assert_called_once()
+        stmt = async_database_connection.execute.call_args[0][0]
 
         values = stmt.compile().params
         assert values["user_id"] == "111222333"
@@ -144,17 +144,17 @@ class TestUsersNewOrUpdate:
         assert values["language_code"] is None
         assert values["is_premium"] is False  # Should default to False when None
 
-    async def test_on_conflict_do_update_configured(self, mock_async_database_session, mock_regular_user):
+    async def test_on_conflict_do_update_configured(self, async_database_connection, mock_regular_user):
         """Test that the statement includes conflict resolution."""
-        await Users.new_or_update(mock_async_database_session, mock_regular_user)
+        await Users.new_or_update(async_database_connection, mock_regular_user)
 
-        stmt = mock_async_database_session.execute.call_args[0][0]
+        stmt = async_database_connection.execute.call_args[0][0]
 
         # Verify that on_conflict was called by checking the statement has conflict handling
         assert hasattr(stmt, "_post_values_clause")
         assert stmt._post_values_clause is not None
 
-    async def test_multiple_users_different_ids(self, mock_async_database_session):
+    async def test_multiple_users_different_ids(self, async_database_connection):
         """Test inserting multiple users with different IDs."""
 
         # Create multiple mock users
@@ -171,24 +171,24 @@ class TestUsersNewOrUpdate:
         user2.is_premium = None
 
         # Insert both users
-        await Users.new_or_update(mock_async_database_session, user1)
-        await Users.new_or_update(mock_async_database_session, user2)
+        await Users.new_or_update(async_database_connection, user1)
+        await Users.new_or_update(async_database_connection, user2)
 
         # Verify both inserts were executed
-        assert mock_async_database_session.execute.call_count == 2
+        assert async_database_connection.execute.call_count == 2
 
         # Verify different user IDs were used
-        first_call_stmt = mock_async_database_session.execute.call_args_list[0][0][0]
-        second_call_stmt = mock_async_database_session.execute.call_args_list[1][0][0]
+        first_call_stmt = async_database_connection.execute.call_args_list[0][0][0]
+        second_call_stmt = async_database_connection.execute.call_args_list[1][0][0]
 
         assert first_call_stmt.compile().params["user_id"] == "111"
         assert second_call_stmt.compile().params["user_id"] == "222"
 
-    async def test_user_properties_mapping(self, mock_async_database_session, mock_user_different_language):
+    async def test_user_properties_mapping(self, async_database_connection, mock_user_different_language):
         """Test that all user properties are correctly mapped to database fields."""
-        await Users.new_or_update(mock_async_database_session, mock_user_different_language)
+        await Users.new_or_update(async_database_connection, mock_user_different_language)
 
-        stmt = mock_async_database_session.execute.call_args[0][0]
+        stmt = async_database_connection.execute.call_args[0][0]
         values = stmt.compile().params
 
         # Verify all telegram.User properties are correctly mapped
@@ -197,7 +197,7 @@ class TestUsersNewOrUpdate:
         assert values["language_code"] == mock_user_different_language.language_code
         assert values["is_premium"] == mock_user_different_language.is_premium
 
-    async def test_premium_status_none_handling(self, mock_async_database_session):
+    async def test_premium_status_none_handling(self, async_database_connection):
         """Test that None premium status is handled correctly."""
         user = MagicMock()
         user.id = 999888777
@@ -205,15 +205,15 @@ class TestUsersNewOrUpdate:
         user.language_code = "de"
         user.is_premium = None
 
-        await Users.new_or_update(mock_async_database_session, user)
+        await Users.new_or_update(async_database_connection, user)
 
-        stmt = mock_async_database_session.execute.call_args[0][0]
+        stmt = async_database_connection.execute.call_args[0][0]
         values = stmt.compile().params
 
         # Premium should default to False when None
         assert values["is_premium"] is False
 
-    async def test_premium_status_true_preserved(self, mock_async_database_session):
+    async def test_premium_status_true_preserved(self, async_database_connection):
         """Test that True premium status is preserved."""
         user = MagicMock()
         user.id = 888777666
@@ -221,15 +221,15 @@ class TestUsersNewOrUpdate:
         user.language_code = "it"
         user.is_premium = True
 
-        await Users.new_or_update(mock_async_database_session, user)
+        await Users.new_or_update(async_database_connection, user)
 
-        stmt = mock_async_database_session.execute.call_args[0][0]
+        stmt = async_database_connection.execute.call_args[0][0]
         values = stmt.compile().params
 
         # Premium should remain True
         assert values["is_premium"] is True
 
-    async def test_premium_status_false_preserved(self, mock_async_database_session):
+    async def test_premium_status_false_preserved(self, async_database_connection):
         """Test that False premium status is preserved."""
         user = MagicMock()
         user.id = 777666555
@@ -237,9 +237,9 @@ class TestUsersNewOrUpdate:
         user.language_code = "pt"
         user.is_premium = False
 
-        await Users.new_or_update(mock_async_database_session, user)
+        await Users.new_or_update(async_database_connection, user)
 
-        stmt = mock_async_database_session.execute.call_args[0][0]
+        stmt = async_database_connection.execute.call_args[0][0]
         values = stmt.compile().params
 
         # Premium should remain False
@@ -249,7 +249,7 @@ class TestUsersNewOrUpdate:
 class TestUsersGetById:
     """Test the get_by_id method of the Users class."""
 
-    async def test_get_existing_user(self, mock_async_database_session):
+    async def test_get_existing_user(self, async_database_connection):
         """Test retrieving an existing user by ID."""
         # Create a mock user object to return
         mock_user = MagicMock(spec=Users)
@@ -266,10 +266,10 @@ class TestUsersGetById:
         mock_scalars = MagicMock()
         mock_scalars.first.return_value = mock_user
         mock_result.scalars.return_value = mock_scalars
-        mock_async_database_session.execute.return_value = mock_result
+        async_database_connection.execute.return_value = mock_result
 
         # Call the method
-        result = await Users.get_by_id(mock_async_database_session, "123456789")
+        result = await Users.get_by_id(async_database_connection, "123456789")
 
         # Verify the result
         assert result is mock_user
@@ -279,51 +279,51 @@ class TestUsersGetById:
         assert result.is_premium is True
 
         # Verify the session.execute was called once
-        mock_async_database_session.execute.assert_called_once()
+        async_database_connection.execute.assert_called_once()
 
         # Get the statement that was executed
-        stmt = mock_async_database_session.execute.call_args[0][0]
+        stmt = async_database_connection.execute.call_args[0][0]
 
         # Verify it's a select statement with correct table
         assert str(stmt.compile()) == str(select(Users).where(Users.user_id == "123456789").compile())
 
-    async def test_get_non_existent_user(self, mock_async_database_session):
+    async def test_get_non_existent_user(self, async_database_connection):
         """Test retrieving a non-existent user returns None."""
         # Configure the mock to return None
         mock_result = MagicMock()
         mock_scalars = MagicMock()
         mock_scalars.first.return_value = None
         mock_result.scalars.return_value = mock_scalars
-        mock_async_database_session.execute.return_value = mock_result
+        async_database_connection.execute.return_value = mock_result
 
         # Call the method
-        result = await Users.get_by_id(mock_async_database_session, "999999999")
+        result = await Users.get_by_id(async_database_connection, "999999999")
 
         # Verify the result is None
         assert result is None
 
         # Verify the session.execute was called once
-        mock_async_database_session.execute.assert_called_once()
+        async_database_connection.execute.assert_called_once()
 
-    async def test_get_by_id_with_different_user_ids(self, mock_async_database_session):
+    async def test_get_by_id_with_different_user_ids(self, async_database_connection):
         """Test that different user IDs generate different queries."""
         # Configure mock to return empty result
         mock_result = MagicMock()
         mock_scalars = MagicMock()
         mock_scalars.first.return_value = None
         mock_result.scalars.return_value = mock_scalars
-        mock_async_database_session.execute.return_value = mock_result
+        async_database_connection.execute.return_value = mock_result
 
         # First call
-        await Users.get_by_id(mock_async_database_session, "111111111")
-        first_stmt = mock_async_database_session.execute.call_args[0][0]
+        await Users.get_by_id(async_database_connection, "111111111")
+        first_stmt = async_database_connection.execute.call_args[0][0]
 
         # Reset mock
-        mock_async_database_session.execute.reset_mock()
+        async_database_connection.execute.reset_mock()
 
         # Second call with different ID
-        await Users.get_by_id(mock_async_database_session, "222222222")
-        second_stmt = mock_async_database_session.execute.call_args[0][0]
+        await Users.get_by_id(async_database_connection, "222222222")
+        second_stmt = async_database_connection.execute.call_args[0][0]
 
         # Verify different user IDs in the where clauses
         first_compiled = first_stmt.compile()
@@ -335,20 +335,20 @@ class TestUsersGetById:
         assert "111111111" not in second_compiled.params.values()
         assert "222222222" not in first_compiled.params.values()
 
-    async def test_get_by_id_query_structure(self, mock_async_database_session):
+    async def test_get_by_id_query_structure(self, async_database_connection):
         """Test the SQL query structure for get_by_id."""
         # Configure mock to return empty result
         mock_result = MagicMock()
         mock_scalars = MagicMock()
         mock_scalars.first.return_value = None
         mock_result.scalars.return_value = mock_scalars
-        mock_async_database_session.execute.return_value = mock_result
+        async_database_connection.execute.return_value = mock_result
 
         # Call the method
-        await Users.get_by_id(mock_async_database_session, "987654321")
+        await Users.get_by_id(async_database_connection, "987654321")
 
         # Get the statement that was executed
-        stmt = mock_async_database_session.execute.call_args[0][0]
+        stmt = async_database_connection.execute.call_args[0][0]
 
         # Compile the statement to inspect it
         compiled = stmt.compile()

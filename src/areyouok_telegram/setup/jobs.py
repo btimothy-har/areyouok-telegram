@@ -8,14 +8,14 @@ from telegram.ext import Application
 from telegram.ext import ContextTypes
 
 from areyouok_telegram.data import Sessions
-from areyouok_telegram.data import async_database_session
+from areyouok_telegram.data import async_database
 from areyouok_telegram.jobs import SessionCleanupJob
 from areyouok_telegram.jobs import schedule_conversation_job
 
 
 async def restore_active_sessions(ctx: Application | ContextTypes.DEFAULT_TYPE):
     """Setup conversation jobs for active chats on startup."""
-    async with async_database_session() as session:
+    async with async_database() as session:
         # Fetch all active sessions
         active_sessions = await Sessions.get_all_active_sessions(session)
 

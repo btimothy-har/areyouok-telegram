@@ -17,7 +17,7 @@ class TestTextResponse:
     """Test suite for TextResponse execution."""
 
     @pytest.mark.asyncio
-    async def test_text_response_execute_simple_message(self, mock_async_database_session):
+    async def test_text_response_execute_simple_message(self, async_database_connection):
         """Test executing a simple text response without reply."""
         # Create mock context
         mock_context = AsyncMock()
@@ -33,7 +33,7 @@ class TestTextResponse:
 
         # Execute the response
         result = await response.execute(
-            db_connection=mock_async_database_session, context=mock_context, chat_id="123456789"
+            db_connection=async_database_connection, context=mock_context, chat_id="123456789"
         )
 
         # Verify the message was sent correctly
@@ -44,7 +44,7 @@ class TestTextResponse:
         assert result == mock_sent_message
 
     @pytest.mark.asyncio
-    async def test_text_response_execute_with_reply(self, mock_async_database_session):
+    async def test_text_response_execute_with_reply(self, async_database_connection):
         """Test executing a text response with reply to specific message."""
         # Create mock context
         mock_context = AsyncMock()
@@ -60,7 +60,7 @@ class TestTextResponse:
 
         # Execute the response
         result = await response.execute(
-            db_connection=mock_async_database_session, context=mock_context, chat_id="123456789"
+            db_connection=async_database_connection, context=mock_context, chat_id="123456789"
         )
 
         # Verify the message was sent with reply parameters
@@ -76,7 +76,7 @@ class TestTextResponse:
         assert result == mock_sent_message
 
     @pytest.mark.asyncio
-    async def test_text_response_execute_handles_exception(self, mock_async_database_session):
+    async def test_text_response_execute_handles_exception(self, async_database_connection):
         """Test that TextResponse handles exceptions during message sending."""
         # Create mock context that raises an exception
         mock_context = AsyncMock()
@@ -89,10 +89,10 @@ class TestTextResponse:
 
         # Execute should raise the exception
         with pytest.raises(telegram.error.NetworkError):
-            await response.execute(db_connection=mock_async_database_session, context=mock_context, chat_id="123456789")
+            await response.execute(db_connection=async_database_connection, context=mock_context, chat_id="123456789")
 
     @pytest.mark.asyncio
-    async def test_text_response_retry_logic(self, mock_async_database_session):
+    async def test_text_response_retry_logic(self, async_database_connection):
         """Test that TextResponse retry logic works for transient errors."""
         # Create mock context that fails once then succeeds
         mock_context = AsyncMock()
@@ -108,7 +108,7 @@ class TestTextResponse:
 
         # Execute the response
         result = await response.execute(
-            db_connection=mock_async_database_session, context=mock_context, chat_id="123456789"
+            db_connection=async_database_connection, context=mock_context, chat_id="123456789"
         )
 
         # Verify retry happened and eventually succeeded
@@ -120,7 +120,7 @@ class TestReactionResponse:
     """Test suite for ReactionResponse execution."""
 
     @pytest.mark.asyncio
-    async def test_reaction_response_execute_success(self, mock_async_database_session):
+    async def test_reaction_response_execute_success(self, async_database_connection):
         """Test successful reaction response execution."""
         # Create mock context and message
         mock_context = AsyncMock()
@@ -144,12 +144,12 @@ class TestReactionResponse:
         ) as mock_retrieve:
             # Execute the response
             result = await response.execute(
-                db_connection=mock_async_database_session, context=mock_context, chat_id="123456789"
+                db_connection=async_database_connection, context=mock_context, chat_id="123456789"
             )
 
             # Verify database lookup
             mock_retrieve.assert_called_once_with(
-                session=mock_async_database_session, message_id="456", chat_id="123456789"
+                session=async_database_connection, message_id="456", chat_id="123456789"
             )
 
             # Verify reaction was set
@@ -164,7 +164,7 @@ class TestReactionResponse:
             assert result.new_reaction[0].emoji == ReactionEmoji.RED_HEART
 
     @pytest.mark.asyncio
-    async def test_reaction_response_execute_api_failure(self, mock_async_database_session):
+    async def test_reaction_response_execute_api_failure(self, async_database_connection):
         """Test reaction response when Telegram API fails."""
         # Create mock context that fails
         mock_context = AsyncMock()
@@ -183,10 +183,10 @@ class TestReactionResponse:
             patch("areyouok_telegram.data.Messages.retrieve_message_by_id", return_value=(mock_message, None)),
             pytest.raises(telegram.error.BadRequest),
         ):
-            await response.execute(db_connection=mock_async_database_session, context=mock_context, chat_id="123456789")
+            await response.execute(db_connection=async_database_connection, context=mock_context, chat_id="123456789")
 
     @pytest.mark.asyncio
-    async def test_reaction_response_execute_set_reaction_returns_false(self, mock_async_database_session):
+    async def test_reaction_response_execute_set_reaction_returns_false(self, async_database_connection):
         """Test reaction response when set_message_reaction returns False."""
         # Create mock context that returns False
         mock_context = AsyncMock()
@@ -203,14 +203,14 @@ class TestReactionResponse:
 
         with patch("areyouok_telegram.data.Messages.retrieve_message_by_id", return_value=(mock_message, None)):
             result = await response.execute(
-                db_connection=mock_async_database_session, context=mock_context, chat_id="123456789"
+                db_connection=async_database_connection, context=mock_context, chat_id="123456789"
             )
 
             # When set_message_reaction returns False, result should be None
             assert result is None
 
     @pytest.mark.asyncio
-    async def test_reaction_response_retry_logic(self, mock_async_database_session):
+    async def test_reaction_response_retry_logic(self, async_database_connection):
         """Test that ReactionResponse retry logic works for transient errors."""
         # Create mock context that fails once then succeeds
         mock_context = AsyncMock()
@@ -230,7 +230,7 @@ class TestReactionResponse:
 
         with patch("areyouok_telegram.data.Messages.retrieve_message_by_id", return_value=(mock_message, None)):
             result = await response.execute(
-                db_connection=mock_async_database_session, context=mock_context, chat_id="123456789"
+                db_connection=async_database_connection, context=mock_context, chat_id="123456789"
             )
 
             # Verify retry happened and eventually succeeded
@@ -242,7 +242,7 @@ class TestDoNothingResponse:
     """Test suite for DoNothingResponse execution."""
 
     @pytest.mark.asyncio
-    async def test_do_nothing_response_execute(self, mock_async_database_session):
+    async def test_do_nothing_response_execute(self, async_database_connection):
         """Test DoNothingResponse execution does nothing."""
         # Create mock context
         mock_context = AsyncMock()
@@ -252,7 +252,7 @@ class TestDoNothingResponse:
 
         # Execute the response
         result = await response.execute(
-            db_connection=mock_async_database_session, context=mock_context, chat_id="123456789"
+            db_connection=async_database_connection, context=mock_context, chat_id="123456789"
         )
 
         # Verify no actions were taken

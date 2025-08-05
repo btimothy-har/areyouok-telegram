@@ -203,19 +203,19 @@ class TestMessagesNewOrUpdate:
     """Test the new_or_update method of the Messages class."""
 
     @freeze_time("2025-01-15 10:30:00", tz_offset=0)
-    async def test_insert_new_text_message(self, mock_async_database_session, mock_text_message):
+    async def test_insert_new_text_message(self, async_database_connection, mock_text_message):
         """Test inserting a new text message record."""
         user_id = "987654321"
         chat_id = "111222333"
 
         # Call the method
-        await Messages.new_or_update(mock_async_database_session, user_id, chat_id, mock_text_message)
+        await Messages.new_or_update(async_database_connection, user_id, chat_id, mock_text_message)
 
         # Verify the session.execute was called once
-        mock_async_database_session.execute.assert_called_once()
+        async_database_connection.execute.assert_called_once()
 
         # Get the statement that was executed
-        stmt = mock_async_database_session.execute.call_args[0][0]
+        stmt = async_database_connection.execute.call_args[0][0]
 
         # Verify it's an insert statement
         assert isinstance(stmt, type(pg_insert(Messages)))
@@ -236,15 +236,15 @@ class TestMessagesNewOrUpdate:
         assert values["updated_at"] == datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
 
     @freeze_time("2025-01-15 10:30:00", tz_offset=0)
-    async def test_insert_new_photo_message(self, mock_async_database_session, mock_photo_message):
+    async def test_insert_new_photo_message(self, async_database_connection, mock_photo_message):
         """Test inserting a new photo message record."""
         user_id = "555666777"
         chat_id = "888999000"
 
-        await Messages.new_or_update(mock_async_database_session, user_id, chat_id, mock_photo_message)
+        await Messages.new_or_update(async_database_connection, user_id, chat_id, mock_photo_message)
 
-        mock_async_database_session.execute.assert_called_once()
-        stmt = mock_async_database_session.execute.call_args[0][0]
+        async_database_connection.execute.assert_called_once()
+        stmt = async_database_connection.execute.call_args[0][0]
 
         assert isinstance(stmt, type(pg_insert(Messages)))
         assert stmt.table.name == "messages"
@@ -260,34 +260,34 @@ class TestMessagesNewOrUpdate:
         assert values["payload"] == mock_photo_message.to_dict.return_value
 
     @freeze_time("2025-01-15 10:30:00", tz_offset=0)
-    async def test_insert_forwarded_message(self, mock_async_database_session, mock_forwarded_message):
+    async def test_insert_forwarded_message(self, async_database_connection, mock_forwarded_message):
         """Test inserting a forwarded message record."""
         user_id = "444555666"
         chat_id = "777888999"
 
-        await Messages.new_or_update(mock_async_database_session, user_id, chat_id, mock_forwarded_message)
+        await Messages.new_or_update(async_database_connection, user_id, chat_id, mock_forwarded_message)
 
-        mock_async_database_session.execute.assert_called_once()
-        stmt = mock_async_database_session.execute.call_args[0][0]
+        async_database_connection.execute.assert_called_once()
+        stmt = async_database_connection.execute.call_args[0][0]
 
         values = stmt.compile().params
         assert values["message_type"] == "Message"
         assert values["payload"] == mock_forwarded_message.to_dict.return_value
 
-    async def test_on_conflict_do_update_configured(self, mock_async_database_session, mock_text_message):
+    async def test_on_conflict_do_update_configured(self, async_database_connection, mock_text_message):
         """Test that the statement includes conflict resolution."""
         user_id = "123456789"
         chat_id = "987654321"
 
-        await Messages.new_or_update(mock_async_database_session, user_id, chat_id, mock_text_message)
+        await Messages.new_or_update(async_database_connection, user_id, chat_id, mock_text_message)
 
-        stmt = mock_async_database_session.execute.call_args[0][0]
+        stmt = async_database_connection.execute.call_args[0][0]
 
         # Verify that on_conflict was called by checking the statement has conflict handling
         assert hasattr(stmt, "_post_values_clause")
         assert stmt._post_values_clause is not None
 
-    async def test_multiple_messages_different_keys(self, mock_async_database_session):
+    async def test_multiple_messages_different_keys(self, async_database_connection):
         """Test inserting multiple messages with different keys."""
 
         # Create multiple mock messages
@@ -300,15 +300,15 @@ class TestMessagesNewOrUpdate:
         message2.to_dict.return_value = {"message_id": 222, "text": "Message 2"}
 
         # Insert both messages with different user/chat combinations
-        await Messages.new_or_update(mock_async_database_session, "user1", "chat1", message1)
-        await Messages.new_or_update(mock_async_database_session, "user2", "chat2", message2)
+        await Messages.new_or_update(async_database_connection, "user1", "chat1", message1)
+        await Messages.new_or_update(async_database_connection, "user2", "chat2", message2)
 
         # Verify both inserts were executed
-        assert mock_async_database_session.execute.call_count == 2
+        assert async_database_connection.execute.call_count == 2
 
         # Verify different message keys were used
-        first_call_stmt = mock_async_database_session.execute.call_args_list[0][0][0]
-        second_call_stmt = mock_async_database_session.execute.call_args_list[1][0][0]
+        first_call_stmt = async_database_connection.execute.call_args_list[0][0][0]
+        second_call_stmt = async_database_connection.execute.call_args_list[1][0][0]
 
         key1 = Messages.generate_message_key("user1", "chat1", 111, "Message")
         key2 = Messages.generate_message_key("user2", "chat2", 222, "Message")
@@ -317,22 +317,22 @@ class TestMessagesNewOrUpdate:
         assert second_call_stmt.compile().params["message_key"] == key2
         assert key1 != key2
 
-    async def test_same_message_different_chats_different_keys(self, mock_async_database_session):
+    async def test_same_message_different_chats_different_keys(self, async_database_connection):
         """Test that the same message in different chats gets different keys."""
         message = MagicMock(spec=telegram.Message)
         message.message_id = 12345
         message.to_dict.return_value = {"message_id": 12345, "text": "Same message"}
 
         # Insert the same message in two different chats
-        await Messages.new_or_update(mock_async_database_session, "user123", "chat1", message)
-        await Messages.new_or_update(mock_async_database_session, "user123", "chat2", message)
+        await Messages.new_or_update(async_database_connection, "user123", "chat1", message)
+        await Messages.new_or_update(async_database_connection, "user123", "chat2", message)
 
         # Verify both inserts were executed
-        assert mock_async_database_session.execute.call_count == 2
+        assert async_database_connection.execute.call_count == 2
 
         # Verify different message keys were generated
-        first_call_stmt = mock_async_database_session.execute.call_args_list[0][0][0]
-        second_call_stmt = mock_async_database_session.execute.call_args_list[1][0][0]
+        first_call_stmt = async_database_connection.execute.call_args_list[0][0][0]
+        second_call_stmt = async_database_connection.execute.call_args_list[1][0][0]
 
         key1 = first_call_stmt.compile().params["message_key"]
         key2 = second_call_stmt.compile().params["message_key"]
@@ -340,7 +340,7 @@ class TestMessagesNewOrUpdate:
         assert key1 != key2
 
     @freeze_time("2025-01-15 10:30:00", tz_offset=0)
-    async def test_insert_message_reaction(self, mock_async_database_session, mock_message_reaction):
+    async def test_insert_message_reaction(self, async_database_connection, mock_message_reaction):
         """Test inserting a message reaction update."""
         user_id = str(mock_message_reaction.user.id)
         chat_id = str(mock_message_reaction.chat.id)
@@ -356,13 +356,13 @@ class TestMessagesNewOrUpdate:
         }
 
         # Call the method
-        await Messages.new_or_update(mock_async_database_session, user_id, chat_id, mock_message_reaction)
+        await Messages.new_or_update(async_database_connection, user_id, chat_id, mock_message_reaction)
 
         # Verify the session.execute was called once
-        mock_async_database_session.execute.assert_called_once()
+        async_database_connection.execute.assert_called_once()
 
         # Get the statement that was executed
-        stmt = mock_async_database_session.execute.call_args[0][0]
+        stmt = async_database_connection.execute.call_args[0][0]
 
         # Verify it's an insert statement
         assert isinstance(stmt, type(pg_insert(Messages)))
@@ -382,7 +382,7 @@ class TestMessagesNewOrUpdate:
         assert values["created_at"] == datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
         assert values["updated_at"] == datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
 
-    async def test_new_or_update_invalid_message_type(self, mock_async_database_session):
+    async def test_new_or_update_invalid_message_type(self, async_database_connection):
         """Test new_or_update raises exception for invalid message type."""
         user_id = "123456789"
         chat_id = "987654321"
@@ -391,7 +391,7 @@ class TestMessagesNewOrUpdate:
         invalid_message = "not a telegram message"
 
         with pytest.raises(InvalidMessageTypeError) as exc_info:
-            await Messages.new_or_update(mock_async_database_session, user_id, chat_id, invalid_message)
+            await Messages.new_or_update(async_database_connection, user_id, chat_id, invalid_message)
 
         assert exc_info.value.message_type == "str"
 
@@ -399,7 +399,7 @@ class TestMessagesNewOrUpdate:
 class TestMessagesRetrieveMessageById:
     """Test the retrieve_message_by_id class method."""
 
-    async def test_retrieve_message_by_id_with_reactions(self, mock_async_database_session, mock_message_record1):
+    async def test_retrieve_message_by_id_with_reactions(self, async_database_connection, mock_message_record1):
         """Test retrieving a message by ID that has reactions (including soft-deleted ones)."""
         message_id = "123"
         chat_id = "456"
@@ -425,13 +425,13 @@ class TestMessagesRetrieveMessageById:
         mock_reaction_result.scalars.return_value = mock_reaction_scalars
 
         # Configure session to return different results for different queries
-        mock_async_database_session.execute.side_effect = [mock_message_result, mock_reaction_result]
+        async_database_connection.execute.side_effect = [mock_message_result, mock_reaction_result]
 
         # Call the method
-        message, reactions = await Messages.retrieve_message_by_id(mock_async_database_session, message_id, chat_id)
+        message, reactions = await Messages.retrieve_message_by_id(async_database_connection, message_id, chat_id)
 
         # Verify two queries were executed (message + reactions)
-        assert mock_async_database_session.execute.call_count == 2
+        assert async_database_connection.execute.call_count == 2
 
         # Verify to_telegram_object was called for message and all reactions
         mock_message_record1.to_telegram_object.assert_called_once()
@@ -445,7 +445,7 @@ class TestMessagesRetrieveMessageById:
         assert reactions[0] == mock_reaction_record1.to_telegram_object.return_value
         assert reactions[1] == mock_reaction_record3.to_telegram_object.return_value
 
-    async def test_retrieve_message_by_id_without_reactions(self, mock_async_database_session, mock_message_record1):
+    async def test_retrieve_message_by_id_without_reactions(self, async_database_connection, mock_message_record1):
         """Test retrieving a message by ID that has no reactions."""
         message_id = "123"
         chat_id = "456"
@@ -461,13 +461,13 @@ class TestMessagesRetrieveMessageById:
         mock_reaction_result.scalars.return_value = mock_reaction_scalars
 
         # Configure session to return different results for different queries
-        mock_async_database_session.execute.side_effect = [mock_message_result, mock_reaction_result]
+        async_database_connection.execute.side_effect = [mock_message_result, mock_reaction_result]
 
         # Call the method
-        message, reactions = await Messages.retrieve_message_by_id(mock_async_database_session, message_id, chat_id)
+        message, reactions = await Messages.retrieve_message_by_id(async_database_connection, message_id, chat_id)
 
         # Verify two queries were executed
-        assert mock_async_database_session.execute.call_count == 2
+        assert async_database_connection.execute.call_count == 2
 
         # Verify to_telegram_object was called for message only
         mock_message_record1.to_telegram_object.assert_called_once()
@@ -476,7 +476,7 @@ class TestMessagesRetrieveMessageById:
         assert message == mock_message_record1.to_telegram_object.return_value
         assert reactions == []
 
-    async def test_retrieve_message_by_id_message_not_found(self, mock_async_database_session):
+    async def test_retrieve_message_by_id_message_not_found(self, async_database_connection):
         """Test retrieving a message by ID when message doesn't exist."""
         message_id = "nonexistent"
         chat_id = "456"
@@ -485,19 +485,19 @@ class TestMessagesRetrieveMessageById:
         mock_message_result = MagicMock()
         mock_message_result.scalar_one_or_none.return_value = None
 
-        mock_async_database_session.execute.return_value = mock_message_result
+        async_database_connection.execute.return_value = mock_message_result
 
         # Call the method
-        message, reactions = await Messages.retrieve_message_by_id(mock_async_database_session, message_id, chat_id)
+        message, reactions = await Messages.retrieve_message_by_id(async_database_connection, message_id, chat_id)
 
         # Verify only one query was executed (message query only)
-        mock_async_database_session.execute.assert_called_once()
+        async_database_connection.execute.assert_called_once()
 
         # Verify the results are both None
         assert message is None
         assert reactions is None
 
-    async def test_retrieve_message_by_id_query_structure(self, mock_async_database_session, mock_message_record1):
+    async def test_retrieve_message_by_id_query_structure(self, async_database_connection, mock_message_record1):
         """Test that retrieve_message_by_id constructs correct SQL queries."""
         message_id = "123"
         chat_id = "456"
@@ -512,17 +512,17 @@ class TestMessagesRetrieveMessageById:
         mock_reaction_scalars.all.return_value = []
         mock_reaction_result.scalars.return_value = mock_reaction_scalars
 
-        mock_async_database_session.execute.side_effect = [mock_message_result, mock_reaction_result]
+        async_database_connection.execute.side_effect = [mock_message_result, mock_reaction_result]
 
         # Call the method
-        await Messages.retrieve_message_by_id(mock_async_database_session, message_id, chat_id)
+        await Messages.retrieve_message_by_id(async_database_connection, message_id, chat_id)
 
         # Verify both queries were executed
-        assert mock_async_database_session.execute.call_count == 2
+        assert async_database_connection.execute.call_count == 2
 
         # Get the statements that were executed
-        message_stmt = mock_async_database_session.execute.call_args_list[0][0][0]
-        reaction_stmt = mock_async_database_session.execute.call_args_list[1][0][0]
+        message_stmt = async_database_connection.execute.call_args_list[0][0][0]
+        reaction_stmt = async_database_connection.execute.call_args_list[1][0][0]
 
         # Verify both are select statements
         assert isinstance(message_stmt, type(select(Messages)))
@@ -532,9 +532,7 @@ class TestMessagesRetrieveMessageById:
 class TestMessagesRetrieveByChat:
     """Test the retrieve_by_chat class method."""
 
-    async def test_retrieve_by_chat_basic(
-        self, mock_async_database_session, mock_message_record1, mock_message_record2
-    ):
+    async def test_retrieve_by_chat_basic(self, async_database_connection, mock_message_record1, mock_message_record2):
         """Test retrieving messages by chat ID."""
         chat_id = "123456"
 
@@ -543,14 +541,14 @@ class TestMessagesRetrieveByChat:
         mock_scalars = MagicMock()
         mock_scalars.all.return_value = [mock_message_record1, mock_message_record2]
         mock_result.scalars.return_value = mock_scalars
-        mock_async_database_session.execute.return_value = mock_result
+        async_database_connection.execute.return_value = mock_result
 
         # Call the method
-        result = await Messages.retrieve_by_chat(mock_async_database_session, chat_id)
+        result = await Messages.retrieve_by_chat(async_database_connection, chat_id)
 
         # Verify the query was executed
-        mock_async_database_session.execute.assert_called_once()
-        stmt = mock_async_database_session.execute.call_args[0][0]
+        async_database_connection.execute.assert_called_once()
+        stmt = async_database_connection.execute.call_args[0][0]
 
         # Check that the statement filters by chat_id
         assert isinstance(stmt, type(select(Messages)))
@@ -564,7 +562,7 @@ class TestMessagesRetrieveByChat:
         assert result[0] == mock_message_record1.to_telegram_object.return_value
         assert result[1] == mock_message_record2.to_telegram_object.return_value
 
-    async def test_retrieve_by_chat_with_time_range(self, mock_async_database_session):
+    async def test_retrieve_by_chat_with_time_range(self, async_database_connection):
         """Test retrieving messages with time range filters."""
         chat_id = "123456"
         from_time = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
@@ -575,20 +573,20 @@ class TestMessagesRetrieveByChat:
         mock_scalars = MagicMock()
         mock_scalars.all.return_value = []
         mock_result.scalars.return_value = mock_scalars
-        mock_async_database_session.execute.return_value = mock_result
+        async_database_connection.execute.return_value = mock_result
 
         # Call the method with time range
         result = await Messages.retrieve_by_chat(
-            mock_async_database_session, chat_id, from_time=from_time, to_time=to_time
+            async_database_connection, chat_id, from_time=from_time, to_time=to_time
         )
 
         # Verify the query was executed
-        mock_async_database_session.execute.assert_called_once()
+        async_database_connection.execute.assert_called_once()
 
         # Verify empty result
         assert result == []
 
-    async def test_retrieve_by_chat_with_limit(self, mock_async_database_session, mock_message_record1):
+    async def test_retrieve_by_chat_with_limit(self, async_database_connection, mock_message_record1):
         """Test retrieving messages with limit."""
         chat_id = "123456"
         limit = 10
@@ -598,13 +596,13 @@ class TestMessagesRetrieveByChat:
         mock_scalars = MagicMock()
         mock_scalars.all.return_value = [mock_message_record1]
         mock_result.scalars.return_value = mock_scalars
-        mock_async_database_session.execute.return_value = mock_result
+        async_database_connection.execute.return_value = mock_result
 
         # Call the method with limit
-        result = await Messages.retrieve_by_chat(mock_async_database_session, chat_id, limit=limit)
+        result = await Messages.retrieve_by_chat(async_database_connection, chat_id, limit=limit)
 
         # Verify the query was executed
-        mock_async_database_session.execute.assert_called_once()
+        async_database_connection.execute.assert_called_once()
 
         # Verify to_telegram_object was called
         mock_message_record1.to_telegram_object.assert_called_once()
@@ -613,7 +611,7 @@ class TestMessagesRetrieveByChat:
         assert len(result) == 1
         assert result[0] == mock_message_record1.to_telegram_object.return_value
 
-    async def test_retrieve_by_chat_no_messages(self, mock_async_database_session):
+    async def test_retrieve_by_chat_no_messages(self, async_database_connection):
         """Test retrieving messages when none exist."""
         chat_id = "nonexistent"
 
@@ -622,15 +620,15 @@ class TestMessagesRetrieveByChat:
         mock_scalars = MagicMock()
         mock_scalars.all.return_value = []
         mock_result.scalars.return_value = mock_scalars
-        mock_async_database_session.execute.return_value = mock_result
+        async_database_connection.execute.return_value = mock_result
 
         # Call the method
-        result = await Messages.retrieve_by_chat(mock_async_database_session, chat_id)
+        result = await Messages.retrieve_by_chat(async_database_connection, chat_id)
 
         # Verify the result is empty
         assert result == []
 
-    async def test_retrieve_by_chat_excludes_soft_deleted(self, mock_async_database_session):
+    async def test_retrieve_by_chat_excludes_soft_deleted(self, async_database_connection):
         """Test retrieving messages excludes soft-deleted ones."""
         chat_id = "123456"
 
@@ -644,17 +642,17 @@ class TestMessagesRetrieveByChat:
         mock_scalars = MagicMock()
         mock_scalars.all.return_value = [mock_message]
         mock_result.scalars.return_value = mock_scalars
-        mock_async_database_session.execute.return_value = mock_result
+        async_database_connection.execute.return_value = mock_result
 
         # Call the method
-        result = await Messages.retrieve_by_chat(mock_async_database_session, chat_id)
+        result = await Messages.retrieve_by_chat(async_database_connection, chat_id)
 
         # Verify only one message returned (soft-deleted excluded by query)
         assert len(result) == 1
         assert result[0] == mock_message.to_telegram_object.return_value
 
     async def test_retrieve_by_chat_uses_retrieve_raw_by_chat(
-        self, mock_async_database_session, mock_message_record1, mock_message_record2
+        self, async_database_connection, mock_message_record1, mock_message_record2
     ):
         """Test that retrieve_by_chat uses retrieve_raw_by_chat internally."""
         chat_id = "123456"
@@ -669,11 +667,11 @@ class TestMessagesRetrieveByChat:
         with patch.object(Messages, "retrieve_raw_by_chat", return_value=raw_messages) as mock_raw_method:
             # Call retrieve_by_chat
             result = await Messages.retrieve_by_chat(
-                mock_async_database_session, chat_id, from_time=from_time, to_time=to_time, limit=limit
+                async_database_connection, chat_id, from_time=from_time, to_time=to_time, limit=limit
             )
 
             # Verify retrieve_raw_by_chat was called with the same parameters
-            mock_raw_method.assert_called_once_with(mock_async_database_session, chat_id, from_time, to_time, limit)
+            mock_raw_method.assert_called_once_with(async_database_connection, chat_id, from_time, to_time, limit)
 
             # Verify to_telegram_object was called on each raw message
             mock_message_record1.to_telegram_object.assert_called_once()
@@ -689,7 +687,7 @@ class TestMessagesRetrieveRawByChat:
     """Test the retrieve_raw_by_chat class method."""
 
     async def test_retrieve_raw_by_chat_basic(
-        self, mock_async_database_session, mock_message_record1, mock_message_record2
+        self, async_database_connection, mock_message_record1, mock_message_record2
     ):
         """Test retrieving raw message models by chat ID."""
         chat_id = "123456"
@@ -699,14 +697,14 @@ class TestMessagesRetrieveRawByChat:
         mock_scalars = MagicMock()
         mock_scalars.all.return_value = [mock_message_record1, mock_message_record2]
         mock_result.scalars.return_value = mock_scalars
-        mock_async_database_session.execute.return_value = mock_result
+        async_database_connection.execute.return_value = mock_result
 
         # Call the method
-        result = await Messages.retrieve_raw_by_chat(mock_async_database_session, chat_id)
+        result = await Messages.retrieve_raw_by_chat(async_database_connection, chat_id)
 
         # Verify the query was executed
-        mock_async_database_session.execute.assert_called_once()
-        stmt = mock_async_database_session.execute.call_args[0][0]
+        async_database_connection.execute.assert_called_once()
+        stmt = async_database_connection.execute.call_args[0][0]
 
         # Check that the statement filters by chat_id
         assert isinstance(stmt, type(select(Messages)))
@@ -720,7 +718,7 @@ class TestMessagesRetrieveRawByChat:
         assert result[0] == mock_message_record1
         assert result[1] == mock_message_record2
 
-    async def test_retrieve_raw_by_chat_with_time_range(self, mock_async_database_session):
+    async def test_retrieve_raw_by_chat_with_time_range(self, async_database_connection):
         """Test retrieving raw messages with time range filters."""
         chat_id = "123456"
         from_time = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
@@ -731,20 +729,20 @@ class TestMessagesRetrieveRawByChat:
         mock_scalars = MagicMock()
         mock_scalars.all.return_value = []
         mock_result.scalars.return_value = mock_scalars
-        mock_async_database_session.execute.return_value = mock_result
+        async_database_connection.execute.return_value = mock_result
 
         # Call the method with time range
         result = await Messages.retrieve_raw_by_chat(
-            mock_async_database_session, chat_id, from_time=from_time, to_time=to_time
+            async_database_connection, chat_id, from_time=from_time, to_time=to_time
         )
 
         # Verify the query was executed
-        mock_async_database_session.execute.assert_called_once()
+        async_database_connection.execute.assert_called_once()
 
         # Verify empty result
         assert result == []
 
-    async def test_retrieve_raw_by_chat_with_limit(self, mock_async_database_session, mock_message_record1):
+    async def test_retrieve_raw_by_chat_with_limit(self, async_database_connection, mock_message_record1):
         """Test retrieving raw messages with limit."""
         chat_id = "123456"
         limit = 10
@@ -754,13 +752,13 @@ class TestMessagesRetrieveRawByChat:
         mock_scalars = MagicMock()
         mock_scalars.all.return_value = [mock_message_record1]
         mock_result.scalars.return_value = mock_scalars
-        mock_async_database_session.execute.return_value = mock_result
+        async_database_connection.execute.return_value = mock_result
 
         # Call the method with limit
-        result = await Messages.retrieve_raw_by_chat(mock_async_database_session, chat_id, limit=limit)
+        result = await Messages.retrieve_raw_by_chat(async_database_connection, chat_id, limit=limit)
 
         # Verify the query was executed
-        mock_async_database_session.execute.assert_called_once()
+        async_database_connection.execute.assert_called_once()
 
         # Verify to_telegram_object was NOT called
         mock_message_record1.to_telegram_object.assert_not_called()
@@ -769,7 +767,7 @@ class TestMessagesRetrieveRawByChat:
         assert len(result) == 1
         assert result[0] == mock_message_record1
 
-    async def test_retrieve_raw_by_chat_no_messages(self, mock_async_database_session):
+    async def test_retrieve_raw_by_chat_no_messages(self, async_database_connection):
         """Test retrieving raw messages when none exist."""
         chat_id = "nonexistent"
 
@@ -778,15 +776,15 @@ class TestMessagesRetrieveRawByChat:
         mock_scalars = MagicMock()
         mock_scalars.all.return_value = []
         mock_result.scalars.return_value = mock_scalars
-        mock_async_database_session.execute.return_value = mock_result
+        async_database_connection.execute.return_value = mock_result
 
         # Call the method
-        result = await Messages.retrieve_raw_by_chat(mock_async_database_session, chat_id)
+        result = await Messages.retrieve_raw_by_chat(async_database_connection, chat_id)
 
         # Verify the result is empty
         assert result == []
 
-    async def test_retrieve_raw_by_chat_all_parameters(self, mock_async_database_session, mock_message_record1):
+    async def test_retrieve_raw_by_chat_all_parameters(self, async_database_connection, mock_message_record1):
         """Test retrieving raw messages with all parameters specified."""
         chat_id = "123456"
         from_time = datetime(2025, 1, 15, 9, 0, 0, tzinfo=UTC)
@@ -798,15 +796,15 @@ class TestMessagesRetrieveRawByChat:
         mock_scalars = MagicMock()
         mock_scalars.all.return_value = [mock_message_record1]
         mock_result.scalars.return_value = mock_scalars
-        mock_async_database_session.execute.return_value = mock_result
+        async_database_connection.execute.return_value = mock_result
 
         # Call the method with all parameters
         result = await Messages.retrieve_raw_by_chat(
-            mock_async_database_session, chat_id, from_time=from_time, to_time=to_time, limit=limit
+            async_database_connection, chat_id, from_time=from_time, to_time=to_time, limit=limit
         )
 
         # Verify the query was executed
-        mock_async_database_session.execute.assert_called_once()
+        async_database_connection.execute.assert_called_once()
 
         # Verify the result
         assert len(result) == 1

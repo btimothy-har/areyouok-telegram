@@ -18,7 +18,7 @@ class TestNewMessageHandler:
 
     @pytest.mark.asyncio
     async def test_on_new_message_with_existing_session(
-        self, mock_async_database_session, mock_update_private_chat_new_message
+        self, async_database_connection, mock_update_private_chat_new_message
     ):
         """Test on_new_message with existing active session."""
         mock_context = AsyncMock()
@@ -37,7 +37,7 @@ class TestNewMessageHandler:
 
             # Verify message was saved
             mock_messages_new_or_update.assert_called_once_with(
-                mock_async_database_session,
+                async_database_connection,
                 user_id=mock_update_private_chat_new_message.effective_user.id,
                 chat_id=mock_update_private_chat_new_message.effective_chat.id,
                 message=mock_update_private_chat_new_message.message,
@@ -45,12 +45,12 @@ class TestNewMessageHandler:
 
             # Verify media extraction was called
             mock_extract_media.assert_called_once_with(
-                mock_async_database_session, mock_update_private_chat_new_message.message
+                async_database_connection, mock_update_private_chat_new_message.message
             )
 
             # Verify session management
             mock_get_active.assert_called_once_with(
-                mock_async_database_session, str(mock_update_private_chat_new_message.effective_chat.id)
+                async_database_connection, str(mock_update_private_chat_new_message.effective_chat.id)
             )
             mock_session.new_message.assert_called_once_with(
                 mock_update_private_chat_new_message.message.date, is_user=True
@@ -58,7 +58,7 @@ class TestNewMessageHandler:
 
     @pytest.mark.asyncio
     async def test_on_new_message_without_existing_session(
-        self, mock_async_database_session, mock_update_private_chat_new_message
+        self, async_database_connection, mock_update_private_chat_new_message
     ):
         """Test on_new_message without existing active session."""
         mock_context = AsyncMock()
@@ -80,7 +80,7 @@ class TestNewMessageHandler:
 
             # Verify message was saved
             mock_messages_new_or_update.assert_called_once_with(
-                mock_async_database_session,
+                async_database_connection,
                 user_id=mock_update_private_chat_new_message.effective_user.id,
                 chat_id=mock_update_private_chat_new_message.effective_chat.id,
                 message=mock_update_private_chat_new_message.message,
@@ -88,15 +88,15 @@ class TestNewMessageHandler:
 
             # Verify media extraction was called
             mock_extract_media.assert_called_once_with(
-                mock_async_database_session, mock_update_private_chat_new_message.message
+                async_database_connection, mock_update_private_chat_new_message.message
             )
 
             # Verify session management
             mock_get_active.assert_called_once_with(
-                mock_async_database_session, str(mock_update_private_chat_new_message.effective_chat.id)
+                async_database_connection, str(mock_update_private_chat_new_message.effective_chat.id)
             )
             mock_create_session.assert_called_once_with(
-                mock_async_database_session,
+                async_database_connection,
                 str(mock_update_private_chat_new_message.effective_chat.id),
                 mock_update_private_chat_new_message.message.date,
             )
@@ -105,7 +105,7 @@ class TestNewMessageHandler:
             )
 
     @pytest.mark.asyncio
-    async def test_no_message_received(self, mock_async_database_session, mock_update_empty):
+    async def test_no_message_received(self, async_database_connection, mock_update_empty):
         """Test on_new_message raises NoMessageError when no message is received."""
         mock_context = AsyncMock()
 
@@ -115,7 +115,7 @@ class TestNewMessageHandler:
         assert str(exc_info.value) == f"Expected to receive a new message in update: {mock_update_empty.update_id}"
 
         # Ensure no database operations were attempted
-        mock_async_database_session.assert_not_called()
+        async_database_connection.assert_not_called()
 
 
 class TestEditMessageHandler:
@@ -123,7 +123,7 @@ class TestEditMessageHandler:
 
     @pytest.mark.asyncio
     async def test_on_edit_message_with_active_session_recent_message(
-        self, mock_async_database_session, mock_update_private_chat_edited_message, mock_session
+        self, async_database_connection, mock_update_private_chat_edited_message, mock_session
     ):
         """Test on_edit_message with active session and recent message (after session start)."""
         mock_context = AsyncMock()
@@ -141,7 +141,7 @@ class TestEditMessageHandler:
 
             # Verify message was saved
             mock_messages_new_or_update.assert_called_once_with(
-                mock_async_database_session,
+                async_database_connection,
                 user_id=mock_update_private_chat_edited_message.effective_user.id,
                 chat_id=mock_update_private_chat_edited_message.effective_chat.id,
                 message=mock_update_private_chat_edited_message.edited_message,
@@ -149,12 +149,12 @@ class TestEditMessageHandler:
 
             # Verify media extraction was called
             mock_extract_media.assert_called_once_with(
-                mock_async_database_session, mock_update_private_chat_edited_message.edited_message
+                async_database_connection, mock_update_private_chat_edited_message.edited_message
             )
 
             # Verify session was extended with edit_date
             mock_get_active.assert_called_once_with(
-                mock_async_database_session, str(mock_update_private_chat_edited_message.effective_chat.id)
+                async_database_connection, str(mock_update_private_chat_edited_message.effective_chat.id)
             )
             mock_session.new_activity.assert_called_once_with(
                 mock_update_private_chat_edited_message.edited_message.edit_date, is_user=True
@@ -162,7 +162,7 @@ class TestEditMessageHandler:
 
     @pytest.mark.asyncio
     async def test_on_edit_message_with_active_session_old_message(
-        self, mock_async_database_session, mock_update_private_chat_edited_message, mock_session
+        self, async_database_connection, mock_update_private_chat_edited_message, mock_session
     ):
         """Test on_edit_message with active session but old message (before session start)."""
         mock_context = AsyncMock()
@@ -180,7 +180,7 @@ class TestEditMessageHandler:
 
             # Verify message was saved
             mock_messages_new_or_update.assert_called_once_with(
-                mock_async_database_session,
+                async_database_connection,
                 user_id=mock_update_private_chat_edited_message.effective_user.id,
                 chat_id=mock_update_private_chat_edited_message.effective_chat.id,
                 message=mock_update_private_chat_edited_message.edited_message,
@@ -188,18 +188,18 @@ class TestEditMessageHandler:
 
             # Verify media extraction was called
             mock_extract_media.assert_called_once_with(
-                mock_async_database_session, mock_update_private_chat_edited_message.edited_message
+                async_database_connection, mock_update_private_chat_edited_message.edited_message
             )
 
             # Verify session was NOT extended (old message)
             mock_get_active.assert_called_once_with(
-                mock_async_database_session, str(mock_update_private_chat_edited_message.effective_chat.id)
+                async_database_connection, str(mock_update_private_chat_edited_message.effective_chat.id)
             )
             mock_session.new_activity.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_on_edit_message_without_active_session(
-        self, mock_async_database_session, mock_update_private_chat_edited_message
+        self, async_database_connection, mock_update_private_chat_edited_message
     ):
         """Test on_edit_message without active session (no session created for edits)."""
         mock_context = AsyncMock()
@@ -215,7 +215,7 @@ class TestEditMessageHandler:
 
             # Verify message was saved
             mock_messages_new_or_update.assert_called_once_with(
-                mock_async_database_session,
+                async_database_connection,
                 user_id=mock_update_private_chat_edited_message.effective_user.id,
                 chat_id=mock_update_private_chat_edited_message.effective_chat.id,
                 message=mock_update_private_chat_edited_message.edited_message,
@@ -226,12 +226,12 @@ class TestEditMessageHandler:
 
             # Verify no session was created for edits
             mock_get_active.assert_called_once_with(
-                mock_async_database_session, str(mock_update_private_chat_edited_message.effective_chat.id)
+                async_database_connection, str(mock_update_private_chat_edited_message.effective_chat.id)
             )
             mock_create_session.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_no_message_received(self, mock_async_database_session, mock_update_empty):
+    async def test_no_message_received(self, async_database_connection, mock_update_empty):
         """Test on_edit_message with the expected payload for an edited private message."""
         mock_context = AsyncMock()
 
@@ -241,7 +241,7 @@ class TestEditMessageHandler:
         assert str(exc_info.value) == f"Expected to receive an edited message in update: {mock_update_empty.update_id}"
 
         # Ensure no database operations were attempted
-        mock_async_database_session.assert_not_called()
+        async_database_connection.assert_not_called()
 
 
 class TestMessageReactHandler:
@@ -249,7 +249,7 @@ class TestMessageReactHandler:
 
     @pytest.mark.asyncio
     async def test_on_message_react_with_active_session_recent_message(
-        self, mock_async_database_session, mock_update_message_reaction, mock_session
+        self, async_database_connection, mock_update_message_reaction, mock_session
     ):
         """Test on_message_react with active session and recent message (after session start)."""
         mock_context = AsyncMock()
@@ -266,7 +266,7 @@ class TestMessageReactHandler:
 
             # Verify message was saved
             mock_messages_new_or_update.assert_called_once_with(
-                mock_async_database_session,
+                async_database_connection,
                 user_id=mock_update_message_reaction.effective_user.id,
                 chat_id=mock_update_message_reaction.effective_chat.id,
                 message=mock_update_message_reaction.message_reaction,
@@ -274,7 +274,7 @@ class TestMessageReactHandler:
 
             # Verify session was extended with reaction date
             mock_get_active.assert_called_once_with(
-                mock_async_database_session, str(mock_update_message_reaction.effective_chat.id)
+                async_database_connection, str(mock_update_message_reaction.effective_chat.id)
             )
             mock_session.new_activity.assert_called_once_with(
                 mock_update_message_reaction.message_reaction.date, is_user=True
@@ -282,7 +282,7 @@ class TestMessageReactHandler:
 
     @pytest.mark.asyncio
     async def test_on_message_react_with_active_session_old_message(
-        self, mock_async_database_session, mock_update_message_reaction, mock_session
+        self, async_database_connection, mock_update_message_reaction, mock_session
     ):
         """Test on_message_react with active session but old message (before session start)."""
         mock_context = AsyncMock()
@@ -299,7 +299,7 @@ class TestMessageReactHandler:
 
             # Verify message was saved
             mock_messages_new_or_update.assert_called_once_with(
-                mock_async_database_session,
+                async_database_connection,
                 user_id=mock_update_message_reaction.effective_user.id,
                 chat_id=mock_update_message_reaction.effective_chat.id,
                 message=mock_update_message_reaction.message_reaction,
@@ -307,13 +307,13 @@ class TestMessageReactHandler:
 
             # Verify session was NOT extended (old message)
             mock_get_active.assert_called_once_with(
-                mock_async_database_session, str(mock_update_message_reaction.effective_chat.id)
+                async_database_connection, str(mock_update_message_reaction.effective_chat.id)
             )
             mock_session.new_activity.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_on_message_react_without_active_session(
-        self, mock_async_database_session, mock_update_message_reaction
+        self, async_database_connection, mock_update_message_reaction
     ):
         """Test on_message_react without active session (no session created for reactions)."""
         mock_context = AsyncMock()
@@ -328,7 +328,7 @@ class TestMessageReactHandler:
 
             # Verify message was saved
             mock_messages_new_or_update.assert_called_once_with(
-                mock_async_database_session,
+                async_database_connection,
                 user_id=mock_update_message_reaction.effective_user.id,
                 chat_id=mock_update_message_reaction.effective_chat.id,
                 message=mock_update_message_reaction.message_reaction,
@@ -336,12 +336,12 @@ class TestMessageReactHandler:
 
             # Verify no session was created for reactions
             mock_get_active.assert_called_once_with(
-                mock_async_database_session, str(mock_update_message_reaction.effective_chat.id)
+                async_database_connection, str(mock_update_message_reaction.effective_chat.id)
             )
             mock_create_session.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_no_message_reaction_received(self, mock_async_database_session, mock_update_empty):
+    async def test_no_message_reaction_received(self, async_database_connection, mock_update_empty):
         """Test on_message_react raises NoMessageReactionError when no message reaction is received."""
         mock_context = AsyncMock()
 
@@ -351,4 +351,4 @@ class TestMessageReactHandler:
         assert str(exc_info.value) == f"Expected to receive a message reaction in update: {mock_update_empty.update_id}"
 
         # Ensure no database operations were attempted
-        mock_async_database_session.assert_not_called()
+        async_database_connection.assert_not_called()

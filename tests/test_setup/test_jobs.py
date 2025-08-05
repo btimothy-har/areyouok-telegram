@@ -32,7 +32,7 @@ class TestSetupConversationRunners:
         active_sessions = [mock_session1, mock_session2]
 
         with (
-            patch("areyouok_telegram.setup.jobs.async_database_session") as mock_db_session,
+            patch("areyouok_telegram.setup.jobs.async_database") as mock_db_session,
             patch("areyouok_telegram.setup.jobs.Sessions.get_all_active_sessions") as mock_get_sessions,
             patch("areyouok_telegram.setup.jobs.schedule_conversation_job") as mock_schedule_job,
         ):
@@ -59,7 +59,7 @@ class TestSetupConversationRunners:
         mock_context = MagicMock(spec=Application)
 
         with (
-            patch("areyouok_telegram.setup.jobs.async_database_session") as mock_db_session,
+            patch("areyouok_telegram.setup.jobs.async_database") as mock_db_session,
             patch("areyouok_telegram.setup.jobs.Sessions.get_all_active_sessions") as mock_get_sessions,
             patch("areyouok_telegram.setup.jobs.schedule_conversation_job") as mock_schedule_job,
         ):

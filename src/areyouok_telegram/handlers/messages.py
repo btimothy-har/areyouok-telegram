@@ -6,7 +6,7 @@ from telegram.ext import ContextTypes
 
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data import Sessions
-from areyouok_telegram.data import async_database_session
+from areyouok_telegram.data import async_database
 from areyouok_telegram.handlers.exceptions import NoEditedMessageError
 from areyouok_telegram.handlers.exceptions import NoMessageError
 from areyouok_telegram.handlers.exceptions import NoMessageReactionError
@@ -25,7 +25,7 @@ async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_
         chat_id=update.effective_chat.id,
         user_id=update.effective_user.id,
     ):
-        async with async_database_session() as session:
+        async with async_database() as session:
             # Save the message
             with logfire.span(
                 "Saving new message to database.",
@@ -69,7 +69,7 @@ async def on_edit_message(update: telegram.Update, context: ContextTypes.DEFAULT
         chat_id=update.effective_chat.id,
         user_id=update.effective_user.id,
     ):
-        async with async_database_session() as session:
+        async with async_database() as session:
             # Save the edited message
             with logfire.span(
                 "Saving edited message to database.",
@@ -123,7 +123,7 @@ async def on_message_react(update: telegram.Update, context: ContextTypes.DEFAUL
         message_id=update.message_reaction.message_id,
         chat_id=update.effective_chat.id,
     ):
-        async with async_database_session() as session:
+        async with async_database() as session:
             # Save the reaction
             with logfire.span(
                 "Saving message reaction to database.",

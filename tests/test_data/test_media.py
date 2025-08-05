@@ -54,14 +54,14 @@ class TestMediaFiles:
     """Test MediaFiles functionality."""
 
     @pytest.mark.asyncio
-    async def test_create_file_with_individual_params(self, mock_async_database_session):
+    async def test_create_file_with_individual_params(self, async_database_connection):
         """Test creating a file with individual parameters."""
         # Mock magic.from_buffer to detect MIME type
         with patch("areyouok_telegram.data.media.magic.from_buffer") as mock_from_buffer:
             mock_from_buffer.return_value = "image/jpeg"
 
             await MediaFiles.create_file(
-                session=mock_async_database_session,
+                session=async_database_connection,
                 file_id="test_123",
                 file_unique_id="test_unique_123",
                 chat_id="123456",
@@ -74,15 +74,15 @@ class TestMediaFiles:
             mock_from_buffer.assert_called_once_with(b"fake_image_data", mime=True)
 
             # Verify database operations were called
-            mock_async_database_session.execute.assert_called_once()
+            async_database_connection.execute.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_get_agent_compatible_media(self, mock_async_database_session, mock_media_files):
+    async def test_get_agent_compatible_media(self, async_database_connection, mock_media_files):
         """Test filtering media files for agent compatibility."""
         # Mock get_by_message_id to return all media types
         with patch.object(MediaFiles, "get_by_message_id", return_value=mock_media_files):
             result = await MediaFiles.get_agent_compatible_media(
-                mock_async_database_session, chat_id="123456", message_id="789"
+                async_database_connection, chat_id="123456", message_id="789"
             )
 
             # Should only return image and PDF files
@@ -91,18 +91,18 @@ class TestMediaFiles:
             assert result[1].mime_type == "application/pdf"
 
     @pytest.mark.asyncio
-    async def test_get_agent_compatible_media_empty(self, mock_async_database_session):
+    async def test_get_agent_compatible_media_empty(self, async_database_connection):
         """Test get_agent_compatible_media with no media files."""
         # Mock get_by_message_id to return empty list
         with patch.object(MediaFiles, "get_by_message_id", return_value=[]):
             result = await MediaFiles.get_agent_compatible_media(
-                mock_async_database_session, chat_id="123456", message_id="789"
+                async_database_connection, chat_id="123456", message_id="789"
             )
 
             assert result == []
 
     @pytest.mark.asyncio
-    async def test_get_agent_compatible_media_no_compatible(self, mock_async_database_session):
+    async def test_get_agent_compatible_media_no_compatible(self, async_database_connection):
         """Test get_agent_compatible_media with only incompatible media."""
         # Create only audio/video media
         audio_media = MagicMock(spec=MediaFiles)
@@ -113,7 +113,7 @@ class TestMediaFiles:
 
         with patch.object(MediaFiles, "get_by_message_id", return_value=[audio_media, video_media]):
             result = await MediaFiles.get_agent_compatible_media(
-                mock_async_database_session, chat_id="123456", message_id="789"
+                async_database_connection, chat_id="123456", message_id="789"
             )
 
             assert result == []
@@ -135,7 +135,7 @@ class TestMediaFiles:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_get_by_file_id_found(self, mock_async_database_session):
+    async def test_get_by_file_id_found(self, async_database_connection):
         """Test get_by_file_id when media is found."""
         # Create mock media file
         mock_media = MagicMock(spec=MediaFiles)
@@ -145,34 +145,34 @@ class TestMediaFiles:
         # Mock the execute result
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = mock_media
-        mock_async_database_session.execute.return_value = mock_result
+        async_database_connection.execute.return_value = mock_result
 
         # Mock update_last_accessed
         with patch.object(MediaFiles, "update_last_accessed") as mock_update:
-            result = await MediaFiles.get_by_file_id(mock_async_database_session, "test_file_123")
+            result = await MediaFiles.get_by_file_id(async_database_connection, "test_file_123")
 
             assert result == mock_media
             # Verify update_last_accessed was called with the media ID
-            mock_update.assert_called_once_with(mock_async_database_session, [123])
+            mock_update.assert_called_once_with(async_database_connection, [123])
 
     @pytest.mark.asyncio
-    async def test_get_by_file_id_not_found(self, mock_async_database_session):
+    async def test_get_by_file_id_not_found(self, async_database_connection):
         """Test get_by_file_id when media is not found."""
         # Mock the execute result to return None
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = None
-        mock_async_database_session.execute.return_value = mock_result
+        async_database_connection.execute.return_value = mock_result
 
         # Mock update_last_accessed
         with patch.object(MediaFiles, "update_last_accessed") as mock_update:
-            result = await MediaFiles.get_by_file_id(mock_async_database_session, "nonexistent_file")
+            result = await MediaFiles.get_by_file_id(async_database_connection, "nonexistent_file")
 
             assert result is None
             # Verify update_last_accessed was NOT called
             mock_update.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_get_by_message_id_with_media(self, mock_async_database_session):
+    async def test_get_by_message_id_with_media(self, async_database_connection):
         """Test get_by_message_id when media files are found."""
         # Create mock media files
         mock_media1 = MagicMock(spec=MediaFiles)
@@ -185,44 +185,44 @@ class TestMediaFiles:
         mock_scalars = MagicMock()
         mock_scalars.all.return_value = [mock_media1, mock_media2]
         mock_result.scalars.return_value = mock_scalars
-        mock_async_database_session.execute.return_value = mock_result
+        async_database_connection.execute.return_value = mock_result
 
         # Mock update_last_accessed
         with patch.object(MediaFiles, "update_last_accessed") as mock_update:
-            result = await MediaFiles.get_by_message_id(mock_async_database_session, "123456", "789")
+            result = await MediaFiles.get_by_message_id(async_database_connection, "123456", "789")
 
             assert result == [mock_media1, mock_media2]
             # Verify update_last_accessed was called with both media IDs
-            mock_update.assert_called_once_with(mock_async_database_session, [1, 2])
+            mock_update.assert_called_once_with(async_database_connection, [1, 2])
 
     @pytest.mark.asyncio
-    async def test_get_by_message_id_no_media(self, mock_async_database_session):
+    async def test_get_by_message_id_no_media(self, async_database_connection):
         """Test get_by_message_id when no media files are found."""
         # Mock the execute result to return empty list
         mock_result = MagicMock()
         mock_scalars = MagicMock()
         mock_scalars.all.return_value = []
         mock_result.scalars.return_value = mock_scalars
-        mock_async_database_session.execute.return_value = mock_result
+        async_database_connection.execute.return_value = mock_result
 
         # Mock update_last_accessed
         with patch.object(MediaFiles, "update_last_accessed") as mock_update:
-            result = await MediaFiles.get_by_message_id(mock_async_database_session, "123456", "789")
+            result = await MediaFiles.get_by_message_id(async_database_connection, "123456", "789")
 
             assert result == []
             # Verify update_last_accessed was NOT called
             mock_update.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_update_last_accessed_with_ids(self, mock_async_database_session):
+    async def test_update_last_accessed_with_ids(self, async_database_connection):
         """Test update_last_accessed with media IDs."""
-        await MediaFiles.update_last_accessed(mock_async_database_session, [1, 2, 3])
+        await MediaFiles.update_last_accessed(async_database_connection, [1, 2, 3])
 
         # Verify execute was called
-        mock_async_database_session.execute.assert_called_once()
+        async_database_connection.execute.assert_called_once()
 
         # Get the statement that was executed
-        executed_stmt = mock_async_database_session.execute.call_args[0][0]
+        executed_stmt = async_database_connection.execute.call_args[0][0]
 
         # Verify it's an update statement (checking the string representation)
         stmt_str = str(executed_stmt)
@@ -231,9 +231,9 @@ class TestMediaFiles:
         assert "last_accessed_at" in stmt_str
 
     @pytest.mark.asyncio
-    async def test_update_last_accessed_empty_list(self, mock_async_database_session):
+    async def test_update_last_accessed_empty_list(self, async_database_connection):
         """Test update_last_accessed with empty media IDs list."""
-        await MediaFiles.update_last_accessed(mock_async_database_session, [])
+        await MediaFiles.update_last_accessed(async_database_connection, [])
 
         # Verify execute was NOT called for empty list
-        mock_async_database_session.execute.assert_not_called()
+        async_database_connection.execute.assert_not_called()

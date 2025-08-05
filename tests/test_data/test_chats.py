@@ -48,16 +48,16 @@ class TestChatsNewOrUpdate:
     """Test the new_or_update method of the Chats class."""
 
     @freeze_time("2025-01-15 10:30:00", tz_offset=0)
-    async def test_insert_new_forum_chat(self, mock_async_database_session, mock_forum_chat_with_title):
+    async def test_insert_new_forum_chat(self, async_database_connection, mock_forum_chat_with_title):
         """Test inserting a new forum chat record."""
         # Call the method
-        await Chats.new_or_update(mock_async_database_session, mock_forum_chat_with_title)
+        await Chats.new_or_update(async_database_connection, mock_forum_chat_with_title)
 
         # Verify the session.execute was called once
-        mock_async_database_session.execute.assert_called_once()
+        async_database_connection.execute.assert_called_once()
 
         # Get the statement that was executed
-        stmt = mock_async_database_session.execute.call_args[0][0]
+        stmt = async_database_connection.execute.call_args[0][0]
 
         # Verify it's an insert statement
         assert isinstance(stmt, type(pg_insert(Chats)))
@@ -74,12 +74,12 @@ class TestChatsNewOrUpdate:
         assert values["updated_at"] == datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
 
     @freeze_time("2025-01-15 10:30:00", tz_offset=0)
-    async def test_insert_new_group_chat(self, mock_async_database_session, mock_group_chat_no_forum):
+    async def test_insert_new_group_chat(self, async_database_connection, mock_group_chat_no_forum):
         """Test inserting a new group chat that's not a forum."""
-        await Chats.new_or_update(mock_async_database_session, mock_group_chat_no_forum)
+        await Chats.new_or_update(async_database_connection, mock_group_chat_no_forum)
 
-        mock_async_database_session.execute.assert_called_once()
-        stmt = mock_async_database_session.execute.call_args[0][0]
+        async_database_connection.execute.assert_called_once()
+        stmt = async_database_connection.execute.call_args[0][0]
 
         assert isinstance(stmt, type(pg_insert(Chats)))
         assert stmt.table.name == "chats"
@@ -91,12 +91,12 @@ class TestChatsNewOrUpdate:
         assert values["is_forum"] is False
 
     @freeze_time("2025-01-15 10:30:00", tz_offset=0)
-    async def test_insert_private_chat_with_none_values(self, mock_async_database_session, mock_private_chat_no_title):
+    async def test_insert_private_chat_with_none_values(self, async_database_connection, mock_private_chat_no_title):
         """Test inserting a private chat with None values for title and is_forum."""
-        await Chats.new_or_update(mock_async_database_session, mock_private_chat_no_title)
+        await Chats.new_or_update(async_database_connection, mock_private_chat_no_title)
 
-        mock_async_database_session.execute.assert_called_once()
-        stmt = mock_async_database_session.execute.call_args[0][0]
+        async_database_connection.execute.assert_called_once()
+        stmt = async_database_connection.execute.call_args[0][0]
 
         assert isinstance(stmt, type(pg_insert(Chats)))
         assert stmt.table.name == "chats"
@@ -108,17 +108,17 @@ class TestChatsNewOrUpdate:
         assert values["title"] is None
         assert values["is_forum"] is False  # Should default to False when None
 
-    async def test_on_conflict_do_update_configured(self, mock_async_database_session, mock_forum_chat_with_title):
+    async def test_on_conflict_do_update_configured(self, async_database_connection, mock_forum_chat_with_title):
         """Test that the statement includes conflict resolution."""
-        await Chats.new_or_update(mock_async_database_session, mock_forum_chat_with_title)
+        await Chats.new_or_update(async_database_connection, mock_forum_chat_with_title)
 
-        stmt = mock_async_database_session.execute.call_args[0][0]
+        stmt = async_database_connection.execute.call_args[0][0]
 
         # Simply verify that on_conflict was called by checking the statement has conflict handling
         assert hasattr(stmt, "_post_values_clause")
         assert stmt._post_values_clause is not None
 
-    async def test_multiple_chats_different_ids(self, mock_async_database_session):
+    async def test_multiple_chats_different_ids(self, async_database_connection):
         """Test inserting multiple chats with different IDs."""
 
         # Create multiple mock chats
@@ -135,15 +135,15 @@ class TestChatsNewOrUpdate:
         chat2.is_forum = False
 
         # Insert both chats
-        await Chats.new_or_update(mock_async_database_session, chat1)
-        await Chats.new_or_update(mock_async_database_session, chat2)
+        await Chats.new_or_update(async_database_connection, chat1)
+        await Chats.new_or_update(async_database_connection, chat2)
 
         # Verify both inserts were executed
-        assert mock_async_database_session.execute.call_count == 2
+        assert async_database_connection.execute.call_count == 2
 
         # Verify different chat IDs were used
-        first_call_stmt = mock_async_database_session.execute.call_args_list[0][0][0]
-        second_call_stmt = mock_async_database_session.execute.call_args_list[1][0][0]
+        first_call_stmt = async_database_connection.execute.call_args_list[0][0][0]
+        second_call_stmt = async_database_connection.execute.call_args_list[1][0][0]
 
         assert first_call_stmt.compile().params["chat_id"] == "111"
         assert second_call_stmt.compile().params["chat_id"] == "222"

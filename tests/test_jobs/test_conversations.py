@@ -221,7 +221,7 @@ class TestConversationJob:
 
         with (
             patch.object(mock_job, "_generate_response") as mock_generate,
-            patch("areyouok_telegram.jobs.conversations.async_database_session") as mock_db_session,
+            patch("areyouok_telegram.jobs.conversations.async_database") as mock_db_session,
         ):
             mock_db_session.return_value.__aenter__.return_value = AsyncMock()
 
@@ -234,7 +234,7 @@ class TestConversationJob:
             mock_generate.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_run_calls_generate_response(self, mock_job, mock_session, mock_async_database_session):
+    async def test_run_calls_generate_response(self, mock_job, mock_session, async_database_connection):
         """Test run calls _generate_response when bot has not responded."""
         context = MagicMock()
 
@@ -249,7 +249,7 @@ class TestConversationJob:
             assert mock_job._run_count == 1
 
             # Should call generate_response
-            mock_generate.assert_called_once_with(mock_async_database_session, context, mock_session)
+            mock_generate.assert_called_once_with(async_database_connection, context, mock_session)
 
     @pytest.mark.asyncio
     async def test_generate_response_with_text_response(
@@ -620,7 +620,7 @@ class TestConversationJob:
             patch.object(mock_job, "_generate_response") as mock_generate,
             patch.object(mock_job, "_stop") as mock_stop,
             patch.object(mock_job, "_compress_session_context") as mock_compress,
-            patch("areyouok_telegram.jobs.conversations.async_database_session") as mock_db_session,
+            patch("areyouok_telegram.jobs.conversations.async_database") as mock_db_session,
         ):
             mock_conn = AsyncMock()
             mock_db_session.return_value.__aenter__.return_value = mock_conn

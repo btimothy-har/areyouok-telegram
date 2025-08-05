@@ -90,14 +90,14 @@ class TestExtractMediaFromTelegramMessage:
 
     @pytest.mark.asyncio
     @patch("areyouok_telegram.data.MediaFiles.create_file")
-    async def test_extract_voice_message(self, mock_create_file, mock_async_database_session, mock_message_with_voice):
+    async def test_extract_voice_message(self, mock_create_file, async_database_connection, mock_message_with_voice):
         """Test extracting voice message with transcription."""
 
         # Mock transcription
         with patch("areyouok_telegram.handlers.utils.asyncio.to_thread") as mock_to_thread:
             mock_to_thread.return_value = "[Transcribed Audio] Test transcription"
 
-            result = await extract_media_from_telegram_message(mock_async_database_session, mock_message_with_voice)
+            result = await extract_media_from_telegram_message(async_database_connection, mock_message_with_voice)
 
         # Should process voice and transcription
         assert result == 2  # Voice file + transcription
@@ -116,14 +116,14 @@ class TestExtractMediaFromTelegramMessage:
     @pytest.mark.asyncio
     @patch("areyouok_telegram.data.MediaFiles.create_file")
     async def test_extract_voice_transcription_error(
-        self, mock_create_file, mock_async_database_session, mock_message_with_voice
+        self, mock_create_file, async_database_connection, mock_message_with_voice
     ):
         """Test voice extraction when transcription fails."""
         # Mock transcription to fail
         with patch("areyouok_telegram.handlers.utils.asyncio.to_thread") as mock_to_thread:
             mock_to_thread.side_effect = VoiceNotProcessableError()
 
-            result = await extract_media_from_telegram_message(mock_async_database_session, mock_message_with_voice)
+            result = await extract_media_from_telegram_message(async_database_connection, mock_message_with_voice)
 
         # Should still save voice file even if transcription fails
         assert result == 1  # Only voice file
@@ -136,13 +136,13 @@ class TestExtractMediaFromTelegramMessage:
     @pytest.mark.asyncio
     @patch("areyouok_telegram.data.MediaFiles.create_file")
     async def test_extract_multiple_media_types(
-        self, mock_create_file, mock_async_database_session, mock_message_with_photo, mock_document
+        self, mock_create_file, async_database_connection, mock_message_with_photo, mock_document
     ):
         """Test extracting multiple media types from a message."""
         # Modify the photo message to also have a document
         mock_message_with_photo.document = mock_document
 
-        result = await extract_media_from_telegram_message(mock_async_database_session, mock_message_with_photo)
+        result = await extract_media_from_telegram_message(async_database_connection, mock_message_with_photo)
 
         # Should process both photo and document
         assert result == 2
@@ -150,7 +150,7 @@ class TestExtractMediaFromTelegramMessage:
 
     @pytest.mark.asyncio
     @patch("areyouok_telegram.data.MediaFiles.create_file")
-    async def test_extract_sticker_message(self, mock_create_file, mock_async_database_session):
+    async def test_extract_sticker_message(self, mock_create_file, async_database_connection):
         """Test extracting sticker from a message."""
         # Create mock sticker message
         mock_message = MagicMock()
@@ -173,7 +173,7 @@ class TestExtractMediaFromTelegramMessage:
         mock_sticker.get_file = AsyncMock(return_value=mock_sticker_file)
         mock_message.sticker = mock_sticker
 
-        result = await extract_media_from_telegram_message(mock_async_database_session, mock_message)
+        result = await extract_media_from_telegram_message(async_database_connection, mock_message)
 
         # Should process sticker
         assert result == 1
@@ -187,7 +187,7 @@ class TestExtractMediaFromTelegramMessage:
 
     @pytest.mark.asyncio
     @patch("areyouok_telegram.data.MediaFiles.create_file")
-    async def test_extract_animation_message(self, mock_create_file, mock_async_database_session):
+    async def test_extract_animation_message(self, mock_create_file, async_database_connection):
         """Test extracting animation (GIF) from a message."""
         # Create mock animation message
         mock_message = MagicMock()
@@ -210,7 +210,7 @@ class TestExtractMediaFromTelegramMessage:
         mock_animation.get_file = AsyncMock(return_value=mock_animation_file)
         mock_message.animation = mock_animation
 
-        result = await extract_media_from_telegram_message(mock_async_database_session, mock_message)
+        result = await extract_media_from_telegram_message(async_database_connection, mock_message)
 
         # Should process animation
         assert result == 1
@@ -224,7 +224,7 @@ class TestExtractMediaFromTelegramMessage:
 
     @pytest.mark.asyncio
     @patch("areyouok_telegram.data.MediaFiles.create_file")
-    async def test_extract_video_message(self, mock_create_file, mock_async_database_session):
+    async def test_extract_video_message(self, mock_create_file, async_database_connection):
         """Test extracting video from a message."""
         # Create mock video message
         mock_message = MagicMock()
@@ -247,7 +247,7 @@ class TestExtractMediaFromTelegramMessage:
         mock_video.get_file = AsyncMock(return_value=mock_video_file)
         mock_message.video = mock_video
 
-        result = await extract_media_from_telegram_message(mock_async_database_session, mock_message)
+        result = await extract_media_from_telegram_message(async_database_connection, mock_message)
 
         # Should process video
         assert result == 1
@@ -261,7 +261,7 @@ class TestExtractMediaFromTelegramMessage:
 
     @pytest.mark.asyncio
     @patch("areyouok_telegram.data.MediaFiles.create_file")
-    async def test_extract_video_note_message(self, mock_create_file, mock_async_database_session):
+    async def test_extract_video_note_message(self, mock_create_file, async_database_connection):
         """Test extracting video note (circular video) from a message."""
         # Create mock video note message
         mock_message = MagicMock()
@@ -284,7 +284,7 @@ class TestExtractMediaFromTelegramMessage:
         mock_video_note.get_file = AsyncMock(return_value=mock_video_note_file)
         mock_message.video_note = mock_video_note
 
-        result = await extract_media_from_telegram_message(mock_async_database_session, mock_message)
+        result = await extract_media_from_telegram_message(async_database_connection, mock_message)
 
         # Should process video note
         assert result == 1

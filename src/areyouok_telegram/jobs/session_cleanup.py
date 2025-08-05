@@ -8,7 +8,7 @@ from telegram.ext import ContextTypes
 
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data import Sessions
-from areyouok_telegram.data import async_database_session
+from areyouok_telegram.data import async_database
 
 
 class SessionCleanupJob:
@@ -52,7 +52,7 @@ class SessionCleanupJob:
             since=cleanup_since,
             runtime=runtime,
         ):
-            async with async_database_session() as conn:
+            async with async_database() as conn:
                 # Fetch all inactive sessions that ended after the last cleanup timestamp
                 # We only want sessions that have been inactive for at least 10 minutes as a safety margin
                 sessions = await Sessions.get_all_inactive_sessions(
@@ -87,7 +87,7 @@ class SessionCleanupJob:
         """
 
         # Run this using a separate connector to avoid collisions
-        async with async_database_session() as conn:
+        async with async_database() as conn:
             messages = await Messages.retrieve_raw_by_chat(
                 session=conn,
                 chat_id=chat_session.chat_id,

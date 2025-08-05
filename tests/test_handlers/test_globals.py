@@ -26,7 +26,7 @@ class TestGlobalUpdateHandler:
             mock_chats_update.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_update_with_user(self, mock_async_database_session, mock_update_empty, mock_user):
+    async def test_update_with_user(self, async_database_connection, mock_update_empty, mock_user):
         """Test on_new_update with the expected payload for a new private message with user."""
 
         mock_context = AsyncMock()
@@ -40,12 +40,12 @@ class TestGlobalUpdateHandler:
             await on_new_update(mock_update_empty, mock_context)
 
             mock_users_update.assert_called_once_with(
-                session=mock_async_database_session, user=mock_update_empty.effective_user
+                session=async_database_connection, user=mock_update_empty.effective_user
             )
             mock_chats_update.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_update_with_chat(self, mock_async_database_session, mock_update_empty, mock_private_chat):
+    async def test_update_with_chat(self, async_database_connection, mock_update_empty, mock_private_chat):
         """Test on_new_update with the expected payload for a new private message with user."""
 
         mock_context = AsyncMock()
@@ -63,7 +63,7 @@ class TestGlobalUpdateHandler:
 
             mock_users_update.assert_not_called()
             mock_chats_update.assert_called_once_with(
-                session=mock_async_database_session, chat=mock_update_empty.effective_chat
+                session=async_database_connection, chat=mock_update_empty.effective_chat
             )
             mock_schedule_job.assert_called_once_with(
                 context=mock_context, chat_id=str(mock_update_empty.effective_chat.id)
@@ -72,7 +72,7 @@ class TestGlobalUpdateHandler:
     @pytest.mark.asyncio
     async def test_update_new_private_message(
         self,
-        mock_async_database_session,
+        async_database_connection,
         mock_update_private_chat_new_message,
     ):
         """Test on_new_update with the expected payload for a new private message."""
@@ -90,10 +90,10 @@ class TestGlobalUpdateHandler:
             await on_new_update(mock_update_private_chat_new_message, mock_context)
 
             mock_users_update.assert_called_once_with(
-                session=mock_async_database_session, user=mock_update_private_chat_new_message.effective_user
+                session=async_database_connection, user=mock_update_private_chat_new_message.effective_user
             )
             mock_chats_update.assert_called_once_with(
-                session=mock_async_database_session, chat=mock_update_private_chat_new_message.effective_chat
+                session=async_database_connection, chat=mock_update_private_chat_new_message.effective_chat
             )
             mock_schedule_job.assert_called_once_with(
                 context=mock_context, chat_id=str(mock_update_private_chat_new_message.effective_chat.id)
@@ -102,7 +102,7 @@ class TestGlobalUpdateHandler:
 
 class TestGlobalErrorHandler:
     @pytest.mark.asyncio
-    async def test_on_error_event_with_developer_chat_id(self, mock_async_database_session):
+    async def test_on_error_event_with_developer_chat_id(self, async_database_connection):
         """Test on_error_event when DEVELOPER_CHAT_ID is configured."""
         mock_update = AsyncMock()
         mock_update.update_id = 12345
@@ -118,7 +118,7 @@ class TestGlobalErrorHandler:
             await on_error_event(mock_update, mock_context)
 
             # Should store the update
-            mock_updates_upsert.assert_called_once_with(mock_async_database_session, update=mock_update)
+            mock_updates_upsert.assert_called_once_with(async_database_connection, update=mock_update)
 
             mock_context.bot.send_message.assert_called_once()
             call_args = mock_context.bot.send_message.call_args
@@ -127,7 +127,7 @@ class TestGlobalErrorHandler:
             assert "ValueError: Test error" in call_args.kwargs["text"]
 
     @pytest.mark.asyncio
-    async def test_on_error_event_without_developer_chat_id(self, mock_async_database_session):
+    async def test_on_error_event_without_developer_chat_id(self, async_database_connection):
         """Test on_error_event when DEVELOPER_CHAT_ID is not configured."""
         mock_update = AsyncMock()
         mock_update.update_id = 12345
@@ -143,7 +143,7 @@ class TestGlobalErrorHandler:
             await on_error_event(mock_update, mock_context)
 
             # Should still store the update
-            mock_updates_upsert.assert_called_once_with(mock_async_database_session, update=mock_update)
+            mock_updates_upsert.assert_called_once_with(async_database_connection, update=mock_update)
 
             mock_context.bot.send_message.assert_not_called()
 

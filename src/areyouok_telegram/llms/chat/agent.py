@@ -8,8 +8,8 @@ from telegram.ext import ContextTypes
 
 from areyouok_telegram.data import LLMUsage
 from areyouok_telegram.data import Messages
-from areyouok_telegram.data import async_database_session
-from areyouok_telegram.data.connection import AsyncSessionLocal
+from areyouok_telegram.data import async_database
+from sqlalchemy.ext.asyncio import AsyncSession
 from areyouok_telegram.llms.analytics import ContentCheckDependencies
 from areyouok_telegram.llms.analytics import ContentCheckResponse
 from areyouok_telegram.llms.analytics import content_check_agent
@@ -30,7 +30,7 @@ class ChatAgentDependencies:
     tg_chat_id: str
     tg_session_id: str
     last_response_type: str
-    db_connection: AsyncSessionLocal
+    db_connection: AsyncSession
     instruction: str | None = None
 
 
@@ -163,7 +163,7 @@ async def validate_agent_response(
 
             content_check: ContentCheckResponse = content_check_run.output
 
-            async with async_database_session() as conn:
+            async with async_database() as conn:
                 await LLMUsage.track_pydantic_usage(
                     session=conn,
                     chat_id=ctx.deps.tg_chat_id,

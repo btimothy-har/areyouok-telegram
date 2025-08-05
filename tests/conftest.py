@@ -28,7 +28,7 @@ def prevent_model_requests():
 
 
 @pytest.fixture(autouse=True)
-def mock_async_database_session():
+def async_database_connection():
     """
     Fixture that provides a mock async database session for all tests.
 
@@ -48,8 +48,8 @@ def mock_async_database_session():
     mock_session.add = MagicMock()
     mock_session.delete = MagicMock()
 
-    with patch("areyouok_telegram.data.connection.AsyncSessionLocal") as mock_session_local:
-        mock_session_local.return_value = mock_session
+    with patch("areyouok_telegram.data.connection.AsyncDbSession") as mock_session_class:
+        mock_session_class.return_value = mock_session
         yield mock_session
 
 

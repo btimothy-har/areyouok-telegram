@@ -9,12 +9,12 @@ from areyouok_telegram.config import DEVELOPER_CHAT_ID
 from areyouok_telegram.data import Chats
 from areyouok_telegram.data import Updates
 from areyouok_telegram.data import Users
-from areyouok_telegram.data import async_database_session
+from areyouok_telegram.data import async_database
 from areyouok_telegram.jobs import schedule_conversation_job
 
 
 async def on_new_update(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):
-    async with async_database_session() as session:
+    async with async_database() as session:
         if update.effective_user:
             await Users.new_or_update(session=session, user=update.effective_user)
             logfire.debug(
@@ -51,7 +51,7 @@ async def on_error_event(update: telegram.Update, context: ContextTypes.DEFAULT_
         logfire.error(f"Exception while handling an update: {update.update_id}", _exc_info=context.error)
 
         # Store update only for debugging
-        async with async_database_session() as session:
+        async with async_database() as session:
             await Updates.new_or_upsert(session, update=update)
 
     if DEVELOPER_CHAT_ID:

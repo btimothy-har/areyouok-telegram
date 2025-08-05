@@ -6,10 +6,10 @@ from areyouok_telegram.data import LLMUsage
 
 
 @pytest.mark.asyncio
-async def test_track_pydantic_usage(mock_async_database_session):
+async def test_track_pydantic_usage(async_database_connection):
     """Test tracking pydantic AI usage."""
     # Mock the execute result
-    mock_async_database_session.execute.return_value.rowcount = 1
+    async_database_connection.execute.return_value.rowcount = 1
 
     # Mock agent and usage data
     mock_agent = MagicMock()
@@ -22,7 +22,7 @@ async def test_track_pydantic_usage(mock_async_database_session):
 
     # Track usage
     result = await LLMUsage.track_pydantic_usage(
-        session=mock_async_database_session,
+        session=async_database_connection,
         chat_id="test_chat_123",
         session_id="test_session_456",
         agent=mock_agent,
@@ -32,14 +32,14 @@ async def test_track_pydantic_usage(mock_async_database_session):
     assert result == 1  # One row inserted
 
     # Verify the correct SQL was executed
-    mock_async_database_session.execute.assert_called_once()
+    async_database_connection.execute.assert_called_once()
 
 
 @pytest.mark.asyncio
-async def test_track_pydantic_usage_fallback_model(mock_async_database_session):
+async def test_track_pydantic_usage_fallback_model(async_database_connection):
     """Test tracking pydantic AI usage with fallback model."""
     # Mock the execute result
-    mock_async_database_session.execute.return_value.rowcount = 1
+    async_database_connection.execute.return_value.rowcount = 1
 
     # Mock agent with fallback model
     mock_agent = MagicMock()
@@ -57,7 +57,7 @@ async def test_track_pydantic_usage_fallback_model(mock_async_database_session):
 
     # Track usage
     result = await LLMUsage.track_pydantic_usage(
-        session=mock_async_database_session,
+        session=async_database_connection,
         chat_id="test_chat_fallback",
         session_id="test_session_fallback",
         agent=mock_agent,
@@ -65,14 +65,14 @@ async def test_track_pydantic_usage_fallback_model(mock_async_database_session):
     )
 
     assert result == 1  # One row inserted
-    mock_async_database_session.execute.assert_called_once()
+    async_database_connection.execute.assert_called_once()
 
 
 @pytest.mark.asyncio
-async def test_track_pydantic_usage_model_without_provider(mock_async_database_session):
+async def test_track_pydantic_usage_model_without_provider(async_database_connection):
     """Test tracking pydantic AI usage when model name lacks provider prefix."""
     # Mock the execute result
-    mock_async_database_session.execute.return_value.rowcount = 1
+    async_database_connection.execute.return_value.rowcount = 1
 
     # Mock agent with model lacking provider prefix
     mock_agent = MagicMock()
@@ -86,7 +86,7 @@ async def test_track_pydantic_usage_model_without_provider(mock_async_database_s
 
     # Track usage
     result = await LLMUsage.track_pydantic_usage(
-        session=mock_async_database_session,
+        session=async_database_connection,
         chat_id="test_chat_no_provider",
         session_id="test_session_no_provider",
         agent=mock_agent,
@@ -94,14 +94,14 @@ async def test_track_pydantic_usage_model_without_provider(mock_async_database_s
     )
 
     assert result == 1  # One row inserted
-    mock_async_database_session.execute.assert_called_once()
+    async_database_connection.execute.assert_called_once()
 
 
 @pytest.mark.asyncio
-async def test_track_usage_error_handling(mock_async_database_session):
+async def test_track_usage_error_handling(async_database_connection):
     """Test that tracking errors don't break application flow."""
     # Mock the database to throw an error
-    mock_async_database_session.execute.side_effect = Exception("Database error")
+    async_database_connection.execute.side_effect = Exception("Database error")
 
     # Mock agent with valid structure
     mock_agent = MagicMock()
@@ -114,7 +114,7 @@ async def test_track_usage_error_handling(mock_async_database_session):
 
     # This should not raise an exception
     result = await LLMUsage.track_pydantic_usage(
-        session=mock_async_database_session,
+        session=async_database_connection,
         chat_id="test_chat_error",
         session_id="test_session_error",
         agent=mock_agent,

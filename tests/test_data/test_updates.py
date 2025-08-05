@@ -143,16 +143,16 @@ class TestUpdatesNewOrUpsert:
     """Test the new_or_upsert method of the Updates class."""
 
     @freeze_time("2025-01-15 10:30:00", tz_offset=0)
-    async def test_insert_new_message_update(self, mock_async_database_session, mock_message_update):
+    async def test_insert_new_message_update(self, async_database_connection, mock_message_update):
         """Test inserting a new message update record."""
         # Call the method
-        await Updates.new_or_upsert(mock_async_database_session, mock_message_update)
+        await Updates.new_or_upsert(async_database_connection, mock_message_update)
 
         # Verify the session.execute was called once
-        mock_async_database_session.execute.assert_called_once()
+        async_database_connection.execute.assert_called_once()
 
         # Get the statement that was executed
-        stmt = mock_async_database_session.execute.call_args[0][0]
+        stmt = async_database_connection.execute.call_args[0][0]
 
         # Verify it's an insert statement
         assert isinstance(stmt, type(pg_insert(Updates)))
@@ -170,12 +170,12 @@ class TestUpdatesNewOrUpsert:
         assert values["updated_at"] == datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
 
     @freeze_time("2025-01-15 10:30:00", tz_offset=0)
-    async def test_insert_new_callback_query_update(self, mock_async_database_session, mock_callback_query_update):
+    async def test_insert_new_callback_query_update(self, async_database_connection, mock_callback_query_update):
         """Test inserting a new callback query update record."""
-        await Updates.new_or_upsert(mock_async_database_session, mock_callback_query_update)
+        await Updates.new_or_upsert(async_database_connection, mock_callback_query_update)
 
-        mock_async_database_session.execute.assert_called_once()
-        stmt = mock_async_database_session.execute.call_args[0][0]
+        async_database_connection.execute.assert_called_once()
+        stmt = async_database_connection.execute.call_args[0][0]
 
         assert isinstance(stmt, type(pg_insert(Updates)))
         assert stmt.table.name == "updates"
@@ -188,30 +188,30 @@ class TestUpdatesNewOrUpsert:
         assert values["payload"] == mock_callback_query_update.to_dict.return_value
 
     @freeze_time("2025-01-15 10:30:00", tz_offset=0)
-    async def test_insert_edited_message_update(self, mock_async_database_session, mock_edited_message_update):
+    async def test_insert_edited_message_update(self, async_database_connection, mock_edited_message_update):
         """Test inserting an edited message update record."""
-        await Updates.new_or_upsert(mock_async_database_session, mock_edited_message_update)
+        await Updates.new_or_upsert(async_database_connection, mock_edited_message_update)
 
-        mock_async_database_session.execute.assert_called_once()
-        stmt = mock_async_database_session.execute.call_args[0][0]
+        async_database_connection.execute.assert_called_once()
+        stmt = async_database_connection.execute.call_args[0][0]
 
         values = stmt.compile().params
         assert values["update_id"] == "98765"
         assert values["payload"] == mock_edited_message_update.to_dict.return_value
 
-    async def test_on_conflict_do_update_configured(self, mock_async_database_session, mock_message_update):
+    async def test_on_conflict_do_update_configured(self, async_database_connection, mock_message_update):
         """Test that the statement includes conflict resolution."""
-        await Updates.new_or_upsert(mock_async_database_session, mock_message_update)
+        await Updates.new_or_upsert(async_database_connection, mock_message_update)
 
-        stmt = mock_async_database_session.execute.call_args[0][0]
+        stmt = async_database_connection.execute.call_args[0][0]
 
         # Verify that on_conflict was called by checking the statement has conflict handling
         assert hasattr(stmt, "_post_values_clause")
         assert stmt._post_values_clause is not None
 
-    async def test_update_key_generation_called(self, mock_async_database_session, mock_message_update):
+    async def test_update_key_generation_called(self, async_database_connection, mock_message_update):
         """Test that the update key is generated from the JSON payload."""
-        await Updates.new_or_upsert(mock_async_database_session, mock_message_update)
+        await Updates.new_or_upsert(async_database_connection, mock_message_update)
 
         # Verify to_json was called for key generation
         mock_message_update.to_json.assert_called_once()
@@ -219,13 +219,13 @@ class TestUpdatesNewOrUpsert:
         # Verify to_dict was called for payload storage
         mock_message_update.to_dict.assert_called_once()
 
-        stmt = mock_async_database_session.execute.call_args[0][0]
+        stmt = async_database_connection.execute.call_args[0][0]
         values = stmt.compile().params
 
         expected_key = Updates.generate_update_key(mock_message_update.to_json.return_value)
         assert values["update_key"] == expected_key
 
-    async def test_multiple_updates_different_keys(self, mock_async_database_session):
+    async def test_multiple_updates_different_keys(self, async_database_connection):
         """Test inserting multiple updates with different keys."""
 
         # Create multiple mock updates
@@ -240,15 +240,15 @@ class TestUpdatesNewOrUpsert:
         update2.to_dict.return_value = {"update_id": 222, "message": {"text": "second"}}
 
         # Insert both updates
-        await Updates.new_or_upsert(mock_async_database_session, update1)
-        await Updates.new_or_upsert(mock_async_database_session, update2)
+        await Updates.new_or_upsert(async_database_connection, update1)
+        await Updates.new_or_upsert(async_database_connection, update2)
 
         # Verify both inserts were executed
-        assert mock_async_database_session.execute.call_count == 2
+        assert async_database_connection.execute.call_count == 2
 
         # Verify different update keys were used
-        first_call_stmt = mock_async_database_session.execute.call_args_list[0][0][0]
-        second_call_stmt = mock_async_database_session.execute.call_args_list[1][0][0]
+        first_call_stmt = async_database_connection.execute.call_args_list[0][0][0]
+        second_call_stmt = async_database_connection.execute.call_args_list[1][0][0]
 
         key1 = Updates.generate_update_key(update1.to_json.return_value)
         key2 = Updates.generate_update_key(update2.to_json.return_value)
@@ -257,7 +257,7 @@ class TestUpdatesNewOrUpsert:
         assert second_call_stmt.compile().params["update_key"] == key2
         assert key1 != key2
 
-    async def test_same_update_id_different_content_different_keys(self, mock_async_database_session):
+    async def test_same_update_id_different_content_different_keys(self, async_database_connection):
         """Test that updates with same ID but different content get different keys."""
         # Create two updates with same update_id but different content
         update1 = MagicMock()
@@ -271,15 +271,15 @@ class TestUpdatesNewOrUpsert:
         update2.to_dict.return_value = {"update_id": 12345, "message": {"text": "modified"}}
 
         # Insert both updates
-        await Updates.new_or_upsert(mock_async_database_session, update1)
-        await Updates.new_or_upsert(mock_async_database_session, update2)
+        await Updates.new_or_upsert(async_database_connection, update1)
+        await Updates.new_or_upsert(async_database_connection, update2)
 
         # Verify both inserts were executed
-        assert mock_async_database_session.execute.call_count == 2
+        assert async_database_connection.execute.call_count == 2
 
         # Verify different update keys were generated despite same update_id
-        first_call_stmt = mock_async_database_session.execute.call_args_list[0][0][0]
-        second_call_stmt = mock_async_database_session.execute.call_args_list[1][0][0]
+        first_call_stmt = async_database_connection.execute.call_args_list[0][0][0]
+        second_call_stmt = async_database_connection.execute.call_args_list[1][0][0]
 
         key1 = first_call_stmt.compile().params["update_key"]
         key2 = second_call_stmt.compile().params["update_key"]

@@ -15,7 +15,7 @@ from areyouok_telegram.data import Context
 from areyouok_telegram.data import LLMUsage
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data import Sessions
-from areyouok_telegram.data import async_database_session
+from areyouok_telegram.data import async_database
 from areyouok_telegram.jobs.exceptions import NoActiveSessionError
 from areyouok_telegram.llms.analytics import ContextTemplate
 from areyouok_telegram.llms.analytics import context_compression_agent
@@ -70,7 +70,7 @@ class ConversationJob:
         self.bot_id = context.bot.id  # Set the bot ID for this run
 
         with logfire.span("Conversation job running", chat_id=self.chat_id, run_count=self._run_count, _level="debug"):
-            async with async_database_session() as conn:
+            async with async_database() as conn:
                 chat_session = await self._get_active_session(conn)
 
                 if not chat_session:

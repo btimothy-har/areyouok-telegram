@@ -18,7 +18,7 @@ class TestContextNewOrUpdate:
 
     @pytest.mark.asyncio
     @freeze_time("2025-01-15 10:30:00", tz_offset=0)
-    async def test_new_or_update_valid_context(self, mock_async_database_session):
+    async def test_new_or_update_valid_context(self, async_database_connection):
         """Test creating a new context with valid type."""
         chat_id = "123456"
         session_id = "session_abc123"
@@ -26,11 +26,11 @@ class TestContextNewOrUpdate:
         content = "This is a session summary"
 
         # Mock the execute method
-        mock_async_database_session.execute = AsyncMock()
+        async_database_connection.execute = AsyncMock()
 
         # Call the method
         await Context.new_or_update(
-            session=mock_async_database_session,
+            session=async_database_connection,
             chat_id=chat_id,
             session_id=session_id,
             ctype=ctype,
@@ -38,14 +38,14 @@ class TestContextNewOrUpdate:
         )
 
         # Verify execute was called
-        mock_async_database_session.execute.assert_called_once()
+        async_database_connection.execute.assert_called_once()
 
         # Verify the values in the insert statement
         # Note: We can't directly inspect the pg_insert values easily,
         # but we can verify execute was called with proper structure
 
     @pytest.mark.asyncio
-    async def test_new_or_update_invalid_context_type(self, mock_async_database_session):
+    async def test_new_or_update_invalid_context_type(self, async_database_connection):
         """Test that invalid context type raises exception."""
         chat_id = "123456"
         session_id = "session_abc123"
@@ -55,7 +55,7 @@ class TestContextNewOrUpdate:
         # Should raise InvalidContextTypeError
         with pytest.raises(InvalidContextTypeError) as exc_info:
             await Context.new_or_update(
-                session=mock_async_database_session,
+                session=async_database_connection,
                 chat_id=chat_id,
                 session_id=session_id,
                 ctype=ctype,
@@ -68,22 +68,22 @@ class TestContextNewOrUpdate:
         assert "session" in str(exc_info.value)  # Should mention valid types
 
         # Verify execute was not called
-        mock_async_database_session.execute.assert_not_called()
+        async_database_connection.execute.assert_not_called()
 
     @pytest.mark.asyncio
     @freeze_time("2025-01-15 10:30:00", tz_offset=0)
-    async def test_new_or_update_converts_chat_id_to_string(self, mock_async_database_session):
+    async def test_new_or_update_converts_chat_id_to_string(self, async_database_connection):
         """Test that chat_id is converted to string."""
         chat_id = 123456  # Integer
         session_id = "session_abc123"
         ctype = "session"
         content = "Content"
 
-        mock_async_database_session.execute = AsyncMock()
+        async_database_connection.execute = AsyncMock()
 
         # Should not raise error even with integer chat_id
         await Context.new_or_update(
-            session=mock_async_database_session,
+            session=async_database_connection,
             chat_id=chat_id,
             session_id=session_id,
             ctype=ctype,
@@ -91,21 +91,21 @@ class TestContextNewOrUpdate:
         )
 
         # Verify execute was called
-        mock_async_database_session.execute.assert_called_once()
+        async_database_connection.execute.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_new_or_update_all_valid_context_types(self, mock_async_database_session):
+    async def test_new_or_update_all_valid_context_types(self, async_database_connection):
         """Test that all valid context types work correctly."""
         chat_id = "123456"
         session_id = "session_abc123"
         content = "Test content"
 
-        mock_async_database_session.execute = AsyncMock()
+        async_database_connection.execute = AsyncMock()
 
         # Test each valid context type
         for ctype in VALID_CONTEXT_TYPES:
             await Context.new_or_update(
-                session=mock_async_database_session,
+                session=async_database_connection,
                 chat_id=chat_id,
                 session_id=session_id,
                 ctype=ctype,
@@ -113,14 +113,14 @@ class TestContextNewOrUpdate:
             )
 
         # Verify execute was called for each valid type
-        assert mock_async_database_session.execute.call_count == len(VALID_CONTEXT_TYPES)
+        assert async_database_connection.execute.call_count == len(VALID_CONTEXT_TYPES)
 
 
 class TestContextRetrieveByChat:
     """Test the retrieve_context_by_chat class method."""
 
     @pytest.mark.asyncio
-    async def test_retrieve_context_by_chat_no_type_filter(self, mock_async_database_session):
+    async def test_retrieve_context_by_chat_no_type_filter(self, async_database_connection):
         """Test retrieving contexts without type filter."""
         chat_id = "123456"
 
@@ -142,11 +142,11 @@ class TestContextRetrieveByChat:
         mock_scalars = MagicMock()
         mock_scalars.all.return_value = [context2, context1]  # Ordered by created_at desc
         mock_result.scalars.return_value = mock_scalars
-        mock_async_database_session.execute.return_value = mock_result
+        async_database_connection.execute.return_value = mock_result
 
         # Call the method
         result = await Context.retrieve_context_by_chat(
-            session=mock_async_database_session,
+            session=async_database_connection,
             chat_id=chat_id,
         )
 
@@ -156,10 +156,10 @@ class TestContextRetrieveByChat:
         assert result[1] == context1
 
         # Verify the query was executed
-        mock_async_database_session.execute.assert_called_once()
+        async_database_connection.execute.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_retrieve_context_by_chat_with_type_filter(self, mock_async_database_session):
+    async def test_retrieve_context_by_chat_with_type_filter(self, async_database_connection):
         """Test retrieving contexts with type filter."""
         chat_id = "123456"
         ctype = "session"
@@ -175,11 +175,11 @@ class TestContextRetrieveByChat:
         mock_scalars = MagicMock()
         mock_scalars.all.return_value = [context1]
         mock_result.scalars.return_value = mock_scalars
-        mock_async_database_session.execute.return_value = mock_result
+        async_database_connection.execute.return_value = mock_result
 
         # Call the method
         result = await Context.retrieve_context_by_chat(
-            session=mock_async_database_session,
+            session=async_database_connection,
             chat_id=chat_id,
             ctype=ctype,
         )
@@ -189,10 +189,10 @@ class TestContextRetrieveByChat:
         assert result[0] == context1
 
         # Verify the query was executed
-        mock_async_database_session.execute.assert_called_once()
+        async_database_connection.execute.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_retrieve_context_by_chat_with_limit(self, mock_async_database_session):
+    async def test_retrieve_context_by_chat_with_limit(self, async_database_connection):
         """Test retrieving contexts with custom limit."""
         chat_id = "123456"
         limit = 5
@@ -211,11 +211,11 @@ class TestContextRetrieveByChat:
         mock_scalars = MagicMock()
         mock_scalars.all.return_value = contexts[:5]  # Only first 5
         mock_result.scalars.return_value = mock_scalars
-        mock_async_database_session.execute.return_value = mock_result
+        async_database_connection.execute.return_value = mock_result
 
         # Call the method
         result = await Context.retrieve_context_by_chat(
-            session=mock_async_database_session,
+            session=async_database_connection,
             chat_id=chat_id,
             limit=limit,
         )
@@ -224,10 +224,10 @@ class TestContextRetrieveByChat:
         assert len(result) == 5
 
         # Verify the query was executed
-        mock_async_database_session.execute.assert_called_once()
+        async_database_connection.execute.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_retrieve_context_by_chat_no_results(self, mock_async_database_session):
+    async def test_retrieve_context_by_chat_no_results(self, async_database_connection):
         """Test retrieving contexts when none exist."""
         chat_id = "123456"
 
@@ -236,11 +236,11 @@ class TestContextRetrieveByChat:
         mock_scalars = MagicMock()
         mock_scalars.all.return_value = []
         mock_result.scalars.return_value = mock_scalars
-        mock_async_database_session.execute.return_value = mock_result
+        async_database_connection.execute.return_value = mock_result
 
         # Call the method
         result = await Context.retrieve_context_by_chat(
-            session=mock_async_database_session,
+            session=async_database_connection,
             chat_id=chat_id,
         )
 
@@ -248,7 +248,7 @@ class TestContextRetrieveByChat:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_retrieve_context_by_chat_invalid_type(self, mock_async_database_session):
+    async def test_retrieve_context_by_chat_invalid_type(self, async_database_connection):
         """Test that invalid context type raises exception."""
         chat_id = "123456"
         ctype = "invalid_type"
@@ -256,7 +256,7 @@ class TestContextRetrieveByChat:
         # Should raise InvalidContextTypeError
         with pytest.raises(InvalidContextTypeError) as exc_info:
             await Context.retrieve_context_by_chat(
-                session=mock_async_database_session,
+                session=async_database_connection,
                 chat_id=chat_id,
                 ctype=ctype,
             )
@@ -265,10 +265,10 @@ class TestContextRetrieveByChat:
         assert exc_info.value.context_type == "invalid_type"
 
         # Verify execute was not called
-        mock_async_database_session.execute.assert_not_called()
+        async_database_connection.execute.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_retrieve_context_by_chat_default_limit(self, mock_async_database_session):
+    async def test_retrieve_context_by_chat_default_limit(self, async_database_connection):
         """Test that default limit is 3."""
         chat_id = "123456"
 
@@ -284,11 +284,11 @@ class TestContextRetrieveByChat:
         mock_scalars = MagicMock()
         mock_scalars.all.return_value = contexts[:3]  # Default limit is 3
         mock_result.scalars.return_value = mock_scalars
-        mock_async_database_session.execute.return_value = mock_result
+        async_database_connection.execute.return_value = mock_result
 
         # Call the method without specifying limit
         result = await Context.retrieve_context_by_chat(
-            session=mock_async_database_session,
+            session=async_database_connection,
             chat_id=chat_id,
         )
 
@@ -353,7 +353,7 @@ class TestContextModel:
         assert isinstance(Context.__table_args__["schema"], str)
 
     @pytest.mark.asyncio
-    async def test_get_by_session_id_success(self, mock_async_database_session):
+    async def test_get_by_session_id_success(self, async_database_connection):
         """Test getting contexts by session_id."""
         session_id = "session-123"
 
@@ -373,11 +373,11 @@ class TestContextModel:
         mock_scalars = MagicMock()
         mock_scalars.all.return_value = [context1, context2]
         mock_result.scalars.return_value = mock_scalars
-        mock_async_database_session.execute.return_value = mock_result
+        async_database_connection.execute.return_value = mock_result
 
         # Call the method
         result = await Context.get_by_session_id(
-            session=mock_async_database_session,
+            session=async_database_connection,
             session_id=session_id,
         )
 
@@ -387,10 +387,10 @@ class TestContextModel:
         assert result[1] == context2
 
         # Verify the query was executed
-        mock_async_database_session.execute.assert_called_once()
+        async_database_connection.execute.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_get_by_session_id_with_type_filter(self, mock_async_database_session):
+    async def test_get_by_session_id_with_type_filter(self, async_database_connection):
         """Test getting contexts by session_id with type filter."""
         session_id = "session-123"
         ctype = "session"
@@ -406,11 +406,11 @@ class TestContextModel:
         mock_scalars = MagicMock()
         mock_scalars.all.return_value = [context]
         mock_result.scalars.return_value = mock_scalars
-        mock_async_database_session.execute.return_value = mock_result
+        async_database_connection.execute.return_value = mock_result
 
         # Call the method
         result = await Context.get_by_session_id(
-            session=mock_async_database_session,
+            session=async_database_connection,
             session_id=session_id,
             ctype=ctype,
         )
@@ -420,14 +420,14 @@ class TestContextModel:
         assert result[0] == context
 
         # Verify the query was executed
-        mock_async_database_session.execute.assert_called_once()
+        async_database_connection.execute.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_get_by_session_id_invalid_type(self, mock_async_database_session):
+    async def test_get_by_session_id_invalid_type(self, async_database_connection):
         """Test get_by_session_id raises error for invalid type."""
         with pytest.raises(InvalidContextTypeError) as exc_info:
             await Context.get_by_session_id(
-                session=mock_async_database_session,
+                session=async_database_connection,
                 session_id="session-123",
                 ctype="invalid_type",
             )
@@ -435,7 +435,7 @@ class TestContextModel:
         assert exc_info.value.context_type == "invalid_type"
 
     @pytest.mark.asyncio
-    async def test_get_by_session_id_no_results(self, mock_async_database_session):
+    async def test_get_by_session_id_no_results(self, async_database_connection):
         """Test get_by_session_id returns None when no results."""
         session_id = "session-123"
 
@@ -444,11 +444,11 @@ class TestContextModel:
         mock_scalars = MagicMock()
         mock_scalars.all.return_value = []
         mock_result.scalars.return_value = mock_scalars
-        mock_async_database_session.execute.return_value = mock_result
+        async_database_connection.execute.return_value = mock_result
 
         # Call the method
         result = await Context.get_by_session_id(
-            session=mock_async_database_session,
+            session=async_database_connection,
             session_id=session_id,
         )
 
@@ -456,7 +456,7 @@ class TestContextModel:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_get_by_chat_id_success(self, mock_async_database_session):
+    async def test_get_by_chat_id_success(self, async_database_connection):
         """Test getting contexts by chat_id."""
         chat_id = "123456"
 
@@ -476,11 +476,11 @@ class TestContextModel:
         mock_scalars = MagicMock()
         mock_scalars.all.return_value = [context1, context2]
         mock_result.scalars.return_value = mock_scalars
-        mock_async_database_session.execute.return_value = mock_result
+        async_database_connection.execute.return_value = mock_result
 
         # Call the method
         result = await Context.get_by_chat_id(
-            session=mock_async_database_session,
+            session=async_database_connection,
             chat_id=chat_id,
         )
 
@@ -490,10 +490,10 @@ class TestContextModel:
         assert result[1] == context2
 
         # Verify the query was executed
-        mock_async_database_session.execute.assert_called_once()
+        async_database_connection.execute.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_get_by_chat_id_with_type_filter(self, mock_async_database_session):
+    async def test_get_by_chat_id_with_type_filter(self, async_database_connection):
         """Test getting contexts by chat_id with type filter."""
         chat_id = "123456"
         ctype = "session"
@@ -509,11 +509,11 @@ class TestContextModel:
         mock_scalars = MagicMock()
         mock_scalars.all.return_value = [context]
         mock_result.scalars.return_value = mock_scalars
-        mock_async_database_session.execute.return_value = mock_result
+        async_database_connection.execute.return_value = mock_result
 
         # Call the method
         result = await Context.get_by_chat_id(
-            session=mock_async_database_session,
+            session=async_database_connection,
             chat_id=chat_id,
             ctype=ctype,
         )
@@ -523,14 +523,14 @@ class TestContextModel:
         assert result[0] == context
 
         # Verify the query was executed
-        mock_async_database_session.execute.assert_called_once()
+        async_database_connection.execute.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_get_by_chat_id_invalid_type(self, mock_async_database_session):
+    async def test_get_by_chat_id_invalid_type(self, async_database_connection):
         """Test get_by_chat_id raises error for invalid type."""
         with pytest.raises(InvalidContextTypeError) as exc_info:
             await Context.get_by_chat_id(
-                session=mock_async_database_session,
+                session=async_database_connection,
                 chat_id="123456",
                 ctype="invalid_type",
             )
@@ -538,7 +538,7 @@ class TestContextModel:
         assert exc_info.value.context_type == "invalid_type"
 
     @pytest.mark.asyncio
-    async def test_get_by_chat_id_no_results(self, mock_async_database_session):
+    async def test_get_by_chat_id_no_results(self, async_database_connection):
         """Test get_by_chat_id returns None when no results."""
         chat_id = "123456"
 
@@ -547,11 +547,11 @@ class TestContextModel:
         mock_scalars = MagicMock()
         mock_scalars.all.return_value = []
         mock_result.scalars.return_value = mock_scalars
-        mock_async_database_session.execute.return_value = mock_result
+        async_database_connection.execute.return_value = mock_result
 
         # Call the method
         result = await Context.get_by_chat_id(
-            session=mock_async_database_session,
+            session=async_database_connection,
             chat_id=chat_id,
         )
 

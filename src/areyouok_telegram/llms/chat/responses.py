@@ -10,7 +10,7 @@ from telegram.constants import ReactionEmoji
 from telegram.ext import ContextTypes
 
 from areyouok_telegram.data import Messages
-from areyouok_telegram.data.connection import AsyncSessionLocal
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 def retry_response():
@@ -37,7 +37,7 @@ class BaseAgentResponse(pydantic.BaseModel):
         return self.__class__.__name__
 
     @abstractmethod
-    async def execute(self, db_connection: AsyncSessionLocal, context: ContextTypes.DEFAULT_TYPE, chat_id: str) -> None:
+    async def execute(self, db_connection: AsyncSession, context: ContextTypes.DEFAULT_TYPE, chat_id: str) -> None:
         """Execute the response action in the given context."""
         raise NotImplementedError("Subclasses must implement this method.")
 
@@ -53,7 +53,7 @@ class TextResponse(BaseAgentResponse):
     @retry_response()
     async def execute(
         self,
-        db_connection: AsyncSessionLocal,  # noqa: ARG002
+        db_connection: AsyncSession,  # noqa: ARG002
         context: ContextTypes.DEFAULT_TYPE,
         chat_id: str,
     ) -> telegram.Message | None:
@@ -90,7 +90,7 @@ class ReactionResponse(BaseAgentResponse):
 
     @retry_response()
     async def execute(
-        self, db_connection: AsyncSessionLocal, context: ContextTypes.DEFAULT_TYPE, chat_id: str
+        self, db_connection: AsyncSession, context: ContextTypes.DEFAULT_TYPE, chat_id: str
     ) -> telegram.MessageReactionUpdated | None:
         message, _ = await Messages.retrieve_message_by_id(
             session=db_connection,
@@ -130,7 +130,7 @@ class ReactionResponse(BaseAgentResponse):
 class DoNothingResponse(BaseAgentResponse):
     """Response model for do-nothing actions."""
 
-    async def execute(self, db_connection: AsyncSessionLocal, context: ContextTypes.DEFAULT_TYPE, chat_id: str) -> None:  # noqa: ARG002
+    async def execute(self, db_connection: AsyncSession, context: ContextTypes.DEFAULT_TYPE, chat_id: str) -> None:  # noqa: ARG002
         """Execute the do-nothing action."""
         logfire.debug(f"DoNothingResponse executed for chat {chat_id}. No action taken.")
         return None

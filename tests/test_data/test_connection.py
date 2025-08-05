@@ -8,119 +8,119 @@ from unittest.mock import patch
 import pytest
 
 from areyouok_telegram.data import Base
-from areyouok_telegram.data import async_database_session
+from areyouok_telegram.data import async_database
 from areyouok_telegram.data import async_engine
-from areyouok_telegram.data.connection import AsyncSessionLocal
+from areyouok_telegram.data.connection import AsyncDbSession
 
 
-class TestAsyncDatabaseSession:
-    """Test the async_database_session context manager."""
+class TestAsyncDatabase:
+    """Test the async_database context manager."""
 
-    @patch("areyouok_telegram.data.connection.AsyncSessionLocal")
-    async def test_session_commit_on_success(self, mock_session_local):
+    @patch("areyouok_telegram.data.connection.AsyncDbSession")
+    async def test_session_commit_on_success(self, mock_session_class):
         """Test that session commits when no exception occurs."""
         # Setup mock session
         mock_session = AsyncMock()
-        mock_session_local.return_value = mock_session
+        mock_session_class.return_value = mock_session
 
         # Use the context manager successfully
-        async with async_database_session() as session:
+        async with async_database() as session:
             # Simulate some database work
             await session.execute("SELECT 1")
 
         # Verify session lifecycle
-        mock_session_local.assert_called_once()
+        mock_session_class.assert_called_once()
         mock_session.execute.assert_called_once_with("SELECT 1")
         mock_session.commit.assert_called_once()
         mock_session.close.assert_called_once()
         mock_session.rollback.assert_not_called()
 
-    @patch("areyouok_telegram.data.connection.AsyncSessionLocal")
-    async def test_session_rollback_on_exception(self, mock_session_local):
+    @patch("areyouok_telegram.data.connection.AsyncDbSession")
+    async def test_session_rollback_on_exception(self, mock_session_class):
         """Test that session rolls back when an exception occurs."""
         # Setup mock session
         mock_session = AsyncMock()
-        mock_session_local.return_value = mock_session
+        mock_session_class.return_value = mock_session
 
         # Use the context manager with an exception
         with pytest.raises(ValueError, match="Test exception"):
-            async with async_database_session() as session:
+            async with async_database() as session:
                 # Simulate some database work
                 await session.execute("INSERT INTO test VALUES (1)")
                 # Raise an exception
                 raise ValueError("Test exception")
 
         # Verify session lifecycle
-        mock_session_local.assert_called_once()
+        mock_session_class.assert_called_once()
         mock_session.execute.assert_called_once_with("INSERT INTO test VALUES (1)")
         mock_session.rollback.assert_called_once()
         mock_session.close.assert_called_once()
         mock_session.commit.assert_not_called()
 
-    @patch("areyouok_telegram.data.connection.AsyncSessionLocal")
-    async def test_session_close_always_called(self, mock_session_local):
+    @patch("areyouok_telegram.data.connection.AsyncDbSession")
+    async def test_session_close_always_called(self, mock_session_class):
         """Test that session.close() is always called, even on exception."""
         # Setup mock session
         mock_session = AsyncMock()
-        mock_session_local.return_value = mock_session
+        mock_session_class.return_value = mock_session
 
         # Test with exception
         with pytest.raises(RuntimeError):
-            async with async_database_session():
+            async with async_database():
                 raise RuntimeError("Database error")
 
         mock_session.close.assert_called_once()
 
         # Reset and test without exception
         mock_session.reset_mock()
-        mock_session_local.reset_mock()
+        mock_session_class.reset_mock()
 
-        async with async_database_session():
+        async with async_database():
             pass
 
         mock_session.close.assert_called_once()
 
-    @patch("areyouok_telegram.data.connection.AsyncSessionLocal")
-    async def test_session_rollback_exception_handling(self, mock_session_local):
+    @patch("areyouok_telegram.data.connection.AsyncDbSession")
+    async def test_session_rollback_exception_handling(self, mock_session_class):
         """Test that rollback exceptions are raised when they occur."""
         # Setup mock session with rollback that raises an exception
         mock_session = AsyncMock()
         mock_session.rollback.side_effect = Exception("Rollback failed")
-        mock_session_local.return_value = mock_session
+        mock_session_class.return_value = mock_session
 
         # When rollback fails, that exception should be raised
         with pytest.raises(Exception, match="Rollback failed"):
-            async with async_database_session():
+            async with async_database():
                 raise ValueError("Original error")
 
         mock_session.rollback.assert_called_once()
         mock_session.close.assert_called_once()
 
-    @patch("areyouok_telegram.data.connection.AsyncSessionLocal")
-    async def test_session_commit_exception_handling(self, mock_session_local):
+    @patch("areyouok_telegram.data.connection.AsyncDbSession")
+    async def test_session_commit_exception_handling(self, mock_session_class):
         """Test behavior when commit fails."""
         # Setup mock session with commit that raises an exception
         mock_session = AsyncMock()
         mock_session.commit.side_effect = Exception("Commit failed")
-        mock_session_local.return_value = mock_session
+        mock_session_class.return_value = mock_session
 
         # Commit exception should be raised
         with pytest.raises(Exception, match="Commit failed"):
-            async with async_database_session():
+            async with async_database():
                 pass
 
         mock_session.commit.assert_called_once()
         mock_session.close.assert_called_once()
-        mock_session.rollback.assert_not_called()
+        mock_session.rollback.assert_called_once()
 
-    @patch("areyouok_telegram.data.connection.AsyncSessionLocal")
-    async def test_multiple_operations_in_session(self, mock_session_local):
+    @patch("areyouok_telegram.data.connection.AsyncDbSession")
+    async def test_multiple_operations_in_session(self, mock_session_class):
         """Test multiple database operations within a single session."""
         # Setup mock session
         mock_session = AsyncMock()
-        mock_session_local.return_value = mock_session
+        mock_session_class.return_value = mock_session
 
-        async with async_database_session() as session:
+        async with async_database() as session:
             await session.execute("INSERT INTO table1 VALUES (1)")
             await session.execute("UPDATE table2 SET col = 'value'")
             await session.execute("DELETE FROM table3 WHERE id = 1")
@@ -130,18 +130,18 @@ class TestAsyncDatabaseSession:
         mock_session.commit.assert_called_once()
         mock_session.close.assert_called_once()
 
-    @patch("areyouok_telegram.data.connection.AsyncSessionLocal")
-    async def test_session_yields_correct_instance(self, mock_session_local):
+    @patch("areyouok_telegram.data.connection.AsyncDbSession")
+    async def test_session_yields_correct_instance(self, mock_session_class):
         """Test that the context manager yields the correct session instance."""
         # Setup mock session
         mock_session = AsyncMock()
-        mock_session_local.return_value = mock_session
+        mock_session_class.return_value = mock_session
 
-        async with async_database_session() as session:
+        async with async_database() as session:
             # The yielded session should be the mock session
             assert session is mock_session
 
-        mock_session_local.assert_called_once()
+        mock_session_class.assert_called_once()
 
 
 class TestDatabaseConfiguration:
@@ -155,13 +155,13 @@ class TestDatabaseConfiguration:
         assert hasattr(Base, "registry")
 
     def test_async_session_local_exists(self):
-        """Test that AsyncSessionLocal is properly configured."""
+        """Test that AsyncDbSession is properly configured."""
 
-        # AsyncSessionLocal should be a sessionmaker instance
-        assert callable(AsyncSessionLocal)
+        # AsyncDbSession should be a sessionmaker instance
+        assert callable(AsyncDbSession)
 
         # Create a session instance to verify it's configured correctly
-        session = AsyncSessionLocal()
+        session = AsyncDbSession()
         assert hasattr(session, "execute")
         assert hasattr(session, "commit")
         assert hasattr(session, "rollback")

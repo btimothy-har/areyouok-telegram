@@ -39,7 +39,7 @@ class TestAreyouokAgent:
     """Test suite for the areyouok agent functionality."""
 
     @pytest.mark.asyncio
-    async def test_agent_basic_response(self, mock_async_database_session):
+    async def test_agent_basic_response(self, async_database_connection):
         """Test basic agent response generation using TestModel."""
         # Create mock dependencies
         mock_context = AsyncMock()
@@ -48,7 +48,7 @@ class TestAreyouokAgent:
             tg_chat_id="123456789",
             tg_session_id="test_session_id",
             last_response_type="no_previous_response",
-            db_connection=mock_async_database_session,
+            db_connection=async_database_connection,
         )
 
         result = await chat_agent.run("I'm feeling really overwhelmed today", deps=test_deps)
@@ -58,7 +58,7 @@ class TestAreyouokAgent:
         assert isinstance(result.output, AgentResponse)
 
     @pytest.mark.asyncio
-    async def test_agent_produces_text_response(self, mock_async_database_session):
+    async def test_agent_produces_text_response(self, async_database_connection):
         """Test agent produces TextResponse (the first/default output type)."""
         # Create mock dependencies
         mock_context = AsyncMock()
@@ -67,7 +67,7 @@ class TestAreyouokAgent:
             tg_chat_id="123456789",
             tg_session_id="test_session_id",
             last_response_type="no_previous_response",
-            db_connection=mock_async_database_session,
+            db_connection=async_database_connection,
         )
 
         result = await chat_agent.run("I'm having a really hard time", deps=test_deps)
@@ -79,7 +79,7 @@ class TestAreyouokAgent:
         assert isinstance(result.output.message_text, str)
 
     @pytest.mark.asyncio
-    async def test_agent_with_different_contexts(self, mock_async_database_session):
+    async def test_agent_with_different_contexts(self, async_database_connection):
         """Test agent behavior with different last response contexts."""
         # Create mock dependencies with different contexts
         mock_context = AsyncMock()
@@ -93,7 +93,7 @@ class TestAreyouokAgent:
                 tg_chat_id="123456789",
                 tg_session_id="test_session_id",
                 last_response_type=last_response,
-                db_connection=mock_async_database_session,
+                db_connection=async_database_connection,
             )
 
             result = await chat_agent.run(f"Testing with {last_response}", deps=test_deps)
@@ -103,7 +103,7 @@ class TestAreyouokAgent:
             assert result.output.reasoning is not None
 
     @pytest.mark.asyncio
-    async def test_agent_handles_multiple_conversation_turns(self, mock_async_database_session):
+    async def test_agent_handles_multiple_conversation_turns(self, async_database_connection):
         """Test agent with multiple conversation turns."""
         # Create mock dependencies
         mock_context = AsyncMock()
@@ -112,7 +112,7 @@ class TestAreyouokAgent:
             tg_chat_id="123456789",
             tg_session_id="test_session_id",
             last_response_type="TextResponse",
-            db_connection=mock_async_database_session,
+            db_connection=async_database_connection,
         )
 
         # Test multiple conversation turns
@@ -135,7 +135,7 @@ class TestAgentValidation:
     """Test suite for agent output validation logic as unit functions."""
 
     @pytest.mark.asyncio
-    async def test_validate_agent_response_invalid_message(self, mock_async_database_session):
+    async def test_validate_agent_response_invalid_message(self, async_database_connection):
         """Test validation fails when message ID doesn't exist."""
         # Create mock dependencies
         mock_context = AsyncMock()
@@ -144,7 +144,7 @@ class TestAgentValidation:
             tg_chat_id="123456789",
             tg_session_id="test_session_id",
             last_response_type="no_previous_response",
-            db_connection=mock_async_database_session,
+            db_connection=async_database_connection,
         )
 
         # Create a ReactionResponse that will fail validation
@@ -166,7 +166,7 @@ class TestAgentValidation:
             assert "Message with ID 999999 not found" in str(exc_info.value)
 
     @pytest.mark.asyncio
-    async def test_validate_agent_response_react_to_self(self, mock_async_database_session):
+    async def test_validate_agent_response_react_to_self(self, async_database_connection):
         """Test validation fails when trying to react to own message."""
         # Create mock dependencies
         mock_context = AsyncMock()
@@ -177,7 +177,7 @@ class TestAgentValidation:
             tg_chat_id="123456789",
             tg_session_id="test_session_id",
             last_response_type="no_previous_response",
-            db_connection=mock_async_database_session,
+            db_connection=async_database_connection,
         )
 
         # Mock a message from the bot itself
@@ -201,7 +201,7 @@ class TestAgentValidation:
             assert "You cannot react to your own message 123" in str(exc_info.value)
 
     @pytest.mark.asyncio
-    async def test_validate_agent_response_success(self, mock_async_database_session):
+    async def test_validate_agent_response_success(self, async_database_connection):
         """Test validation succeeds with valid message from different user."""
         # Create mock dependencies
         mock_context = AsyncMock()
@@ -212,7 +212,7 @@ class TestAgentValidation:
             tg_chat_id="123456789",
             tg_session_id="test_session_id",
             last_response_type="no_previous_response",
-            db_connection=mock_async_database_session,
+            db_connection=async_database_connection,
         )
 
         # Mock a valid message from a different user
@@ -238,7 +238,7 @@ class TestAgentValidation:
             assert result.emoji == ReactionEmoji.RED_HEART
 
     @pytest.mark.asyncio
-    async def test_validate_agent_response_text_response_passthrough(self, mock_async_database_session):
+    async def test_validate_agent_response_text_response_passthrough(self, async_database_connection):
         """Test validation passes through TextResponse without checks."""
         # Create mock dependencies
         mock_context = AsyncMock()
@@ -247,7 +247,7 @@ class TestAgentValidation:
             tg_chat_id="123456789",
             tg_session_id="test_session_id",
             last_response_type="no_previous_response",
-            db_connection=mock_async_database_session,
+            db_connection=async_database_connection,
         )
 
         # Create a TextResponse
@@ -266,7 +266,7 @@ class TestAgentValidation:
         assert result.message_text == "I'm here to listen"
 
     @pytest.mark.asyncio
-    async def test_validate_agent_response_with_instruction_text_response_pass(self, mock_async_database_session):
+    async def test_validate_agent_response_with_instruction_text_response_pass(self, async_database_connection):
         """Test validation with instruction passes when text response acknowledges it."""
         # Create mock dependencies with instruction
         mock_context = AsyncMock()
@@ -275,7 +275,7 @@ class TestAgentValidation:
             tg_chat_id="123456789",
             tg_session_id="test_session_id",
             last_response_type="no_previous_response",
-            db_connection=mock_async_database_session,
+            db_connection=async_database_connection,
             instruction="The user sent a video file, but you can only view images and PDFs.",
         )
 
@@ -302,7 +302,7 @@ class TestAgentValidation:
                 assert result == text_response
 
     @pytest.mark.asyncio
-    async def test_validate_agent_response_with_instruction_text_response_fail(self, mock_async_database_session):
+    async def test_validate_agent_response_with_instruction_text_response_fail(self, async_database_connection):
         """Test validation with instruction fails when text response doesn't acknowledge it."""
         # Create mock dependencies with instruction
         mock_context = AsyncMock()
@@ -311,7 +311,7 @@ class TestAgentValidation:
             tg_chat_id="123456789",
             tg_session_id="test_session_id",
             last_response_type="no_previous_response",
-            db_connection=mock_async_database_session,
+            db_connection=async_database_connection,
             instruction="The user sent a video file, but you can only view images and PDFs.",
         )
 
@@ -340,7 +340,7 @@ class TestAgentValidation:
                 assert "You didn't acknowledge the video file" in exc_info.value.feedback
 
     @pytest.mark.asyncio
-    async def test_validate_agent_response_with_instruction_non_text_response(self, mock_async_database_session):
+    async def test_validate_agent_response_with_instruction_non_text_response(self, async_database_connection):
         """Test validation with instruction fails for non-text responses."""
         # Create mock dependencies with instruction
         mock_context = AsyncMock()
@@ -349,7 +349,7 @@ class TestAgentValidation:
             tg_chat_id="123456789",
             tg_session_id="test_session_id",
             last_response_type="no_previous_response",
-            db_connection=mock_async_database_session,
+            db_connection=async_database_connection,
             instruction="The user sent a video file, but you can only view images and PDFs.",
         )
 
@@ -374,7 +374,7 @@ class TestAgentValidation:
             assert not exc_info.value.feedback  # Empty feedback for non-text responses
 
     @pytest.mark.asyncio
-    async def test_validate_agent_response_with_instruction_do_nothing_response(self, mock_async_database_session):
+    async def test_validate_agent_response_with_instruction_do_nothing_response(self, async_database_connection):
         """Test validation with instruction fails for DoNothingResponse."""
         # Create mock dependencies with instruction
         mock_context = AsyncMock()
@@ -383,7 +383,7 @@ class TestAgentValidation:
             tg_chat_id="123456789",
             tg_session_id="test_session_id",
             last_response_type="no_previous_response",
-            db_connection=mock_async_database_session,
+            db_connection=async_database_connection,
             instruction="The user sent a video file, but you can only view images and PDFs.",
         )
 

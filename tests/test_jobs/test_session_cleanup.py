@@ -205,7 +205,7 @@ class TestSessionCleanupJob:
         session.session_end = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
 
         with (
-            patch("areyouok_telegram.jobs.session_cleanup.async_database_session") as mock_db_session,
+            patch("areyouok_telegram.jobs.session_cleanup.async_database") as mock_db_session,
             patch(
                 "areyouok_telegram.jobs.session_cleanup.Messages.retrieve_raw_by_chat", new=AsyncMock()
             ) as mock_retrieve,
