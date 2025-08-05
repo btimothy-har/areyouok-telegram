@@ -3,8 +3,8 @@
 import pytest
 from pydantic_ai.models.test import TestModel
 
-from areyouok_telegram.llms.analytics.context import ContextTemplate
-from areyouok_telegram.llms.analytics.context import context_compression_agent
+from areyouok_telegram.llms.analytics.context_compression import ContextTemplate
+from areyouok_telegram.llms.analytics.context_compression import context_compression_agent
 
 
 @pytest.fixture

@@ -36,6 +36,7 @@ async def _telegram_message_to_model_message(
         user_content = [json.dumps(msg_dict)]
 
         for m in media_files:
+            # Anthropic only supports images, PDFs and text files.
             if m.mime_type.startswith("image/") or m.mime_type == "application/pdf":
                 user_content.append(
                     pydantic_ai.BinaryContent(
@@ -45,7 +46,6 @@ async def _telegram_message_to_model_message(
                 )
             elif m.mime_type.startswith("text/"):
                 user_content.append(m.bytes_data.decode("utf-8"))
-            # Don't include unsupported media types in content
 
         model_message = pydantic_ai.messages.ModelRequest(
             parts=[
@@ -70,7 +70,10 @@ async def _telegram_message_to_model_message(
 async def get_unsupported_media_from_messages(
     conn, messages: list[telegram.Message], since_timestamp: datetime | None = None
 ) -> list[str]:
-    """Get list of unsupported media types from messages.
+    """Get list of unsupported media types from messages
+
+    Anthropic only supports images, PDFs and text files.
+    We "soft pass" audio as we transcribe audio content before sending to the model.
 
     Args:
         conn: Database connection
@@ -78,7 +81,7 @@ async def get_unsupported_media_from_messages(
         since_timestamp: Only check messages after this timestamp
 
     Returns:
-        List of unsupported media type names (e.g., ["video", "audio"])
+        List of unsupported media type names (e.g., ["video/mp4"])
     """
     unsupported_media = []
 
@@ -97,18 +100,15 @@ async def get_unsupported_media_from_messages(
 
         for m in media_files:
             # Skip supported media types
-            if m.mime_type.startswith("image/") or m.mime_type == "application/pdf":
-                continue
-            elif m.mime_type.startswith("text/"):
+            if (
+                m.mime_type.startswith("image/")
+                or m.mime_type == "application/pdf"
+                or m.mime_type.startswith("text/")
+                or m.mime_type.startswith("audio/")
+            ):
                 continue
 
-            # Track unsupported media types
-            if m.mime_type.startswith("video/"):
-                unsupported_media.append("video")
-            elif m.mime_type.startswith("audio/"):
-                unsupported_media.append("audio")
-            else:
-                unsupported_media.append(m.mime_type)
+            unsupported_media.append(m.mime_type)
 
     return unsupported_media
 

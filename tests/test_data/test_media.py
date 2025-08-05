@@ -133,3 +133,107 @@ class TestMediaFiles:
 
         result = media_file.bytes_data
         assert result is None
+
+    @pytest.mark.asyncio
+    async def test_get_by_file_id_found(self, mock_async_database_session):
+        """Test get_by_file_id when media is found."""
+        # Create mock media file
+        mock_media = MagicMock(spec=MediaFiles)
+        mock_media.id = 123
+        mock_media.file_id = "test_file_123"
+
+        # Mock the execute result
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = mock_media
+        mock_async_database_session.execute.return_value = mock_result
+
+        # Mock update_last_accessed
+        with patch.object(MediaFiles, "update_last_accessed") as mock_update:
+            result = await MediaFiles.get_by_file_id(mock_async_database_session, "test_file_123")
+
+            assert result == mock_media
+            # Verify update_last_accessed was called with the media ID
+            mock_update.assert_called_once_with(mock_async_database_session, [123])
+
+    @pytest.mark.asyncio
+    async def test_get_by_file_id_not_found(self, mock_async_database_session):
+        """Test get_by_file_id when media is not found."""
+        # Mock the execute result to return None
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        mock_async_database_session.execute.return_value = mock_result
+
+        # Mock update_last_accessed
+        with patch.object(MediaFiles, "update_last_accessed") as mock_update:
+            result = await MediaFiles.get_by_file_id(mock_async_database_session, "nonexistent_file")
+
+            assert result is None
+            # Verify update_last_accessed was NOT called
+            mock_update.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_get_by_message_id_with_media(self, mock_async_database_session):
+        """Test get_by_message_id when media files are found."""
+        # Create mock media files
+        mock_media1 = MagicMock(spec=MediaFiles)
+        mock_media1.id = 1
+        mock_media2 = MagicMock(spec=MediaFiles)
+        mock_media2.id = 2
+
+        # Mock the execute result
+        mock_result = MagicMock()
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = [mock_media1, mock_media2]
+        mock_result.scalars.return_value = mock_scalars
+        mock_async_database_session.execute.return_value = mock_result
+
+        # Mock update_last_accessed
+        with patch.object(MediaFiles, "update_last_accessed") as mock_update:
+            result = await MediaFiles.get_by_message_id(mock_async_database_session, "123456", "789")
+
+            assert result == [mock_media1, mock_media2]
+            # Verify update_last_accessed was called with both media IDs
+            mock_update.assert_called_once_with(mock_async_database_session, [1, 2])
+
+    @pytest.mark.asyncio
+    async def test_get_by_message_id_no_media(self, mock_async_database_session):
+        """Test get_by_message_id when no media files are found."""
+        # Mock the execute result to return empty list
+        mock_result = MagicMock()
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = []
+        mock_result.scalars.return_value = mock_scalars
+        mock_async_database_session.execute.return_value = mock_result
+
+        # Mock update_last_accessed
+        with patch.object(MediaFiles, "update_last_accessed") as mock_update:
+            result = await MediaFiles.get_by_message_id(mock_async_database_session, "123456", "789")
+
+            assert result == []
+            # Verify update_last_accessed was NOT called
+            mock_update.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_update_last_accessed_with_ids(self, mock_async_database_session):
+        """Test update_last_accessed with media IDs."""
+        await MediaFiles.update_last_accessed(mock_async_database_session, [1, 2, 3])
+
+        # Verify execute was called
+        mock_async_database_session.execute.assert_called_once()
+
+        # Get the statement that was executed
+        executed_stmt = mock_async_database_session.execute.call_args[0][0]
+
+        # Verify it's an update statement (checking the string representation)
+        stmt_str = str(executed_stmt)
+        assert "UPDATE" in stmt_str
+        assert "media_files" in stmt_str
+        assert "last_accessed_at" in stmt_str
+
+    @pytest.mark.asyncio
+    async def test_update_last_accessed_empty_list(self, mock_async_database_session):
+        """Test update_last_accessed with empty media IDs list."""
+        await MediaFiles.update_last_accessed(mock_async_database_session, [])
+
+        # Verify execute was NOT called for empty list
+        mock_async_database_session.execute.assert_not_called()

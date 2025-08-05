@@ -21,7 +21,9 @@ from areyouok_telegram.llms.chat import chat_agent
 from areyouok_telegram.llms.chat.agent import validate_agent_response
 from areyouok_telegram.llms.chat.exceptions import InvalidMessageError
 from areyouok_telegram.llms.chat.exceptions import ReactToSelfError
+from areyouok_telegram.llms.chat.exceptions import UnacknowledgedImportantMessageError
 from areyouok_telegram.llms.chat.responses import AgentResponse
+from areyouok_telegram.llms.chat.responses import DoNothingResponse
 from areyouok_telegram.llms.chat.responses import ReactionResponse
 from areyouok_telegram.llms.chat.responses import TextResponse
 
@@ -44,6 +46,7 @@ class TestAreyouokAgent:
         test_deps = ChatAgentDependencies(
             tg_context=mock_context,
             tg_chat_id="123456789",
+            tg_session_id="test_session_id",
             last_response_type="no_previous_response",
             db_connection=mock_async_database_session,
         )
@@ -62,6 +65,7 @@ class TestAreyouokAgent:
         test_deps = ChatAgentDependencies(
             tg_context=mock_context,
             tg_chat_id="123456789",
+            tg_session_id="test_session_id",
             last_response_type="no_previous_response",
             db_connection=mock_async_database_session,
         )
@@ -87,6 +91,7 @@ class TestAreyouokAgent:
             test_deps = ChatAgentDependencies(
                 tg_context=mock_context,
                 tg_chat_id="123456789",
+                tg_session_id="test_session_id",
                 last_response_type=last_response,
                 db_connection=mock_async_database_session,
             )
@@ -105,6 +110,7 @@ class TestAreyouokAgent:
         test_deps = ChatAgentDependencies(
             tg_context=mock_context,
             tg_chat_id="123456789",
+            tg_session_id="test_session_id",
             last_response_type="TextResponse",
             db_connection=mock_async_database_session,
         )
@@ -136,6 +142,7 @@ class TestAgentValidation:
         test_deps = ChatAgentDependencies(
             tg_context=mock_context,
             tg_chat_id="123456789",
+            tg_session_id="test_session_id",
             last_response_type="no_previous_response",
             db_connection=mock_async_database_session,
         )
@@ -168,6 +175,7 @@ class TestAgentValidation:
         test_deps = ChatAgentDependencies(
             tg_context=mock_context,
             tg_chat_id="123456789",
+            tg_session_id="test_session_id",
             last_response_type="no_previous_response",
             db_connection=mock_async_database_session,
         )
@@ -202,6 +210,7 @@ class TestAgentValidation:
         test_deps = ChatAgentDependencies(
             tg_context=mock_context,
             tg_chat_id="123456789",
+            tg_session_id="test_session_id",
             last_response_type="no_previous_response",
             db_connection=mock_async_database_session,
         )
@@ -236,6 +245,7 @@ class TestAgentValidation:
         test_deps = ChatAgentDependencies(
             tg_context=mock_context,
             tg_chat_id="123456789",
+            tg_session_id="test_session_id",
             last_response_type="no_previous_response",
             db_connection=mock_async_database_session,
         )
@@ -254,3 +264,139 @@ class TestAgentValidation:
         # Should return the same response unchanged
         assert result == text_response
         assert result.message_text == "I'm here to listen"
+
+    @pytest.mark.asyncio
+    async def test_validate_agent_response_with_instruction_text_response_pass(self, mock_async_database_session):
+        """Test validation with instruction passes when text response acknowledges it."""
+        # Create mock dependencies with instruction
+        mock_context = AsyncMock()
+        test_deps = ChatAgentDependencies(
+            tg_context=mock_context,
+            tg_chat_id="123456789",
+            tg_session_id="test_session_id",
+            last_response_type="no_previous_response",
+            db_connection=mock_async_database_session,
+            instruction="The user sent a video file, but you can only view images and PDFs.",
+        )
+
+        # Create a TextResponse that acknowledges the instruction
+        text_response = TextResponse(
+            reasoning="User sent video, need to acknowledge",
+            message_text="I see you sent a video, but I can only view images and PDFs.",
+            reply_to_message_id=None,
+        )
+
+        # Mock content check agent to pass
+        mock_content_check_run = MagicMock()
+        mock_content_check_run.output.check_pass = True
+        mock_content_check_run.usage.return_value = Usage()
+
+        with patch("areyouok_telegram.llms.chat.agent.content_check_agent.run", return_value=mock_content_check_run):
+            with patch("areyouok_telegram.data.llm_usage.LLMUsage.track_pydantic_usage", new_callable=AsyncMock):
+                # Create proper RunContext with required parameters
+                ctx = RunContext(deps=test_deps, messages=[], retry=0, model=TestModel(), usage=Usage())
+
+                # Should pass validation
+                result = await validate_agent_response(ctx, text_response)
+
+                assert result == text_response
+
+    @pytest.mark.asyncio
+    async def test_validate_agent_response_with_instruction_text_response_fail(self, mock_async_database_session):
+        """Test validation with instruction fails when text response doesn't acknowledge it."""
+        # Create mock dependencies with instruction
+        mock_context = AsyncMock()
+        test_deps = ChatAgentDependencies(
+            tg_context=mock_context,
+            tg_chat_id="123456789",
+            tg_session_id="test_session_id",
+            last_response_type="no_previous_response",
+            db_connection=mock_async_database_session,
+            instruction="The user sent a video file, but you can only view images and PDFs.",
+        )
+
+        # Create a TextResponse that doesn't acknowledge the instruction
+        text_response = TextResponse(
+            reasoning="User needs support",
+            message_text="How are you feeling today?",
+            reply_to_message_id=None,
+        )
+
+        # Mock content check agent to fail
+        mock_content_check_run = MagicMock()
+        mock_content_check_run.output.check_pass = False
+        mock_content_check_run.output.feedback = "You didn't acknowledge the video file"
+        mock_content_check_run.usage.return_value = Usage()
+
+        with patch("areyouok_telegram.llms.chat.agent.content_check_agent.run", return_value=mock_content_check_run):
+            with patch("areyouok_telegram.data.llm_usage.LLMUsage.track_pydantic_usage", new_callable=AsyncMock):
+                # Create proper RunContext with required parameters
+                ctx = RunContext(deps=test_deps, messages=[], retry=0, model=TestModel(), usage=Usage())
+
+                with pytest.raises(UnacknowledgedImportantMessageError) as exc_info:
+                    await validate_agent_response(ctx, text_response)
+
+                assert "video file" in str(exc_info.value)
+                assert "You didn't acknowledge the video file" in exc_info.value.feedback
+
+    @pytest.mark.asyncio
+    async def test_validate_agent_response_with_instruction_non_text_response(self, mock_async_database_session):
+        """Test validation with instruction fails for non-text responses."""
+        # Create mock dependencies with instruction
+        mock_context = AsyncMock()
+        test_deps = ChatAgentDependencies(
+            tg_context=mock_context,
+            tg_chat_id="123456789",
+            tg_session_id="test_session_id",
+            last_response_type="no_previous_response",
+            db_connection=mock_async_database_session,
+            instruction="The user sent a video file, but you can only view images and PDFs.",
+        )
+
+        # Create a ReactionResponse (non-text response)
+        reaction_response = ReactionResponse(
+            reasoning="React to message",
+            react_to_message_id="123",
+            emoji=ReactionEmoji.THUMBS_UP,
+        )
+
+        # Mock message lookup for reaction validation
+        mock_message = MagicMock()
+        mock_message.from_user.id = 123456  # Different from bot
+        with patch("areyouok_telegram.data.Messages.retrieve_message_by_id", return_value=(mock_message, None)):
+            # Create proper RunContext with required parameters
+            ctx = RunContext(deps=test_deps, messages=[], retry=0, model=TestModel(), usage=Usage())
+
+            with pytest.raises(UnacknowledgedImportantMessageError) as exc_info:
+                await validate_agent_response(ctx, reaction_response)
+
+            assert "video file" in str(exc_info.value)
+            assert not exc_info.value.feedback  # Empty feedback for non-text responses
+
+    @pytest.mark.asyncio
+    async def test_validate_agent_response_with_instruction_do_nothing_response(self, mock_async_database_session):
+        """Test validation with instruction fails for DoNothingResponse."""
+        # Create mock dependencies with instruction
+        mock_context = AsyncMock()
+        test_deps = ChatAgentDependencies(
+            tg_context=mock_context,
+            tg_chat_id="123456789",
+            tg_session_id="test_session_id",
+            last_response_type="no_previous_response",
+            db_connection=mock_async_database_session,
+            instruction="The user sent a video file, but you can only view images and PDFs.",
+        )
+
+        # Create a DoNothingResponse
+        do_nothing_response = DoNothingResponse(
+            reasoning="Nothing to say",
+        )
+
+        # Create proper RunContext with required parameters
+        ctx = RunContext(deps=test_deps, messages=[], retry=0, model=TestModel(), usage=Usage())
+
+        with pytest.raises(UnacknowledgedImportantMessageError) as exc_info:
+            await validate_agent_response(ctx, do_nothing_response)
+
+        assert "video file" in str(exc_info.value)
+        assert not exc_info.value.feedback  # Empty feedback for non-text responses

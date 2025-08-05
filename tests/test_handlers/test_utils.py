@@ -1,5 +1,6 @@
 """Tests for handler utilities including voice transcription."""
 
+from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
@@ -146,3 +147,151 @@ class TestExtractMediaFromTelegramMessage:
         # Should process both photo and document
         assert result == 2
         assert mock_create_file.call_count == 2
+
+    @pytest.mark.asyncio
+    @patch("areyouok_telegram.data.MediaFiles.create_file")
+    async def test_extract_sticker_message(self, mock_create_file, mock_async_database_session):
+        """Test extracting sticker from a message."""
+        # Create mock sticker message
+        mock_message = MagicMock()
+        mock_message.chat.id = "123456"
+        mock_message.id = "789"
+        mock_message.photo = None
+        mock_message.document = None
+        mock_message.animation = None
+        mock_message.video = None
+        mock_message.video_note = None
+        mock_message.voice = None
+
+        # Mock sticker
+        mock_sticker = MagicMock()
+        mock_sticker_file = MagicMock()
+        mock_sticker_file.file_id = "sticker_123"
+        mock_sticker_file.file_unique_id = "sticker_unique_123"
+        mock_sticker_file.file_size = 2048
+        mock_sticker_file.download_as_bytearray = AsyncMock(return_value=b"fake_sticker_data")
+        mock_sticker.get_file = AsyncMock(return_value=mock_sticker_file)
+        mock_message.sticker = mock_sticker
+
+        result = await extract_media_from_telegram_message(mock_async_database_session, mock_message)
+
+        # Should process sticker
+        assert result == 1
+        assert mock_create_file.call_count == 1
+
+        # Verify sticker file was saved
+        call_kwargs = mock_create_file.call_args.kwargs
+        assert call_kwargs["file_id"] == "sticker_123"
+        assert call_kwargs["file_unique_id"] == "sticker_unique_123"
+        assert call_kwargs["content_bytes"] == b"fake_sticker_data"
+
+    @pytest.mark.asyncio
+    @patch("areyouok_telegram.data.MediaFiles.create_file")
+    async def test_extract_animation_message(self, mock_create_file, mock_async_database_session):
+        """Test extracting animation (GIF) from a message."""
+        # Create mock animation message
+        mock_message = MagicMock()
+        mock_message.chat.id = "123456"
+        mock_message.id = "789"
+        mock_message.photo = None
+        mock_message.sticker = None
+        mock_message.document = None
+        mock_message.video = None
+        mock_message.video_note = None
+        mock_message.voice = None
+
+        # Mock animation
+        mock_animation = MagicMock()
+        mock_animation_file = MagicMock()
+        mock_animation_file.file_id = "animation_123"
+        mock_animation_file.file_unique_id = "animation_unique_123"
+        mock_animation_file.file_size = 4096
+        mock_animation_file.download_as_bytearray = AsyncMock(return_value=b"fake_animation_data")
+        mock_animation.get_file = AsyncMock(return_value=mock_animation_file)
+        mock_message.animation = mock_animation
+
+        result = await extract_media_from_telegram_message(mock_async_database_session, mock_message)
+
+        # Should process animation
+        assert result == 1
+        assert mock_create_file.call_count == 1
+
+        # Verify animation file was saved
+        call_kwargs = mock_create_file.call_args.kwargs
+        assert call_kwargs["file_id"] == "animation_123"
+        assert call_kwargs["file_unique_id"] == "animation_unique_123"
+        assert call_kwargs["content_bytes"] == b"fake_animation_data"
+
+    @pytest.mark.asyncio
+    @patch("areyouok_telegram.data.MediaFiles.create_file")
+    async def test_extract_video_message(self, mock_create_file, mock_async_database_session):
+        """Test extracting video from a message."""
+        # Create mock video message
+        mock_message = MagicMock()
+        mock_message.chat.id = "123456"
+        mock_message.id = "789"
+        mock_message.photo = None
+        mock_message.sticker = None
+        mock_message.document = None
+        mock_message.animation = None
+        mock_message.video_note = None
+        mock_message.voice = None
+
+        # Mock video
+        mock_video = MagicMock()
+        mock_video_file = MagicMock()
+        mock_video_file.file_id = "video_123"
+        mock_video_file.file_unique_id = "video_unique_123"
+        mock_video_file.file_size = 8192
+        mock_video_file.download_as_bytearray = AsyncMock(return_value=b"fake_video_data")
+        mock_video.get_file = AsyncMock(return_value=mock_video_file)
+        mock_message.video = mock_video
+
+        result = await extract_media_from_telegram_message(mock_async_database_session, mock_message)
+
+        # Should process video
+        assert result == 1
+        assert mock_create_file.call_count == 1
+
+        # Verify video file was saved
+        call_kwargs = mock_create_file.call_args.kwargs
+        assert call_kwargs["file_id"] == "video_123"
+        assert call_kwargs["file_unique_id"] == "video_unique_123"
+        assert call_kwargs["content_bytes"] == b"fake_video_data"
+
+    @pytest.mark.asyncio
+    @patch("areyouok_telegram.data.MediaFiles.create_file")
+    async def test_extract_video_note_message(self, mock_create_file, mock_async_database_session):
+        """Test extracting video note (circular video) from a message."""
+        # Create mock video note message
+        mock_message = MagicMock()
+        mock_message.chat.id = "123456"
+        mock_message.id = "789"
+        mock_message.photo = None
+        mock_message.sticker = None
+        mock_message.document = None
+        mock_message.animation = None
+        mock_message.video = None
+        mock_message.voice = None
+
+        # Mock video note
+        mock_video_note = MagicMock()
+        mock_video_note_file = MagicMock()
+        mock_video_note_file.file_id = "video_note_123"
+        mock_video_note_file.file_unique_id = "video_note_unique_123"
+        mock_video_note_file.file_size = 16384
+        mock_video_note_file.download_as_bytearray = AsyncMock(return_value=b"fake_video_note_data")
+        mock_video_note.get_file = AsyncMock(return_value=mock_video_note_file)
+        mock_message.video_note = mock_video_note
+
+        result = await extract_media_from_telegram_message(mock_async_database_session, mock_message)
+
+        # Should process video note
+        assert result == 1
+        assert mock_create_file.call_count == 1
+
+        # Verify video note file was saved
+        call_kwargs = mock_create_file.call_args.kwargs
+        assert call_kwargs["file_id"] == "video_note_123"
+        assert call_kwargs["file_unique_id"] == "video_note_unique_123"
+        assert call_kwargs["content_bytes"] == b"fake_video_note_data"

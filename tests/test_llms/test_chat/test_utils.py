@@ -5,9 +5,11 @@
 import json
 from datetime import UTC
 from datetime import datetime
+from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
+import pydantic_ai
 import pytest
 import telegram
 from pydantic_ai import messages
@@ -16,6 +18,159 @@ from areyouok_telegram.jobs.utils import _telegram_message_to_model_message
 from areyouok_telegram.jobs.utils import _telegram_reaction_to_model_message
 from areyouok_telegram.jobs.utils import convert_telegram_message_to_model_message
 from areyouok_telegram.llms.utils import telegram_message_to_dict
+
+
+class TestMediaFileProcessing:
+    """Test suite for media file processing in _telegram_message_to_model_message."""
+
+    @pytest.mark.asyncio
+    async def test_message_with_image_media(self):
+        """Test processing message with image media files."""
+        # Create mock message
+        mock_message = MagicMock(spec=telegram.Message)
+        mock_message.message_id = 123
+        mock_message.text = "Check out this image"
+        mock_message.date = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
+        mock_message.chat = MagicMock()
+        mock_message.chat.id = 123456
+
+        # Mock image media file
+        image_file = MagicMock()
+        image_file.mime_type = "image/png"
+        image_file.bytes_data = b"fake_image_data"
+
+        with patch("areyouok_telegram.data.MediaFiles.get_by_message_id", new_callable=AsyncMock) as mock_get_media:
+            mock_get_media.return_value = [image_file]
+
+            result = await _telegram_message_to_model_message(None, mock_message, datetime.now(UTC), is_user=True)
+
+            # Verify result is ModelRequest with image content
+            assert isinstance(result, messages.ModelRequest)
+            assert len(result.parts[0].content) == 2  # JSON + image
+            assert isinstance(result.parts[0].content[1], pydantic_ai.BinaryContent)
+            assert result.parts[0].content[1].media_type == "image/png"
+            assert result.parts[0].content[1].data == b"fake_image_data"
+
+    @pytest.mark.asyncio
+    async def test_message_with_pdf_media(self):
+        """Test processing message with PDF media files."""
+        # Create mock message
+        mock_message = MagicMock(spec=telegram.Message)
+        mock_message.message_id = 456
+        mock_message.text = "Here's the PDF"
+        mock_message.date = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
+        mock_message.chat = MagicMock()
+        mock_message.chat.id = 123456
+
+        # Mock PDF media file
+        pdf_file = MagicMock()
+        pdf_file.mime_type = "application/pdf"
+        pdf_file.bytes_data = b"fake_pdf_data"
+
+        with patch("areyouok_telegram.data.MediaFiles.get_by_message_id", new_callable=AsyncMock) as mock_get_media:
+            mock_get_media.return_value = [pdf_file]
+
+            result = await _telegram_message_to_model_message(None, mock_message, datetime.now(UTC), is_user=True)
+
+            # Verify result includes PDF as binary content
+            assert isinstance(result, messages.ModelRequest)
+            assert len(result.parts[0].content) == 2  # JSON + PDF
+            assert isinstance(result.parts[0].content[1], pydantic_ai.BinaryContent)
+            assert result.parts[0].content[1].media_type == "application/pdf"
+            assert result.parts[0].content[1].data == b"fake_pdf_data"
+
+    @pytest.mark.asyncio
+    async def test_message_with_text_file_media(self):
+        """Test processing message with text file media."""
+        # Create mock message
+        mock_message = MagicMock(spec=telegram.Message)
+        mock_message.message_id = 789
+        mock_message.text = "Text file attached"
+        mock_message.date = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
+        mock_message.chat = MagicMock()
+        mock_message.chat.id = 123456
+
+        # Mock text media file
+        text_file = MagicMock()
+        text_file.mime_type = "text/plain"
+        text_file.bytes_data = b"Hello from text file"
+
+        with patch("areyouok_telegram.data.MediaFiles.get_by_message_id", new_callable=AsyncMock) as mock_get_media:
+            mock_get_media.return_value = [text_file]
+
+            result = await _telegram_message_to_model_message(None, mock_message, datetime.now(UTC), is_user=True)
+
+            # Verify result includes text content as string
+            assert isinstance(result, messages.ModelRequest)
+            assert len(result.parts[0].content) == 2  # JSON + text
+            assert isinstance(result.parts[0].content[1], str)
+            assert result.parts[0].content[1] == "Hello from text file"
+
+    @pytest.mark.asyncio
+    async def test_message_with_multiple_mixed_media(self):
+        """Test processing message with multiple media types."""
+        # Create mock message
+        mock_message = MagicMock(spec=telegram.Message)
+        mock_message.message_id = 999
+        mock_message.text = "Multiple files"
+        mock_message.date = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
+        mock_message.chat = MagicMock()
+        mock_message.chat.id = 123456
+
+        # Mock multiple media files
+        image_file = MagicMock()
+        image_file.mime_type = "image/jpeg"
+        image_file.bytes_data = b"image_data"
+
+        text_file = MagicMock()
+        text_file.mime_type = "text/markdown"
+        text_file.bytes_data = b"# Markdown content"
+
+        video_file = MagicMock()
+        video_file.mime_type = "video/mp4"
+        video_file.bytes_data = b"video_data"
+
+        with patch("areyouok_telegram.data.MediaFiles.get_by_message_id", new_callable=AsyncMock) as mock_get_media:
+            mock_get_media.return_value = [image_file, text_file, video_file]
+
+            result = await _telegram_message_to_model_message(None, mock_message, datetime.now(UTC), is_user=True)
+
+            # Verify only supported media is included (image + text, not video)
+            assert isinstance(result, messages.ModelRequest)
+            assert len(result.parts[0].content) == 3  # JSON + image + text
+
+            # Check image content
+            assert isinstance(result.parts[0].content[1], pydantic_ai.BinaryContent)
+            assert result.parts[0].content[1].media_type == "image/jpeg"
+
+            # Check text content
+            assert isinstance(result.parts[0].content[2], str)
+            assert result.parts[0].content[2] == "# Markdown content"
+
+    @pytest.mark.asyncio
+    async def test_message_with_unsupported_media_only(self):
+        """Test processing message with only unsupported media types."""
+        # Create mock message
+        mock_message = MagicMock(spec=telegram.Message)
+        mock_message.message_id = 555
+        mock_message.text = "Video attached"
+        mock_message.date = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
+        mock_message.chat = MagicMock()
+        mock_message.chat.id = 123456
+
+        # Mock unsupported media file
+        video_file = MagicMock()
+        video_file.mime_type = "video/mp4"
+        video_file.bytes_data = b"video_data"
+
+        with patch("areyouok_telegram.data.MediaFiles.get_by_message_id", new_callable=AsyncMock) as mock_get_media:
+            mock_get_media.return_value = [video_file]
+
+            result = await _telegram_message_to_model_message(None, mock_message, datetime.now(UTC), is_user=True)
+
+            # Verify only JSON content is included (unsupported media is skipped)
+            assert isinstance(result, messages.ModelRequest)
+            assert isinstance(result.parts[0].content, str)  # Only JSON, no list
 
 
 class TestTelegramMessageToDict:
