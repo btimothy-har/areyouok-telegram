@@ -5,18 +5,15 @@ from importlib.metadata import version
 
 import logfire
 
+from areyouok_telegram.config import CONTROLLED_ENV
 from areyouok_telegram.config import ENV
 from areyouok_telegram.config import GITHUB_REPOSITORY
 from areyouok_telegram.config import GITHUB_SHA
 from areyouok_telegram.config import LOGFIRE_TOKEN
 
-logger = logging.getLogger(__name__)
-
 
 def logging_setup():
     """Setup logging configuration."""
-
-    controlled_environments = ["production", "staging"]
 
     logging.getLogger().addHandler(logfire.LogfireLoggingHandler())
 
@@ -28,7 +25,7 @@ def logging_setup():
     console = False
     code_source = None
 
-    if ENV in controlled_environments:
+    if ENV in CONTROLLED_ENV:
         if GITHUB_REPOSITORY and GITHUB_SHA:
             code_source = logfire.CodeSource(
                 repository=f"https://github.com/{GITHUB_REPOSITORY}",
@@ -38,7 +35,7 @@ def logging_setup():
         console = logfire.ConsoleOptions(
             span_style="show-parents",
             show_project_link=False,
-            min_log_level="debug" if ENV == "development" else "info",
+            min_log_level="debug",
             verbose=True,
         )
 
