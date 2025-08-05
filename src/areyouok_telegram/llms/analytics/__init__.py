@@ -1,20 +1,15 @@
-import dspy
-
-from areyouok_telegram.config import OPENROUTER_API_KEY
-from areyouok_telegram.llms.analytics.context import DynamicContextCompression
-
-dspy.settings.configure(
-    lm=dspy.LM(
-        "openai/openai/gpt-4.1-nano",
-        temperature=0,
-        api_key=OPENROUTER_API_KEY,
-        api_base="https://openrouter.ai/api/v1",
-        cache=False,
-        max_tokens=128_000,
-    ),
-    track_usage=True,
-)
+from areyouok_telegram.llms.analytics.anonymizer import anonymization_agent
+from areyouok_telegram.llms.analytics.content_check import ContentCheckDependencies
+from areyouok_telegram.llms.analytics.content_check import ContentCheckResponse
+from areyouok_telegram.llms.analytics.content_check import content_check_agent
+from areyouok_telegram.llms.analytics.context_compression import ContextTemplate
+from areyouok_telegram.llms.analytics.context_compression import context_compression_agent
 
 __all__ = [
-    "DynamicContextCompression",
+    "context_compression_agent",
+    "anonymization_agent",
+    "ContextTemplate",
+    "content_check_agent",
+    "ContentCheckResponse",
+    "ContentCheckDependencies",
 ]

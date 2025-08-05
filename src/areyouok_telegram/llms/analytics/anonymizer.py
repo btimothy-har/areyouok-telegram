@@ -1,34 +1,44 @@
-import dspy
+import pydantic_ai
+from pydantic_ai.models.fallback import FallbackModel
+from pydantic_ai.models.openai import OpenAIModel
+
+from areyouok_telegram.llms.utils import openrouter_provider
+from areyouok_telegram.llms.utils import pydantic_ai_instrumentation
+
+model_settings = pydantic_ai.settings.ModelSettings(temperature=0.0)
+
+agent_models = FallbackModel(
+    OpenAIModel(
+        model_name="gpt-4.1-nano-2025-04-14",
+        settings=model_settings,
+    ),
+    OpenAIModel(
+        model_name="openai/gpt-4.1-nano",
+        provider=openrouter_provider,
+        settings=model_settings,
+    ),
+)
 
 
-class TextAnonymizer(dspy.Signature):
-    """Text anonymization"""
+anonymization_agent = pydantic_ai.Agent(
+    model=agent_models,
+    name="anonymization_agent",
+    end_strategy="exhaustive",
+    instrument=pydantic_ai_instrumentation,
+)
 
-    text: str = dspy.InputField(desc="The text to be anonymized, which may contain sensitive information.")
-    anonymized_text: str = dspy.OutputField(
-        desc="The anonymized text, taking special care to retain the essence and meaning of the original."
-    )
+
+@anonymization_agent.instructions
+def generate_instructions() -> str:
+    return """
+You are a text anonymization assistant. Your task is to anonymize sensitive information \
+in the provided text while retaining the essence and meaning of the original message.
+
+Replace names, locations, specific identifiers, and other potentially identifying information with \
+generic placeholders. Maintain the emotional tone and context of the message.
+    """
 
 
-class AnonymizationModule(dspy.Module):
-    """Module for anonymizing text"""
-
-    def __init__(self):
-        self.anonymizer = dspy.ChainOfThought(TextAnonymizer)
-
-    def forward(self, text: str) -> dspy.Prediction:
-        """Anonymize the given text."""
-
-        anonymized_text = self.anonymizer(text=text)
-
-        result = dspy.Prediction(
-            anonymized_text=anonymized_text.anonymized_text,
-        )
-
-        # Preserve LLM usage data
-        if hasattr(anonymized_text, "get_lm_usage"):
-            usage = anonymized_text.get_lm_usage()
-            if usage:
-                result.set_lm_usage(usage)
-
-        return result
+@anonymization_agent.output_validator
+async def validate_anonymous_output(ctx: pydantic_ai.RunContext, data: str) -> str:  # noqa: ARG001
+    return data

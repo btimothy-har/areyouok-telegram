@@ -3,19 +3,22 @@ from dataclasses import dataclass
 import pydantic_ai
 from pydantic_ai.models.anthropic import AnthropicModel
 from pydantic_ai.models.fallback import FallbackModel
-from pydantic_ai.models.instrumented import InstrumentationSettings
 from pydantic_ai.models.openai import OpenAIModel
-from pydantic_ai.providers.anthropic import AnthropicProvider
-from pydantic_ai.providers.openrouter import OpenRouterProvider
 from telegram.ext import ContextTypes
 
-from areyouok_telegram.config import ANTHROPIC_API_KEY
-from areyouok_telegram.config import OPENROUTER_API_KEY
+from areyouok_telegram.data import LLMUsage
 from areyouok_telegram.data import Messages
+from areyouok_telegram.data import async_database_session
 from areyouok_telegram.data.connection import AsyncSessionLocal
+from areyouok_telegram.llms.analytics import ContentCheckDependencies
+from areyouok_telegram.llms.analytics import ContentCheckResponse
+from areyouok_telegram.llms.analytics import content_check_agent
 from areyouok_telegram.llms.chat.exceptions import InvalidMessageError
 from areyouok_telegram.llms.chat.exceptions import ReactToSelfError
+from areyouok_telegram.llms.chat.exceptions import UnacknowledgedImportantMessageError
 from areyouok_telegram.llms.chat.responses import AgentResponse
+from areyouok_telegram.llms.utils import openrouter_provider
+from areyouok_telegram.llms.utils import pydantic_ai_instrumentation
 
 
 @dataclass
@@ -25,18 +28,26 @@ class ChatAgentDependencies:
     # TODO: Add user preferences so we have context
     tg_context: ContextTypes.DEFAULT_TYPE
     tg_chat_id: str
+    tg_session_id: str
     last_response_type: str
     db_connection: AsyncSessionLocal
+    instruction: str | None = None
 
+
+model_settings = pydantic_ai.settings.ModelSettings(
+    temperature=0.6,
+    parallel_tool_calls=True,
+)
 
 agent_models = FallbackModel(
     AnthropicModel(
         model_name="claude-sonnet-4-20250514",
-        provider=AnthropicProvider(api_key=ANTHROPIC_API_KEY),
+        settings=model_settings,
     ),
     OpenAIModel(
         model_name="anthropic/claude-sonnet-4",
-        provider=OpenRouterProvider(api_key=OPENROUTER_API_KEY),
+        provider=openrouter_provider,
+        settings=model_settings,
     ),
 )
 
@@ -46,7 +57,8 @@ chat_agent = pydantic_ai.Agent(
     deps_type=ChatAgentDependencies,
     name="areyouok_telegram_agent",
     end_strategy="exhaustive",
-    instrument=InstrumentationSettings(include_content=False),
+    instrument=pydantic_ai_instrumentation,
+    retries=3,
 )
 
 
@@ -110,6 +122,13 @@ In addition to the current chat history, you are also provided with:
 <last_response>
 You last decided to: {ctx.deps.last_response_type}
 </last_response>
+
+<important_message_for_user>
+{ctx.deps.instruction if ctx.deps.instruction else "None"}
+
+If there is an important message for the user (not "None"), you MUST acknowledge it in your response to the user \
+    in a supportive and understanding way.
+</important_message_for_user>
     """
 
 
@@ -129,5 +148,31 @@ async def validate_agent_response(
 
         if message.from_user.id == ctx.deps.tg_context.bot.id:
             raise ReactToSelfError(data.react_to_message_id)
+
+    if ctx.deps.instruction:
+        if data.response_type != "TextResponse":
+            raise UnacknowledgedImportantMessageError(ctx.deps.instruction)
+
+        else:
+            content_check_run = await content_check_agent.run(
+                user_prompt=data.message_text,
+                deps=ContentCheckDependencies(
+                    check_content_exists=ctx.deps.instruction,
+                ),
+            )
+
+            content_check: ContentCheckResponse = content_check_run.output
+
+            async with async_database_session() as conn:
+                await LLMUsage.track_pydantic_usage(
+                    session=conn,
+                    chat_id=ctx.deps.tg_chat_id,
+                    session_id=ctx.deps.tg_session_id,
+                    agent=content_check_agent,
+                    data=content_check_run.usage(),
+                )
+
+            if not content_check.check_pass:
+                raise UnacknowledgedImportantMessageError(ctx.deps.instruction, content_check.feedback)
 
     return data

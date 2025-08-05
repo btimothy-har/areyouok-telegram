@@ -1,6 +1,7 @@
 """Tests for the ConversationJob class and related functions."""
 
 import hashlib
+import json
 from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
@@ -17,6 +18,7 @@ from areyouok_telegram.jobs.conversations import JOB_LOCK
 from areyouok_telegram.jobs.conversations import ConversationJob
 from areyouok_telegram.jobs.conversations import schedule_conversation_job
 from areyouok_telegram.jobs.exceptions import NoActiveSessionError
+from areyouok_telegram.llms.analytics import ContextTemplate
 from areyouok_telegram.llms.chat import ChatAgentDependencies
 from areyouok_telegram.llms.chat.responses import DoNothingResponse
 from areyouok_telegram.llms.chat.responses import ReactionResponse
@@ -36,19 +38,47 @@ def mock_job(mock_session):
 @pytest.fixture
 def mock_input_message():
     """Create a mock message conversion that returns proper ModelMessage objects."""
-    with patch("areyouok_telegram.llms.utils.convert_telegram_message_to_model_message") as mock_convert:
-        # Create a proper ModelRequest message
-        model_request = pydantic_ai.messages.ModelRequest(
-            parts=[
-                pydantic_ai.messages.UserPromptPart(
-                    content='{"text": "Hello", "message_id": "123", "timestamp": "0 seconds ago"}',
-                    timestamp=datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC),
-                    part_kind="user-prompt",
+    with patch("areyouok_telegram.jobs.utils.convert_telegram_message_to_model_message") as mock_convert:
+        # Create a side effect function that returns proper responses based on is_user
+        async def convert_side_effect(conn, message, ts_reference=None, *, is_user=False):  # noqa: ARG001
+            if is_user:
+                model_request = pydantic_ai.messages.ModelRequest(
+                    parts=[
+                        pydantic_ai.messages.UserPromptPart(
+                            content=json.dumps(
+                                {
+                                    "text": getattr(message, "text", "Hello"),
+                                    "message_id": str(getattr(message, "message_id", 123)),
+                                    "timestamp": "0 seconds ago",
+                                }
+                            ),
+                            timestamp=getattr(message, "date", datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)),
+                            part_kind="user-prompt",
+                        )
+                    ],
+                    kind="request",
                 )
-            ],
-            kind="request",
-        )
-        mock_convert.return_value = model_request
+                return model_request, []
+            else:
+                model_response = pydantic_ai.messages.ModelResponse(
+                    parts=[
+                        pydantic_ai.messages.TextPart(
+                            content=json.dumps(
+                                {
+                                    "text": getattr(message, "text", "Bot response"),
+                                    "message_id": str(getattr(message, "message_id", 456)),
+                                    "timestamp": "0 seconds ago",
+                                }
+                            ),
+                            part_kind="text",
+                        )
+                    ],
+                    timestamp=getattr(message, "date", datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)),
+                    kind="response",
+                )
+                return model_response, []
+
+        mock_convert.side_effect = convert_side_effect
         yield mock_convert
 
 
@@ -58,7 +88,7 @@ def mock_agent_run():
     with patch("areyouok_telegram.llms.chat.chat_agent.run") as mock_run:
         # Default to TextResponse, but can be overridden in tests
         mock_result = MagicMock()
-        mock_result.data = TextResponse(reasoning="Default test reasoning", message_text="Default test response")
+        mock_result.output = TextResponse(reasoning="Default test reasoning", message_text="Default test response")
         mock_run.return_value = mock_result
         yield mock_run
 
@@ -111,6 +141,20 @@ def mock_do_nothing_response():
     mock_response.execute = AsyncMock(return_value=None)
 
     return mock_response
+
+
+@pytest.fixture
+def mock_context_template():
+    """Create a mock ContextTemplate object."""
+    return ContextTemplate(
+        life_situation="User is experiencing work stress",
+        connection="User prefers direct communication",
+        personal_context="User values work-life balance",
+        conversation="User discussing workplace challenges",
+        practical_matters="User seeking advice on time management",
+        feedback="User appreciates practical suggestions",
+        others="No additional context",
+    )
 
 
 class TestConversationJob:
@@ -208,23 +252,30 @@ class TestConversationJob:
             mock_generate.assert_called_once_with(mock_async_database_session, context, mock_session)
 
     @pytest.mark.asyncio
-    @pytest.mark.usefixtures("mock_input_message")
     async def test_generate_response_with_text_response(
         self, mock_job, mock_session, mock_agent_run, mock_text_response
     ):
         """Test _generate_response when agent returns a TextResponse."""
 
         # Mock agent run to return a TextResponse
-        mock_agent_run.return_value.data = mock_text_response
+        mock_agent_run.return_value.output = mock_text_response
 
         # Use mock messages from fixtures
         msg1 = MagicMock()
         msg1.date = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
         msg1.message_id = 100
+        msg1.from_user = MagicMock()
+        msg1.from_user.id = 123456789  # User ID
+        msg1.chat = MagicMock()
+        msg1.chat.id = "123456"
 
         msg2 = MagicMock()
         msg2.date = datetime(2025, 1, 15, 10, 1, 0, tzinfo=UTC)
         msg2.message_id = 101
+        msg2.from_user = MagicMock()
+        msg2.from_user.id = 123456789  # User ID
+        msg2.chat = MagicMock()
+        msg2.chat.id = "123456"
 
         messages = [msg2, msg1]  # Out of order
 
@@ -239,7 +290,7 @@ class TestConversationJob:
         mock_session.get_messages = AsyncMock(return_value=messages)
 
         # Configure agent to return the mock TextResponse
-        mock_agent_run.return_value.data = mock_text_response
+        mock_agent_run.return_value.output = mock_text_response
 
         # The mock_text_response fixture already provides the bot response
         bot_response = mock_text_response.execute.return_value
@@ -247,9 +298,15 @@ class TestConversationJob:
         with (
             patch("areyouok_telegram.data.Messages.new_or_update") as mock_new_or_update,
             patch("areyouok_telegram.data.Context.retrieve_context_by_chat") as mock_retrieve_context,
+            patch(
+                "areyouok_telegram.jobs.conversations.get_unsupported_media_from_messages",
+                new_callable=AsyncMock,
+            ) as mock_get_unsupported_media,
         ):
             # Mock no previous context
             mock_retrieve_context.return_value = []
+            # Mock no unsupported media - make it async
+            mock_get_unsupported_media.return_value = []
 
             result = await mock_job._generate_response(conn, context, mock_session)
 
@@ -304,7 +361,7 @@ class TestConversationJob:
         mock_session.get_messages = AsyncMock(return_value=messages)
 
         # Configure agent to return the mock ReactionResponse
-        mock_agent_run.return_value.data = mock_reaction_response
+        mock_agent_run.return_value.output = mock_reaction_response
 
         # The mock_reaction_response fixture already provides the bot response
         bot_response = mock_reaction_response.execute.return_value
@@ -312,9 +369,15 @@ class TestConversationJob:
         with (
             patch("areyouok_telegram.data.Messages.new_or_update") as mock_new_or_update,
             patch("areyouok_telegram.data.Context.retrieve_context_by_chat") as mock_retrieve_context,
+            patch(
+                "areyouok_telegram.jobs.conversations.get_unsupported_media_from_messages",
+                new_callable=AsyncMock,
+            ) as mock_get_unsupported_media,
         ):
             # Mock no previous context
             mock_retrieve_context.return_value = []
+            # Mock no unsupported media - make it async
+            mock_get_unsupported_media.return_value = []
 
             result = await mock_job._generate_response(conn, context, mock_session)
 
@@ -368,14 +431,20 @@ class TestConversationJob:
         mock_session.get_messages = AsyncMock(return_value=messages)
 
         # Configure agent to return the mock DoNothingResponse
-        mock_agent_run.return_value.data = mock_do_nothing_response
+        mock_agent_run.return_value.output = mock_do_nothing_response
 
         with (
             patch("areyouok_telegram.data.Messages.new_or_update") as mock_new_or_update,
             patch("areyouok_telegram.data.Context.retrieve_context_by_chat") as mock_retrieve_context,
+            patch(
+                "areyouok_telegram.jobs.conversations.get_unsupported_media_from_messages",
+                new_callable=AsyncMock,
+            ) as mock_get_unsupported_media,
         ):
             # Mock no previous context
             mock_retrieve_context.return_value = []
+            # Mock no unsupported media - make it async
+            mock_get_unsupported_media.return_value = []
 
             result = await mock_job._generate_response(conn, context, mock_session)
 
@@ -427,9 +496,17 @@ class TestConversationJob:
         # Configure agent to fail
         mock_agent_run.side_effect = Exception("Agent error")
 
-        with patch("areyouok_telegram.data.Context.retrieve_context_by_chat") as mock_retrieve_context:
+        with (
+            patch("areyouok_telegram.data.Context.retrieve_context_by_chat") as mock_retrieve_context,
+            patch(
+                "areyouok_telegram.jobs.conversations.get_unsupported_media_from_messages",
+                new_callable=AsyncMock,
+            ) as mock_get_unsupported_media,
+        ):
             # Mock no previous context
             mock_retrieve_context.return_value = []
+            # Mock no unsupported media - make it async
+            mock_get_unsupported_media.return_value = []
 
             result = await mock_job._generate_response(conn, context, mock_session)
 
@@ -463,14 +540,22 @@ class TestConversationJob:
         mock_session.get_messages = AsyncMock(return_value=messages)
 
         # Configure agent to return the mock TextResponse
-        mock_agent_run.return_value.data = mock_text_response
+        mock_agent_run.return_value.output = mock_text_response
 
         # Configure text response execution to fail
         mock_text_response.execute.side_effect = Exception("Network error")
 
-        with patch("areyouok_telegram.data.Context.retrieve_context_by_chat") as mock_retrieve_context:
+        with (
+            patch("areyouok_telegram.data.Context.retrieve_context_by_chat") as mock_retrieve_context,
+            patch(
+                "areyouok_telegram.jobs.conversations.get_unsupported_media_from_messages",
+                new_callable=AsyncMock,
+            ) as mock_get_unsupported_media,
+        ):
             # Mock no previous context
             mock_retrieve_context.return_value = []
+            # Mock no unsupported media - make it async
+            mock_get_unsupported_media.return_value = []
 
             result = await mock_job._generate_response(conn, context, mock_session)
 
@@ -682,7 +767,7 @@ class TestConversationJob:
         mock_job.schedule_removal.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_compress_session_context_success(self):
+    async def test_compress_session_context_success(self, mock_context_template):
         """Test _compress_session_context successfully compresses and saves context."""
         job = ConversationJob("123456")
 
@@ -708,19 +793,16 @@ class TestConversationJob:
         with (
             patch("areyouok_telegram.jobs.conversations.Context.get_by_session_id") as mock_get_context,
             patch("areyouok_telegram.jobs.conversations.Context.new_or_update") as mock_new_context,
-            patch("areyouok_telegram.jobs.conversations.DynamicContextCompression") as mock_compression_class,
-            patch("areyouok_telegram.jobs.conversations.asyncio.to_thread") as mock_to_thread,
+            patch("areyouok_telegram.jobs.conversations.context_compression_agent.run") as mock_agent_run,
         ):
             # No existing context
             mock_get_context.return_value = None
 
-            # Mock compression result
-            mock_compression = MagicMock()
-            mock_compression_class.return_value = mock_compression
-
-            mock_result = MagicMock()
-            mock_result.context = "Compressed context summary"
-            mock_to_thread.return_value = mock_result
+            # Mock agent run result
+            mock_agent_result = MagicMock()
+            mock_agent_result.output = mock_context_template
+            mock_agent_result.usage = MagicMock(return_value={})
+            mock_agent_run.return_value = mock_agent_result
 
             await job._compress_session_context(conn, mock_session)
 
@@ -731,21 +813,19 @@ class TestConversationJob:
                 ctype="session",
             )
 
-            # Should get messages and compress them
+            # Should get messages and run compression agent
             mock_session.get_messages.assert_called_once_with(conn)
-            mock_to_thread.assert_called_once_with(
-                mock_compression,
-                messages=[msg1, msg2],  # Should be sorted by date
-            )
+            mock_agent_run.assert_called_once()
 
             # Should save new context
-            mock_new_context.assert_called_once_with(
-                session=conn,
-                chat_id="123456",
-                session_id="session-123",
-                ctype="session",
-                content="Compressed context summary",
-            )
+            mock_new_context.assert_called_once()
+            call_args = mock_new_context.call_args
+            assert call_args.kwargs["session"] == conn
+            assert call_args.kwargs["chat_id"] == "123456"
+            assert call_args.kwargs["session_id"] == "session-123"
+            assert call_args.kwargs["ctype"] == "session"
+            # Content should be the formatted template
+            assert "User is experiencing work stress" in call_args.kwargs["content"]
 
     @pytest.mark.asyncio
     async def test_compress_session_context_existing_context(self):
@@ -762,7 +842,7 @@ class TestConversationJob:
         with (
             patch("areyouok_telegram.jobs.conversations.Context.get_by_session_id") as mock_get_context,
             patch("areyouok_telegram.jobs.conversations.Context.new_or_update") as mock_new_context,
-            patch("areyouok_telegram.jobs.conversations.DynamicContextCompression") as mock_compression_class,
+            patch("areyouok_telegram.jobs.conversations.context_compression_agent.run") as mock_agent_run,
         ):
             # Existing context found
             mock_get_context.return_value = MagicMock()
@@ -776,11 +856,209 @@ class TestConversationJob:
                 ctype="session",
             )
 
-            # Compression class is instantiated but not used
-            mock_compression_class.assert_called_once()
-            # Should NOT save anything or get messages
+            # Should NOT save anything, get messages, or run compression
             mock_new_context.assert_not_called()
             mock_session.get_messages.assert_not_called()
+            mock_agent_run.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_compress_session_context_agent_failure(self):
+        """Test _compress_session_context handles agent failure gracefully."""
+        job = ConversationJob("123456")
+
+        # Mock database connection
+        conn = AsyncMock()
+
+        # Mock session
+        mock_session = MagicMock()
+        mock_session.session_key = "session-123"
+        mock_session.get_messages = AsyncMock()
+
+        # Mock messages
+        msg1 = MagicMock()
+        msg1.date = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
+        msg1.text = "Hello"
+
+        mock_session.get_messages.return_value = [msg1]
+
+        with (
+            patch("areyouok_telegram.jobs.conversations.Context.get_by_session_id") as mock_get_context,
+            patch("areyouok_telegram.jobs.conversations.Context.new_or_update") as mock_new_context,
+            patch("areyouok_telegram.jobs.conversations.context_compression_agent.run") as mock_agent_run,
+            patch("areyouok_telegram.jobs.conversations.logfire.exception") as mock_logfire_exception,
+        ):
+            # No existing context
+            mock_get_context.return_value = None
+
+            # Mock agent to raise exception
+            mock_agent_run.side_effect = Exception("Agent processing error")
+
+            # Should not raise exception
+            await job._compress_session_context(conn, mock_session)
+
+            # Should have called agent
+            mock_agent_run.assert_called_once()
+
+            # Should NOT save context
+            mock_new_context.assert_not_called()
+
+            # Should log the exception
+            mock_logfire_exception.assert_called_once()
+            log_message = mock_logfire_exception.call_args[0][0]
+            assert "Failed to compress context for chat 123456" in log_message
+            assert "session-123" in log_message
+
+    @pytest.mark.asyncio
+    @pytest.mark.usefixtures("mock_input_message")
+    async def test_generate_response_with_existing_context(self, mock_job, mock_session, mock_agent_run):
+        """Test _generate_response with existing context that needs sorting."""
+        # Mock messages
+        message = MagicMock()
+        message.date = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
+        message.message_id = 100
+
+        messages = [message]
+
+        # Mock context
+        context = MagicMock()
+        context.bot.id = 999999
+
+        # Mock connection
+        conn = AsyncMock()
+
+        # Use mock session from fixture
+        mock_session.get_messages = AsyncMock(return_value=messages)
+
+        # Configure agent to return a TextResponse
+        mock_response = MagicMock(spec=TextResponse)
+        mock_response.reasoning = "Test reasoning"
+        mock_response.message_text = "Test response"
+        mock_response.response_type = "TextResponse"
+        mock_response.execute = AsyncMock(return_value=MagicMock())
+        mock_agent_run.return_value.output = mock_response
+
+        with (
+            patch("areyouok_telegram.data.Messages.new_or_update"),
+            patch("areyouok_telegram.data.Context.retrieve_context_by_chat") as mock_retrieve_context,
+            patch(
+                "areyouok_telegram.jobs.conversations.get_unsupported_media_from_messages",
+                new_callable=AsyncMock,
+            ) as mock_get_unsupported_media,
+        ):
+            # Mock existing context with multiple items out of order
+            ctx1 = MagicMock()
+            ctx1.created_at = datetime(2025, 1, 15, 10, 2, 0, tzinfo=UTC)
+            ctx1.content = "Context 2"
+
+            ctx2 = MagicMock()
+            ctx2.created_at = datetime(2025, 1, 15, 10, 1, 0, tzinfo=UTC)
+            ctx2.content = "Context 1"
+
+            ctx3 = MagicMock()
+            ctx3.created_at = datetime(2025, 1, 15, 10, 3, 0, tzinfo=UTC)
+            ctx3.content = "Context 3"
+
+            # Return unsorted contexts
+            mock_retrieve_context.return_value = [ctx1, ctx2, ctx3]
+
+            # Mock no unsupported media
+            mock_get_unsupported_media.return_value = []
+
+            result = await mock_job._generate_response(conn, context, mock_session)
+
+            assert result is True
+
+            # Verify agent was called with sorted context
+            mock_agent_run.assert_called_once()
+            call_args = mock_agent_run.call_args
+
+            # The context should be passed as message history with sorted items
+            message_history = call_args.kwargs["message_history"]
+
+            # First should be the sorted contexts as ModelResponse messages
+            # They should be sorted by created_at (ctx2, ctx1, ctx3)
+            assert len(message_history) >= 3
+
+            # Verify the order by checking the content
+            context_contents = []
+            for msg in message_history[:3]:
+                if isinstance(msg, pydantic_ai.messages.ModelResponse):
+                    # Extract the content from the JSON in the TextPart
+                    json_content = json.loads(msg.parts[0].content)
+                    # Extract just the content part after "Summary of prior conversation:\n\n"
+                    content = json_content["content"]
+                    if content.startswith("Summary of prior conversation:\n\n"):
+                        content = content[len("Summary of prior conversation:\n\n") :]
+                    context_contents.append(content)
+
+            # Should be sorted by created_at
+            assert context_contents == ["Context 1", "Context 2", "Context 3"]
+
+    @pytest.mark.asyncio
+    @pytest.mark.usefixtures("mock_input_message")
+    async def test_generate_response_with_multiple_unsupported_media(self, mock_job, mock_session, mock_agent_run):
+        """Test _generate_response with multiple types of unsupported media."""
+        # Mock messages
+        message = MagicMock()
+        message.date = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
+        message.message_id = 100
+
+        messages = [message]
+
+        # Mock context
+        context = MagicMock()
+        context.bot.id = 999999
+
+        # Mock connection
+        conn = AsyncMock()
+
+        # Use mock session from fixture
+        mock_session.get_messages = AsyncMock(return_value=messages)
+
+        # Configure agent to return a TextResponse
+        mock_response = MagicMock(spec=TextResponse)
+        mock_response.reasoning = "Test reasoning"
+        mock_response.message_text = "Test response"
+        mock_response.response_type = "TextResponse"
+        mock_response.execute = AsyncMock(return_value=MagicMock())
+        mock_agent_run.return_value.output = mock_response
+
+        with (
+            patch("areyouok_telegram.data.Messages.new_or_update"),
+            patch("areyouok_telegram.data.Context.retrieve_context_by_chat") as mock_retrieve_context,
+            patch(
+                "areyouok_telegram.jobs.conversations.get_unsupported_media_from_messages",
+                new_callable=AsyncMock,
+            ) as mock_get_unsupported_media,
+        ):
+            # Mock no previous context
+            mock_retrieve_context.return_value = []
+
+            # Mock multiple unsupported media types with duplicates (no audio since it's now supported)
+            mock_get_unsupported_media.return_value = [
+                "video/mp4",
+                "application/msword",
+                "video/webm",
+                "application/msword",
+            ]
+
+            result = await mock_job._generate_response(conn, context, mock_session)
+
+            assert result is True
+
+            # Verify agent was called with instruction about multiple media types
+            mock_agent_run.assert_called_once()
+            call_args = mock_agent_run.call_args
+            deps = call_args.kwargs["deps"]
+
+            # Should have created instruction with unique types (order may vary due to set())
+            assert deps.instruction is not None
+            assert "The user sent" in deps.instruction
+            assert "files, but you can only view images and PDFs." in deps.instruction
+            # Check unique MIME types are mentioned
+            assert "video/mp4" in deps.instruction
+            assert "video/webm" in deps.instruction
+            assert "application/msword" in deps.instruction
 
 
 class TestScheduleConversationJob:

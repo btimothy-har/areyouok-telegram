@@ -16,9 +16,11 @@ dependencies = [
     "asyncpg~=0.30.0",
     "tenacity~=8.2.3",
     "logfire~=4.0.0",
-    "dspy~=2.6.27",
     "pydantic-ai~=0.4.7",
     "pydantic-ai[logfire]",
+    "python-magic~=0.4.27",
+    "openai~=1.92.0",
+    "pydub~=0.25.1",
 ]
 
 [dependency-groups]

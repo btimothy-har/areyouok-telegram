@@ -243,3 +243,186 @@ def mock_session():
     mock_session.has_bot_responded = False
 
     return mock_session
+
+
+@pytest.fixture
+def mock_voice():
+    """Create a mock telegram.Voice object."""
+    mock_voice = create_autospec(telegram.Voice, spec_set=True, instance=True)
+    mock_voice.file_id = "voice_test_123"
+    mock_voice.file_unique_id = "voice_unique_test_123"
+    mock_voice.duration = 10
+    mock_voice.mime_type = "audio/ogg"
+    mock_voice.file_size = 1024
+
+    # Mock get_file method
+    mock_file = AsyncMock()
+    mock_file.file_id = mock_voice.file_id
+    mock_file.file_unique_id = mock_voice.file_unique_id
+    mock_file.file_size = mock_voice.file_size
+    mock_file.download_as_bytearray = AsyncMock(return_value=bytearray(b"fake_voice_data"))
+
+    mock_voice.get_file = AsyncMock(return_value=mock_file)
+
+    return mock_voice
+
+
+@pytest.fixture
+def mock_photo():
+    """Create a mock telegram.PhotoSize object."""
+    mock_photo = create_autospec(telegram.PhotoSize, spec_set=True, instance=True)
+    mock_photo.file_id = "photo_test_123"
+    mock_photo.file_unique_id = "photo_unique_test_123"
+    mock_photo.width = 1024
+    mock_photo.height = 768
+    mock_photo.file_size = 2048
+
+    # Mock get_file method
+    mock_file = AsyncMock()
+    mock_file.file_id = mock_photo.file_id
+    mock_file.file_unique_id = mock_photo.file_unique_id
+    mock_file.file_size = mock_photo.file_size
+    mock_file.download_as_bytearray = AsyncMock(return_value=bytearray(b"fake_photo_data"))
+
+    mock_photo.get_file = AsyncMock(return_value=mock_file)
+
+    return mock_photo
+
+
+@pytest.fixture
+def mock_document():
+    """Create a mock telegram.Document object."""
+    mock_doc = create_autospec(telegram.Document, spec_set=True, instance=True)
+    mock_doc.file_id = "doc_test_123"
+    mock_doc.file_unique_id = "doc_unique_test_123"
+    mock_doc.file_name = "test_document.pdf"
+    mock_doc.mime_type = "application/pdf"
+    mock_doc.file_size = 4096
+
+    # Mock get_file method
+    mock_file = AsyncMock()
+    mock_file.file_id = mock_doc.file_id
+    mock_file.file_unique_id = mock_doc.file_unique_id
+    mock_file.file_size = mock_doc.file_size
+    mock_file.download_as_bytearray = AsyncMock(return_value=bytearray(b"fake_pdf_data"))
+
+    mock_doc.get_file = AsyncMock(return_value=mock_file)
+
+    return mock_doc
+
+
+@pytest.fixture
+def mock_video():
+    """Create a mock telegram.Video object."""
+    mock_video = create_autospec(telegram.Video, spec_set=True, instance=True)
+    mock_video.file_id = "video_test_123"
+    mock_video.file_unique_id = "video_unique_test_123"
+    mock_video.width = 1920
+    mock_video.height = 1080
+    mock_video.duration = 60
+    mock_video.mime_type = "video/mp4"
+    mock_video.file_size = 8192
+
+    # Mock get_file method
+    mock_file = AsyncMock()
+    mock_file.file_id = mock_video.file_id
+    mock_file.file_unique_id = mock_video.file_unique_id
+    mock_file.file_size = mock_video.file_size
+    mock_file.download_as_bytearray = AsyncMock(return_value=bytearray(b"fake_video_data"))
+
+    mock_video.get_file = AsyncMock(return_value=mock_file)
+
+    return mock_video
+
+
+@pytest.fixture
+def mock_message_with_voice(mock_private_chat, mock_voice):
+    """Create a mock telegram.Message object with voice."""
+    mock_message = create_autospec(telegram.Message, spec_set=True, instance=True)
+
+    mock_message.message_id = 2
+    mock_message.text = None
+    mock_message.voice = mock_voice
+
+    # Media attributes
+    mock_message.photo = None
+    mock_message.document = None
+    mock_message.video = None
+    mock_message.animation = None
+    mock_message.sticker = None
+    mock_message.video_note = None
+
+    # Create a proper mock user for from_user
+    mock_from_user = create_autospec(telegram.User, spec_set=True, instance=True)
+    mock_from_user.id = 987654321
+    mock_from_user.first_name = "John"
+    mock_from_user.username = "johndoe"
+
+    mock_message.from_user = mock_from_user
+    mock_message.chat = mock_private_chat
+    mock_message.chat_id = mock_private_chat.id
+    mock_message.date = DEFAULT_DATETIME
+
+    return mock_message
+
+
+@pytest.fixture
+def mock_message_with_photo(mock_private_chat, mock_photo):
+    """Create a mock telegram.Message object with photo."""
+    mock_message = create_autospec(telegram.Message, spec_set=True, instance=True)
+
+    mock_message.message_id = 3
+    mock_message.text = "Check out this photo!"
+    mock_message.photo = [mock_photo]  # Photo is a list
+
+    # Media attributes
+    mock_message.voice = None
+    mock_message.document = None
+    mock_message.video = None
+    mock_message.animation = None
+    mock_message.sticker = None
+    mock_message.video_note = None
+
+    # Create a proper mock user for from_user
+    mock_from_user = create_autospec(telegram.User, spec_set=True, instance=True)
+    mock_from_user.id = 987654321
+    mock_from_user.first_name = "John"
+    mock_from_user.username = "johndoe"
+
+    mock_message.from_user = mock_from_user
+    mock_message.chat = mock_private_chat
+    mock_message.chat_id = mock_private_chat.id
+    mock_message.date = DEFAULT_DATETIME
+
+    return mock_message
+
+
+@pytest.fixture
+def mock_message_with_document(mock_private_chat, mock_document):
+    """Create a mock telegram.Message object with document."""
+    mock_message = create_autospec(telegram.Message, spec_set=True, instance=True)
+
+    mock_message.message_id = 4
+    mock_message.text = "Here's the document"
+    mock_message.document = mock_document
+
+    # Media attributes
+    mock_message.voice = None
+    mock_message.photo = None
+    mock_message.video = None
+    mock_message.animation = None
+    mock_message.sticker = None
+    mock_message.video_note = None
+
+    # Create a proper mock user for from_user
+    mock_from_user = create_autospec(telegram.User, spec_set=True, instance=True)
+    mock_from_user.id = 987654321
+    mock_from_user.first_name = "John"
+    mock_from_user.username = "johndoe"
+
+    mock_message.from_user = mock_from_user
+    mock_message.chat = mock_private_chat
+    mock_message.chat_id = mock_private_chat.id
+    mock_message.date = DEFAULT_DATETIME
+
+    return mock_message
