@@ -12,3 +12,13 @@ fix:
 
 run:
 	uv run -m areyouok_telegram.main
+
+build:
+	podman build --progress=plain -t areyouok-telegram:latest .
+
+start:
+	podman run \
+		--name areyouok-telegram \
+		--env-file .env \
+		--restart unless-stopped \
+		areyouok-telegram:latest

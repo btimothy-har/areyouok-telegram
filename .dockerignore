@@ -1,0 +1,92 @@
+# Git and version control
+.git/
+.gitignore
+.gitattributes
+
+# Documentation and non-essential files
+README.md
+LICENSE
+CLAUDE.md
+*.md
+docs/
+
+# Development and build artifacts
+.venv/
+.env
+.envrc
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+build/
+dist/
+*.egg-info/
+.eggs/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Testing and coverage
+tests/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+*.py.cover
+.hypothesis/
+.tox/
+.nox/
+cover/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.cursorignore
+.cursorindexingignore
+
+# Linting and formatting
+.ruff_cache/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+
+# Development tools
+Makefile
+.pypirc
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+tmp/
+temp/
+
+# OS-specific files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Jupyter notebooks (if any)
+.ipynb_checkpoints
+
+# Package manager files (not needed in container)
+.pdm-python
+.pdm-build/
+.pixi/
+
+# Docker-related files
+Dockerfile*
+.dockerignore
+docker-compose*.yml
+docker-compose*.yaml
+
+# CI/CD files
+.github/
