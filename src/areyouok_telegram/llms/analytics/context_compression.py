@@ -1,5 +1,6 @@
 import pydantic
 import pydantic_ai
+from pydantic_ai.models.anthropic import AnthropicModel
 from pydantic_ai.models.fallback import FallbackModel
 from pydantic_ai.models.openai import OpenAIModel
 
@@ -123,12 +124,12 @@ class ContextTemplate(pydantic.BaseModel):
 model_settings = pydantic_ai.settings.ModelSettings(temperature=0.4)
 
 agent_models = FallbackModel(
-    OpenAIModel(
-        model_name="gpt-4.1-mini-2025-04-14",
+    AnthropicModel(
+        model_name="claude-3-5-haiku-20241022",
         settings=model_settings,
     ),
     OpenAIModel(
-        model_name="openai/gpt-4.1-mini",
+        model_name="anthropic/claude-3.5-haiku",
         provider=openrouter_provider,
         settings=model_settings,
     ),
