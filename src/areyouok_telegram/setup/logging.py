@@ -44,6 +44,7 @@ def logging_setup():
 
     logfire.configure(
         send_to_logfire=True if LOGFIRE_TOKEN else False,
+        min_level="debug" if ENV == "development" else "info",
         token=LOGFIRE_TOKEN,
         service_name="areyouok-telegram",
         service_version=version("areyouok-telegram"),

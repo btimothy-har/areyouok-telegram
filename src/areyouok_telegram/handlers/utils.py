@@ -82,6 +82,7 @@ async def extract_media_from_telegram_message(
 
     with logfire.span(
         "Extracting media from message",
+        _span_name="handlers.utils.extract_media_from_telegram_message",
         message_id=message.message_id,
         chat_id=message.chat.id,
     ):
@@ -134,6 +135,7 @@ async def extract_media_from_telegram_message(
             if message.voice and file.file_unique_id == message.voice.file_unique_id:
                 with logfire.span(
                     "Transcribing detected audio",
+                    _span_name="handlers.utils.extract_media_from_telegram_message.transcribe_voice",
                     file_id=file.file_id,
                     chat_id=message.chat.id,
                 ):
