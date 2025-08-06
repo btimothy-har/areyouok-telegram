@@ -15,7 +15,6 @@ from areyouok_telegram.handlers import on_message_react
 from areyouok_telegram.handlers import on_new_message
 from areyouok_telegram.handlers import on_new_update
 from areyouok_telegram.setup import database_setup
-from areyouok_telegram.setup import logging_setup
 from areyouok_telegram.setup import restore_active_sessions
 from areyouok_telegram.setup import setup_bot_description
 from areyouok_telegram.setup import setup_bot_name
@@ -33,7 +32,6 @@ async def application_startup(application: Application):
 def create_application() -> Application:
     """Create and configure the Telegram bot application."""
     # Initialize infrastructure
-    logging_setup()
     database_setup()
 
     # Create application
