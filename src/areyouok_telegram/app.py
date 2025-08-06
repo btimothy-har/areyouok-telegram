@@ -1,5 +1,6 @@
 """Application factory for the Telegram bot."""
 
+import logfire
 import telegram
 from telegram.ext import Application
 from telegram.ext import ApplicationBuilder
@@ -23,37 +24,50 @@ from areyouok_telegram.setup import start_session_cleanups
 
 async def application_startup(application: Application):
     """Configure bot metadata on startup."""
-    await setup_bot_name(application)
-    await setup_bot_description(application)
-    await restore_active_sessions(application)
-    await start_session_cleanups(application)
+    with logfire.span(
+        "Starting up Telegram bot application.",
+        _span_name="app.application_startup",
+    ):
+        await setup_bot_name(application)
+        await setup_bot_description(application)
+        await restore_active_sessions(application)
+        await start_session_cleanups(application)
 
 
 def create_application() -> Application:
     """Create and configure the Telegram bot application."""
-    # Initialize infrastructure
-    database_setup()
 
-    # Create application
-    application = (
-        ApplicationBuilder()
-        .token(TELEGRAM_BOT_TOKEN)
-        .concurrent_updates(concurrent_updates=True)
-        .post_init(application_startup)
-        .build()
-    )
+    with logfire.span(
+        "Initializing Telegram bot application.",
+        _span_name="app.create_application",
+    ):
+        # Initialize infrastructure
+        database_setup()
 
-    # Add error handler
-    application.add_error_handler(on_error_event)
+        # Create application
+        application = (
+            ApplicationBuilder()
+            .token(TELEGRAM_BOT_TOKEN)
+            .concurrent_updates(concurrent_updates=True)
+            .post_init(application_startup)
+            .build()
+        )
 
-    # Add handlers by group
-    application.add_handler(TypeHandler(telegram.Update, on_new_update, block=True), group=0)
+        # Add error handler
+        application.add_error_handler(on_error_event)
 
-    # Message Handlers
-    application.add_handler(MessageHandler(filters.UpdateType.MESSAGE, on_new_message, block=False), group=1)
-    application.add_handler(MessageHandler(filters.UpdateType.EDITED_MESSAGE, on_edit_message, block=False), group=1)
+        # Add handlers by group
+        application.add_handler(TypeHandler(telegram.Update, on_new_update, block=True), group=0)
 
-    # Reaction Handler
-    application.add_handler(MessageReactionHandler(on_message_react, message_reaction_types=-1, block=False), group=1)
+        # Message Handlers
+        application.add_handler(MessageHandler(filters.UpdateType.MESSAGE, on_new_message, block=False), group=1)
+        application.add_handler(
+            MessageHandler(filters.UpdateType.EDITED_MESSAGE, on_edit_message, block=False), group=1
+        )
 
-    return application
+        # Reaction Handler
+        application.add_handler(
+            MessageReactionHandler(on_message_react, message_reaction_types=-1, block=False), group=1
+        )
+
+        return application

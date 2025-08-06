@@ -13,13 +13,17 @@ def database_setup():
 
     from areyouok_telegram.data import Base  # noqa: PLC0415
 
-    engine = create_engine(f"postgresql://{PG_CONNECTION_STRING}")
+    with logfire.span(
+        "Setting up database.",
+        _span_name="setup.database.database_setup",
+    ):
+        engine = create_engine(f"postgresql://{PG_CONNECTION_STRING}")
 
-    with engine.begin() as conn:
-        # Create schemas if they do not exist
-        conn.execute(CreateSchema(ENV, if_not_exists=True))
+        with engine.begin() as conn:
+            # Create schemas if they do not exist
+            conn.execute(CreateSchema(ENV, if_not_exists=True))
 
-        # Create all tables in the specified schema
-        Base.metadata.create_all(conn)
+            # Create all tables in the specified schema
+            Base.metadata.create_all(conn)
 
-    logfire.info(f"Database setup complete. All tables created in schema '{ENV}'.")
+        logfire.info(f"Database setup complete. All tables created in schema '{ENV}'.")

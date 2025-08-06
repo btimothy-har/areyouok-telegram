@@ -15,25 +15,27 @@ from areyouok_telegram.jobs import schedule_conversation_job
 
 async def restore_active_sessions(ctx: Application | ContextTypes.DEFAULT_TYPE):
     """Setup conversation jobs for active chats on startup."""
-    async with async_database() as db_conn:
-        # Fetch all active sessions
-        active_sessions = await Sessions.get_all_active_sessions(db_conn)
+    with logfire.span(
+        "Restoring chat sessions from database.",
+        _span_name="setup.jobs.restore_active_sessions",
+    ):
+        async with async_database() as db_conn:
+            # Fetch all active sessions
+            active_sessions = await Sessions.get_all_active_sessions(db_conn)
 
-        if not active_sessions:
-            logfire.info("No active sessions found, skipping conversation job setup.")
-            return
+            if not active_sessions:
+                logfire.info("No active sessions found, skipping conversation job setup.")
+                return
 
-        await asyncio.gather(
-            *[
+            await asyncio.gather(*[
                 schedule_conversation_job(
                     context=ctx,
                     chat_id=s.chat_id,
                 )
                 for s in active_sessions
-            ]
-        )
+            ])
 
-    logfire.info(f"Restored {len(active_sessions)} active sessions.")
+        logfire.info(f"Restored {len(active_sessions)} active sessions.")
 
 
 async def start_session_cleanups(ctx: Application | ContextTypes.DEFAULT_TYPE):
@@ -57,4 +59,4 @@ async def start_session_cleanups(ctx: Application | ContextTypes.DEFAULT_TYPE):
         },
     )
 
-    logfire.info(f"Session cleanup job scheduled to run every 15 minutes starting at {start_time.isoformat()}")
+    logfire.info(f"Session cleanup job scheduled to run every 15 minutes starting at {start_time.isoformat()}.")
