@@ -103,11 +103,7 @@ class TestConversationJob:
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
         mock_context.bot.id = "bot123"
 
-        mock_response = TextResponse(
-            reasoning="Test reasoning",
-            message_text="Hello!",
-            reply_to_message_id=None
-        )
+        mock_response = TextResponse(reasoning="Test reasoning", message_text="Hello!", reply_to_message_id=None)
 
         mock_message = MagicMock(spec=telegram.Message)
 
@@ -124,15 +120,10 @@ class TestConversationJob:
         # Verify response was generated and executed
         assert job.last_response == "TextResponse"
         mock_generate.assert_called_once()
-        mock_execute.assert_called_once_with(
-            context=mock_context,
-            response=mock_response
-        )
+        mock_execute.assert_called_once_with(context=mock_context, response=mock_response)
 
         # Verify bot activity was logged
-        mock_log_activity.assert_called_once_with(
-            "bot123", "123", mock_session, mock_message
-        )
+        mock_log_activity.assert_called_once_with("bot123", "123", mock_session, mock_message)
 
     @pytest.mark.asyncio
     async def test_generate_response_success(self):
@@ -143,22 +134,16 @@ class TestConversationJob:
         mock_session = MagicMock()
         mock_session.session_id = "session123"
 
-        mock_response = TextResponse(
-            reasoning="Test reasoning",
-            message_text="Test response",
-            reply_to_message_id=None
-        )
+        mock_response = TextResponse(reasoning="Test reasoning", message_text="Test response", reply_to_message_id=None)
 
         mock_payload = MagicMock()
         mock_payload.output = mock_response
 
-        with patch("areyouok_telegram.jobs.conversations.run_agent_with_tracking",
-                  new=AsyncMock(return_value=mock_payload)):
+        with patch(
+            "areyouok_telegram.jobs.conversations.run_agent_with_tracking", new=AsyncMock(return_value=mock_payload)
+        ):
             result = await job.generate_response(
-                context=mock_context,
-                chat_session=mock_session,
-                conversation_history=[],
-                instructions=None
+                context=mock_context, chat_session=mock_session, conversation_history=[], instructions=None
             )
 
         assert result == mock_response
@@ -173,15 +158,14 @@ class TestConversationJob:
         mock_session.session_id = "session123"
 
         with (
-            patch("areyouok_telegram.jobs.conversations.run_agent_with_tracking",
-                  new=AsyncMock(side_effect=Exception("Test error"))),
+            patch(
+                "areyouok_telegram.jobs.conversations.run_agent_with_tracking",
+                new=AsyncMock(side_effect=Exception("Test error")),
+            ),
             patch("areyouok_telegram.jobs.conversations.logfire.exception") as mock_log_exception,
         ):
             result = await job.generate_response(
-                context=mock_context,
-                chat_session=mock_session,
-                conversation_history=[],
-                instructions=None
+                context=mock_context, chat_session=mock_session, conversation_history=[], instructions=None
             )
 
         assert result is None
@@ -193,11 +177,7 @@ class TestConversationJob:
         job = ConversationJob("123")
 
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
-        mock_response = TextResponse(
-            reasoning="Test reasoning",
-            message_text="Hello!",
-            reply_to_message_id="456"
-        )
+        mock_response = TextResponse(reasoning="Test reasoning", message_text="Hello!", reply_to_message_id="456")
 
         mock_message = MagicMock(spec=telegram.Message)
 
@@ -218,9 +198,7 @@ class TestConversationJob:
 
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
         mock_response = ReactionResponse(
-            reasoning="Test reasoning",
-            react_to_message_id="456",
-            emoji=ReactionEmoji.THUMBS_UP
+            reasoning="Test reasoning", react_to_message_id="456", emoji=ReactionEmoji.THUMBS_UP
         )
 
         mock_message = MagicMock(spec=telegram.Message)
@@ -228,10 +206,13 @@ class TestConversationJob:
 
         with (
             patch("areyouok_telegram.jobs.conversations.async_database") as mock_async_db,
-            patch("areyouok_telegram.jobs.conversations.Messages.retrieve_message_by_id",
-                  new=AsyncMock(return_value=(mock_message, None))),
-            patch.object(job, "_execute_reaction_response",
-                        new=AsyncMock(return_value=mock_reaction)) as mock_execute_reaction,
+            patch(
+                "areyouok_telegram.jobs.conversations.Messages.retrieve_message_by_id",
+                new=AsyncMock(return_value=(mock_message, None)),
+            ),
+            patch.object(
+                job, "_execute_reaction_response", new=AsyncMock(return_value=mock_reaction)
+            ) as mock_execute_reaction,
             patch("areyouok_telegram.jobs.conversations.logfire.info") as mock_log_info,
         ):
             mock_db_conn = AsyncMock()
@@ -241,9 +222,7 @@ class TestConversationJob:
 
         assert result == mock_reaction
         mock_execute_reaction.assert_called_once_with(
-            context=mock_context,
-            response=mock_response,
-            message=mock_message
+            context=mock_context, response=mock_response, message=mock_message
         )
         mock_log_info.assert_called_once_with("Response executed in chat 123: ReactionResponse.")
 
@@ -254,15 +233,15 @@ class TestConversationJob:
 
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
         mock_response = ReactionResponse(
-            reasoning="Test reasoning",
-            react_to_message_id="456",
-            emoji=ReactionEmoji.THUMBS_UP
+            reasoning="Test reasoning", react_to_message_id="456", emoji=ReactionEmoji.THUMBS_UP
         )
 
         with (
             patch("areyouok_telegram.jobs.conversations.async_database") as mock_async_db,
-            patch("areyouok_telegram.jobs.conversations.Messages.retrieve_message_by_id",
-                  new=AsyncMock(return_value=(None, None))),
+            patch(
+                "areyouok_telegram.jobs.conversations.Messages.retrieve_message_by_id",
+                new=AsyncMock(return_value=(None, None)),
+            ),
             patch("areyouok_telegram.jobs.conversations.logfire.warning") as mock_log_warning,
         ):
             mock_db_conn = AsyncMock()
@@ -271,9 +250,7 @@ class TestConversationJob:
             result = await job.execute_response(mock_context, mock_response)
 
         assert result is None
-        mock_log_warning.assert_called_once_with(
-            "Message 456 not found in chat 123, skipping reaction."
-        )
+        mock_log_warning.assert_called_once_with("Message 456 not found in chat 123, skipping reaction.")
 
     @pytest.mark.asyncio
     async def test_execute_text_response_with_reply(self):
@@ -283,11 +260,7 @@ class TestConversationJob:
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
         mock_context.bot.send_message = AsyncMock(return_value=MagicMock(spec=telegram.Message))
 
-        response = TextResponse(
-            reasoning="Test reasoning",
-            message_text="Reply text",
-            reply_to_message_id="789"
-        )
+        response = TextResponse(reasoning="Test reasoning", message_text="Reply text", reply_to_message_id="789")
 
         await job._execute_text_response(mock_context, response)
 
@@ -306,20 +279,12 @@ class TestConversationJob:
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
         mock_context.bot.send_message = AsyncMock(return_value=MagicMock(spec=telegram.Message))
 
-        response = TextResponse(
-            reasoning="Test reasoning",
-            message_text="Regular text",
-            reply_to_message_id=None
-        )
+        response = TextResponse(reasoning="Test reasoning", message_text="Regular text", reply_to_message_id=None)
 
         await job._execute_text_response(mock_context, response)
 
         # Verify send_message was called without reply parameters
-        mock_context.bot.send_message.assert_called_once_with(
-            chat_id=123,
-            text="Regular text",
-            reply_parameters=None
-        )
+        mock_context.bot.send_message.assert_called_once_with(chat_id=123, text="Regular text", reply_parameters=None)
 
     @pytest.mark.asyncio
     async def test_execute_reaction_response_success(self):
@@ -333,7 +298,7 @@ class TestConversationJob:
         response = ReactionResponse(
             reasoning="Test reasoning",
             react_to_message_id="456",
-            emoji=ReactionEmoji.RED_HEART  # This is actually ❤ not ❤️
+            emoji=ReactionEmoji.RED_HEART,  # This is actually ❤ not ❤️
         )
 
         mock_message = MagicMock(spec=telegram.Message)
@@ -343,9 +308,7 @@ class TestConversationJob:
 
         # Verify reaction was sent
         mock_context.bot.set_message_reaction.assert_called_once_with(
-            chat_id=123,
-            message_id=456,
-            reaction=ReactionEmoji.RED_HEART
+            chat_id=123, message_id=456, reaction=ReactionEmoji.RED_HEART
         )
 
         # Verify MessageReactionUpdated was created
@@ -365,8 +328,10 @@ class TestConversationJob:
 
         with (
             patch("areyouok_telegram.jobs.conversations.async_database") as mock_async_db,
-            patch("areyouok_telegram.jobs.conversations.Context.get_by_session_id",
-                  new=AsyncMock(return_value=mock_context)),
+            patch(
+                "areyouok_telegram.jobs.conversations.Context.get_by_session_id",
+                new=AsyncMock(return_value=mock_context),
+            ),
             patch("areyouok_telegram.jobs.conversations.logfire.warning") as mock_log_warning,
         ):
             mock_db_conn = AsyncMock()
@@ -375,8 +340,7 @@ class TestConversationJob:
             await job.close_session(mock_session)
 
         mock_log_warning.assert_called_once_with(
-            "Context already exists for session, skipping compression.",
-            session_id="session123"
+            "Context already exists for session, skipping compression.", session_id="session123"
         )
 
     @pytest.mark.asyncio
@@ -399,9 +363,7 @@ class TestConversationJob:
 
             await job.close_session(mock_session)
 
-        mock_log_warning.assert_called_once_with(
-            "No messages found in chat session session123, nothing to compress."
-        )
+        mock_log_warning.assert_called_once_with("No messages found in chat session session123, nothing to compress.")
 
     @pytest.mark.asyncio
     async def test_close_session_success(self):
@@ -435,4 +397,3 @@ class TestConversationJob:
         mock_save.assert_called_once_with("123", mock_session, mock_compressed)
         mock_close.assert_called_once_with(mock_session)
         mock_log_info.assert_called_once_with("Session session123 closed due to inactivity.")
-

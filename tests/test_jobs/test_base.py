@@ -1,6 +1,7 @@
 """Tests for jobs/base.py."""
 
 import asyncio
+import hashlib
 from datetime import UTC
 from datetime import datetime
 from unittest.mock import AsyncMock
@@ -40,8 +41,7 @@ class TestBaseJob:
 
     def test_id_property(self):
         """Test job ID is consistent MD5 hash of name."""
-        import hashlib
-        
+
         job = ConcreteJob()
 
         # ID should be MD5 hash of name
@@ -128,9 +128,7 @@ class TestBaseJob:
             await job.stop(mock_context)
 
         # Verify warning was logged
-        mock_log_warning.assert_called_once_with(
-            "No existing job found for test_job, nothing to stop."
-        )
+        mock_log_warning.assert_called_once_with("No existing job found for test_job, nothing to stop.")
 
     @pytest.mark.asyncio
     async def test_stop_uses_lock(self):
@@ -146,10 +144,10 @@ class TestBaseJob:
 
         # Verify the lock is not initially locked
         assert not job_lock.locked()
-        
+
         lock_was_acquired = False
 
-        def check_lock(name):
+        def check_lock(name):  # noqa: ARG001
             # When get_jobs_by_name is called, the lock should be held
             nonlocal lock_was_acquired
             lock_was_acquired = job_lock.locked()
@@ -168,6 +166,7 @@ class TestBaseJob:
     @pytest.mark.asyncio
     async def test_abstract_methods_not_implemented(self):
         """Test abstract methods raise NotImplementedError."""
+
         # Create a job without implementing abstract methods
         class IncompleteJob(BaseJob):
             pass
@@ -186,7 +185,7 @@ class TestBaseJob:
 
         with patch("areyouok_telegram.jobs.base.logfire.warning") as mock_warning:
             await job.stop(mock_context)
-            
+
         # Should log warning about no jobs
         mock_warning.assert_called_once()
 
@@ -198,4 +197,3 @@ class TestBaseJob:
 
         # Same key should return same lock
         assert JOB_LOCK["new_test_key"] is test_lock
-

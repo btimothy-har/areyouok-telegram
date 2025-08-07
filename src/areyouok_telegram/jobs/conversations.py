@@ -278,9 +278,9 @@ class ConversationJob(BaseJob):
 
                 if media:
                     unsupported_media = [m for m in media if not m.is_anthropic_supported]
-                    unsupported_media_types.extend([
-                        m.mime_type for m in unsupported_media if not m.mime_type.startswith("audio/")
-                    ])
+                    unsupported_media_types.extend(
+                        [m.mime_type for m in unsupported_media if not m.mime_type.startswith("audio/")]
+                    )
 
             if len(unsupported_media_types) == 1:
                 media_instruction = (

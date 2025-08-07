@@ -28,8 +28,9 @@ class TestGetChatSession:
             mock_db_conn = AsyncMock()
             mock_async_db.return_value.__aenter__.return_value = mock_db_conn
 
-            with patch("areyouok_telegram.jobs.utils.Sessions.get_active_session",
-                      new=AsyncMock(return_value=mock_session)) as mock_get_active:
+            with patch(
+                "areyouok_telegram.jobs.utils.Sessions.get_active_session", new=AsyncMock(return_value=mock_session)
+            ) as mock_get_active:
                 result = await get_chat_session("chat123")
 
         assert result == mock_session
@@ -63,8 +64,10 @@ class TestGetAllInactiveSessions:
             mock_db_conn = AsyncMock()
             mock_async_db.return_value.__aenter__.return_value = mock_db_conn
 
-            with patch("areyouok_telegram.jobs.utils.Sessions.get_all_inactive_sessions",
-                      new=AsyncMock(return_value=mock_sessions)) as mock_get_all:
+            with patch(
+                "areyouok_telegram.jobs.utils.Sessions.get_all_inactive_sessions",
+                new=AsyncMock(return_value=mock_sessions),
+            ) as mock_get_all:
                 result = await get_all_inactive_sessions(from_dt, to_dt)
 
         assert result == mock_sessions
@@ -81,8 +84,9 @@ class TestGetAllInactiveSessions:
             mock_db_conn = AsyncMock()
             mock_async_db.return_value.__aenter__.return_value = mock_db_conn
 
-            with patch("areyouok_telegram.jobs.utils.Sessions.get_all_inactive_sessions",
-                      new=AsyncMock(return_value=[])):
+            with patch(
+                "areyouok_telegram.jobs.utils.Sessions.get_all_inactive_sessions", new=AsyncMock(return_value=[])
+            ):
                 result = await get_all_inactive_sessions(from_dt, to_dt)
 
         assert result == []
@@ -110,26 +114,15 @@ class TestLogBotActivity:
                 await log_bot_activity("bot123", "chat456", mock_session, mock_message)
 
         # Verify new_activity was called with bot flag
-        mock_session.new_activity.assert_called_once_with(
-            db_conn=mock_db_conn,
-            timestamp=frozen_time,
-            is_user=False
-        )
+        mock_session.new_activity.assert_called_once_with(db_conn=mock_db_conn, timestamp=frozen_time, is_user=False)
 
         # Verify message was saved
         mock_new_or_update.assert_called_once_with(
-            db_conn=mock_db_conn,
-            user_id="bot123",
-            chat_id="chat456",
-            message=mock_message
+            db_conn=mock_db_conn, user_id="bot123", chat_id="chat456", message=mock_message
         )
 
         # Verify new_message was called for telegram.Message
-        mock_session.new_message.assert_called_once_with(
-            db_conn=mock_db_conn,
-            timestamp=frozen_time,
-            is_user=False
-        )
+        mock_session.new_message.assert_called_once_with(db_conn=mock_db_conn, timestamp=frozen_time, is_user=False)
 
     @pytest.mark.asyncio
     async def test_log_bot_activity_with_reaction(self, frozen_time):
@@ -149,18 +142,11 @@ class TestLogBotActivity:
                 await log_bot_activity("bot123", "chat456", mock_session, mock_reaction)
 
         # Verify new_activity was called
-        mock_session.new_activity.assert_called_once_with(
-            db_conn=mock_db_conn,
-            timestamp=frozen_time,
-            is_user=False
-        )
+        mock_session.new_activity.assert_called_once_with(db_conn=mock_db_conn, timestamp=frozen_time, is_user=False)
 
         # Verify message was saved
         mock_new_or_update.assert_called_once_with(
-            db_conn=mock_db_conn,
-            user_id="bot123",
-            chat_id="chat456",
-            message=mock_reaction
+            db_conn=mock_db_conn, user_id="bot123", chat_id="chat456", message=mock_reaction
         )
 
         # Verify new_message was NOT called for MessageReactionUpdated
@@ -181,11 +167,7 @@ class TestLogBotActivity:
                 await log_bot_activity("bot123", "chat456", mock_session, None)
 
         # Verify new_activity was still called
-        mock_session.new_activity.assert_called_once_with(
-            db_conn=mock_db_conn,
-            timestamp=frozen_time,
-            is_user=False
-        )
+        mock_session.new_activity.assert_called_once_with(db_conn=mock_db_conn, timestamp=frozen_time, is_user=False)
 
         # Verify message operations were not called
         mock_new_or_update.assert_not_called()
@@ -218,7 +200,7 @@ class TestSaveSessionContext:
             chat_id="chat456",
             session_id="session123",
             ctype="session",
-            content="Test context content"
+            content="Test context content",
         )
 
 
@@ -238,8 +220,4 @@ class TestCloseChatSession:
             await close_chat_session(mock_session)
 
         # Verify close_session was called with current timestamp
-        mock_session.close_session.assert_called_once_with(
-            db_conn=mock_db_conn,
-            timestamp=frozen_time
-        )
-
+        mock_session.close_session.assert_called_once_with(db_conn=mock_db_conn, timestamp=frozen_time)

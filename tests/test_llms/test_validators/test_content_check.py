@@ -19,9 +19,7 @@ class TestContentCheckAgent:
     async def test_content_check_pass(self):
         """Test content check when content passes validation."""
         # Create test model with custom response
-        test_model = TestModel(
-            custom_output_args={"check_pass": True, "feedback": "No Feedback Needed"}
-        )
+        test_model = TestModel(custom_output_args={"check_pass": True, "feedback": "No Feedback Needed"})
 
         deps = ContentCheckDependencies(check_content_exists="The message must contain a greeting")
 
@@ -52,9 +50,7 @@ class TestContentCheckAgent:
 
     async def test_content_check_with_complex_instruction(self):
         """Test content check with complex validation instruction."""
-        test_model = TestModel(
-            custom_output_args={"check_pass": True, "feedback": "No Feedback Needed"}
-        )
+        test_model = TestModel(custom_output_args={"check_pass": True, "feedback": "No Feedback Needed"})
 
         deps = ContentCheckDependencies(check_content_exists="The message must contain both a question and be polite")
 
@@ -115,7 +111,7 @@ class TestContentCheckAgent:
         deps = ContentCheckDependencies(check_content_exists="Must include specific keywords")
 
         with content_check_agent.override(model=test_model):
-            result = await content_check_agent.run("This message has specific keywords", deps=deps)
+            await content_check_agent.run("This message has specific keywords", deps=deps)
 
             # Get the last request to verify instructions were formatted
             last_request = test_model.last_model_request_parameters
