@@ -13,6 +13,9 @@ fix:
 run:
 	uv run -m areyouok_telegram.main
 
+reset-db:
+	uv run scripts/reset_database.py
+
 build:
 	podman build --progress=plain -t areyouok-telegram:latest .
 

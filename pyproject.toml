@@ -49,6 +49,7 @@ required-version = "~=0.7.0"
 required-version = "~=0.12.0"
 line-length = 120
 fix = true
+exclude = ["scripts"]
 
 [tool.ruff.lint]
 select = [
