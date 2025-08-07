@@ -7,6 +7,7 @@ import pydantic_ai
 import telegram
 from telegram.ext import ContextTypes
 
+from areyouok_telegram.config import ENV
 from areyouok_telegram.data import Context
 from areyouok_telegram.data import MediaFiles
 from areyouok_telegram.data import Messages
@@ -31,6 +32,8 @@ from .utils import close_chat_session
 from .utils import get_chat_session
 from .utils import log_bot_activity
 from .utils import save_session_context
+
+SESSION_TIMEOUT = timedelta(minutes=10) if ENV == "research" else timedelta(minutes=60)
 
 
 class ConversationJob(BaseJob):
@@ -77,7 +80,7 @@ class ConversationJob(BaseJob):
             if chat_session.last_user_activity:
                 inactivity_duration = self._run_timestamp - chat_session.last_user_activity
 
-                if inactivity_duration > timedelta(seconds=60 * 60):  # 1 hour
+                if inactivity_duration > SESSION_TIMEOUT:
                     with logfire.span(
                         f"Closing chat session {chat_session.session_id} due to inactivity.",
                         _span_name="ConversationJob._run.close_session",
@@ -279,9 +282,9 @@ class ConversationJob(BaseJob):
 
                 if media:
                     unsupported_media = [m for m in media if not m.is_anthropic_supported]
-                    unsupported_media_types.extend(
-                        [m.mime_type for m in unsupported_media if not m.mime_type.startswith("audio/")]
-                    )
+                    unsupported_media_types.extend([
+                        m.mime_type for m in unsupported_media if not m.mime_type.startswith("audio/")
+                    ])
 
             if len(unsupported_media_types) == 1:
                 media_instruction = (
