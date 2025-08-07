@@ -12,8 +12,8 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from areyouok_telegram.config import ENV
-from areyouok_telegram.data.connection import Base
-from areyouok_telegram.data.utils import with_retry
+from areyouok_telegram.data import Base
+from areyouok_telegram.utils import traced
 
 
 class LLMUsage(Base):
@@ -39,7 +39,7 @@ class LLMUsage(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
 
     @classmethod
-    @with_retry()
+    @traced(extract_args=["chat_id", "session_id", "agent", "data"])
     async def track_pydantic_usage(
         cls,
         db_conn: AsyncSession,

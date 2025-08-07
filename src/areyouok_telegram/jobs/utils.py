@@ -1,139 +1,85 @@
-import json
 from datetime import UTC
 from datetime import datetime
 
-import pydantic_ai
 import telegram
 
-from areyouok_telegram.data import MediaFiles
+from areyouok_telegram.data import Context
+from areyouok_telegram.data import Messages
 from areyouok_telegram.data import MessageTypes
-from areyouok_telegram.llms.utils import telegram_message_to_dict
+from areyouok_telegram.data import Sessions
+from areyouok_telegram.data import async_database
+from areyouok_telegram.llms.analytics import ContextTemplate
+from areyouok_telegram.utils import db_retry
 
 
-async def convert_telegram_message_to_model_message(
-    db_conn, message: MessageTypes, ts_reference: datetime | None = None, *, is_user: bool = False
-) -> pydantic_ai.messages.ModelMessage:
-    """Helper function to convert a Telegram message/reaction to a model request or response."""
-    ts_reference = ts_reference or datetime.now(UTC)
-
-    if isinstance(message, telegram.MessageReactionUpdated):
-        return await _telegram_reaction_to_model_message(message, ts_reference, is_user=is_user)
-
-    if isinstance(message, telegram.Message):
-        return await _telegram_message_to_model_message(db_conn, message, ts_reference, is_user=is_user)
-
-
-async def _telegram_message_to_model_message(
-    db_conn, message: telegram.Message, ts_reference: datetime, *, is_user: bool = False
-) -> pydantic_ai.messages.ModelMessage:
-    """Convert a Telegram message to a model request or response."""
-    media_files = await MediaFiles.get_by_message_id(
-        db_conn, chat_id=str(message.chat.id), message_id=str(message.message_id)
-    )
-    msg_dict = telegram_message_to_dict(message, ts_reference)
-
-    if is_user:
-        user_content = [json.dumps(msg_dict)]
-
-        for m in media_files:
-            # Anthropic only supports images, PDFs and text files.
-            if m.mime_type.startswith("image/") or m.mime_type == "application/pdf":
-                user_content.append(
-                    pydantic_ai.BinaryContent(
-                        data=m.bytes_data,
-                        media_type=m.mime_type,
-                    )
-                )
-            elif m.mime_type.startswith("text/"):
-                user_content.append(m.bytes_data.decode("utf-8"))
-
-        model_message = pydantic_ai.messages.ModelRequest(
-            parts=[
-                pydantic_ai.messages.UserPromptPart(
-                    content=user_content if len(user_content) > 1 else user_content[0],
-                    timestamp=message.date,
-                    part_kind="user-prompt",
-                )
-            ],
-            kind="request",
-        )
-    else:
-        model_message = pydantic_ai.messages.ModelResponse(
-            parts=[pydantic_ai.messages.TextPart(content=json.dumps(msg_dict), part_kind="text")],
-            timestamp=message.date,
-            kind="response",
-        )
-
-    return model_message
-
-
-async def get_unsupported_media_from_messages(
-    db_conn, messages: list[telegram.Message], since_timestamp: datetime | None = None
-) -> list[str]:
-    """Get list of unsupported media types from messages
-
-    Anthropic only supports images, PDFs and text files.
-    We "soft pass" audio as we transcribe audio content before sending to the model.
-
-    Args:
-        db_conn: Database connection
-        messages: List of telegram messages to check
-        since_timestamp: Only check messages after this timestamp
-
-    Returns:
-        List of unsupported media type names (e.g., ["video/mp4"])
+@db_retry()
+async def get_chat_session(chat_id: str) -> "Sessions":
     """
-    unsupported_media = []
-
-    for message in messages:
-        # Skip messages before the timestamp if provided
-        if since_timestamp and message.date <= since_timestamp:
-            continue
-
-        # Only check user messages
-        if not message.from_user:
-            continue
-
-        media_files = await MediaFiles.get_by_message_id(
-            db_conn, chat_id=str(message.chat.id), message_id=str(message.message_id)
-        )
-
-        for m in media_files:
-            # Skip supported media types
-            if (
-                m.mime_type.startswith("image/")
-                or m.mime_type == "application/pdf"
-                or m.mime_type.startswith("text/")
-                or m.mime_type.startswith("audio/")
-            ):
-                continue
-
-            unsupported_media.append(m.mime_type)
-
-    return unsupported_media
+    Retrieve the active session for a given chat ID.
+    """
+    async with async_database() as db_conn:
+        return await Sessions.get_active_session(db_conn, chat_id)
 
 
-async def _telegram_reaction_to_model_message(
-    reaction: telegram.MessageReactionUpdated, ts_reference: datetime, *, is_user: bool = False
-) -> pydantic_ai.messages.ModelMessage:
-    """Convert a Telegram message reaction to a model request or response."""
+@db_retry()
+async def get_all_inactive_sessions(from_dt: datetime, to_dt: datetime) -> list["Sessions"]:
+    """
+    Retrieve all inactive sessions that ended within the specified time range.
+    """
+    async with async_database() as db_conn:
+        return await Sessions.get_all_inactive_sessions(db_conn, from_dt, to_dt)
 
-    msg_dict = telegram_message_to_dict(reaction, ts_reference)
 
-    if is_user:
-        return pydantic_ai.messages.ModelRequest(
-            parts=[
-                pydantic_ai.messages.UserPromptPart(
-                    content=json.dumps(msg_dict),
-                    timestamp=reaction.date,
-                    part_kind="user-prompt",
+@db_retry()
+async def log_bot_activity(
+    bot_id: str, chat_id: str, chat_session: Sessions, response_message: MessageTypes | None
+) -> None:
+    async with async_database() as db_conn:
+        if response_message:
+            await Messages.new_or_update(
+                db_conn=db_conn,
+                user_id=bot_id,  # Bot's user ID as the sender
+                chat_id=chat_id,
+                message=response_message,
+            )
+
+            if isinstance(response_message, telegram.Message):
+                await chat_session.new_message(
+                    db_conn=db_conn,
+                    timestamp=response_message.date,
+                    is_user=False,  # This is a bot response
                 )
-            ],
-            kind="request",
+        else:
+            await chat_session.new_activity(
+                db_conn=db_conn,
+                timestamp=datetime.now(UTC),
+                is_user=False,  # This is a bot response
+            )
+
+
+@db_retry()
+async def save_session_context(chat_id: str, chat_session: Sessions, context: ContextTemplate):
+    """
+    Create a session context for the given chat ID.
+    If no session exists, create a new one.
+    """
+    async with async_database() as db_conn:
+        await Context.new_or_update(
+            db_conn=db_conn,
+            chat_id=chat_id,
+            session_id=chat_session.session_id,
+            ctype="session",
+            content=context.content,
         )
-    else:
-        return pydantic_ai.messages.ModelResponse(
-            parts=[pydantic_ai.messages.TextPart(content=json.dumps(msg_dict), part_kind="text")],
-            timestamp=reaction.date,
-            kind="response",
+
+
+@db_retry()
+async def close_chat_session(chat_session: Sessions):
+    """
+    Close the chat session and clean up any resources.
+    """
+    async with async_database() as db_conn:
+        await chat_session.close_session(
+            db_conn=db_conn,
+            timestamp=datetime.now(UTC),
         )

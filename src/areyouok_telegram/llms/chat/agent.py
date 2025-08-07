@@ -4,10 +4,8 @@ import pydantic_ai
 from pydantic_ai.models.anthropic import AnthropicModel
 from pydantic_ai.models.fallback import FallbackModel
 from pydantic_ai.models.openai import OpenAIModel
-from sqlalchemy.ext.asyncio import AsyncSession
 from telegram.ext import ContextTypes
 
-from areyouok_telegram.data import LLMUsage
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data import async_database
 from areyouok_telegram.llms.analytics import ContentCheckDependencies
@@ -19,6 +17,7 @@ from areyouok_telegram.llms.chat.exceptions import UnacknowledgedImportantMessag
 from areyouok_telegram.llms.chat.responses import AgentResponse
 from areyouok_telegram.llms.utils import openrouter_provider
 from areyouok_telegram.llms.utils import pydantic_ai_instrumentation
+from areyouok_telegram.llms.utils import run_agent_with_tracking
 
 
 @dataclass
@@ -30,7 +29,6 @@ class ChatAgentDependencies:
     tg_chat_id: str
     tg_session_id: str
     last_response_type: str
-    db_connection: AsyncSession
     instruction: str | None = None
 
 
@@ -137,11 +135,12 @@ async def validate_agent_response(
     ctx: pydantic_ai.RunContext[ChatAgentDependencies], data: AgentResponse
 ) -> AgentResponse:
     if data.response_type == "ReactionResponse":
-        message, _ = await Messages.retrieve_message_by_id(
-            db_conn=ctx.deps.db_connection,
-            message_id=data.react_to_message_id,
-            chat_id=ctx.deps.tg_chat_id,
-        )
+        async with async_database() as db_conn:
+            message, _ = await Messages.retrieve_message_by_id(
+                db_conn=db_conn,
+                message_id=data.react_to_message_id,
+                chat_id=ctx.deps.tg_chat_id,
+            )
 
         if not message:
             raise InvalidMessageError(data.react_to_message_id)
@@ -154,23 +153,19 @@ async def validate_agent_response(
             raise UnacknowledgedImportantMessageError(ctx.deps.instruction)
 
         else:
-            content_check_run = await content_check_agent.run(
-                user_prompt=data.message_text,
-                deps=ContentCheckDependencies(
-                    check_content_exists=ctx.deps.instruction,
-                ),
+            content_check_run = await run_agent_with_tracking(
+                agent=content_check_agent,
+                chat_id=ctx.deps.tg_chat_id,
+                session_id=ctx.deps.tg_session_id,
+                run_kwargs={
+                    "user_prompt": data.message_text,
+                    "deps": ContentCheckDependencies(
+                        check_content_exists=ctx.deps.instruction,
+                    ),
+                },
             )
 
             content_check: ContentCheckResponse = content_check_run.output
-
-            async with async_database() as conn:
-                await LLMUsage.track_pydantic_usage(
-                    session=conn,
-                    chat_id=ctx.deps.tg_chat_id,
-                    session_id=ctx.deps.tg_session_id,
-                    agent=content_check_agent,
-                    data=content_check_run.usage(),
-                )
 
             if not content_check.check_pass:
                 raise UnacknowledgedImportantMessageError(ctx.deps.instruction, content_check.feedback)

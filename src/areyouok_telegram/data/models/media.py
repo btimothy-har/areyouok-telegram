@@ -1,7 +1,7 @@
 import base64
+import hashlib
 from datetime import UTC
 from datetime import datetime
-from typing import Optional
 
 import magic
 from sqlalchemy import Column
@@ -15,8 +15,8 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from areyouok_telegram.config import ENV
-from areyouok_telegram.data.connection import Base
-from areyouok_telegram.data.utils import with_retry
+from areyouok_telegram.data import Base
+from areyouok_telegram.utils import traced
 
 
 class MediaFiles(Base):
@@ -25,26 +25,27 @@ class MediaFiles(Base):
     __tablename__ = "media_files"
     __table_args__ = {"schema": ENV}
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    file_key = Column(String, nullable=False, unique=True)
 
-    # Telegram identifiers
     file_id = Column(String, nullable=False, index=True)
     file_unique_id = Column(String, nullable=False, index=True)
 
     chat_id = Column(String, nullable=False, index=True)
     message_id = Column(String, nullable=False, index=True)
 
-    # Media type using MIME type standard
     mime_type = Column(String, nullable=False)
     file_size = Column(Integer, nullable=True)
-
-    # Content storage in base64
     content_base64 = Column(Text, nullable=True)
 
-    # Timestamps
+    id = Column(Integer, primary_key=True, autoincrement=True)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False)
     updated_at = Column(TIMESTAMP(timezone=True), nullable=False)
     last_accessed_at = Column(TIMESTAMP(timezone=True), nullable=True)
+
+    @staticmethod
+    def generate_file_key(chat_id: str, message_id: str, file_unique_id: str) -> str:
+        """Generate a unique key for a file based on its chat ID, message ID, and unique ID."""
+        return hashlib.sha256(f"{chat_id}:{message_id}:{file_unique_id}".encode()).hexdigest()
 
     @property
     def bytes_data(self) -> bytes | None:
@@ -53,62 +54,20 @@ class MediaFiles(Base):
             return base64.b64decode(self.content_base64)
         return None
 
-    @classmethod
-    @with_retry()
-    async def get_by_file_id(cls, db_conn: AsyncSession, file_id: str) -> Optional["MediaFiles"]:
-        """Retrieve media by file_id and update last_accessed_at."""
-        stmt = select(cls).where(cls.file_id == file_id)
-        result = await db_conn.execute(stmt)
-        media = result.scalar_one_or_none()
+    @property
+    def is_anthropic_supported(self) -> bool:
+        """Check if the file is supported by Anthropic.
 
-        # Update last_accessed_at if media was found
-        if media:
-            await cls.update_last_accessed(db_conn, [media.id])
-
-        return media
-
-    @classmethod
-    @with_retry()
-    async def get_by_message_id(cls, db_conn: AsyncSession, chat_id: str, message_id: str) -> list["MediaFiles"]:
-        """Retrieve all media files by chat_id and message_id and update last_accessed_at."""
-        stmt = select(cls).where((cls.chat_id == chat_id) & (cls.message_id == message_id))
-        result = await db_conn.execute(stmt)
-        media_files = result.scalars().all()
-
-        # Update last_accessed_at for all found media files
-        if media_files:
-            media_ids = [media.id for media in media_files]
-            await cls.update_last_accessed(db_conn, media_ids)
-
-        return media_files
-
-    @classmethod
-    @with_retry()
-    async def get_agent_compatible_media(
-        cls, db_conn: AsyncSession, chat_id: str, message_id: str
-    ) -> list["MediaFiles"]:
-        """Retrieve media files that are compatible with the agent (images and PDFs only).
-
-        Args:
-            db_conn: Database connection
-            chat_id: Chat ID
-            message_id: Message ID
-
-        Returns:
-            List of media files that can be processed by the agent
+        Anthropic supports images, PDFs, and text files.
         """
-        # Get all media for the message
-        all_media = await cls.get_by_message_id(db_conn, chat_id, message_id)
-
-        # Filter to only include images and PDFs that Anthropic can process
-        return [
-            media
-            for media in all_media
-            if media.mime_type and (media.mime_type.startswith("image/") or media.mime_type == "application/pdf")
-        ]
+        return (
+            self.mime_type.startswith("image/")
+            or self.mime_type.startswith("application/pdf")
+            or self.mime_type.startswith("text/")
+        )
 
     @classmethod
-    @with_retry()
+    @traced(extract_args=["file_id", "chat_id", "message_id", "file_size"])
     async def create_file(
         cls,
         db_conn: AsyncSession,
@@ -116,7 +75,7 @@ class MediaFiles(Base):
         file_unique_id: str,
         chat_id: str,
         message_id: str,
-        file_size: int | None,
+        file_size: int,
         content_bytes: bytes,
     ):
         """Create a media file entry.
@@ -161,8 +120,23 @@ class MediaFiles(Base):
         await db_conn.execute(stmt)
 
     @classmethod
-    @with_retry()
-    async def update_last_accessed(cls, db_conn: AsyncSession, media_ids: list[int]) -> None:
+    @traced(extract_args=["chat_id", "message_id"])
+    async def get_by_message_id(cls, db_conn: AsyncSession, chat_id: str, message_id: str) -> list["MediaFiles"]:
+        """Retrieve all media files by chat_id and message_id and update last_accessed_at."""
+        stmt = select(cls).where((cls.chat_id == chat_id) & (cls.message_id == message_id))
+        result = await db_conn.execute(stmt)
+        media_files = result.scalars().all()
+
+        # Update last_accessed_at for all found media files
+        if media_files:
+            media_ids = [media.id for media in media_files]
+            await cls.bulk_update_last_accessed(db_conn, media_ids)
+
+        return media_files
+
+    @classmethod
+    @traced(extract_args=["file_id"])
+    async def bulk_update_last_accessed(cls, db_conn: AsyncSession, media_ids: list[int]) -> None:
         """Update last_accessed_at timestamp for given media IDs.
 
         Args:

@@ -12,8 +12,8 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from areyouok_telegram.config import ENV
-from areyouok_telegram.data.connection import Base
-from areyouok_telegram.data.utils import with_retry
+from areyouok_telegram.data import Base
+from areyouok_telegram.utils import traced
 
 
 class Updates(Base):
@@ -21,6 +21,7 @@ class Updates(Base):
     __table_args__ = {"schema": ENV}
 
     update_key = Column(String, nullable=False, unique=True)
+
     update_id = Column(String, nullable=False)
     payload = Column(JSONB, nullable=False)
 
@@ -34,7 +35,7 @@ class Updates(Base):
         return hashlib.sha256(payload.encode()).hexdigest()
 
     @classmethod
-    @with_retry()
+    @traced(extract_args=["update"])
     async def new_or_upsert(cls, db_conn: AsyncSession, update: telegram.Update):
         """Insert or update a message in the database."""
         now = datetime.now(UTC)

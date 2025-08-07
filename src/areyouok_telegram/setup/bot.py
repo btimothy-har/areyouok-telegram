@@ -11,6 +11,7 @@ from telegram.ext import ContextTypes
 from areyouok_telegram.config import ENV
 from areyouok_telegram.setup.exceptions import BotDescriptionSetupError
 from areyouok_telegram.setup.exceptions import BotNameSetupError
+from areyouok_telegram.utils import traced
 
 
 def package_version():
@@ -34,6 +35,7 @@ def _generate_short_description():
     return description
 
 
+@traced(extract_args=False)
 async def setup_bot_name(ctx: Application | ContextTypes.DEFAULT_TYPE):
     """Set the bot name with proper error handling."""
     new_name = _generate_bot_name()
@@ -65,9 +67,10 @@ async def setup_bot_name(ctx: Application | ContextTypes.DEFAULT_TYPE):
     if not success:
         raise BotNameSetupError(new_name)
 
-    logfire.debug(f"Bot name set to: {new_name}")
+    logfire.info(f"Bot name set to: {new_name}")
 
 
+@traced(extract_args=False)
 async def setup_bot_description(ctx: Application | ContextTypes.DEFAULT_TYPE):
     """Set the bot description with proper error handling."""
     new_description = _generate_short_description()
@@ -103,4 +106,4 @@ async def setup_bot_description(ctx: Application | ContextTypes.DEFAULT_TYPE):
     if not success:
         raise BotDescriptionSetupError()
 
-    logfire.debug(f"Bot description set to: {new_description}")
+    logfire.info(f"Bot description set to: {new_description}")

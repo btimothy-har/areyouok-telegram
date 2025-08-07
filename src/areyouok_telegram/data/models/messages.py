@@ -13,8 +13,8 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from areyouok_telegram.config import ENV
-from areyouok_telegram.data.connection import Base
-from areyouok_telegram.data.utils import with_retry
+from areyouok_telegram.data import Base
+from areyouok_telegram.utils import traced
 
 MessageTypes = telegram.Message | telegram.MessageReactionUpdated
 
@@ -30,6 +30,7 @@ class Messages(Base):
     __table_args__ = {"schema": ENV}
 
     message_key = Column(String, nullable=False, unique=True)
+
     message_id = Column(String, nullable=False)
     message_type = Column(String, nullable=False)
     user_id = Column(String, nullable=False)
@@ -64,9 +65,11 @@ class Messages(Base):
             return None
         return self.message_type_obj.de_json(self.payload, None)
 
-    @with_retry()
-    async def delete(self) -> bool:
+    async def delete(self, db_conn: AsyncSession) -> bool:
         """Soft delete the message by clearing its payload.
+
+        Args:
+            db_conn: Database connection for persisting changes
 
         Returns:
             bool: True if the message was soft deleted, False if it was already deleted.
@@ -77,10 +80,12 @@ class Messages(Base):
 
         # Clear the payload directly on the instance
         self.payload = None
+        db_conn.add(self)
+
         return True
 
     @classmethod
-    @with_retry()
+    @traced(extract_args=["user_id", "chat_id", "message"])
     async def new_or_update(
         cls,
         db_conn: AsyncSession,
@@ -118,12 +123,14 @@ class Messages(Base):
         await db_conn.execute(stmt)
 
     @classmethod
-    @with_retry()
+    @traced(extract_args=["message_id", "chat_id"])
     async def retrieve_message_by_id(
         cls,
         db_conn: AsyncSession,
         message_id: str,
         chat_id: str,
+        *,
+        include_reactions: bool = True,
     ) -> tuple[telegram.Message | None, list[telegram.MessageReactionUpdated] | None]:
         """Retrieve a message by its ID and chat ID, returning a telegram.Message object."""
         stmt = select(cls).where(
@@ -136,7 +143,9 @@ class Messages(Base):
         result = await db_conn.execute(stmt)
         message = result.scalar_one_or_none()
 
-        if message:
+        reaction_objects: list[telegram.MessageReactionUpdated] = []
+
+        if message and include_reactions:
             stmt = select(cls).where(
                 cls.message_id == message_id,
                 cls.chat_id == chat_id,
@@ -153,12 +162,12 @@ class Messages(Base):
                 if obj is not None:
                     reaction_objects.append(obj)
 
-            return message.to_telegram_object(), reaction_objects
+        rt_message = message.to_telegram_object() if message else None
 
-        return None, None
+        return rt_message, reaction_objects if include_reactions else None
 
     @classmethod
-    @with_retry()
+    @traced(extract_args=["chat_id"])
     async def retrieve_by_chat(
         cls,
         db_conn: AsyncSession,
@@ -172,7 +181,7 @@ class Messages(Base):
         return [msg.to_telegram_object() for msg in messages]
 
     @classmethod
-    @with_retry()
+    @traced(extract_args=["chat_id"])
     async def retrieve_raw_by_chat(
         cls,
         db_conn: AsyncSession,

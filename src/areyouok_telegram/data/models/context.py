@@ -1,3 +1,4 @@
+import hashlib
 from datetime import UTC
 from datetime import datetime
 
@@ -10,8 +11,8 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from areyouok_telegram.config import ENV
-from areyouok_telegram.data.connection import Base
-from areyouok_telegram.data.utils import with_retry
+from areyouok_telegram.data import Base
+from areyouok_telegram.utils import traced
 
 VALID_CONTEXT_TYPES = [
     "session",
@@ -28,6 +29,8 @@ class Context(Base):
     __tablename__ = "context"
     __table_args__ = {"schema": ENV}
 
+    context_key = Column(String, nullable=False, unique=True)
+
     chat_id = Column(String, nullable=False)
     session_id = Column(String, nullable=False)
     type = Column(String, nullable=False)
@@ -36,8 +39,13 @@ class Context(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False)
 
+    @staticmethod
+    def generate_context_key(chat_id: str, ctype: str, content: str) -> str:
+        """Generate a unique key for a context based on chat ID, type, content, and message type."""
+        return hashlib.sha256(f"{chat_id}:{ctype}:{content}".encode()).hexdigest()
+
     @classmethod
-    @with_retry()
+    @traced(extract_args=["chat_id", "session_id", "ctype"])
     async def new_or_update(
         cls,
         db_conn: AsyncSession,
@@ -53,6 +61,7 @@ class Context(Base):
             raise InvalidContextTypeError(ctype)
 
         stmt = pg_insert(cls).values(
+            context_key=cls.generate_context_key(chat_id, ctype, content),
             chat_id=str(chat_id),
             session_id=session_id,
             type=ctype,
@@ -60,10 +69,19 @@ class Context(Base):
             created_at=now,
         )
 
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["context_key"],
+            set_={
+                "session_id": stmt.excluded.session_id,
+                "content": stmt.excluded.content,
+                "created_at": stmt.excluded.created_at,
+            },
+        )
+
         await db_conn.execute(stmt)
 
     @classmethod
-    @with_retry()
+    @traced(extract_args=["session_id"])
     async def get_by_session_id(
         cls,
         db_conn: AsyncSession,
@@ -86,7 +104,7 @@ class Context(Base):
         return contexts if contexts else None
 
     @classmethod
-    @with_retry()
+    @traced(extract_args=["chat_id"])
     async def get_by_chat_id(
         cls,
         db_conn: AsyncSession,
@@ -109,7 +127,7 @@ class Context(Base):
         return contexts if contexts else None
 
     @classmethod
-    @with_retry()
+    @traced(extract_args=["chat_id"])
     async def retrieve_context_by_chat(
         cls,
         db_conn: AsyncSession,

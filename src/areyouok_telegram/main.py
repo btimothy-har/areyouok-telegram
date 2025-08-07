@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from importlib.metadata import version
+from typing import Any
 
 import logfire
 import telegram
@@ -15,6 +16,27 @@ from areyouok_telegram.config import GITHUB_REPOSITORY
 from areyouok_telegram.config import GITHUB_SHA
 from areyouok_telegram.config import LOGFIRE_TOKEN
 from areyouok_telegram.data.connection import async_engine
+from areyouok_telegram.setup import database_setup
+
+
+def scrub_telegram_data(data: logfire.ScrubMatch) -> Any | None:
+    sensitive_paths = [
+        ("message", "text"),
+        ("chat", "first_name"),
+        ("chat", "username"),
+        ("from", "first_name"),
+        ("from", "username"),
+        ("user", "first_name"),
+        ("user", "username"),
+        ("return", "text"),
+        ("response", "message_text"),
+    ]
+
+    if any(data.path[-len(path) :] == path for path in sensitive_paths):
+        return "[REDACTED]"
+
+    return data.value
+
 
 if __name__ == "__main__":
     # Configure event loop policy for performance
@@ -47,7 +69,7 @@ if __name__ == "__main__":
 
     logfire.configure(
         send_to_logfire=True if LOGFIRE_TOKEN else False,
-        min_level="debug" if ENV == "development" else "info",
+        min_level="info" if ENV == "development" else "info",
         token=LOGFIRE_TOKEN,
         service_name="areyouok-telegram",
         service_version=version("areyouok-telegram"),
@@ -55,11 +77,23 @@ if __name__ == "__main__":
         console=console,
         code_source=code_source,
         distributed_tracing=False,
-        scrubbing=False,
+        scrubbing=logfire.ScrubbingOptions(
+            callback=scrub_telegram_data,
+            extra_patterns=[
+                "text",
+                "first_name",
+                "username",
+                "message_text",
+            ],
+        ),
     )
 
     logfire.log_slow_async_callbacks(slow_duration=0.25)
     logfire.instrument_sqlalchemy(engine=async_engine)
 
-    application = create_application()
+    # Initialize infrastructure
+    with logfire.span("Application is starting."):
+        database_setup()
+        application = create_application()
+
     application.run_polling(allowed_updates=telegram.Update.ALL_TYPES, drop_pending_updates=True)

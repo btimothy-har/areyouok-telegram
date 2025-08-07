@@ -12,9 +12,9 @@ from sqlalchemy.dialects.postgresql import TIMESTAMP
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from areyouok_telegram.config import ENV
-from areyouok_telegram.data.connection import Base
-from areyouok_telegram.data.messages import Messages
-from areyouok_telegram.data.utils import with_retry
+from areyouok_telegram.data import Base
+from areyouok_telegram.data import Messages
+from areyouok_telegram.utils import traced
 
 
 class Sessions(Base):
@@ -34,6 +34,12 @@ class Sessions(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
 
+    @staticmethod
+    def generate_session_key(chat_id: str, session_start: datetime) -> str:
+        """Generate a unique key for a session based on chat ID and start time."""
+        timestamp_str = session_start.isoformat()
+        return hashlib.sha256(f"{chat_id}:{timestamp_str}".encode()).hexdigest()
+
     @property
     def session_id(self) -> str:
         """Return the unique session ID, which is the session key."""
@@ -50,17 +56,11 @@ class Sessions(Base):
 
         return self.last_bot_activity > self.last_user_activity
 
-    @staticmethod
-    def generate_session_key(chat_id: str, session_start: datetime) -> str:
-        """Generate a unique key for a session based on chat ID and start time."""
-        timestamp_str = session_start.isoformat()
-        return hashlib.sha256(f"{chat_id}:{timestamp_str}".encode()).hexdigest()
-
-    @with_retry()
-    async def new_message(self, timestamp: datetime, *, is_user: bool) -> None:
+    @traced(extract_args=["timestamp", "is_user"])
+    async def new_message(self, db_conn: AsyncSession, timestamp: datetime, *, is_user: bool) -> None:
         """Record a new message in the session, updating appropriate timestamps."""
         # Always update new activity timestamp
-        await self.new_activity(timestamp, is_user=is_user)
+        await self.new_activity(db_conn, timestamp, is_user=is_user)
 
         if is_user:
             self.last_user_message = max(self.last_user_message, timestamp) if self.last_user_message else timestamp
@@ -70,8 +70,10 @@ class Sessions(Base):
         else:
             self.last_bot_message = max(self.last_bot_message, timestamp) if self.last_bot_message else timestamp
 
-    @with_retry()
-    async def new_activity(self, timestamp: datetime, *, is_user: bool) -> None:
+        db_conn.add(self)
+
+    @traced(extract_args=["timestamp", "is_user"])
+    async def new_activity(self, db_conn: AsyncSession, timestamp: datetime, *, is_user: bool) -> None:
         """Record user activity (like edits) without incrementing message count."""
         if is_user:
             self.last_user_activity = max(self.last_user_activity, timestamp) if self.last_user_activity else timestamp
@@ -79,14 +81,18 @@ class Sessions(Base):
         else:
             self.last_bot_activity = max(self.last_bot_activity, timestamp) if self.last_bot_activity else timestamp
 
-    @with_retry()
+        db_conn.add(self)
+
+    @traced(extract_args=["timestamp"])
     async def close_session(self, db_conn: AsyncSession, timestamp: datetime) -> None:
         """Close a session by setting session_end and message_count."""
         messages = await self.get_messages(db_conn)
         self.session_end = timestamp
         self.message_count = len(messages)
 
-    @with_retry()
+        db_conn.add(self)
+
+    @traced(extract_args=False)
     async def get_messages(self, db_conn: AsyncSession) -> list[telegram.Message]:
         """Retrieve all messages from this session."""
         # Determine the end time - either session_end or current time for active sessions
@@ -97,7 +103,22 @@ class Sessions(Base):
         )
 
     @classmethod
-    @with_retry()
+    @traced(extract_args=["chat_id", "timestamp"])
+    async def create_session(cls, db_conn: AsyncSession, chat_id: str, timestamp: datetime) -> "Sessions":
+        """Create a new session for a chat."""
+        session_key = cls.generate_session_key(chat_id, timestamp)
+
+        new_session = cls(
+            session_key=session_key,
+            chat_id=chat_id,
+            session_start=timestamp,
+        )
+
+        db_conn.add(new_session)
+        return new_session
+
+    @classmethod
+    @traced(extract_args=["chat_id"])
     async def get_active_session(cls, db_conn: AsyncSession, chat_id: str) -> Optional["Sessions"]:
         """Get the active (non-closed) session for a chat."""
         stmt = select(cls).where(cls.chat_id == chat_id).where(cls.session_end.is_(None))
@@ -106,7 +127,7 @@ class Sessions(Base):
         return result.scalar_one_or_none()
 
     @classmethod
-    @with_retry()
+    @traced(extract_args=False)
     async def get_all_active_sessions(cls, db_conn: AsyncSession) -> list["Sessions"]:
         """Get all active (non-closed) sessions."""
         stmt = select(cls).where(cls.session_end.is_(None))  # Only active sessions
@@ -115,7 +136,7 @@ class Sessions(Base):
         return list(result.scalars().all())
 
     @classmethod
-    @with_retry()
+    @traced(extract_args=["from_dt", "to_dt"])
     async def get_all_inactive_sessions(
         cls, db_conn: AsyncSession, from_dt: datetime, to_dt: datetime
     ) -> list["Sessions"]:
@@ -138,18 +159,3 @@ class Sessions(Base):
 
         result = await db_conn.execute(stmt)
         return list(result.scalars().all())
-
-    @classmethod
-    @with_retry()
-    async def create_session(cls, db_conn: AsyncSession, chat_id: str, timestamp: datetime) -> "Sessions":
-        """Create a new session for a chat."""
-        session_key = cls.generate_session_key(chat_id, timestamp)
-
-        new_session = cls(
-            session_key=session_key,
-            chat_id=chat_id,
-            session_start=timestamp,
-        )
-
-        db_conn.add(new_session)
-        return new_session
