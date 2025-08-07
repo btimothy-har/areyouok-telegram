@@ -24,7 +24,7 @@ async def restore_active_sessions(ctx: Application | ContextTypes.DEFAULT_TYPE):
             return
 
         for session in active_sessions:
-            schedule_job(
+            await schedule_job(
                 context=ctx,
                 job=ConversationJob(chat_id=session.chat_id),
                 interval=timedelta(seconds=10),

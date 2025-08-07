@@ -35,6 +35,13 @@ async def log_bot_activity(
     bot_id: str, chat_id: str, chat_session: Sessions, response_message: MessageTypes | None
 ) -> None:
     async with async_database() as db_conn:
+        # Always create a new activity for the bot, even if no response message is provided
+        await chat_session.new_activity(
+            db_conn=db_conn,
+            timestamp=datetime.now(UTC),
+            is_user=False,  # This is a bot response
+        )
+
         if response_message:
             await Messages.new_or_update(
                 db_conn=db_conn,
@@ -49,12 +56,6 @@ async def log_bot_activity(
                     timestamp=response_message.date,
                     is_user=False,  # This is a bot response
                 )
-        else:
-            await chat_session.new_activity(
-                db_conn=db_conn,
-                timestamp=datetime.now(UTC),
-                is_user=False,  # This is a bot response
-            )
 
 
 @db_retry()

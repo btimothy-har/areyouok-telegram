@@ -118,7 +118,6 @@ class Sessions(Base):
         return new_session
 
     @classmethod
-    @traced(extract_args=["chat_id"])
     async def get_active_session(cls, db_conn: AsyncSession, chat_id: str) -> Optional["Sessions"]:
         """Get the active (non-closed) session for a chat."""
         stmt = select(cls).where(cls.chat_id == chat_id).where(cls.session_end.is_(None))

@@ -73,7 +73,6 @@ class ConversationJob(BaseJob):
         """Generate a consistent job name for this chat."""
         return f"conversation:{self.chat_id}"
 
-    @traced(extract_args=False)
     async def _run(self, context: ContextTypes.DEFAULT_TYPE) -> None:  # noqa: ARG002
         """Process conversation for this chat."""
 
@@ -91,29 +90,39 @@ class ConversationJob(BaseJob):
                 inactivity_duration = self._run_timestamp - chat_session.last_user_activity
 
                 if inactivity_duration > timedelta(seconds=60 * 60):  # 1 hour
-                    await self.close_session(chat_session=chat_session)
-                    await self.stop(context)
+                    with logfire.span(
+                        f"Closing chat session {chat_session.session_id} due to inactivity.",
+                        _span_name="ConversationJob._run.close_session",
+                        chat_id=self.chat_id,
+                    ):
+                        await self.close_session(chat_session=chat_session)
+                        await self.stop(context)
 
         else:
-            message_history, instructions = await self._prepare_conversation_input(
-                chat_session=chat_session,
-                include_context=True,  # Include context in the conversation input
-            )
-            response = await self.generate_response(
-                context=context,
-                chat_session=chat_session,
-                conversation_history=message_history,
-                instructions=instructions or None,
-            )
+            with logfire.span(
+                f"Generating response in {chat_session.session_id}.",
+                _span_name="ConversationJob._run.respond",
+                chat_id=self.chat_id,
+            ):
+                message_history, instructions = await self._prepare_conversation_input(
+                    chat_session=chat_session,
+                    include_context=True,  # Include context in the conversation input
+                )
+                response = await self.generate_response(
+                    context=context,
+                    chat_session=chat_session,
+                    conversation_history=message_history,
+                    instructions=instructions or None,
+                )
 
-            self.last_response = response.response_type
+                self.last_response = response.response_type
 
-            response_message = await self.execute_response(
-                context=context,
-                response=response,
-            )
+                response_message = await self.execute_response(
+                    context=context,
+                    response=response,
+                )
 
-            await log_bot_activity(context.bot.id, self.chat_id, chat_session, response_message)
+                await log_bot_activity(context.bot.id, self.chat_id, chat_session, response_message)
 
     @traced(extract_args=["chat_session", "instructions"])
     async def generate_response(
@@ -219,7 +228,7 @@ class ConversationJob(BaseJob):
             return
 
         compressed_context = await self._compress_session_context(
-            chat_session=chat_session,
+            chat_session=chat_session, message_history=message_history
         )
 
         await save_session_context(self.chat_id, chat_session, compressed_context)

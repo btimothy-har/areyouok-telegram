@@ -15,7 +15,6 @@ from areyouok_telegram.config import ENV
 from areyouok_telegram.config import GITHUB_REPOSITORY
 from areyouok_telegram.config import GITHUB_SHA
 from areyouok_telegram.config import LOGFIRE_TOKEN
-from areyouok_telegram.data.connection import async_engine
 from areyouok_telegram.setup import database_setup
 
 
@@ -89,7 +88,6 @@ if __name__ == "__main__":
     )
 
     logfire.log_slow_async_callbacks(slow_duration=0.25)
-    logfire.instrument_sqlalchemy(engine=async_engine)
 
     # Initialize infrastructure
     with logfire.span("Application is starting."):
