@@ -32,7 +32,6 @@ async def on_new_update(update: telegram.Update, context: ContextTypes.DEFAULT_T
             if update.effective_chat:
                 await Chats.new_or_update(db_conn=db_conn, chat=update.effective_chat)
 
-    # Schedule conversation job for any update with a chat
     await schedule_job(
         context=context,
         job=ConversationJob(chat_id=str(update.effective_chat.id)),

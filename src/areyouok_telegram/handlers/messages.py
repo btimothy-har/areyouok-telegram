@@ -4,6 +4,7 @@ import logfire
 import telegram
 from telegram.ext import ContextTypes
 
+from areyouok_telegram.config import ENV
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database
@@ -38,9 +39,11 @@ async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_
             # Record new user message
             await active_session.new_message(db_conn=db_conn, timestamp=update.message.date, is_user=True)
         else:
-            # Create new session and record the first message
-            new_session = await Sessions.create_session(db_conn, chat_id, update.message.date)
-            await new_session.new_message(db_conn=db_conn, timestamp=update.message.date, is_user=True)
+            if ENV != "research":
+                # Create new session and record the first message
+                # If this is a research environment, we don't create a session automatically
+                new_session = await Sessions.create_session(db_conn, chat_id, update.message.date)
+                await new_session.new_message(db_conn=db_conn, timestamp=update.message.date, is_user=True)
 
         await extract_media
 
