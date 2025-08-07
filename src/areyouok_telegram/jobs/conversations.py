@@ -14,7 +14,6 @@ from areyouok_telegram.data import MessageTypes
 from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database
 from areyouok_telegram.jobs import BaseJob
-from areyouok_telegram.jobs.exceptions import NoActiveSessionError
 from areyouok_telegram.llms.chat import AgentResponse
 from areyouok_telegram.llms.chat import ChatAgentDependencies
 from areyouok_telegram.llms.chat import ReactionResponse
@@ -66,8 +65,10 @@ class ConversationJob(BaseJob):
         chat_session = await get_chat_session(chat_id=self.chat_id)
 
         if not chat_session:
-            # This is unexpected behaviour, could imply race conditions in play.
-            raise NoActiveSessionError(self.chat_id)
+            # If no active session is found, log a warning and stop the job
+            # This can happen if the user submits a command without chatting
+            logfire.warning("Conversation job started without an active session.")
+            await self.stop(context)
 
         elif chat_session.has_bot_responded:
             logfire.debug("No new updates, nothing to do.")
