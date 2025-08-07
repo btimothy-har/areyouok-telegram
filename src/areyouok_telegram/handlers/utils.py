@@ -9,12 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from areyouok_telegram.config import OPENAI_API_KEY
 from areyouok_telegram.data import MediaFiles
-
-
-class VoiceNotProcessableError(Exception):
-    """Raised when voice cannot be processed."""
-
-    pass
+from areyouok_telegram.handlers.exceptions import VoiceNotProcessableError
+from areyouok_telegram.utils import traced
 
 
 def transcribe_voice_data_sync(voice_data: bytes) -> str:
@@ -65,14 +61,85 @@ def transcribe_voice_data_sync(voice_data: bytes) -> str:
         raise VoiceNotProcessableError() from e
 
 
+@traced(extract_args=["message", "file"])
+async def _download_file(db_conn: AsyncSession, message: telegram.Message, file: telegram.File) -> bytes:
+    """Download a Telegram file as bytes.
+
+    Args:
+        db_conn: Database connection
+        message: Telegram message object
+        file: Telegram file
+    """
+    try:
+        content_bytes = await file.download_as_bytearray()
+
+        # Pass individual attributes to create_file
+        await MediaFiles.create_file(
+            db_conn=db_conn,
+            file_id=file.file_id,
+            file_unique_id=file.file_unique_id,
+            chat_id=str(message.chat.id),
+            message_id=str(message.id),
+            file_size=file.file_size,
+            content_bytes=bytes(content_bytes),
+        )
+
+        # For voice messages, also create a transcription
+        if message.voice and file.file_unique_id == message.voice.file_unique_id:
+            with logfire.span(
+                "Transcribing voice message",
+                _span_name="handlers.utils._download_file.transcribe_voice",
+                chat_id=message.chat.id,
+                message_id=message.id,
+                file_id=file.file_id,
+                file_unique_id=file.file_unique_id,
+            ):
+                try:
+                    # Transcribe the voice message in a separate thread
+                    transcription = await asyncio.to_thread(transcribe_voice_data_sync, bytes(content_bytes))
+
+                    # Store the transcription as a text file
+                    transcription_bytes = transcription.encode("utf-8")
+                    await MediaFiles.create_file(
+                        db_conn=db_conn,
+                        file_id=f"{file.file_id}_transcription",
+                        file_unique_id=f"{file.file_unique_id}_transcription",
+                        chat_id=str(message.chat.id),
+                        message_id=str(message.id),
+                        file_size=len(transcription_bytes),
+                        content_bytes=transcription_bytes,
+                    )
+                    logfire.info(f"Transcription is {len(transcription)} characters long.", chat_id=message.chat.id)
+
+                except VoiceNotProcessableError:
+                    logfire.exception(
+                        "Voice message could not be transcribed.",
+                        chat_id=message.chat.id,
+                        message_id=message.id,
+                        file_id=file.file_id,
+                        file_unique_id=file.file_unique_id,
+                    )
+
+    except Exception as e:
+        logfire.exception(
+            "Failed to download file.",
+            exc_info=e,
+            chat_id=message.chat.id,
+            message_id=message.id,
+            file_id=file.file_id,
+            file_unique_id=file.file_unique_id,
+        )
+
+
+@traced(extract_args=["message"])
 async def extract_media_from_telegram_message(
-    session: AsyncSession,
+    db_conn: AsyncSession,
     message: telegram.Message,
 ) -> int:
     """Process media files from a Telegram message.
 
     Args:
-        session: Database session
+        db_conn: Database connection
         message: Telegram message object
 
     Returns:
@@ -80,92 +147,41 @@ async def extract_media_from_telegram_message(
     """
     media_files = []
 
-    with logfire.span(
-        "Extracting media from message",
-        _span_name="handlers.utils.extract_media_from_telegram_message",
+    if message.photo:
+        photo_file = await message.photo[-1].get_file()
+        media_files.append(photo_file)
+
+    if message.sticker:
+        sticker_file = await message.sticker.get_file()
+        media_files.append(sticker_file)
+
+    if message.document:
+        document_file = await message.document.get_file()
+        media_files.append(document_file)
+
+    if message.animation:
+        animation_file = await message.animation.get_file()
+        media_files.append(animation_file)
+
+    if message.video:
+        video_file = await message.video.get_file()
+        media_files.append(video_file)
+
+    if message.video_note:
+        video_note_file = await message.video_note.get_file()
+        media_files.append(video_note_file)
+
+    if message.voice:
+        voice_file = await message.voice.get_file()
+        media_files.append(voice_file)
+
+    await asyncio.gather(*[_download_file(db_conn, message, file) for file in media_files], return_exceptions=True)
+
+    logfire.info(
+        f"Processed {len(media_files)} media files from message.",
         message_id=message.message_id,
         chat_id=message.chat.id,
-    ):
-        if message.photo:
-            photo_file = await message.photo[-1].get_file()
-            media_files.append(photo_file)
+        processed_count=len(media_files),
+    )
 
-        if message.sticker:
-            sticker_file = await message.sticker.get_file()
-            media_files.append(sticker_file)
-
-        if message.document:
-            document_file = await message.document.get_file()
-            media_files.append(document_file)
-
-        if message.animation:
-            animation_file = await message.animation.get_file()
-            media_files.append(animation_file)
-
-        if message.video:
-            video_file = await message.video.get_file()
-            media_files.append(video_file)
-
-        if message.video_note:
-            video_note_file = await message.video_note.get_file()
-            media_files.append(video_note_file)
-
-        if message.voice:
-            voice_file = await message.voice.get_file()
-            media_files.append(voice_file)
-
-        processed_count = 0
-        for file in media_files:
-            # Download file content as bytes
-            content_bytes = await file.download_as_bytearray()
-
-            # Pass individual attributes to create_file
-            await MediaFiles.create_file(
-                session=session,
-                file_id=file.file_id,
-                file_unique_id=file.file_unique_id,
-                chat_id=str(message.chat.id),
-                message_id=str(message.id),
-                file_size=file.file_size,
-                content_bytes=bytes(content_bytes),
-            )
-            processed_count += 1
-
-            # For voice messages, also create a transcription
-            if message.voice and file.file_unique_id == message.voice.file_unique_id:
-                with logfire.span(
-                    "Transcribing detected audio",
-                    _span_name="handlers.utils.extract_media_from_telegram_message.transcribe_voice",
-                    file_id=file.file_id,
-                    chat_id=message.chat.id,
-                ):
-                    try:
-                        # Transcribe the voice message in a separate thread
-                        transcription = await asyncio.to_thread(transcribe_voice_data_sync, bytes(content_bytes))
-
-                        # Store the transcription as a text file
-                        transcription_bytes = transcription.encode("utf-8")
-                        await MediaFiles.create_file(
-                            session=session,
-                            file_id=f"{file.file_id}_transcription",
-                            file_unique_id=f"{file.file_unique_id}_transcription",
-                            chat_id=str(message.chat.id),
-                            message_id=str(message.id),
-                            file_size=len(transcription_bytes),
-                            content_bytes=transcription_bytes,
-                        )
-                        processed_count += 1
-                        logfire.info(f"Transcription is {len(transcription)} characters long.", chat_id=message.chat.id)
-
-                    except VoiceNotProcessableError:
-                        # If transcription fails, we still have the original voice file
-                        pass
-
-        logfire.info(
-            f"Processed {processed_count} media files from message",
-            message_id=message.message_id,
-            chat_id=message.chat.id,
-            processed_count=processed_count,
-        )
-
-    return processed_count
+    return len(media_files)

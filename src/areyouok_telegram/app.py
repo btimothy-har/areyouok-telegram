@@ -14,15 +14,14 @@ from areyouok_telegram.handlers import on_error_event
 from areyouok_telegram.handlers import on_message_react
 from areyouok_telegram.handlers import on_new_message
 from areyouok_telegram.handlers import on_new_update
-from areyouok_telegram.setup import database_setup
-from areyouok_telegram.setup import logging_setup
 from areyouok_telegram.setup import restore_active_sessions
 from areyouok_telegram.setup import setup_bot_description
 from areyouok_telegram.setup import setup_bot_name
 from areyouok_telegram.setup import start_session_cleanups
+from areyouok_telegram.utils import traced
 
 
-async def application_startup(application: Application):
+async def application_post_init(application: Application):
     """Configure bot metadata on startup."""
     await setup_bot_name(application)
     await setup_bot_description(application)
@@ -30,18 +29,16 @@ async def application_startup(application: Application):
     await start_session_cleanups(application)
 
 
+@traced(extract_args=False)
 def create_application() -> Application:
     """Create and configure the Telegram bot application."""
-    # Initialize infrastructure
-    logging_setup()
-    database_setup()
 
     # Create application
     application = (
         ApplicationBuilder()
         .token(TELEGRAM_BOT_TOKEN)
         .concurrent_updates(concurrent_updates=True)
-        .post_init(application_startup)
+        .post_init(application_post_init)
         .build()
     )
 

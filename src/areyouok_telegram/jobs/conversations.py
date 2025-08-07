@@ -1,7 +1,3 @@
-import asyncio
-import hashlib
-import json
-from collections import defaultdict
 from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
@@ -12,24 +8,33 @@ import telegram
 from telegram.ext import ContextTypes
 
 from areyouok_telegram.data import Context
-from areyouok_telegram.data import LLMUsage
+from areyouok_telegram.data import MediaFiles
 from areyouok_telegram.data import Messages
+from areyouok_telegram.data import MessageTypes
 from areyouok_telegram.data import Sessions
-from areyouok_telegram.data import async_database_session
+from areyouok_telegram.data import async_database
+from areyouok_telegram.jobs import BaseJob
 from areyouok_telegram.jobs.exceptions import NoActiveSessionError
-from areyouok_telegram.llms.analytics import ContextTemplate
-from areyouok_telegram.llms.analytics import context_compression_agent
 from areyouok_telegram.llms.chat import AgentResponse
 from areyouok_telegram.llms.chat import ChatAgentDependencies
+from areyouok_telegram.llms.chat import ReactionResponse
+from areyouok_telegram.llms.chat import TextResponse
 from areyouok_telegram.llms.chat import chat_agent
+from areyouok_telegram.llms.context_compression import ContextTemplate
+from areyouok_telegram.llms.context_compression import context_compression_agent
+from areyouok_telegram.llms.utils import context_to_model_message
+from areyouok_telegram.llms.utils import run_agent_with_tracking
+from areyouok_telegram.llms.utils import telegram_message_to_model_message
+from areyouok_telegram.utils import db_retry
+from areyouok_telegram.utils import traced
 
-from .utils import convert_telegram_message_to_model_message
-from .utils import get_unsupported_media_from_messages
+from .utils import close_chat_session
+from .utils import get_chat_session
+from .utils import log_bot_activity
+from .utils import save_session_context
 
-JOB_LOCK = defaultdict(asyncio.Lock)
 
-
-class ConversationJob:
+class ConversationJob(BaseJob):
     """
     A class-based job for handling conversations in a specific chat.
 
@@ -46,242 +51,152 @@ class ConversationJob:
         Args:
             chat_id: The chat ID to process
         """
-        self.chat_id = chat_id
-        self.bot_id = None  # This will be set when the job is run
-
-        self._last_response = None
-        self._run_timestamp = datetime.now(UTC)
-        self._run_count = 0
+        super().__init__()
+        self.chat_id = str(chat_id)
+        self.last_response = None
 
     @property
     def name(self) -> str:
         """Generate a consistent job name for this chat."""
-        return f"conversation_processor:{self.chat_id}"
+        return f"conversation:{self.chat_id}"
 
-    @property
-    def _id(self) -> str:
-        return hashlib.md5(self.name.encode()).hexdigest()
-
-    async def run(self, context: ContextTypes.DEFAULT_TYPE) -> None:  # noqa: ARG002
+    async def _run(self, context: ContextTypes.DEFAULT_TYPE) -> None:  # noqa: ARG002
         """Process conversation for this chat."""
 
-        self._run_count += 1
-        self._run_timestamp = datetime.now(UTC)
-        self.bot_id = context.bot.id  # Set the bot ID for this run
+        chat_session = await get_chat_session(chat_id=self.chat_id)
 
-        with logfire.span("Conversation job running", chat_id=self.chat_id, run_count=self._run_count, _level="debug"):
-            async with async_database_session() as conn:
-                chat_session = await self._get_active_session(conn)
+        if not chat_session:
+            # This is unexpected behaviour, could imply race conditions in play.
+            raise NoActiveSessionError(self.chat_id)
 
-                if not chat_session:
-                    # This is unexpected behaviour, could imply race conditions in play.
-                    raise NoActiveSessionError(self.chat_id)
+        elif chat_session.has_bot_responded:
+            logfire.debug("No new updates, nothing to do.")
 
-                elif chat_session.has_bot_responded:
-                    logfire.debug("No new updates, nothing to do.")
+            # If the last user activity was more than an hour ago, stop the job
+            if chat_session.last_user_activity:
+                inactivity_duration = self._run_timestamp - chat_session.last_user_activity
 
-                else:
-                    await self._generate_response(conn, context, chat_session)
-                    return
+                if inactivity_duration > timedelta(seconds=60 * 60):  # 1 hour
+                    with logfire.span(
+                        f"Closing chat session {chat_session.session_id} due to inactivity.",
+                        _span_name="ConversationJob._run.close_session",
+                        chat_id=self.chat_id,
+                    ):
+                        await self.close_session(chat_session=chat_session)
+                        await self.stop(context)
 
-                # If the last user activity was more than an hour ago, stop the job
-                if chat_session.last_user_activity:
-                    inactivity_duration = self._run_timestamp - chat_session.last_user_activity
+        else:
+            with logfire.span(
+                f"Generating response in {chat_session.session_id}.",
+                _span_name="ConversationJob._run.respond",
+                chat_id=self.chat_id,
+            ):
+                message_history, instructions = await self._prepare_conversation_input(
+                    chat_session=chat_session,
+                    include_context=True,  # Include context in the conversation input
+                )
+                response = await self.generate_response(
+                    context=context,
+                    chat_session=chat_session,
+                    conversation_history=message_history,
+                    instructions=instructions or None,
+                )
 
-                    if inactivity_duration > timedelta(seconds=60 * 60):  # 1 hour
-                        with logfire.span(
-                            "Terminating chat session due to inactivity.",
-                            _span_name="jobs.conversations.stop_inactive_session",
-                            chat_id=self.chat_id,
-                            session_key=chat_session.session_id,
-                            last_user_activity=chat_session.last_user_activity,
-                            run_timestamp=self._run_timestamp,
-                            inactivity_duration=inactivity_duration.total_seconds(),
-                        ):
-                            await self._compress_session_context(conn, chat_session)
+                self.last_response = response.response_type
 
-                            await chat_session.close_session(
-                                session=conn,
-                                timestamp=self._run_timestamp,
-                            )
+                response_message = await self.execute_response(
+                    context=context,
+                    response=response,
+                )
 
-                            await self._stop(context)
+                await log_bot_activity(context.bot.id, self.chat_id, chat_session, response_message)
 
-    async def _get_active_session(self, conn) -> Sessions | None:
-        """Retrieve the active session for this chat."""
-        return await Sessions.get_active_session(conn, self.chat_id)
-
-    async def _get_chat_context(self, conn) -> list[pydantic_ai.messages.ModelMessage]:
-        last_context = await Context.retrieve_context_by_chat(
-            session=conn,
-            chat_id=self.chat_id,
-            ctype="session",
-        )
-
-        if last_context:
-            last_context.sort(key=lambda c: c.created_at)
-
-        last_context = last_context or []
-
-        return [
-            pydantic_ai.messages.ModelResponse(
-                parts=[
-                    pydantic_ai.messages.TextPart(
-                        content=json.dumps(
-                            {
-                                "timestamp": (
-                                    f"{(self._run_timestamp - context.created_at).total_seconds()} seconds ago"
-                                ),
-                                "content": f"Summary of prior conversation:\n\n{context.content}",
-                            }
-                        ),
-                        part_kind="text",
-                    )
-                ],
-                timestamp=context.created_at,
-                kind="response",
-            )
-            for context in last_context
-        ]
-
-    async def _generate_response(self, conn, context: ContextTypes.DEFAULT_TYPE, chat_session: Sessions) -> bool:
+    @traced(extract_args=["chat_session", "instructions"])
+    async def generate_response(
+        self,
+        context: ContextTypes.DEFAULT_TYPE,
+        chat_session: Sessions,
+        conversation_history: list[pydantic_ai.messages.ModelMessage],
+        instructions: str | None = None,
+    ) -> AgentResponse | None:
         """Process messages for this chat and send appropriate replies.
 
         Returns:
-            bool: True if action was taken (message sent), False otherwise
+            AgentResponse: The response generated by the chat agent, or None if an error occurred.
         """
-        with logfire.span(
-            "Generating response for chat session",
-            _span_name="jobs.conversations._generate_response",
-            chat_id=self.chat_id,
-            session_key=chat_session.session_id,
-            run_count=self._run_count,
-        ):
-            last_context = await self._get_chat_context(conn)
+        agent_run_payload = None
 
-            # Get all messages from the session
-            messages = await chat_session.get_messages(conn)
-            messages.sort(key=lambda msg: msg.date)  # Sort messages by date
-
-            # Convert messages to model messages
-            session_messages = [
-                await convert_telegram_message_to_model_message(
-                    conn=conn,
-                    message=msg,
-                    ts_reference=self._run_timestamp,
-                    is_user=msg.from_user and msg.from_user.id != self.bot_id,
-                )
-                for msg in messages
-            ]
-
-            # Check for unsupported media only in messages since last bot activity
-            unsupported_media = await get_unsupported_media_from_messages(
-                conn, messages, since_timestamp=chat_session.last_bot_activity
-            )
-
-            # Create instruction message for unsupported media
-            media_instruction = None
-            if unsupported_media:
-                unique_types = list(set(unsupported_media))
-                if len(unique_types) == 1:
-                    media_instruction = (
-                        f"The user sent a {unique_types[0]} file, but you can only view images and PDFs."
-                    )
-                else:
-                    media_instruction = (
-                        f"The user sent {', '.join(unique_types)} files, but you can only view images and PDFs."
-                    )
-
-            try:
-                agent_run_payload = await chat_agent.run(
-                    message_history=last_context + session_messages,
-                    deps=ChatAgentDependencies(
+        try:
+            agent_run_payload = await run_agent_with_tracking(
+                chat_agent,
+                chat_id=self.chat_id,
+                session_id=chat_session.session_id,
+                run_kwargs={
+                    "message_history": conversation_history,
+                    "deps": ChatAgentDependencies(
                         tg_context=context,
                         tg_chat_id=self.chat_id,
-                        tg_session_id=chat_session.session_key,
-                        last_response_type=self._last_response,
-                        db_connection=conn,
-                        instruction=media_instruction,
+                        tg_session_id=chat_session.session_id,
+                        last_response_type=self.last_response,
+                        instruction=instructions or None,
                     ),
-                )
+                },
+            )
 
-                agent_response: AgentResponse = agent_run_payload.output
+            agent_response: AgentResponse = agent_run_payload.output
 
-            except Exception:
-                # TODO: Handle LLM errors
-                logfire.exception(f"Failed to generate response for chat {self.chat_id}")
-                return False
+        except Exception:
+            # TODO: Handle LLM errors
+            logfire.exception(f"Failed to generate response for chat {self.chat_id}")
 
-            try:
-                self._last_response = agent_response.response_type
+        else:
+            return agent_response
 
-                response_message = await agent_response.execute(
-                    db_connection=conn,
-                    context=context,
+    @traced(extract_args=["chat_session", "response"], record_return=True)
+    async def execute_response(
+        self, context: ContextTypes.DEFAULT_TYPE, response: AgentResponse
+    ) -> MessageTypes | None:
+        """Execute the response action in the given context."""
+
+        response_message = None
+
+        if response.response_type == "TextResponse":
+            response_message = await self._execute_text_response(context=context, response=response)
+
+        elif response.response_type == "ReactionResponse":
+            # Get the message to react to
+            async with async_database() as db_conn:
+                message, _ = await Messages.retrieve_message_by_id(
+                    db_conn=db_conn,
+                    message_id=response.react_to_message_id,
                     chat_id=self.chat_id,
+                    include_reactions=False,
                 )
 
-            except Exception:
-                # TODO: Handle response execution errors
-                logfire.exception(f"Failed to execute response for chat {self.chat_id}")
-                return False
-
-            else:
-                await chat_session.new_activity(
-                    timestamp=self._run_timestamp,
-                    is_user=False,  # This is a bot response
+            if not message:
+                logfire.warning(
+                    f"Message {response.react_to_message_id} not found in chat {self.chat_id}, skipping reaction."
                 )
-
-                if response_message:
-                    await Messages.new_or_update(
-                        session=conn,
-                        user_id=str(context.bot.id),  # Bot's user ID as the sender
-                        chat_id=self.chat_id,
-                        message=response_message,
-                    )
-
-                    if isinstance(response_message, telegram.Message):
-                        await chat_session.new_message(
-                            timestamp=response_message.date,
-                            is_user=False,  # This is a bot response
-                        )
-                    return True
-            finally:
-                # Track LLM usage for this chat
-                await LLMUsage.track_pydantic_usage(
-                    session=conn,
-                    chat_id=self.chat_id,
-                    session_id=chat_session.session_key,
-                    agent=chat_agent,
-                    data=agent_run_payload.usage(),
-                )
-
-        return False
-
-    async def _stop(self, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Stop the conversation job for this chat."""
-        async with JOB_LOCK[str(self.chat_id)]:
-            existing_jobs = context.job_queue.get_jobs_by_name(self.name)
-            if not existing_jobs:
-                logfire.warning(f"No existing job found for chat {self.chat_id}, nothing to stop.")
                 return
 
-            for job in existing_jobs:
-                job.schedule_removal()
+            response_message = await self._execute_reaction_response(
+                context=context, response=response, message=message
+            )
 
-        logfire.info(f"Stopped conversation job for chat {self.chat_id} due to inactivity.")
+        logfire.info(f"Response executed in chat {self.chat_id}: {response.response_type}.")
 
-    async def _compress_session_context(self, conn, chat_session: Sessions) -> None:
-        """
-        Compress the session context for this chat.
-        Uses it's own database connection to avoid conflicts with other jobs.
-        """
+        return response_message
 
-        context = await Context.get_by_session_id(
-            session=conn,
-            session_id=chat_session.session_key,
-            ctype="session",
-        )
+    @traced(extract_args=["chat_session"])
+    async def close_session(self, chat_session: Sessions) -> None:
+        """Closes the chat session and compresses the context."""
+
+        async with async_database() as db_conn:
+            context = await Context.get_by_session_id(
+                db_conn=db_conn,
+                session_id=chat_session.session_key,
+                ctype="session",
+            )
 
         if context:
             logfire.warning(
@@ -290,77 +205,176 @@ class ConversationJob:
             )
             return
 
-        # Get all messages from the session
-        messages = await chat_session.get_messages(conn)
-        messages.sort(key=lambda msg: msg.date)  # Sort messages by date
+        message_history, _ = await self._prepare_conversation_input(
+            chat_session=chat_session,
+            include_context=False,  # Include context in the conversation input
+        )
 
-        # Convert messages to model messages
-        session_messages = [
-            await convert_telegram_message_to_model_message(
-                conn=conn,
-                message=msg,
-                ts_reference=self._run_timestamp,
-                is_user=msg.from_user and msg.from_user.id != self.bot_id,
+        if len(message_history) == 0:
+            logfire.warning(f"No messages found in chat session {chat_session.session_id}, nothing to compress.")
+            return
+
+        compressed_context = await self._compress_session_context(
+            chat_session=chat_session, message_history=message_history
+        )
+
+        await save_session_context(self.chat_id, chat_session, compressed_context)
+        await close_chat_session(chat_session)
+
+        logfire.info(f"Session {chat_session.session_id} closed due to inactivity.")
+
+    @traced(extract_args=["chat_session", "include_context"])
+    @db_retry()
+    async def _prepare_conversation_input(
+        self, chat_session: Sessions, *, include_context: bool = True
+    ) -> tuple[list[pydantic_ai.messages.ModelMessage], str | None]:
+        """Prepare the conversation input for the chat session.
+        This method gathers the message history and checks for unsupported media types.
+        Returns:
+            tuple: A tuple containing the message history and any special instructions to the user.
+        """
+        async with async_database() as db_conn:
+            message_history = []
+
+            if include_context:
+                # Gather chat context
+                last_context = await Context.retrieve_context_by_chat(
+                    db_conn=db_conn,
+                    chat_id=self.chat_id,
+                    ctype="session",
+                )
+                if last_context:
+                    last_context.sort(key=lambda c: c.created_at)
+
+                    last_context = last_context or []
+                    message_history.extend([context_to_model_message(c) for c in last_context])
+
+            # Get all messages from the session
+            media_instruction = None
+            unsupported_media_types = []
+
+            messages = await chat_session.get_messages(db_conn)
+            messages.sort(key=lambda msg: msg.date)  # Sort messages by date
+
+            for msg in messages:
+                if isinstance(msg, telegram.Message):
+                    media = await MediaFiles.get_by_message_id(
+                        db_conn=db_conn,
+                        chat_id=self.chat_id,
+                        message_id=str(msg.message_id),
+                    )
+                    user = msg.from_user.id
+                elif isinstance(msg, telegram.MessageReactionUpdated):
+                    media = []
+                    user = msg.user.id
+
+                as_model_message = telegram_message_to_model_message(
+                    message=msg,
+                    media=media,
+                    ts_reference=self._run_timestamp,
+                    is_user=user != self._bot_id,
+                )
+                message_history.append(as_model_message)
+
+                if media:
+                    unsupported_media = [m for m in media if not m.is_anthropic_supported]
+                    unsupported_media_types.extend(
+                        [m.mime_type for m in unsupported_media if not m.mime_type.startswith("audio/")]
+                    )
+
+            if len(unsupported_media_types) == 1:
+                media_instruction = (
+                    f"The user sent a {unsupported_media_types[0]} file, but you can only view images and PDFs."
+                )
+            elif len(unsupported_media_types) > 1:
+                media_instruction = (
+                    f"The user sent {', '.join(unsupported_media_types)} files, but you can only view images and PDFs."
+                )
+
+            return message_history, media_instruction
+
+    async def _execute_text_response(
+        self, context: ContextTypes.DEFAULT_TYPE, response: TextResponse
+    ) -> telegram.Message | None:
+        """
+        Send a text response to the chat.
+        """
+        if response.reply_to_message_id:
+            reply_parameters = telegram.ReplyParameters(
+                message_id=int(response.reply_to_message_id),
+                allow_sending_without_reply=True,
             )
-            for msg in messages
-        ]
+        else:
+            reply_parameters = None
 
         try:
-            context_run_payload = await context_compression_agent.run(message_history=session_messages)
+            reply_message = await context.bot.send_message(
+                chat_id=int(self.chat_id),
+                text=response.message_text,
+                reply_parameters=reply_parameters,
+            )
+        except Exception:
+            logfire.exception(f"Failed to send text reply to chat {self.chat_id}")
+            raise
+
+        return reply_message
+
+    async def _execute_reaction_response(
+        self, context: ContextTypes.DEFAULT_TYPE, response: ReactionResponse, message: telegram.Message
+    ):
+        try:
+            react_sent = await context.bot.set_message_reaction(
+                chat_id=int(self.chat_id),
+                message_id=int(response.react_to_message_id),
+                reaction=response.emoji,
+            )
+
+        except Exception:
+            logfire.exception(
+                f"Failed to send reaction to message {response.react_to_message_id} in chat {self.chat_id}"
+            )
+            raise
+
+        else:
+            if react_sent:
+                # Manually create MessageReactionUpdated object as Telegram API does not return it
+                reaction_message = telegram.MessageReactionUpdated(
+                    chat=message.chat,
+                    message_id=int(response.react_to_message_id),
+                    date=datetime.now(UTC),
+                    old_reaction=(),
+                    new_reaction=(telegram.ReactionTypeEmoji(emoji=response.emoji),),
+                    user=await context.bot.get_me(),
+                )
+                return reaction_message
+
+        return None
+
+    async def _compress_session_context(
+        self, chat_session: Sessions, message_history: list[pydantic_ai.messages.ModelMessage]
+    ) -> ContextTemplate:
+        """
+        Compress the session context for this chat.
+        """
+
+        context_run_payload = None
+
+        try:
+            context_run_payload = await run_agent_with_tracking(
+                context_compression_agent,
+                chat_id=self.chat_id,
+                session_id=chat_session.session_id,
+                run_kwargs={
+                    "message_history": message_history,
+                },
+            )
+
             context_report: ContextTemplate = context_run_payload.output
 
         except Exception:
             logfire.exception(
                 f"Failed to compress context for chat {self.chat_id} with session key {chat_session.session_key}."
             )
-            return
 
-        await Context.new_or_update(
-            session=conn,
-            chat_id=self.chat_id,
-            session_id=chat_session.session_key,
-            ctype="session",
-            content=context_report.content,
-        )
-
-        await LLMUsage.track_pydantic_usage(
-            session=conn,
-            chat_id=self.chat_id,
-            session_id=chat_session.session_key,
-            agent=context_compression_agent,
-            data=context_run_payload.usage(),
-        )
-
-
-async def schedule_conversation_job(context: ContextTypes.DEFAULT_TYPE, chat_id: int, interval: int = 10) -> None:
-    """
-    Schedule a conversation processing job for a specific chat.
-
-    Args:
-        context: The bot context
-        chat_id: The chat ID to process
-        interval: The interval in seconds between job runs (default: 10 seconds)
-    """
-    processor = ConversationJob(chat_id)
-
-    async with JOB_LOCK[str(chat_id)]:
-        # Check if a job already exists for this chat
-        existing_jobs = context.job_queue.get_jobs_by_name(processor.name)
-        if existing_jobs:
-            logfire.debug(f"Job already scheduled for chat {chat_id}, skipping.")
-            return
-
-        # Schedule the job to run once after the specified delay
-        context.job_queue.run_repeating(
-            callback=processor.run,
-            interval=interval,
-            first=int(interval / 2),
-            name=processor.name,
-            chat_id=chat_id,
-            job_kwargs={
-                "id": processor._id,
-                "coalesce": True,
-                "max_instances": 1,
-            },
-        )
-        logfire.info(f"Scheduled conversation job for chat {chat_id} with interval {interval} seconds.")
+        else:
+            return context_report

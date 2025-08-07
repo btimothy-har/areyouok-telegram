@@ -1,354 +1,411 @@
-from datetime import timedelta
+"""Tests for handlers/messages.py."""
+
+from datetime import UTC
+from datetime import datetime
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
 import pytest
+import telegram
+from telegram.ext import ContextTypes
 
-from areyouok_telegram.handlers import on_edit_message
-from areyouok_telegram.handlers import on_message_react
-from areyouok_telegram.handlers import on_new_message
 from areyouok_telegram.handlers.exceptions import NoEditedMessageError
 from areyouok_telegram.handlers.exceptions import NoMessageError
 from areyouok_telegram.handlers.exceptions import NoMessageReactionError
+from areyouok_telegram.handlers.messages import on_edit_message
+from areyouok_telegram.handlers.messages import on_message_react
+from areyouok_telegram.handlers.messages import on_new_message
 
 
-class TestNewMessageHandler:
-    """Test suite for message handlers functionality."""
+class TestOnNewMessage:
+    """Test the on_new_message handler."""
 
     @pytest.mark.asyncio
-    async def test_on_new_message_with_existing_session(
-        self, mock_async_database_session, mock_update_private_chat_new_message
-    ):
-        """Test on_new_message with existing active session."""
-        mock_context = AsyncMock()
+    async def test_on_new_message_with_existing_session(self, mock_db_session, frozen_time):
+        """Test handling new message with existing active session."""
+        # Create mock update with message
+        mock_update = MagicMock(spec=telegram.Update)
+        mock_update.update_id = 123
+        mock_update.message = MagicMock(spec=telegram.Message)
+        mock_update.message.date = frozen_time
+        mock_update.effective_user = MagicMock(spec=telegram.User)
+        mock_update.effective_user.id = 456
+        mock_update.effective_chat = MagicMock(spec=telegram.Chat)
+        mock_update.effective_chat.id = 789
 
-        # Mock an existing active session
-        mock_session = MagicMock()
-        mock_session.new_message = AsyncMock()
+        mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
+
+        # Create mock active session
+        mock_active_session = MagicMock()
+        mock_active_session.new_message = AsyncMock()
 
         with (
-            patch("areyouok_telegram.data.Messages.new_or_update") as mock_messages_new_or_update,
-            patch("areyouok_telegram.data.Sessions.get_active_session", return_value=mock_session) as mock_get_active,
-            patch("areyouok_telegram.handlers.messages.extract_media_from_telegram_message") as mock_extract_media,
+            patch("areyouok_telegram.handlers.messages.Messages.new_or_update", new=AsyncMock()) as mock_msg_save,
+            patch(
+                "areyouok_telegram.handlers.messages.extract_media_from_telegram_message", new=AsyncMock()
+            ) as mock_extract_media,
+            patch(
+                "areyouok_telegram.handlers.messages.Sessions.get_active_session",
+                new=AsyncMock(return_value=mock_active_session),
+            ) as mock_get_session,
+            patch(
+                "areyouok_telegram.handlers.messages.Sessions.create_session", new=AsyncMock()
+            ) as mock_create_session,
         ):
-            # Act
-            await on_new_message(mock_update_private_chat_new_message, mock_context)
+            await on_new_message(mock_update, mock_context)
 
             # Verify message was saved
-            mock_messages_new_or_update.assert_called_once_with(
-                mock_async_database_session,
-                user_id=mock_update_private_chat_new_message.effective_user.id,
-                chat_id=mock_update_private_chat_new_message.effective_chat.id,
-                message=mock_update_private_chat_new_message.message,
+            mock_msg_save.assert_called_once_with(
+                db_conn=mock_db_session,
+                user_id=456,
+                chat_id=789,
+                message=mock_update.message,
             )
 
             # Verify media extraction was called
-            mock_extract_media.assert_called_once_with(
-                mock_async_database_session, mock_update_private_chat_new_message.message
+            mock_extract_media.assert_called_once_with(mock_db_session, mock_update.message)
+
+            # Verify session lookup
+            mock_get_session.assert_called_once_with(mock_db_session, "789")
+
+            # Verify existing session was used
+            mock_active_session.new_message.assert_called_once_with(
+                db_conn=mock_db_session, timestamp=frozen_time, is_user=True
             )
 
-            # Verify session management
-            mock_get_active.assert_called_once_with(
-                mock_async_database_session, str(mock_update_private_chat_new_message.effective_chat.id)
-            )
-            mock_session.new_message.assert_called_once_with(
-                mock_update_private_chat_new_message.message.date, is_user=True
-            )
+            # Verify new session was not created
+            mock_create_session.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_on_new_message_without_existing_session(
-        self, mock_async_database_session, mock_update_private_chat_new_message
-    ):
-        """Test on_new_message without existing active session."""
-        mock_context = AsyncMock()
+    async def test_on_new_message_without_existing_session(self, mock_db_session, frozen_time):
+        """Test handling new message without existing active session."""
+        # Create mock update with message
+        mock_update = MagicMock(spec=telegram.Update)
+        mock_update.update_id = 123
+        mock_update.message = MagicMock(spec=telegram.Message)
+        mock_update.message.date = frozen_time
+        mock_update.effective_user = MagicMock(spec=telegram.User)
+        mock_update.effective_user.id = 456
+        mock_update.effective_chat = MagicMock(spec=telegram.Chat)
+        mock_update.effective_chat.id = 789
 
-        # Mock the created session
+        mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
+
+        # Create mock new session
         mock_new_session = MagicMock()
         mock_new_session.new_message = AsyncMock()
 
         with (
-            patch("areyouok_telegram.data.Messages.new_or_update") as mock_messages_new_or_update,
-            patch("areyouok_telegram.data.Sessions.get_active_session", return_value=None) as mock_get_active,
+            patch("areyouok_telegram.handlers.messages.Messages.new_or_update", new=AsyncMock()),
+            patch("areyouok_telegram.handlers.messages.extract_media_from_telegram_message", new=AsyncMock()),
             patch(
-                "areyouok_telegram.data.Sessions.create_session", return_value=mock_new_session
+                "areyouok_telegram.handlers.messages.Sessions.get_active_session", new=AsyncMock(return_value=None)
+            ) as mock_get_session,
+            patch(
+                "areyouok_telegram.handlers.messages.Sessions.create_session",
+                new=AsyncMock(return_value=mock_new_session),
             ) as mock_create_session,
-            patch("areyouok_telegram.handlers.messages.extract_media_from_telegram_message") as mock_extract_media,
         ):
-            # Act
-            await on_new_message(mock_update_private_chat_new_message, mock_context)
+            await on_new_message(mock_update, mock_context)
 
-            # Verify message was saved
-            mock_messages_new_or_update.assert_called_once_with(
-                mock_async_database_session,
-                user_id=mock_update_private_chat_new_message.effective_user.id,
-                chat_id=mock_update_private_chat_new_message.effective_chat.id,
-                message=mock_update_private_chat_new_message.message,
-            )
+            # Verify session lookup
+            mock_get_session.assert_called_once_with(mock_db_session, "789")
 
-            # Verify media extraction was called
-            mock_extract_media.assert_called_once_with(
-                mock_async_database_session, mock_update_private_chat_new_message.message
-            )
+            # Verify new session was created
+            mock_create_session.assert_called_once_with(mock_db_session, "789", frozen_time)
 
-            # Verify session management
-            mock_get_active.assert_called_once_with(
-                mock_async_database_session, str(mock_update_private_chat_new_message.effective_chat.id)
-            )
-            mock_create_session.assert_called_once_with(
-                mock_async_database_session,
-                str(mock_update_private_chat_new_message.effective_chat.id),
-                mock_update_private_chat_new_message.message.date,
-            )
+            # Verify message was recorded in new session
             mock_new_session.new_message.assert_called_once_with(
-                mock_update_private_chat_new_message.message.date, is_user=True
+                db_conn=mock_db_session, timestamp=frozen_time, is_user=True
             )
 
     @pytest.mark.asyncio
-    async def test_no_message_received(self, mock_async_database_session, mock_update_empty):
-        """Test on_new_message raises NoMessageError when no message is received."""
-        mock_context = AsyncMock()
+    async def test_on_new_message_without_message_raises_error(self):
+        """Test that handler raises NoMessageError when update has no message."""
+        mock_update = MagicMock(spec=telegram.Update)
+        mock_update.update_id = 123
+        mock_update.message = None
+
+        mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
 
         with pytest.raises(NoMessageError) as exc_info:
-            await on_new_message(mock_update_empty, mock_context)
+            await on_new_message(mock_update, mock_context)
 
-        assert str(exc_info.value) == f"Expected to receive a new message in update: {mock_update_empty.update_id}"
-
-        # Ensure no database operations were attempted
-        mock_async_database_session.assert_not_called()
+        assert exc_info.value.update_id == 123
+        assert "Expected to receive a new message in update: 123" in str(exc_info.value)
 
 
-class TestEditMessageHandler:
-    """Test suite for message edit handlers functionality."""
+class TestOnEditMessage:
+    """Test the on_edit_message handler."""
 
     @pytest.mark.asyncio
-    async def test_on_edit_message_with_active_session_recent_message(
-        self, mock_async_database_session, mock_update_private_chat_edited_message, mock_session
-    ):
-        """Test on_edit_message with active session and recent message (after session start)."""
-        mock_context = AsyncMock()
+    async def test_on_edit_message_with_active_session_after_start(self, mock_db_session, frozen_time):
+        """Test handling edited message with active session where original message is after session start."""
+        # Create mock update with edited message
+        mock_update = MagicMock(spec=telegram.Update)
+        mock_update.update_id = 123
+        mock_update.edited_message = MagicMock(spec=telegram.Message)
+        mock_update.edited_message.date = frozen_time
+        mock_update.edited_message.edit_date = datetime(2024, 1, 1, 12, 0, 1, tzinfo=UTC)
+        mock_update.edited_message.message_id = 999
+        mock_update.effective_user = MagicMock(spec=telegram.User)
+        mock_update.effective_user.id = 456
+        mock_update.effective_chat = MagicMock(spec=telegram.Chat)
+        mock_update.effective_chat.id = 789
 
-        # Set session start to the message date (message is current, so should extend)
-        mock_session.session_start = mock_update_private_chat_edited_message.edited_message.date
+        mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
+
+        # Create mock active session
+        mock_active_session = MagicMock()
+        mock_active_session.session_start = datetime(2024, 1, 1, 11, 0, 0, tzinfo=UTC)
+        mock_active_session.new_activity = AsyncMock()
 
         with (
-            patch("areyouok_telegram.data.Messages.new_or_update") as mock_messages_new_or_update,
-            patch("areyouok_telegram.data.Sessions.get_active_session", return_value=mock_session) as mock_get_active,
-            patch("areyouok_telegram.handlers.messages.extract_media_from_telegram_message") as mock_extract_media,
+            patch("areyouok_telegram.handlers.messages.Messages.new_or_update", new=AsyncMock()) as mock_msg_save,
+            patch(
+                "areyouok_telegram.handlers.messages.extract_media_from_telegram_message", new=AsyncMock()
+            ) as mock_extract_media,
+            patch(
+                "areyouok_telegram.handlers.messages.Sessions.get_active_session",
+                new=AsyncMock(return_value=mock_active_session),
+            ),
+            patch("areyouok_telegram.handlers.messages.logfire.info") as mock_log_info,
         ):
-            # Act
-            await on_edit_message(mock_update_private_chat_edited_message, mock_context)
+            await on_edit_message(mock_update, mock_context)
 
             # Verify message was saved
-            mock_messages_new_or_update.assert_called_once_with(
-                mock_async_database_session,
-                user_id=mock_update_private_chat_edited_message.effective_user.id,
-                chat_id=mock_update_private_chat_edited_message.effective_chat.id,
-                message=mock_update_private_chat_edited_message.edited_message,
+            mock_msg_save.assert_called_once_with(
+                mock_db_session,
+                user_id=456,
+                chat_id=789,
+                message=mock_update.edited_message,
             )
 
             # Verify media extraction was called
-            mock_extract_media.assert_called_once_with(
-                mock_async_database_session, mock_update_private_chat_edited_message.edited_message
+            mock_extract_media.assert_called_once_with(mock_db_session, mock_update.edited_message)
+
+            # Verify activity was recorded
+            mock_active_session.new_activity.assert_called_once_with(
+                db_conn=mock_db_session,
+                timestamp=datetime(2024, 1, 1, 12, 0, 1, tzinfo=UTC),
+                is_user=True,
             )
 
-            # Verify session was extended with edit_date
-            mock_get_active.assert_called_once_with(
-                mock_async_database_session, str(mock_update_private_chat_edited_message.effective_chat.id)
-            )
-            mock_session.new_activity.assert_called_once_with(
-                mock_update_private_chat_edited_message.edited_message.edit_date, is_user=True
-            )
+            # Should not log about message being before session
+            assert not any("before session start" in str(call) for call in mock_log_info.call_args_list)
 
     @pytest.mark.asyncio
-    async def test_on_edit_message_with_active_session_old_message(
-        self, mock_async_database_session, mock_update_private_chat_edited_message, mock_session
-    ):
-        """Test on_edit_message with active session but old message (before session start)."""
-        mock_context = AsyncMock()
+    async def test_on_edit_message_with_active_session_before_start(self):
+        """Test handling edited message where original message is before session start."""
+        # Create mock update with edited message
+        mock_update = MagicMock(spec=telegram.Update)
+        mock_update.update_id = 123
+        mock_update.edited_message = MagicMock(spec=telegram.Message)
+        mock_update.edited_message.date = datetime(2024, 1, 1, 10, 0, 0, tzinfo=UTC)  # Before session start
+        mock_update.edited_message.edit_date = datetime(2024, 1, 1, 12, 0, 1, tzinfo=UTC)
+        mock_update.edited_message.message_id = 999
+        mock_update.effective_user = MagicMock(spec=telegram.User)
+        mock_update.effective_user.id = 456
+        mock_update.effective_chat = MagicMock(spec=telegram.Chat)
+        mock_update.effective_chat.id = 789
 
-        # Set session start after the message date (old message, should NOT extend)
-        mock_session.session_start = mock_update_private_chat_edited_message.edited_message.date + timedelta(minutes=30)
+        mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
+
+        # Create mock active session
+        mock_active_session = MagicMock()
+        mock_active_session.session_start = datetime(2024, 1, 1, 11, 0, 0, tzinfo=UTC)
+        mock_active_session.new_activity = AsyncMock()
 
         with (
-            patch("areyouok_telegram.data.Messages.new_or_update") as mock_messages_new_or_update,
-            patch("areyouok_telegram.data.Sessions.get_active_session", return_value=mock_session) as mock_get_active,
-            patch("areyouok_telegram.handlers.messages.extract_media_from_telegram_message") as mock_extract_media,
+            patch("areyouok_telegram.handlers.messages.Messages.new_or_update", new=AsyncMock()),
+            patch("areyouok_telegram.handlers.messages.extract_media_from_telegram_message", new=AsyncMock()),
+            patch(
+                "areyouok_telegram.handlers.messages.Sessions.get_active_session",
+                new=AsyncMock(return_value=mock_active_session),
+            ),
+            patch("areyouok_telegram.handlers.messages.logfire.info") as mock_log_info,
         ):
-            # Act
-            await on_edit_message(mock_update_private_chat_edited_message, mock_context)
+            await on_edit_message(mock_update, mock_context)
 
-            # Verify message was saved
-            mock_messages_new_or_update.assert_called_once_with(
-                mock_async_database_session,
-                user_id=mock_update_private_chat_edited_message.effective_user.id,
-                chat_id=mock_update_private_chat_edited_message.effective_chat.id,
-                message=mock_update_private_chat_edited_message.edited_message,
-            )
+            # Activity should not be recorded
+            mock_active_session.new_activity.assert_not_called()
 
-            # Verify media extraction was called
-            mock_extract_media.assert_called_once_with(
-                mock_async_database_session, mock_update_private_chat_edited_message.edited_message
-            )
-
-            # Verify session was NOT extended (old message)
-            mock_get_active.assert_called_once_with(
-                mock_async_database_session, str(mock_update_private_chat_edited_message.effective_chat.id)
-            )
-            mock_session.new_activity.assert_not_called()
+            # Should log about message being before session
+            mock_log_info.assert_called()
+            assert any("before session start" in str(call) for call in mock_log_info.call_args_list)
 
     @pytest.mark.asyncio
-    async def test_on_edit_message_without_active_session(
-        self, mock_async_database_session, mock_update_private_chat_edited_message
-    ):
-        """Test on_edit_message without active session (no session created for edits)."""
-        mock_context = AsyncMock()
+    async def test_on_edit_message_without_active_session(self):
+        """Test handling edited message without active session."""
+        # Create mock update with edited message
+        mock_update = MagicMock(spec=telegram.Update)
+        mock_update.update_id = 123
+        mock_update.edited_message = MagicMock(spec=telegram.Message)
+        mock_update.effective_user = MagicMock(spec=telegram.User)
+        mock_update.effective_user.id = 456
+        mock_update.effective_chat = MagicMock(spec=telegram.Chat)
+        mock_update.effective_chat.id = 789
+
+        mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
 
         with (
-            patch("areyouok_telegram.data.Messages.new_or_update") as mock_messages_new_or_update,
-            patch("areyouok_telegram.data.Sessions.get_active_session", return_value=None) as mock_get_active,
-            patch("areyouok_telegram.data.Sessions.create_session") as mock_create_session,
-            patch("areyouok_telegram.handlers.messages.extract_media_from_telegram_message") as mock_extract_media,
+            patch("areyouok_telegram.handlers.messages.Messages.new_or_update", new=AsyncMock()),
+            patch(
+                "areyouok_telegram.handlers.messages.extract_media_from_telegram_message", new=AsyncMock()
+            ) as mock_extract_media,
+            patch("areyouok_telegram.handlers.messages.Sessions.get_active_session", new=AsyncMock(return_value=None)),
+            patch("areyouok_telegram.handlers.messages.logfire.info") as mock_log_info,
         ):
-            # Act
-            await on_edit_message(mock_update_private_chat_edited_message, mock_context)
+            await on_edit_message(mock_update, mock_context)
 
-            # Verify message was saved
-            mock_messages_new_or_update.assert_called_once_with(
-                mock_async_database_session,
-                user_id=mock_update_private_chat_edited_message.effective_user.id,
-                chat_id=mock_update_private_chat_edited_message.effective_chat.id,
-                message=mock_update_private_chat_edited_message.edited_message,
-            )
-
-            # Verify media extraction was NOT called (no active session)
+            # Media extraction should not be called
             mock_extract_media.assert_not_called()
 
-            # Verify no session was created for edits
-            mock_get_active.assert_called_once_with(
-                mock_async_database_session, str(mock_update_private_chat_edited_message.effective_chat.id)
-            )
-            mock_create_session.assert_not_called()
+            # Should log about no active session
+            mock_log_info.assert_called_with("No active session found for edited message, skipping session activity.")
 
     @pytest.mark.asyncio
-    async def test_no_message_received(self, mock_async_database_session, mock_update_empty):
-        """Test on_edit_message with the expected payload for an edited private message."""
-        mock_context = AsyncMock()
+    async def test_on_edit_message_without_edited_message_raises_error(self):
+        """Test that handler raises NoEditedMessageError when update has no edited message."""
+        mock_update = MagicMock(spec=telegram.Update)
+        mock_update.update_id = 123
+        mock_update.edited_message = None
+
+        mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
 
         with pytest.raises(NoEditedMessageError) as exc_info:
-            await on_edit_message(mock_update_empty, mock_context)
+            await on_edit_message(mock_update, mock_context)
 
-        assert str(exc_info.value) == f"Expected to receive an edited message in update: {mock_update_empty.update_id}"
-
-        # Ensure no database operations were attempted
-        mock_async_database_session.assert_not_called()
+        assert exc_info.value.update_id == 123
+        assert "Expected to receive an edited message in update: 123" in str(exc_info.value)
 
 
-class TestMessageReactHandler:
-    """Test suite for message reaction handlers functionality."""
+class TestOnMessageReact:
+    """Test the on_message_react handler."""
 
     @pytest.mark.asyncio
-    async def test_on_message_react_with_active_session_recent_message(
-        self, mock_async_database_session, mock_update_message_reaction, mock_session
-    ):
-        """Test on_message_react with active session and recent message (after session start)."""
-        mock_context = AsyncMock()
+    async def test_on_message_react_with_active_session_after_start(self, mock_db_session, frozen_time):
+        """Test handling message reaction with active session where reaction is after session start."""
+        # Create mock update with message reaction
+        mock_update = MagicMock(spec=telegram.Update)
+        mock_update.update_id = 123
+        mock_update.message_reaction = MagicMock(spec=telegram.MessageReactionUpdated)
+        mock_update.message_reaction.date = frozen_time
+        mock_update.message_reaction.message_id = 999
+        mock_update.effective_user = MagicMock(spec=telegram.User)
+        mock_update.effective_user.id = 456
+        mock_update.effective_chat = MagicMock(spec=telegram.Chat)
+        mock_update.effective_chat.id = 789
 
-        # Set session start to the message date (message is current, so should record activity)
-        mock_session.session_start = mock_update_message_reaction.message_reaction.date
+        mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
+
+        # Create mock active session
+        mock_active_session = MagicMock()
+        mock_active_session.session_start = datetime(2024, 1, 1, 11, 0, 0, tzinfo=UTC)
+        mock_active_session.new_activity = AsyncMock()
 
         with (
-            patch("areyouok_telegram.data.Messages.new_or_update") as mock_messages_new_or_update,
-            patch("areyouok_telegram.data.Sessions.get_active_session", return_value=mock_session) as mock_get_active,
+            patch("areyouok_telegram.handlers.messages.Messages.new_or_update", new=AsyncMock()) as mock_msg_save,
+            patch(
+                "areyouok_telegram.handlers.messages.Sessions.get_active_session",
+                new=AsyncMock(return_value=mock_active_session),
+            ),
+            patch("areyouok_telegram.handlers.messages.logfire.info") as mock_log_info,
         ):
-            # Act
-            await on_message_react(mock_update_message_reaction, mock_context)
+            await on_message_react(mock_update, mock_context)
 
-            # Verify message was saved
-            mock_messages_new_or_update.assert_called_once_with(
-                mock_async_database_session,
-                user_id=mock_update_message_reaction.effective_user.id,
-                chat_id=mock_update_message_reaction.effective_chat.id,
-                message=mock_update_message_reaction.message_reaction,
+            # Verify message/reaction was saved
+            mock_msg_save.assert_called_once_with(
+                mock_db_session,
+                user_id=456,
+                chat_id=789,
+                message=mock_update.message_reaction,
             )
 
-            # Verify session was extended with reaction date
-            mock_get_active.assert_called_once_with(
-                mock_async_database_session, str(mock_update_message_reaction.effective_chat.id)
+            # Verify activity was recorded
+            mock_active_session.new_activity.assert_called_once_with(
+                db_conn=mock_db_session,
+                timestamp=frozen_time,
+                is_user=True,
             )
-            mock_session.new_activity.assert_called_once_with(
-                mock_update_message_reaction.message_reaction.date, is_user=True
-            )
+
+            # Should log about recording activity
+            mock_log_info.assert_called_with("Session activity recorded for message reaction.")
 
     @pytest.mark.asyncio
-    async def test_on_message_react_with_active_session_old_message(
-        self, mock_async_database_session, mock_update_message_reaction, mock_session
-    ):
-        """Test on_message_react with active session but old message (before session start)."""
-        mock_context = AsyncMock()
+    async def test_on_message_react_with_active_session_before_start(self):
+        """Test handling message reaction where reaction is before session start."""
+        # Create mock update with message reaction
+        mock_update = MagicMock(spec=telegram.Update)
+        mock_update.update_id = 123
+        mock_update.message_reaction = MagicMock(spec=telegram.MessageReactionUpdated)
+        mock_update.message_reaction.date = datetime(2024, 1, 1, 10, 0, 0, tzinfo=UTC)  # Before session start
+        mock_update.message_reaction.message_id = 999
+        mock_update.effective_user = MagicMock(spec=telegram.User)
+        mock_update.effective_user.id = 456
+        mock_update.effective_chat = MagicMock(spec=telegram.Chat)
+        mock_update.effective_chat.id = 789
 
-        # Set session start after the message date (old message, should NOT record activity)
-        mock_session.session_start = mock_update_message_reaction.message_reaction.date + timedelta(minutes=30)
+        mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
+
+        # Create mock active session
+        mock_active_session = MagicMock()
+        mock_active_session.session_start = datetime(2024, 1, 1, 11, 0, 0, tzinfo=UTC)
+        mock_active_session.new_activity = AsyncMock()
 
         with (
-            patch("areyouok_telegram.data.Messages.new_or_update") as mock_messages_new_or_update,
-            patch("areyouok_telegram.data.Sessions.get_active_session", return_value=mock_session) as mock_get_active,
+            patch("areyouok_telegram.handlers.messages.Messages.new_or_update", new=AsyncMock()),
+            patch(
+                "areyouok_telegram.handlers.messages.Sessions.get_active_session",
+                new=AsyncMock(return_value=mock_active_session),
+            ),
+            patch("areyouok_telegram.handlers.messages.logfire.info") as mock_log_info,
         ):
-            # Act
-            await on_message_react(mock_update_message_reaction, mock_context)
+            await on_message_react(mock_update, mock_context)
 
-            # Verify message was saved
-            mock_messages_new_or_update.assert_called_once_with(
-                mock_async_database_session,
-                user_id=mock_update_message_reaction.effective_user.id,
-                chat_id=mock_update_message_reaction.effective_chat.id,
-                message=mock_update_message_reaction.message_reaction,
-            )
+            # Activity should not be recorded
+            mock_active_session.new_activity.assert_not_called()
 
-            # Verify session was NOT extended (old message)
-            mock_get_active.assert_called_once_with(
-                mock_async_database_session, str(mock_update_message_reaction.effective_chat.id)
-            )
-            mock_session.new_activity.assert_not_called()
+            # Should log about reaction being before session
+            mock_log_info.assert_called()
+            assert any("before session start" in str(call) for call in mock_log_info.call_args_list)
 
     @pytest.mark.asyncio
-    async def test_on_message_react_without_active_session(
-        self, mock_async_database_session, mock_update_message_reaction
-    ):
-        """Test on_message_react without active session (no session created for reactions)."""
-        mock_context = AsyncMock()
+    async def test_on_message_react_without_active_session(self):
+        """Test handling message reaction without active session."""
+        # Create mock update with message reaction
+        mock_update = MagicMock(spec=telegram.Update)
+        mock_update.update_id = 123
+        mock_update.message_reaction = MagicMock(spec=telegram.MessageReactionUpdated)
+        mock_update.effective_user = MagicMock(spec=telegram.User)
+        mock_update.effective_user.id = 456
+        mock_update.effective_chat = MagicMock(spec=telegram.Chat)
+        mock_update.effective_chat.id = 789
+
+        mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
 
         with (
-            patch("areyouok_telegram.data.Messages.new_or_update") as mock_messages_new_or_update,
-            patch("areyouok_telegram.data.Sessions.get_active_session", return_value=None) as mock_get_active,
-            patch("areyouok_telegram.data.Sessions.create_session") as mock_create_session,
+            patch("areyouok_telegram.handlers.messages.Messages.new_or_update", new=AsyncMock()),
+            patch("areyouok_telegram.handlers.messages.Sessions.get_active_session", new=AsyncMock(return_value=None)),
+            patch("areyouok_telegram.handlers.messages.logfire.info") as mock_log_info,
         ):
-            # Act
-            await on_message_react(mock_update_message_reaction, mock_context)
+            await on_message_react(mock_update, mock_context)
 
-            # Verify message was saved
-            mock_messages_new_or_update.assert_called_once_with(
-                mock_async_database_session,
-                user_id=mock_update_message_reaction.effective_user.id,
-                chat_id=mock_update_message_reaction.effective_chat.id,
-                message=mock_update_message_reaction.message_reaction,
-            )
-
-            # Verify no session was created for reactions
-            mock_get_active.assert_called_once_with(
-                mock_async_database_session, str(mock_update_message_reaction.effective_chat.id)
-            )
-            mock_create_session.assert_not_called()
+            # Should log about no active session
+            mock_log_info.assert_called_with("No active session found for message reaction, skipping session activity.")
 
     @pytest.mark.asyncio
-    async def test_no_message_reaction_received(self, mock_async_database_session, mock_update_empty):
-        """Test on_message_react raises NoMessageReactionError when no message reaction is received."""
-        mock_context = AsyncMock()
+    async def test_on_message_react_without_reaction_raises_error(self):
+        """Test that handler raises NoMessageReactionError when update has no message reaction."""
+        mock_update = MagicMock(spec=telegram.Update)
+        mock_update.update_id = 123
+        mock_update.message_reaction = None
+
+        mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
 
         with pytest.raises(NoMessageReactionError) as exc_info:
-            await on_message_react(mock_update_empty, mock_context)
+            await on_message_react(mock_update, mock_context)
 
-        assert str(exc_info.value) == f"Expected to receive a message reaction in update: {mock_update_empty.update_id}"
-
-        # Ensure no database operations were attempted
-        mock_async_database_session.assert_not_called()
+        assert exc_info.value.update_id == 123
+        assert "Expected to receive a message reaction in update: 123" in str(exc_info.value)

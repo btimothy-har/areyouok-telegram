@@ -1,5 +1,3 @@
-import hashlib
-from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
 
@@ -8,10 +6,15 @@ from telegram.ext import ContextTypes
 
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data import Sessions
-from areyouok_telegram.data import async_database_session
+from areyouok_telegram.data import async_database
+from areyouok_telegram.jobs import BaseJob
+from areyouok_telegram.utils import db_retry
+from areyouok_telegram.utils import traced
+
+from .utils import get_all_inactive_sessions
 
 
-class SessionCleanupJob:
+class SessionCleanupJob(BaseJob):
     """
     Application lifecycle job for cleaning up sessions.
 
@@ -25,80 +28,62 @@ class SessionCleanupJob:
         """
         Initialize the session cleanup job.
         """
+        super().__init__()
         self.last_cleanup_timestamp: datetime | None = None
 
     @property
     def name(self) -> str:
-        """Generate a consistent job name for this chat."""
         return "session_cleanup"
 
-    @property
-    def _id(self) -> str:
-        return hashlib.md5(self.name.encode()).hexdigest()
-
-    async def run(self, context: ContextTypes.DEFAULT_TYPE) -> None:  # noqa: ARG002
+    @traced(extract_args=False)
+    async def _run(self, context: ContextTypes.DEFAULT_TYPE) -> None:  # noqa: ARG002
         """Process conversation for this chat."""
 
-        runtime = datetime.now(UTC)
-
         if not self.last_cleanup_timestamp:
-            cleanup_since = runtime - timedelta(days=7)
+            cleanup_since = self._run_timestamp - timedelta(days=7)
         else:
             cleanup_since = self.last_cleanup_timestamp
 
+        sessions = await get_all_inactive_sessions(
+            from_dt=cleanup_since,
+            to_dt=self._run_timestamp - timedelta(minutes=10),  # Safety margin of 10 minutes
+        )
+
+        if not sessions:
+            logfire.info("No inactive sessions found for cleanup.")
+            return
+
         with logfire.span(
-            "Session cleanup job running",
-            _span_name="jobs.session_cleanup.run",
-            since=cleanup_since,
-            runtime=runtime,
+            f"Cleaning up {len(sessions)} inactive sessions since {cleanup_since.isoformat()}",
         ):
-            async with async_database_session() as conn:
-                # Fetch all inactive sessions that ended after the last cleanup timestamp
-                # We only want sessions that have been inactive for at least 10 minutes as a safety margin
-                sessions = await Sessions.get_all_inactive_sessions(
-                    conn, from_dt=cleanup_since, to_dt=runtime - timedelta(minutes=10)
-                )
+            total_deleted = 0
 
-                if not sessions:
-                    logfire.debug("No inactive sessions found for cleanup.")
-                    return
+            for session in sessions:
+                deleted_count = await self._cleanup_session(session)
+                total_deleted += deleted_count
 
-            with logfire.span(
-                f"Cleaning up {len(sessions)} inactive sessions since {cleanup_since.isoformat()}",
-            ):
-                total_deleted = 0
+            logfire.info(f"Session cleanup completed. Deleted {total_deleted} messages from {len(sessions)} sessions.")
 
-                for session in sessions:
-                    deleted_count = await self._cleanup_session(session)
-                    total_deleted += deleted_count
+            # Update the last cleanup timestamp
+            self.last_cleanup_timestamp = self._run_timestamp
 
-                logfire.info(
-                    f"Session cleanup completed. Deleted {total_deleted} messages from {len(sessions)} sessions."
-                )
+    @db_retry()
+    async def _cleanup_session(self, chat_session: Sessions) -> int:
+        """Clean up messages for a specific chat session."""
 
-                # Update the last cleanup timestamp
-                self.last_cleanup_timestamp = runtime
-
-    async def _cleanup_session(self, chat_session: Sessions) -> bool:
-        """Process messages for this chat and send appropriate replies.
-
-        Returns:
-            bool: True if action was taken (message sent), False otherwise
-        """
-
-        # Run this using a separate connector to avoid collisions
-        async with async_database_session() as conn:
+        async with async_database() as db_conn:
             messages = await Messages.retrieve_raw_by_chat(
-                session=conn,
+                db_conn=db_conn,
                 chat_id=chat_session.chat_id,
                 to_time=chat_session.session_end,
             )
 
             ct = 0
             for msg in messages:
-                deleted = await msg.delete()
+                deleted = await msg.delete(db_conn=db_conn)
                 ct += 1 if deleted else 0
 
-        logfire.info(f"Cleaned up {ct} messages for session {chat_session.session_id} in chat {chat_session.chat_id}.")
-
-        return ct
+            logfire.info(
+                f"Cleaned up {ct} messages for session {chat_session.session_id} in chat {chat_session.chat_id}."
+            )
+            return ct
