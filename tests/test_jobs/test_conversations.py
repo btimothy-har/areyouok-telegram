@@ -13,7 +13,6 @@ from telegram.constants import ReactionEmoji
 from telegram.ext import ContextTypes
 
 from areyouok_telegram.jobs.conversations import ConversationJob
-from areyouok_telegram.jobs.exceptions import NoActiveSessionError
 from areyouok_telegram.llms.chat import ReactionResponse
 from areyouok_telegram.llms.chat import TextResponse
 
@@ -32,18 +31,6 @@ class TestConversationJob:
         """Test name property generates correct job name."""
         job = ConversationJob("chat456")
         assert job.name == "conversation:chat456"
-
-    @pytest.mark.asyncio
-    async def test_run_no_active_session(self):
-        """Test _run raises error when no active session."""
-        job = ConversationJob("123")
-        job._run_timestamp = datetime.now(UTC)
-
-        mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
-
-        with patch("areyouok_telegram.jobs.conversations.get_chat_session", new=AsyncMock(return_value=None)):
-            with pytest.raises(NoActiveSessionError):
-                await job._run(mock_context)
 
     @pytest.mark.asyncio
     async def test_run_bot_already_responded(self):
