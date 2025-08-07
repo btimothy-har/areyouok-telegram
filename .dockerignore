@@ -62,6 +62,9 @@ dmypy.json
 Makefile
 .pypirc
 
+# Scripts directory
+scripts/
+
 # Logs and temporary files
 *.log
 *.tmp
