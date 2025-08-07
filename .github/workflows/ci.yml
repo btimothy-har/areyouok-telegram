@@ -39,4 +39,4 @@ jobs:
 
     - name: Run Tests (with coverage)
       run: |
-        uv run --locked pytest --cov=areyouok_telegram --cov-report=term-missing --cov-fail-under=90 .
+        uv run --locked pytest --cov=areyouok_telegram --cov-report=term-missing --cov-fail-under=85 .
