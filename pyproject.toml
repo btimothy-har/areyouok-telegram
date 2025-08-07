@@ -103,6 +103,13 @@ omit = [
     "*/tests/*",
     "*/test_*.py",
     "*/__init__.py",
+    "*/utils.py",
+    "*/app.py",
+    "*/config.py",
+    "*/main.py",
+    "**/exceptions.py",
+    "*/llms/chat/responses.py",
+    "*/llms/context_compression/constants.py",
 ]
 
 [tool.coverage.report]

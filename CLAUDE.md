@@ -48,5 +48,15 @@ This is a Telegram bot application with the following structure:
 ### Testing
 - Uses **pytest** with async support (`pytest-asyncio`)
 - Test coverage with **pytest-cov**
-- Includes test fixtures and factory-boy for test data generation
-- Tests are organized to mirror the source structure
+- **Unit tests only**: No integration tests are implemented or needed - all testing focuses on individual function behavior
+- All external dependencies (database calls, API calls, etc.) are mocked to ensure tests focus on the logic flow within individual functions
+- Tests validate function behavior in isolation, with all called functions stubbed/mocked using `unittest.mock` or `pytest-mock`
+- Time-based functionality frozen during tests using **freezegun**
+- Tests are organized in `tests/` to mirror the source structure
+- Test fixtures and **factory-boy** for generating test data
+- Reuse fixtures as much as possible:
+    (1) Shared/common fixtures should be created in @tests/conftest.py;
+    (2) Suite-specific fixtures can be created within the test file
+- Fixtures should be used in one of two ways:
+    (1) As an argument if the fixture is being modified
+    (2) Using pytest.mark.usefixture if no modification is needed in the fixture

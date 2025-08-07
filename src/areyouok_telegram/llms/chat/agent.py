@@ -8,16 +8,16 @@ from telegram.ext import ContextTypes
 
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data import async_database
-from areyouok_telegram.llms.analytics import ContentCheckDependencies
-from areyouok_telegram.llms.analytics import ContentCheckResponse
-from areyouok_telegram.llms.analytics import content_check_agent
-from areyouok_telegram.llms.chat.exceptions import InvalidMessageError
-from areyouok_telegram.llms.chat.exceptions import ReactToSelfError
-from areyouok_telegram.llms.chat.exceptions import UnacknowledgedImportantMessageError
 from areyouok_telegram.llms.chat.responses import AgentResponse
+from areyouok_telegram.llms.exceptions import InvalidMessageError
+from areyouok_telegram.llms.exceptions import ReactToSelfError
+from areyouok_telegram.llms.exceptions import UnacknowledgedImportantMessageError
 from areyouok_telegram.llms.utils import openrouter_provider
 from areyouok_telegram.llms.utils import pydantic_ai_instrumentation
 from areyouok_telegram.llms.utils import run_agent_with_tracking
+from areyouok_telegram.llms.validators.content_check import ContentCheckDependencies
+from areyouok_telegram.llms.validators.content_check import ContentCheckResponse
+from areyouok_telegram.llms.validators.content_check import content_check_agent
 
 
 @dataclass

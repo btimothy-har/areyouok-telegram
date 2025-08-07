@@ -14,13 +14,14 @@ from areyouok_telegram.data import MessageTypes
 from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database
 from areyouok_telegram.jobs import BaseJob
-from areyouok_telegram.llms.analytics import ContextTemplate
-from areyouok_telegram.llms.analytics import context_compression_agent
+from areyouok_telegram.jobs.exceptions import NoActiveSessionError
 from areyouok_telegram.llms.chat import AgentResponse
 from areyouok_telegram.llms.chat import ChatAgentDependencies
 from areyouok_telegram.llms.chat import ReactionResponse
 from areyouok_telegram.llms.chat import TextResponse
 from areyouok_telegram.llms.chat import chat_agent
+from areyouok_telegram.llms.context_compression import ContextTemplate
+from areyouok_telegram.llms.context_compression import context_compression_agent
 from areyouok_telegram.llms.utils import context_to_model_message
 from areyouok_telegram.llms.utils import run_agent_with_tracking
 from areyouok_telegram.llms.utils import telegram_message_to_model_message
@@ -31,20 +32,6 @@ from .utils import close_chat_session
 from .utils import get_chat_session
 from .utils import log_bot_activity
 from .utils import save_session_context
-
-
-class BaseConversationJobError(Exception):
-    """Base exception for all conversation job-related errors."""
-
-    pass
-
-
-class NoActiveSessionError(BaseConversationJobError):
-    """Raised when there is no active chat session for the conversation job."""
-
-    def __init__(self, chat_id: str):
-        super().__init__(f"No active chat session found for chat ID: {chat_id}")
-        self.chat_id = chat_id
 
 
 class ConversationJob(BaseJob):
@@ -65,7 +52,7 @@ class ConversationJob(BaseJob):
             chat_id: The chat ID to process
         """
         super().__init__()
-        self.chat_id = chat_id
+        self.chat_id = str(chat_id)
         self.last_response = None
 
     @property

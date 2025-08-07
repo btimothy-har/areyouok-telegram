@@ -9,13 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from areyouok_telegram.config import OPENAI_API_KEY
 from areyouok_telegram.data import MediaFiles
+from areyouok_telegram.handlers.exceptions import VoiceNotProcessableError
 from areyouok_telegram.utils import traced
-
-
-class VoiceNotProcessableError(Exception):
-    """Raised when voice cannot be processed."""
-
-    pass
 
 
 def transcribe_voice_data_sync(voice_data: bytes) -> str:

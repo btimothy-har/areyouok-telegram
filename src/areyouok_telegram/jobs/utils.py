@@ -8,7 +8,7 @@ from areyouok_telegram.data import Messages
 from areyouok_telegram.data import MessageTypes
 from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database
-from areyouok_telegram.llms.analytics import ContextTemplate
+from areyouok_telegram.llms.context_compression import ContextTemplate
 from areyouok_telegram.utils import db_retry
 
 

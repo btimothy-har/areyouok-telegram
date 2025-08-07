@@ -24,3 +24,9 @@ class NoMessageReactionError(BaseHandlerError):
     def __init__(self, update_id):
         super().__init__(f"Expected to receive a message reaction in update: {update_id}")
         self.update_id = update_id
+
+
+class VoiceNotProcessableError(BaseHandlerError):
+    """Raised when voice cannot be processed."""
+
+    pass

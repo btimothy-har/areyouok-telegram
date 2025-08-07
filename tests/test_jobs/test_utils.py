@@ -1,4 +1,4 @@
-"""Tests for unsupported media handling."""
+"""Tests for jobs/utils.py."""
 
 from datetime import UTC
 from datetime import datetime
@@ -7,224 +7,239 @@ from unittest.mock import MagicMock
 from unittest.mock import patch
 
 import pytest
+import telegram
 
-from areyouok_telegram.data import MediaFiles
-from areyouok_telegram.jobs.utils import get_unsupported_media_from_messages
+from areyouok_telegram.jobs.utils import close_chat_session
+from areyouok_telegram.jobs.utils import get_all_inactive_sessions
+from areyouok_telegram.jobs.utils import get_chat_session
+from areyouok_telegram.jobs.utils import log_bot_activity
+from areyouok_telegram.jobs.utils import save_session_context
 
 
-class TestUnsupportedMediaHandling:
-    """Test unsupported media detection and handling."""
-
-    @pytest.mark.asyncio
-    async def test_get_unsupported_media_from_messages_video(self):
-        """Test detection of video files."""
-        # Create mock messages
-        msg1 = MagicMock()
-        msg1.date = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
-        msg1.message_id = 100
-        msg1.from_user = MagicMock()
-        msg1.from_user.id = 123456789
-        msg1.chat = MagicMock()
-        msg1.chat.id = "123456"
-
-        messages = [msg1]
-
-        # Mock media files
-        video_file = MagicMock()
-        video_file.mime_type = "video/mp4"
-
-        with patch.object(MediaFiles, "get_by_message_id", new_callable=AsyncMock) as mock_get_media:
-            mock_get_media.return_value = [video_file]
-
-            result = await get_unsupported_media_from_messages(None, messages)
-
-            assert result == ["video/mp4"]
-            mock_get_media.assert_called_once()
+class TestGetChatSession:
+    """Test the get_chat_session function."""
 
     @pytest.mark.asyncio
-    async def test_get_unsupported_media_from_messages_audio_now_supported(self):
-        """Test that audio files are now supported and not returned as unsupported."""
-        # Create mock messages
-        msg1 = MagicMock()
-        msg1.date = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
-        msg1.message_id = 100
-        msg1.from_user = MagicMock()
-        msg1.from_user.id = 123456789
-        msg1.chat = MagicMock()
-        msg1.chat.id = "123456"
+    async def test_get_chat_session_success(self):
+        """Test successfully retrieving active session."""
+        mock_session = MagicMock()
 
-        messages = [msg1]
+        with patch("areyouok_telegram.jobs.utils.async_database") as mock_async_db:
+            mock_db_conn = AsyncMock()
+            mock_async_db.return_value.__aenter__.return_value = mock_db_conn
 
-        # Mock media files
-        audio_file = MagicMock()
-        audio_file.mime_type = "audio/mpeg"
+            with patch("areyouok_telegram.jobs.utils.Sessions.get_active_session",
+                      new=AsyncMock(return_value=mock_session)) as mock_get_active:
+                result = await get_chat_session("chat123")
 
-        with patch.object(MediaFiles, "get_by_message_id", new_callable=AsyncMock) as mock_get_media:
-            mock_get_media.return_value = [audio_file]
-
-            result = await get_unsupported_media_from_messages(None, messages)
-
-            # Audio is now supported, so should return empty list
-            assert result == []
+        assert result == mock_session
+        # Verify Sessions.get_active_session was called with correct args
+        mock_get_active.assert_called_once_with(mock_db_conn, "chat123")
 
     @pytest.mark.asyncio
-    async def test_get_unsupported_media_from_messages_mixed(self):
-        """Test detection of multiple unsupported media types."""
-        # Create mock messages
-        msg1 = MagicMock()
-        msg1.date = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
-        msg1.message_id = 100
-        msg1.from_user = MagicMock()
-        msg1.from_user.id = 123456789
-        msg1.chat = MagicMock()
-        msg1.chat.id = "123456"
+    async def test_get_chat_session_no_active_session(self):
+        """Test when no active session exists."""
+        with patch("areyouok_telegram.jobs.utils.async_database") as mock_async_db:
+            mock_db_conn = AsyncMock()
+            mock_async_db.return_value.__aenter__.return_value = mock_db_conn
 
-        msg2 = MagicMock()
-        msg2.date = datetime(2025, 1, 15, 10, 1, 0, tzinfo=UTC)
-        msg2.message_id = 101
-        msg2.from_user = MagicMock()
-        msg2.from_user.id = 123456789
-        msg2.chat = MagicMock()
-        msg2.chat.id = "123456"
+            with patch("areyouok_telegram.jobs.utils.Sessions.get_active_session", new=AsyncMock(return_value=None)):
+                result = await get_chat_session("chat123")
 
-        messages = [msg1, msg2]
+        assert result is None
 
-        # Mock media files for first message
-        video_file = MagicMock()
-        video_file.mime_type = "video/mp4"
 
-        # Mock media files for second message - use a document instead of audio since audio is now supported
-        document_file = MagicMock()
-        document_file.mime_type = "application/msword"
-
-        with patch.object(MediaFiles, "get_by_message_id", new_callable=AsyncMock) as mock_get_media:
-            mock_get_media.side_effect = [[video_file], [document_file]]
-
-            result = await get_unsupported_media_from_messages(None, messages)
-
-            assert result == ["video/mp4", "application/msword"]
-            assert mock_get_media.call_count == 2
+class TestGetAllInactiveSessions:
+    """Test the get_all_inactive_sessions function."""
 
     @pytest.mark.asyncio
-    async def test_get_unsupported_media_ignores_supported_types(self):
-        """Test that supported media types are ignored."""
-        # Create mock messages
-        msg1 = MagicMock()
-        msg1.date = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
-        msg1.message_id = 100
-        msg1.from_user = MagicMock()
-        msg1.from_user.id = 123456789
-        msg1.chat = MagicMock()
-        msg1.chat.id = "123456"
+    async def test_get_all_inactive_sessions_success(self, frozen_time):
+        """Test successfully retrieving inactive sessions."""
+        mock_sessions = [MagicMock(), MagicMock()]
+        from_dt = datetime(2024, 1, 1, tzinfo=UTC)
+        to_dt = frozen_time
 
-        messages = [msg1]
+        with patch("areyouok_telegram.jobs.utils.async_database") as mock_async_db:
+            mock_db_conn = AsyncMock()
+            mock_async_db.return_value.__aenter__.return_value = mock_db_conn
 
-        # Mock media files with mixed types
-        image_file = MagicMock()
-        image_file.mime_type = "image/png"
+            with patch("areyouok_telegram.jobs.utils.Sessions.get_all_inactive_sessions",
+                      new=AsyncMock(return_value=mock_sessions)) as mock_get_all:
+                result = await get_all_inactive_sessions(from_dt, to_dt)
 
-        pdf_file = MagicMock()
-        pdf_file.mime_type = "application/pdf"
-
-        text_file = MagicMock()
-        text_file.mime_type = "text/plain"
-
-        video_file = MagicMock()
-        video_file.mime_type = "video/mp4"
-
-        # Add audio file to test it's now supported
-        audio_file = MagicMock()
-        audio_file.mime_type = "audio/mpeg"
-
-        with patch.object(MediaFiles, "get_by_message_id", new_callable=AsyncMock) as mock_get_media:
-            mock_get_media.return_value = [image_file, pdf_file, text_file, video_file, audio_file]
-
-            result = await get_unsupported_media_from_messages(None, messages)
-
-            # Only video should be in the result (audio is now supported)
-            assert result == ["video/mp4"]
+        assert result == mock_sessions
+        # Verify Sessions.get_all_inactive_sessions was called with correct args
+        mock_get_all.assert_called_once_with(mock_db_conn, from_dt, to_dt)
 
     @pytest.mark.asyncio
-    async def test_get_unsupported_media_with_since_timestamp(self):
-        """Test filtering messages by timestamp."""
-        # Create mock messages
-        msg1 = MagicMock()
-        msg1.date = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
-        msg1.from_user = MagicMock()
-        msg1.from_user.id = 123456789
-        msg1.chat = MagicMock()
-        msg1.chat.id = "123456"
-        msg1.message_id = 100
+    async def test_get_all_inactive_sessions_empty(self):
+        """Test when no inactive sessions exist."""
+        from_dt = datetime(2024, 1, 1, tzinfo=UTC)
+        to_dt = datetime(2024, 1, 2, tzinfo=UTC)
 
-        msg2 = MagicMock()
-        msg2.date = datetime(2025, 1, 15, 10, 5, 0, tzinfo=UTC)  # 5 minutes later
-        msg2.from_user = MagicMock()
-        msg2.from_user.id = 123456789
-        msg2.chat = MagicMock()
-        msg2.chat.id = "123456"
-        msg2.message_id = 101
+        with patch("areyouok_telegram.jobs.utils.async_database") as mock_async_db:
+            mock_db_conn = AsyncMock()
+            mock_async_db.return_value.__aenter__.return_value = mock_db_conn
 
-        messages = [msg1, msg2]
+            with patch("areyouok_telegram.jobs.utils.Sessions.get_all_inactive_sessions",
+                      new=AsyncMock(return_value=[])):
+                result = await get_all_inactive_sessions(from_dt, to_dt)
 
-        # Set since_timestamp between the two messages
-        since_timestamp = datetime(2025, 1, 15, 10, 2, 0, tzinfo=UTC)
+        assert result == []
 
-        # Mock media files
-        video_file = MagicMock()
-        video_file.mime_type = "video/mp4"
 
-        with patch.object(MediaFiles, "get_by_message_id", new_callable=AsyncMock) as mock_get_media:
-            mock_get_media.return_value = [video_file]
-
-            result = await get_unsupported_media_from_messages(None, messages, since_timestamp)
-
-            # Should only check msg2 (after since_timestamp)
-            assert result == ["video/mp4"]
-            assert mock_get_media.call_count == 1
-            mock_get_media.assert_called_with(None, chat_id="123456", message_id="101")
+class TestLogBotActivity:
+    """Test the log_bot_activity function."""
 
     @pytest.mark.asyncio
-    async def test_get_unsupported_media_unknown_mime_type(self):
-        """Test handling of unknown mime types."""
-        # Create mock messages
-        msg1 = MagicMock()
-        msg1.date = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
-        msg1.message_id = 100
-        msg1.from_user = MagicMock()
-        msg1.from_user.id = 123456789
-        msg1.chat = MagicMock()
-        msg1.chat.id = "123456"
+    async def test_log_bot_activity_with_message(self, frozen_time):
+        """Test logging bot activity with a response message."""
+        mock_session = MagicMock()
+        mock_session.new_activity = AsyncMock()
+        mock_session.new_message = AsyncMock()
 
-        messages = [msg1]
+        # Create mock response message
+        mock_message = MagicMock(spec=telegram.Message)
+        mock_message.date = frozen_time
 
-        # Mock media files with unknown type
-        unknown_file = MagicMock()
-        unknown_file.mime_type = "application/octet-stream"
+        with patch("areyouok_telegram.jobs.utils.async_database") as mock_async_db:
+            mock_db_conn = AsyncMock()
+            mock_async_db.return_value.__aenter__.return_value = mock_db_conn
 
-        with patch.object(MediaFiles, "get_by_message_id", new_callable=AsyncMock) as mock_get_media:
-            mock_get_media.return_value = [unknown_file]
+            with patch("areyouok_telegram.jobs.utils.Messages.new_or_update", new=AsyncMock()) as mock_new_or_update:
+                await log_bot_activity("bot123", "chat456", mock_session, mock_message)
 
-            result = await get_unsupported_media_from_messages(None, messages)
+        # Verify new_activity was called with bot flag
+        mock_session.new_activity.assert_called_once_with(
+            db_conn=mock_db_conn,
+            timestamp=frozen_time,
+            is_user=False
+        )
 
-            # Should return the full mime type for unknown types
-            assert result == ["application/octet-stream"]
+        # Verify message was saved
+        mock_new_or_update.assert_called_once_with(
+            db_conn=mock_db_conn,
+            user_id="bot123",
+            chat_id="chat456",
+            message=mock_message
+        )
+
+        # Verify new_message was called for telegram.Message
+        mock_session.new_message.assert_called_once_with(
+            db_conn=mock_db_conn,
+            timestamp=frozen_time,
+            is_user=False
+        )
 
     @pytest.mark.asyncio
-    async def test_get_unsupported_media_no_user(self):
-        """Test that messages without from_user are skipped."""
-        # Create mock messages
-        msg1 = MagicMock()
-        msg1.date = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
-        msg1.message_id = 100
-        msg1.from_user = None  # No user
-        msg1.chat = MagicMock()
-        msg1.chat.id = "123456"
+    async def test_log_bot_activity_with_reaction(self, frozen_time):
+        """Test logging bot activity with a reaction message."""
+        mock_session = MagicMock()
+        mock_session.new_activity = AsyncMock()
+        mock_session.new_message = AsyncMock()
 
-        messages = [msg1]
+        # Create mock reaction message
+        mock_reaction = MagicMock(spec=telegram.MessageReactionUpdated)
 
-        with patch.object(MediaFiles, "get_by_message_id", new_callable=AsyncMock) as mock_get_media:
-            result = await get_unsupported_media_from_messages(None, messages)
+        with patch("areyouok_telegram.jobs.utils.async_database") as mock_async_db:
+            mock_db_conn = AsyncMock()
+            mock_async_db.return_value.__aenter__.return_value = mock_db_conn
 
-            # Should not check media for messages without users
-            assert result == []
-            mock_get_media.assert_not_called()
+            with patch("areyouok_telegram.jobs.utils.Messages.new_or_update", new=AsyncMock()) as mock_new_or_update:
+                await log_bot_activity("bot123", "chat456", mock_session, mock_reaction)
+
+        # Verify new_activity was called
+        mock_session.new_activity.assert_called_once_with(
+            db_conn=mock_db_conn,
+            timestamp=frozen_time,
+            is_user=False
+        )
+
+        # Verify message was saved
+        mock_new_or_update.assert_called_once_with(
+            db_conn=mock_db_conn,
+            user_id="bot123",
+            chat_id="chat456",
+            message=mock_reaction
+        )
+
+        # Verify new_message was NOT called for MessageReactionUpdated
+        mock_session.new_message.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_log_bot_activity_no_message(self, frozen_time):
+        """Test logging bot activity without a response message."""
+        mock_session = MagicMock()
+        mock_session.new_activity = AsyncMock()
+        mock_session.new_message = AsyncMock()
+
+        with patch("areyouok_telegram.jobs.utils.async_database") as mock_async_db:
+            mock_db_conn = AsyncMock()
+            mock_async_db.return_value.__aenter__.return_value = mock_db_conn
+
+            with patch("areyouok_telegram.jobs.utils.Messages.new_or_update", new=AsyncMock()) as mock_new_or_update:
+                await log_bot_activity("bot123", "chat456", mock_session, None)
+
+        # Verify new_activity was still called
+        mock_session.new_activity.assert_called_once_with(
+            db_conn=mock_db_conn,
+            timestamp=frozen_time,
+            is_user=False
+        )
+
+        # Verify message operations were not called
+        mock_new_or_update.assert_not_called()
+        mock_session.new_message.assert_not_called()
+
+
+class TestSaveSessionContext:
+    """Test the save_session_context function."""
+
+    @pytest.mark.asyncio
+    async def test_save_session_context_success(self):
+        """Test successfully saving session context."""
+        mock_session = MagicMock()
+        mock_session.session_id = "session123"
+
+        # Create mock context template
+        mock_context = MagicMock()
+        mock_context.content = "Test context content"
+
+        with patch("areyouok_telegram.jobs.utils.async_database") as mock_async_db:
+            mock_db_conn = AsyncMock()
+            mock_async_db.return_value.__aenter__.return_value = mock_db_conn
+
+            with patch("areyouok_telegram.jobs.utils.Context.new_or_update", new=AsyncMock()) as mock_new_or_update:
+                await save_session_context("chat456", mock_session, mock_context)
+
+        # Verify Context.new_or_update was called with correct args
+        mock_new_or_update.assert_called_once_with(
+            db_conn=mock_db_conn,
+            chat_id="chat456",
+            session_id="session123",
+            ctype="session",
+            content="Test context content"
+        )
+
+
+class TestCloseChatSession:
+    """Test the close_chat_session function."""
+
+    @pytest.mark.asyncio
+    async def test_close_chat_session_success(self, frozen_time):
+        """Test successfully closing a chat session."""
+        mock_session = MagicMock()
+        mock_session.close_session = AsyncMock()
+
+        with patch("areyouok_telegram.jobs.utils.async_database") as mock_async_db:
+            mock_db_conn = AsyncMock()
+            mock_async_db.return_value.__aenter__.return_value = mock_db_conn
+
+            await close_chat_session(mock_session)
+
+        # Verify close_session was called with current timestamp
+        mock_session.close_session.assert_called_once_with(
+            db_conn=mock_db_conn,
+            timestamp=frozen_time
+        )
+

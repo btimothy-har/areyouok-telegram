@@ -1,18 +1,5 @@
 import pydantic
-import telegram
-import tenacity
 from telegram.constants import ReactionEmoji
-
-
-def retry_response():
-    return tenacity.retry(
-        retry=tenacity.retry_if_exception_type((telegram.error.NetworkError, telegram.error.TimedOut)),
-        wait=tenacity.wait_chain(
-            *[tenacity.wait_fixed(0.5) for _ in range(2)] + [tenacity.wait_random_exponential(multiplier=0.5, max=5)]
-        ),
-        stop=tenacity.stop_after_attempt(5),
-        reraise=True,
-    )
 
 
 class BaseAgentResponse(pydantic.BaseModel):

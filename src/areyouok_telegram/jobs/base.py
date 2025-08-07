@@ -49,8 +49,6 @@ class BaseJob(ABC):
         Stops the job gracefully.
         """
         async with JOB_LOCK[self.id]:
-            await self._stop(context)
-
             existing_jobs = context.job_queue.get_jobs_by_name(self.name)
             if not existing_jobs:
                 logfire.warning(f"No existing job found for {self.name}, nothing to stop.")

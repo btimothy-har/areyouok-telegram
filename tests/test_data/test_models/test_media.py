@@ -1,0 +1,187 @@
+"""Tests for MediaFiles model."""
+
+import base64
+import hashlib
+from unittest.mock import AsyncMock
+from unittest.mock import MagicMock
+from unittest.mock import patch
+
+import pytest
+
+from areyouok_telegram.data.models.media import MediaFiles
+
+
+class TestMediaFiles:
+    """Test MediaFiles model."""
+
+    def test_generate_file_key(self):
+        """Test file key generation."""
+        chat_id = "123"
+        message_id = "456"
+        file_unique_id = "unique789"
+
+        expected = hashlib.sha256(f"{chat_id}:{message_id}:{file_unique_id}".encode()).hexdigest()
+        assert MediaFiles.generate_file_key(chat_id, message_id, file_unique_id) == expected
+
+    def test_bytes_data_with_content(self):
+        """Test decoding base64 content to bytes."""
+        media = MediaFiles()
+        test_data = b"test content"
+        media.content_base64 = base64.b64encode(test_data).decode("ascii")
+
+        assert media.bytes_data == test_data
+
+    def test_bytes_data_without_content(self):
+        """Test bytes_data returns None when no content."""
+        media = MediaFiles()
+        media.content_base64 = None
+
+        assert media.bytes_data is None
+
+    def test_is_anthropic_supported_image(self):
+        """Test image files are marked as Anthropic-supported."""
+        media = MediaFiles()
+        media.mime_type = "image/png"
+
+        assert media.is_anthropic_supported is True
+
+    def test_is_anthropic_supported_pdf(self):
+        """Test PDF files are marked as Anthropic-supported."""
+        media = MediaFiles()
+        media.mime_type = "application/pdf"
+
+        assert media.is_anthropic_supported is True
+
+    def test_is_anthropic_supported_text(self):
+        """Test text files are marked as Anthropic-supported."""
+        media = MediaFiles()
+        media.mime_type = "text/plain"
+
+        assert media.is_anthropic_supported is True
+
+    def test_is_anthropic_supported_unsupported(self):
+        """Test unsupported files are marked correctly."""
+        media = MediaFiles()
+        media.mime_type = "video/mp4"
+
+        assert media.is_anthropic_supported is False
+
+    @pytest.mark.asyncio
+    async def test_create_file_with_content(self, mock_db_session):
+        """Test creating a media file with content."""
+        test_content = b"test file content"
+
+        # Mock magic.from_buffer
+        with patch("areyouok_telegram.data.models.media.magic.from_buffer") as mock_magic:
+            mock_magic.return_value = "text/plain"
+
+            mock_result = AsyncMock()
+            mock_db_session.execute.return_value = mock_result
+
+            await MediaFiles.create_file(
+                mock_db_session,
+                file_id="file123",
+                file_unique_id="unique123",
+                chat_id="chat456",
+                message_id="msg789",
+                file_size=len(test_content),
+                content_bytes=test_content,
+            )
+
+            # Verify execute was called
+            mock_db_session.execute.assert_called_once()
+
+            # Verify magic was called with the content
+            mock_magic.assert_called_once_with(test_content, mime=True)
+
+            # Verify the statement is for media_files table
+            call_args = mock_db_session.execute.call_args[0][0]
+            assert hasattr(call_args, "table")
+            assert call_args.table.name == "media_files"
+
+    @pytest.mark.asyncio
+    async def test_create_file_without_content(self, mock_db_session):
+        """Test creating a media file without content."""
+        with patch("areyouok_telegram.data.models.media.magic.from_buffer") as mock_magic:
+            mock_result = AsyncMock()
+            mock_db_session.execute.return_value = mock_result
+
+            await MediaFiles.create_file(
+                mock_db_session,
+                file_id="file456",
+                file_unique_id="unique456",
+                chat_id="chat789",
+                message_id="msg012",
+                file_size=0,
+                content_bytes=None,
+            )
+
+            # Verify execute was called
+            mock_db_session.execute.assert_called_once()
+
+            # Magic should not be called with None content
+            mock_magic.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_get_by_message_id_found(self, mock_db_session):
+        """Test retrieving media files by message ID."""
+        # Create mock media files
+        mock_media1 = MagicMock(spec=MediaFiles)
+        mock_media1.id = 1
+        mock_media2 = MagicMock(spec=MediaFiles)
+        mock_media2.id = 2
+
+        # Setup mock chain for execute().scalars().all()
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = [mock_media1, mock_media2]
+        mock_result = MagicMock()
+        mock_result.scalars.return_value = mock_scalars
+        mock_db_session.execute.return_value = mock_result
+
+        result = await MediaFiles.get_by_message_id(mock_db_session, "chat123", "msg456")
+
+        assert result == [mock_media1, mock_media2]
+
+        # Verify two execute calls: one for select, one for update
+        assert mock_db_session.execute.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_get_by_message_id_not_found(self, mock_db_session):
+        """Test retrieving media files when none found."""
+        # Setup mock chain for execute().scalars().all() returning empty list
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = []
+        mock_result = MagicMock()
+        mock_result.scalars.return_value = mock_scalars
+        mock_db_session.execute.return_value = mock_result
+
+        result = await MediaFiles.get_by_message_id(mock_db_session, "chat999", "msg999")
+
+        assert result == []
+
+        # Only one execute call for select, no update since no media found
+        mock_db_session.execute.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_bulk_update_last_accessed_with_ids(self, mock_db_session):
+        """Test bulk updating last accessed timestamp."""
+        mock_result = AsyncMock()
+        mock_db_session.execute.return_value = mock_result
+
+        await MediaFiles.bulk_update_last_accessed(mock_db_session, [1, 2, 3])
+
+        # Verify execute was called
+        mock_db_session.execute.assert_called_once()
+
+        # Verify it's an update statement
+        call_args = mock_db_session.execute.call_args[0][0]
+        assert hasattr(call_args, "table")
+        assert call_args.table.name == "media_files"
+
+    @pytest.mark.asyncio
+    async def test_bulk_update_last_accessed_empty_list(self, mock_db_session):
+        """Test bulk update with empty list does nothing."""
+        await MediaFiles.bulk_update_last_accessed(mock_db_session, [])
+
+        # Verify execute was not called
+        mock_db_session.execute.assert_not_called()

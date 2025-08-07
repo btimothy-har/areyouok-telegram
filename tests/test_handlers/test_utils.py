@@ -1,297 +1,456 @@
-"""Tests for handler utilities including voice transcription."""
+"""Tests for handlers/utils.py."""
 
+# ruff: noqa: PLC2701
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
 import pytest
+import telegram
+from pydub import AudioSegment
 
-from areyouok_telegram.handlers.utils import VoiceNotProcessableError
+from areyouok_telegram.handlers.exceptions import VoiceNotProcessableError
+from areyouok_telegram.handlers.utils import _download_file
 from areyouok_telegram.handlers.utils import extract_media_from_telegram_message
 from areyouok_telegram.handlers.utils import transcribe_voice_data_sync
 
 
-class TestVoiceTranscription:
-    """Test voice transcription functionality."""
+class TestTranscribeVoiceDataSync:
+    """Test the transcribe_voice_data_sync function."""
 
-    @patch("areyouok_telegram.handlers.utils.openai.OpenAI")
-    @patch("areyouok_telegram.handlers.utils.AudioSegment.from_ogg")
-    def test_transcribe_voice_data_sync_success(self, mock_from_ogg, mock_openai_class):
-        """Test successful voice transcription."""
-        # Mock audio segment
-        mock_audio = MagicMock()
-        mock_audio.__len__.return_value = 5 * 60 * 1000  # 5 minutes
-        mock_audio.__getitem__.return_value = mock_audio
-        mock_audio.export = MagicMock()
-        mock_from_ogg.return_value = mock_audio
+    def test_transcribe_short_audio(self):
+        """Test transcribing audio shorter than 10 minutes."""
+        # Create mock audio data
+        mock_voice_data = b"fake audio data"
 
-        # Mock OpenAI client
-        mock_client = MagicMock()
-        mock_openai_class.return_value = mock_client
-        mock_client.audio.transcriptions.create.return_value = "This is a test transcription"
-
-        # Test transcription
-        voice_data = b"fake_ogg_data"
-        result = transcribe_voice_data_sync(voice_data)
-
-        assert result == "[Transcribed Audio] This is a test transcription"
-        mock_client.audio.transcriptions.create.assert_called_once()
-
-        # Verify model is gpt-4o-transcribe
-        call_kwargs = mock_client.audio.transcriptions.create.call_args.kwargs
-        assert call_kwargs["model"] == "gpt-4o-transcribe"
-
-    @patch("areyouok_telegram.handlers.utils.openai.OpenAI")
-    @patch("areyouok_telegram.handlers.utils.AudioSegment.from_ogg")
-    def test_transcribe_voice_data_sync_long_audio(self, mock_from_ogg, mock_openai_class):
-        """Test transcription of audio longer than 10 minutes."""
-        # Mock audio segment (15 minutes)
-        mock_audio = MagicMock()
-        mock_audio.__len__.return_value = 15 * 60 * 1000  # 15 minutes
-
-        # Mock segments
-        mock_segment1 = MagicMock()
-        mock_segment2 = MagicMock()
-        mock_audio.__getitem__.side_effect = [mock_segment1, mock_segment2]
-
-        mock_from_ogg.return_value = mock_audio
+        # Create a mock AudioSegment that's 5 minutes long
+        mock_audio_segment = MagicMock(spec=AudioSegment)
+        mock_audio_segment.__len__.return_value = 5 * 60 * 1000  # 5 minutes in milliseconds
+        mock_audio_segment.__getitem__.return_value = mock_audio_segment
+        mock_audio_segment.export = MagicMock()
 
         # Mock OpenAI client
         mock_client = MagicMock()
-        mock_openai_class.return_value = mock_client
-        mock_client.audio.transcriptions.create.side_effect = [
-            "First segment transcription",
-            "Second segment transcription",
-        ]
+        mock_transcription = "This is a test transcription"
+        mock_client.audio.transcriptions.create.return_value = mock_transcription
 
-        # Test transcription
-        voice_data = b"fake_long_ogg_data"
-        result = transcribe_voice_data_sync(voice_data)
+        with (
+            patch("areyouok_telegram.handlers.utils.AudioSegment.from_ogg", return_value=mock_audio_segment),
+            patch("areyouok_telegram.handlers.utils.openai.OpenAI", return_value=mock_client),
+            patch("areyouok_telegram.handlers.utils.OPENAI_API_KEY", "test-key"),
+        ):
+            result = transcribe_voice_data_sync(mock_voice_data)
 
-        assert result == "[Transcribed Audio] First segment transcription Second segment transcription"
-        assert mock_client.audio.transcriptions.create.call_count == 2
+            # Verify the result
+            assert result == "[Transcribed Audio] This is a test transcription"
 
-    @patch("areyouok_telegram.handlers.utils.openai.OpenAI")
-    @patch("areyouok_telegram.handlers.utils.AudioSegment.from_ogg")
-    def test_transcribe_voice_data_sync_error(self, mock_from_ogg, mock_openai_class):  # noqa: ARG002
-        """Test transcription error handling."""
-        # Mock audio processing to raise an error
-        mock_from_ogg.side_effect = Exception("Audio processing failed")
+            # Verify AudioSegment was created from the voice data
+            AudioSegment.from_ogg.assert_called_once()
 
-        # Test transcription
-        voice_data = b"fake_bad_ogg_data"
+            # Verify OpenAI transcription was called once (single segment)
+            mock_client.audio.transcriptions.create.assert_called_once_with(
+                model="gpt-4o-transcribe",
+                file=mock_audio_segment.export.call_args[0][0],
+                response_format="text",
+                language="en",
+                prompt=None,
+                temperature=0.0,
+            )
 
-        with pytest.raises(VoiceNotProcessableError):
-            transcribe_voice_data_sync(voice_data)
+    def test_transcribe_long_audio_multiple_segments(self):
+        """Test transcribing audio longer than 10 minutes (multiple segments)."""
+        mock_voice_data = b"fake audio data"
+
+        # Create a mock AudioSegment that's 25 minutes long
+        mock_audio_segment = MagicMock(spec=AudioSegment)
+        mock_audio_segment.__len__.return_value = 25 * 60 * 1000  # 25 minutes in milliseconds
+        mock_audio_segment.__getitem__.return_value = mock_audio_segment
+        mock_audio_segment.export = MagicMock()
+
+        # Mock OpenAI client
+        mock_client = MagicMock()
+        mock_transcriptions = ["First segment", "Second segment", "Third segment"]
+        mock_client.audio.transcriptions.create.side_effect = mock_transcriptions
+
+        with (
+            patch("areyouok_telegram.handlers.utils.AudioSegment.from_ogg", return_value=mock_audio_segment),
+            patch("areyouok_telegram.handlers.utils.openai.OpenAI", return_value=mock_client),
+            patch("areyouok_telegram.handlers.utils.OPENAI_API_KEY", "test-key"),
+        ):
+            result = transcribe_voice_data_sync(mock_voice_data)
+
+            # Verify the result concatenates all segments
+            assert result == "[Transcribed Audio] First segment Second segment Third segment"
+
+            # Verify OpenAI transcription was called 3 times (3 segments)
+            assert mock_client.audio.transcriptions.create.call_count == 3
+
+            # Verify the prompt for second and third segments uses previous transcription
+            calls = mock_client.audio.transcriptions.create.call_args_list
+            assert calls[0][1]["prompt"] is None
+            assert calls[1][1]["prompt"] == "First segment"
+            assert calls[2][1]["prompt"] == "Second segment"
+
+    def test_transcribe_voice_data_sync_exception(self):
+        """Test that exceptions are wrapped in VoiceNotProcessableError."""
+        mock_voice_data = b"fake audio data"
+
+        with patch(
+            "areyouok_telegram.handlers.utils.AudioSegment.from_ogg",
+            side_effect=Exception("Audio processing error"),
+        ):
+            with pytest.raises(VoiceNotProcessableError):
+                transcribe_voice_data_sync(mock_voice_data)
+
+
+class TestDownloadFile:
+    """Test the _download_file function."""
+
+    @pytest.mark.asyncio
+    async def test_download_file_non_voice(self, mock_db_session):
+        """Test downloading a non-voice file."""
+        # Create mock message and file
+        mock_message = MagicMock(spec=telegram.Message)
+        mock_message.chat.id = 123
+        mock_message.id = 456
+        mock_message.voice = None  # Not a voice message
+
+        mock_file = MagicMock(spec=telegram.File)
+        mock_file.file_id = "file123"
+        mock_file.file_unique_id = "unique123"
+        mock_file.file_size = 1024
+        mock_file.download_as_bytearray = AsyncMock(return_value=bytearray(b"file content"))
+
+        with (
+            patch("areyouok_telegram.handlers.utils.MediaFiles.create_file", new=AsyncMock()) as mock_create_file,
+            patch("areyouok_telegram.handlers.utils.logfire.span"),
+            patch("areyouok_telegram.handlers.utils.logfire.info"),
+        ):
+            await _download_file(mock_db_session, mock_message, mock_file)
+
+            # Verify file was downloaded
+            mock_file.download_as_bytearray.assert_called_once()
+
+            # Verify file was saved to database
+            mock_create_file.assert_called_once_with(
+                db_conn=mock_db_session,
+                file_id="file123",
+                file_unique_id="unique123",
+                chat_id="123",
+                message_id="456",
+                file_size=1024,
+                content_bytes=b"file content",
+            )
+
+    @pytest.mark.asyncio
+    async def test_download_voice_file_with_transcription(self, mock_db_session):
+        """Test downloading a voice file with successful transcription."""
+        # Create mock message with voice
+        mock_voice = MagicMock()
+        mock_voice.file_unique_id = "voice_unique123"
+
+        mock_message = MagicMock(spec=telegram.Message)
+        mock_message.chat.id = 123
+        mock_message.id = 456
+        mock_message.voice = mock_voice
+
+        mock_file = MagicMock(spec=telegram.File)
+        mock_file.file_id = "voice123"
+        mock_file.file_unique_id = "voice_unique123"
+        mock_file.file_size = 2048
+        mock_file.download_as_bytearray = AsyncMock(return_value=bytearray(b"voice content"))
+
+        mock_transcription = "[Transcribed Audio] Hello world"
+
+        with (
+            patch("areyouok_telegram.handlers.utils.MediaFiles.create_file", new=AsyncMock()) as mock_create_file,
+            patch("areyouok_telegram.handlers.utils.asyncio.to_thread", new=AsyncMock(return_value=mock_transcription)),
+            patch("areyouok_telegram.handlers.utils.logfire.span"),
+            patch("areyouok_telegram.handlers.utils.logfire.info") as mock_log_info,
+        ):
+            await _download_file(mock_db_session, mock_message, mock_file)
+
+            # Verify file was downloaded
+            mock_file.download_as_bytearray.assert_called_once()
+
+            # Verify both voice file and transcription were saved
+            assert mock_create_file.call_count == 2
+
+            # First call saves the voice file
+            first_call = mock_create_file.call_args_list[0]
+            assert first_call.kwargs["file_id"] == "voice123"
+            assert first_call.kwargs["content_bytes"] == b"voice content"
+
+            # Second call saves the transcription
+            second_call = mock_create_file.call_args_list[1]
+            assert second_call.kwargs["file_id"] == "voice123_transcription"
+            assert second_call.kwargs["file_unique_id"] == "voice_unique123_transcription"
+            assert second_call.kwargs["content_bytes"] == mock_transcription.encode("utf-8")
+
+            # Verify logging
+            mock_log_info.assert_called_with(
+                f"Transcription is {len(mock_transcription)} characters long.", chat_id=123
+            )
+
+    @pytest.mark.asyncio
+    async def test_download_voice_file_transcription_error(self, mock_db_session):
+        """Test downloading a voice file when transcription fails."""
+        # Create mock message with voice
+        mock_voice = MagicMock()
+        mock_voice.file_unique_id = "voice_unique123"
+
+        mock_message = MagicMock(spec=telegram.Message)
+        mock_message.chat.id = 123
+        mock_message.id = 456
+        mock_message.voice = mock_voice
+
+        mock_file = MagicMock(spec=telegram.File)
+        mock_file.file_id = "voice123"
+        mock_file.file_unique_id = "voice_unique123"
+        mock_file.file_size = 2048
+        mock_file.download_as_bytearray = AsyncMock(return_value=bytearray(b"voice content"))
+
+        with (
+            patch("areyouok_telegram.handlers.utils.MediaFiles.create_file", new=AsyncMock()) as mock_create_file,
+            patch(
+                "areyouok_telegram.handlers.utils.asyncio.to_thread",
+                new=AsyncMock(side_effect=VoiceNotProcessableError()),
+            ),
+            patch("areyouok_telegram.handlers.utils.logfire.span"),
+            patch("areyouok_telegram.handlers.utils.logfire.exception") as mock_log_exception,
+        ):
+            await _download_file(mock_db_session, mock_message, mock_file)
+
+            # Verify voice file was saved but transcription was not
+            mock_create_file.assert_called_once_with(
+                db_conn=mock_db_session,
+                file_id="voice123",
+                file_unique_id="voice_unique123",
+                chat_id="123",
+                message_id="456",
+                file_size=2048,
+                content_bytes=b"voice content",
+            )
+
+            # Verify error was logged
+            mock_log_exception.assert_called_once_with(
+                "Voice message could not be transcribed.",
+                chat_id=123,
+                message_id=456,
+                file_id="voice123",
+                file_unique_id="voice_unique123",
+            )
+
+    @pytest.mark.asyncio
+    async def test_download_file_general_exception(self, mock_db_session):
+        """Test handling general exceptions during file download."""
+        mock_message = MagicMock(spec=telegram.Message)
+        mock_message.chat.id = 123
+        mock_message.id = 456
+        mock_message.voice = None
+
+        mock_file = MagicMock(spec=telegram.File)
+        mock_file.file_id = "file123"
+        mock_file.file_unique_id = "unique123"
+        mock_file.download_as_bytearray = AsyncMock(side_effect=Exception("Download failed"))
+
+        with patch("areyouok_telegram.handlers.utils.logfire.exception") as mock_log_exception:
+            await _download_file(mock_db_session, mock_message, mock_file)
+
+            # Verify error was logged
+            mock_log_exception.assert_called_once()
+            assert mock_log_exception.call_args[0][0] == "Failed to download file."
 
 
 class TestExtractMediaFromTelegramMessage:
-    """Test media extraction from Telegram messages."""
+    """Test the extract_media_from_telegram_message function."""
 
     @pytest.mark.asyncio
-    @patch("areyouok_telegram.data.MediaFiles.create_file")
-    async def test_extract_voice_message(self, mock_create_file, async_database_connection, mock_message_with_voice):
-        """Test extracting voice message with transcription."""
-
-        # Mock transcription
-        with patch("areyouok_telegram.handlers.utils.asyncio.to_thread") as mock_to_thread:
-            mock_to_thread.return_value = "[Transcribed Audio] Test transcription"
-
-            result = await extract_media_from_telegram_message(async_database_connection, mock_message_with_voice)
-
-        # Should process voice and transcription
-        assert result == 2  # Voice file + transcription
-        assert mock_create_file.call_count == 2
-
-        # Verify voice file was saved
-        first_call = mock_create_file.call_args_list[0]
-        assert first_call.kwargs["file_id"] == "voice_test_123"
-        assert first_call.kwargs["content_bytes"] == b"fake_voice_data"
-
-        # Verify transcription was saved
-        second_call = mock_create_file.call_args_list[1]
-        assert second_call.kwargs["file_id"] == "voice_test_123_transcription"
-        assert second_call.kwargs["content_bytes"] == b"[Transcribed Audio] Test transcription"
-
-    @pytest.mark.asyncio
-    @patch("areyouok_telegram.data.MediaFiles.create_file")
-    async def test_extract_voice_transcription_error(
-        self, mock_create_file, async_database_connection, mock_message_with_voice
-    ):
-        """Test voice extraction when transcription fails."""
-        # Mock transcription to fail
-        with patch("areyouok_telegram.handlers.utils.asyncio.to_thread") as mock_to_thread:
-            mock_to_thread.side_effect = VoiceNotProcessableError()
-
-            result = await extract_media_from_telegram_message(async_database_connection, mock_message_with_voice)
-
-        # Should still save voice file even if transcription fails
-        assert result == 1  # Only voice file
-        assert mock_create_file.call_count == 1
-
-        # Verify only voice file was saved
-        call_kwargs = mock_create_file.call_args.kwargs
-        assert call_kwargs["file_id"] == "voice_test_123"
-
-    @pytest.mark.asyncio
-    @patch("areyouok_telegram.data.MediaFiles.create_file")
-    async def test_extract_multiple_media_types(
-        self, mock_create_file, async_database_connection, mock_message_with_photo, mock_document
-    ):
-        """Test extracting multiple media types from a message."""
-        # Modify the photo message to also have a document
-        mock_message_with_photo.document = mock_document
-
-        result = await extract_media_from_telegram_message(async_database_connection, mock_message_with_photo)
-
-        # Should process both photo and document
-        assert result == 2
-        assert mock_create_file.call_count == 2
-
-    @pytest.mark.asyncio
-    @patch("areyouok_telegram.data.MediaFiles.create_file")
-    async def test_extract_sticker_message(self, mock_create_file, async_database_connection):
-        """Test extracting sticker from a message."""
-        # Create mock sticker message
-        mock_message = MagicMock()
-        mock_message.chat.id = "123456"
-        mock_message.id = "789"
+    async def test_extract_no_media(self, mock_db_session):
+        """Test extracting from message with no media."""
+        mock_message = MagicMock(spec=telegram.Message)
         mock_message.photo = None
+        mock_message.sticker = None
         mock_message.document = None
         mock_message.animation = None
         mock_message.video = None
         mock_message.video_note = None
         mock_message.voice = None
+        mock_message.message_id = 123
+        mock_message.chat.id = 456
 
-        # Mock sticker
+        with (
+            patch("areyouok_telegram.handlers.utils._download_file", new=AsyncMock()) as mock_download,
+            patch("areyouok_telegram.handlers.utils.logfire.info") as mock_log_info,
+        ):
+            result = await extract_media_from_telegram_message(mock_db_session, mock_message)
+
+            assert result == 0
+            mock_download.assert_not_called()
+            mock_log_info.assert_called_with(
+                "Processed 0 media files from message.",
+                message_id=123,
+                chat_id=456,
+                processed_count=0,
+            )
+
+    @pytest.mark.asyncio
+    async def test_extract_photo(self, mock_db_session):
+        """Test extracting photo from message."""
+        mock_photo = MagicMock()
+        mock_photo.get_file = AsyncMock(return_value=MagicMock(spec=telegram.File))
+
+        mock_message = MagicMock(spec=telegram.Message)
+        mock_message.photo = [mock_photo]  # Photo is a list
+        mock_message.sticker = None
+        mock_message.document = None
+        mock_message.animation = None
+        mock_message.video = None
+        mock_message.video_note = None
+        mock_message.voice = None
+        mock_message.message_id = 123
+        mock_message.chat.id = 456
+
+        with (
+            patch("areyouok_telegram.handlers.utils._download_file", new=AsyncMock()) as mock_download,
+            patch("areyouok_telegram.handlers.utils.logfire.info") as mock_log_info,
+        ):
+            result = await extract_media_from_telegram_message(mock_db_session, mock_message)
+
+            assert result == 1
+            mock_download.assert_called_once()
+            mock_log_info.assert_called_with(
+                "Processed 1 media files from message.",
+                message_id=123,
+                chat_id=456,
+                processed_count=1,
+            )
+
+    @pytest.mark.asyncio
+    async def test_extract_multiple_media_types(self, mock_db_session):
+        """Test extracting multiple media types from message."""
+        # Create mocks for different media types
+        mock_photo = MagicMock()
+        mock_photo.get_file = AsyncMock(return_value=MagicMock(spec=telegram.File))
+
+        mock_document = MagicMock()
+        mock_document.get_file = AsyncMock(return_value=MagicMock(spec=telegram.File))
+
+        mock_voice = MagicMock()
+        mock_voice.get_file = AsyncMock(return_value=MagicMock(spec=telegram.File))
+
+        mock_message = MagicMock(spec=telegram.Message)
+        mock_message.photo = [mock_photo]
+        mock_message.sticker = None
+        mock_message.document = mock_document
+        mock_message.animation = None
+        mock_message.video = None
+        mock_message.video_note = None
+        mock_message.voice = mock_voice
+        mock_message.message_id = 123
+        mock_message.chat.id = 456
+
+        with (
+            patch("areyouok_telegram.handlers.utils._download_file", new=AsyncMock()) as mock_download,
+            patch("areyouok_telegram.handlers.utils.logfire.info") as mock_log_info,
+        ):
+            result = await extract_media_from_telegram_message(mock_db_session, mock_message)
+
+            assert result == 3
+            assert mock_download.call_count == 3
+            mock_log_info.assert_called_with(
+                "Processed 3 media files from message.",
+                message_id=123,
+                chat_id=456,
+                processed_count=3,
+            )
+
+    @pytest.mark.asyncio
+    async def test_extract_all_media_types(self, mock_db_session):
+        """Test extracting all supported media types."""
+        # Create mocks for all media types
+        mock_photo = MagicMock()
+        mock_photo.get_file = AsyncMock(return_value=MagicMock(spec=telegram.File))
+
         mock_sticker = MagicMock()
-        mock_sticker_file = MagicMock()
-        mock_sticker_file.file_id = "sticker_123"
-        mock_sticker_file.file_unique_id = "sticker_unique_123"
-        mock_sticker_file.file_size = 2048
-        mock_sticker_file.download_as_bytearray = AsyncMock(return_value=b"fake_sticker_data")
-        mock_sticker.get_file = AsyncMock(return_value=mock_sticker_file)
-        mock_message.sticker = mock_sticker
+        mock_sticker.get_file = AsyncMock(return_value=MagicMock(spec=telegram.File))
 
-        result = await extract_media_from_telegram_message(async_database_connection, mock_message)
+        mock_document = MagicMock()
+        mock_document.get_file = AsyncMock(return_value=MagicMock(spec=telegram.File))
 
-        # Should process sticker
-        assert result == 1
-        assert mock_create_file.call_count == 1
-
-        # Verify sticker file was saved
-        call_kwargs = mock_create_file.call_args.kwargs
-        assert call_kwargs["file_id"] == "sticker_123"
-        assert call_kwargs["file_unique_id"] == "sticker_unique_123"
-        assert call_kwargs["content_bytes"] == b"fake_sticker_data"
-
-    @pytest.mark.asyncio
-    @patch("areyouok_telegram.data.MediaFiles.create_file")
-    async def test_extract_animation_message(self, mock_create_file, async_database_connection):
-        """Test extracting animation (GIF) from a message."""
-        # Create mock animation message
-        mock_message = MagicMock()
-        mock_message.chat.id = "123456"
-        mock_message.id = "789"
-        mock_message.photo = None
-        mock_message.sticker = None
-        mock_message.document = None
-        mock_message.video = None
-        mock_message.video_note = None
-        mock_message.voice = None
-
-        # Mock animation
         mock_animation = MagicMock()
-        mock_animation_file = MagicMock()
-        mock_animation_file.file_id = "animation_123"
-        mock_animation_file.file_unique_id = "animation_unique_123"
-        mock_animation_file.file_size = 4096
-        mock_animation_file.download_as_bytearray = AsyncMock(return_value=b"fake_animation_data")
-        mock_animation.get_file = AsyncMock(return_value=mock_animation_file)
-        mock_message.animation = mock_animation
+        mock_animation.get_file = AsyncMock(return_value=MagicMock(spec=telegram.File))
 
-        result = await extract_media_from_telegram_message(async_database_connection, mock_message)
-
-        # Should process animation
-        assert result == 1
-        assert mock_create_file.call_count == 1
-
-        # Verify animation file was saved
-        call_kwargs = mock_create_file.call_args.kwargs
-        assert call_kwargs["file_id"] == "animation_123"
-        assert call_kwargs["file_unique_id"] == "animation_unique_123"
-        assert call_kwargs["content_bytes"] == b"fake_animation_data"
-
-    @pytest.mark.asyncio
-    @patch("areyouok_telegram.data.MediaFiles.create_file")
-    async def test_extract_video_message(self, mock_create_file, async_database_connection):
-        """Test extracting video from a message."""
-        # Create mock video message
-        mock_message = MagicMock()
-        mock_message.chat.id = "123456"
-        mock_message.id = "789"
-        mock_message.photo = None
-        mock_message.sticker = None
-        mock_message.document = None
-        mock_message.animation = None
-        mock_message.video_note = None
-        mock_message.voice = None
-
-        # Mock video
         mock_video = MagicMock()
-        mock_video_file = MagicMock()
-        mock_video_file.file_id = "video_123"
-        mock_video_file.file_unique_id = "video_unique_123"
-        mock_video_file.file_size = 8192
-        mock_video_file.download_as_bytearray = AsyncMock(return_value=b"fake_video_data")
-        mock_video.get_file = AsyncMock(return_value=mock_video_file)
+        mock_video.get_file = AsyncMock(return_value=MagicMock(spec=telegram.File))
+
+        mock_video_note = MagicMock()
+        mock_video_note.get_file = AsyncMock(return_value=MagicMock(spec=telegram.File))
+
+        mock_voice = MagicMock()
+        mock_voice.get_file = AsyncMock(return_value=MagicMock(spec=telegram.File))
+
+        mock_message = MagicMock(spec=telegram.Message)
+        mock_message.photo = [mock_photo]
+        mock_message.sticker = mock_sticker
+        mock_message.document = mock_document
+        mock_message.animation = mock_animation
         mock_message.video = mock_video
+        mock_message.video_note = mock_video_note
+        mock_message.voice = mock_voice
+        mock_message.message_id = 123
+        mock_message.chat.id = 456
 
-        result = await extract_media_from_telegram_message(async_database_connection, mock_message)
+        with (
+            patch("areyouok_telegram.handlers.utils._download_file", new=AsyncMock()) as mock_download,
+            patch("areyouok_telegram.handlers.utils.logfire.info") as mock_log_info,
+        ):
+            result = await extract_media_from_telegram_message(mock_db_session, mock_message)
 
-        # Should process video
-        assert result == 1
-        assert mock_create_file.call_count == 1
-
-        # Verify video file was saved
-        call_kwargs = mock_create_file.call_args.kwargs
-        assert call_kwargs["file_id"] == "video_123"
-        assert call_kwargs["file_unique_id"] == "video_unique_123"
-        assert call_kwargs["content_bytes"] == b"fake_video_data"
+            assert result == 7
+            assert mock_download.call_count == 7
+            mock_log_info.assert_called_with(
+                "Processed 7 media files from message.",
+                message_id=123,
+                chat_id=456,
+                processed_count=7,
+            )
 
     @pytest.mark.asyncio
-    @patch("areyouok_telegram.data.MediaFiles.create_file")
-    async def test_extract_video_note_message(self, mock_create_file, async_database_connection):
-        """Test extracting video note (circular video) from a message."""
-        # Create mock video note message
-        mock_message = MagicMock()
-        mock_message.chat.id = "123456"
-        mock_message.id = "789"
-        mock_message.photo = None
+    async def test_extract_media_with_download_exceptions(self, mock_db_session):
+        """Test that download exceptions are handled gracefully."""
+        mock_photo = MagicMock()
+        mock_photo.get_file = AsyncMock(return_value=MagicMock(spec=telegram.File))
+
+        mock_document = MagicMock()
+        mock_document.get_file = AsyncMock(return_value=MagicMock(spec=telegram.File))
+
+        mock_message = MagicMock(spec=telegram.Message)
+        mock_message.photo = [mock_photo]
         mock_message.sticker = None
-        mock_message.document = None
+        mock_message.document = mock_document
         mock_message.animation = None
         mock_message.video = None
+        mock_message.video_note = None
         mock_message.voice = None
+        mock_message.message_id = 123
+        mock_message.chat.id = 456
 
-        # Mock video note
-        mock_video_note = MagicMock()
-        mock_video_note_file = MagicMock()
-        mock_video_note_file.file_id = "video_note_123"
-        mock_video_note_file.file_unique_id = "video_note_unique_123"
-        mock_video_note_file.file_size = 16384
-        mock_video_note_file.download_as_bytearray = AsyncMock(return_value=b"fake_video_note_data")
-        mock_video_note.get_file = AsyncMock(return_value=mock_video_note_file)
-        mock_message.video_note = mock_video_note
+        # Mock one download to fail
+        mock_download = AsyncMock(side_effect=[Exception("Download failed"), None])
 
-        result = await extract_media_from_telegram_message(async_database_connection, mock_message)
+        with (
+            patch("areyouok_telegram.handlers.utils._download_file", mock_download),
+            patch("areyouok_telegram.handlers.utils.logfire.info") as mock_log_info,
+        ):
+            result = await extract_media_from_telegram_message(mock_db_session, mock_message)
 
-        # Should process video note
-        assert result == 1
-        assert mock_create_file.call_count == 1
-
-        # Verify video note file was saved
-        call_kwargs = mock_create_file.call_args.kwargs
-        assert call_kwargs["file_id"] == "video_note_123"
-        assert call_kwargs["file_unique_id"] == "video_note_unique_123"
-        assert call_kwargs["content_bytes"] == b"fake_video_note_data"
+            # Both files should be attempted, count is still 2
+            assert result == 2
+            assert mock_download.call_count == 2
+            mock_log_info.assert_called_with(
+                "Processed 2 media files from message.",
+                message_id=123,
+                chat_id=456,
+                processed_count=2,
+            )
