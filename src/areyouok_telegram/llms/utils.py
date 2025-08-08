@@ -10,6 +10,7 @@ import telegram
 from pydantic_ai.models.instrumented import InstrumentationSettings
 from pydantic_ai.providers.openrouter import OpenRouterProvider
 
+from areyouok_telegram.config import CONTROLLED_ENV
 from areyouok_telegram.config import ENV
 from areyouok_telegram.config import OPENROUTER_API_KEY
 from areyouok_telegram.data import Context
@@ -18,7 +19,7 @@ from areyouok_telegram.data import MediaFiles
 from areyouok_telegram.data import MessageTypes
 from areyouok_telegram.data import async_database
 
-pydantic_ai_instrumentation = InstrumentationSettings(include_content=True if ENV == "research" else False)
+pydantic_ai_instrumentation = InstrumentationSettings(include_content=False if ENV in CONTROLLED_ENV else True)
 
 openrouter_provider = OpenRouterProvider(api_key=OPENROUTER_API_KEY)
 
