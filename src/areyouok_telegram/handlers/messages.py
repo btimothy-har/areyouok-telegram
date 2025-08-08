@@ -4,21 +4,24 @@ import logfire
 import telegram
 from telegram.ext import ContextTypes
 
-from areyouok_telegram.config import ENV
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database
 from areyouok_telegram.handlers.exceptions import NoEditedMessageError
 from areyouok_telegram.handlers.exceptions import NoMessageError
 from areyouok_telegram.handlers.exceptions import NoMessageReactionError
+from areyouok_telegram.handlers.media_utils import extract_media_from_telegram_message
+from areyouok_telegram.research.handlers import on_new_message_research
 from areyouok_telegram.utils import db_retry
+from areyouok_telegram.utils import environment_override
 from areyouok_telegram.utils import traced
-
-from .utils import extract_media_from_telegram_message
 
 
 @traced(extract_args=["update"])
 @db_retry()
+@environment_override({
+    "research": on_new_message_research,
+})
 async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):  # noqa: ARG001
     if not update.message:
         raise NoMessageError(update.update_id)
@@ -39,11 +42,9 @@ async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_
             # Record new user message
             await active_session.new_message(db_conn=db_conn, timestamp=update.message.date, is_user=True)
         else:
-            if ENV != "research":
-                # Create new session and record the first message
-                # If this is a research environment, we don't create a session automatically
-                new_session = await Sessions.create_session(db_conn, chat_id, update.message.date)
-                await new_session.new_message(db_conn=db_conn, timestamp=update.message.date, is_user=True)
+            # Create new session and record the first message
+            new_session = await Sessions.create_session(db_conn, chat_id, update.message.date)
+            await new_session.new_message(db_conn=db_conn, timestamp=update.message.date, is_user=True)
 
         await extract_media
 

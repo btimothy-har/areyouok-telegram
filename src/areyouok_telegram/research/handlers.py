@@ -1,11 +1,15 @@
+import asyncio
 from datetime import UTC
 from datetime import datetime
 
 import telegram
 from telegram.ext import ContextTypes
 
+from areyouok_telegram.data import Messages
 from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database
+from areyouok_telegram.handlers.exceptions import NoMessageError
+from areyouok_telegram.handlers.media_utils import extract_media_from_telegram_message
 
 from .constants import END_NO_ACTIVE_SESSION
 from .constants import FEEDBACK_REQUEST
@@ -62,3 +66,26 @@ async def on_end_command_research(update: telegram.Update, context: ContextTypes
                 chat_id=update.effective_chat.id,
                 text=END_NO_ACTIVE_SESSION,
             )
+
+
+async def on_new_message_research(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):  # noqa: ARG001
+    if not update.message:
+        raise NoMessageError(update.update_id)
+
+    async with async_database() as db_conn:
+        # Save the message
+        await Messages.new_or_update(
+            db_conn=db_conn, user_id=update.effective_user.id, chat_id=update.effective_chat.id, message=update.message
+        )
+
+        extract_media = asyncio.create_task(extract_media_from_telegram_message(db_conn, update.message))
+
+        # Handle session management
+        chat_id = str(update.effective_chat.id)
+        active_session = await Sessions.get_active_session(db_conn, chat_id)
+
+        if active_session:
+            # Record new user message if there is an active session - distinct from the main handler
+            await active_session.new_message(db_conn=db_conn, timestamp=update.message.date, is_user=True)
+
+        await extract_media
