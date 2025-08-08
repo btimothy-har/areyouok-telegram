@@ -3,7 +3,7 @@ You are using the research version of "Are You OK?" Please note the following:
 
 - You need to explicitly start a new session by sending the command `/start`.
 - You can only interact with the bot in the context of that session.
-- Sessions are automatically ended after 10 minutes of inactivity.
+- Sessions are automatically ended after {chat_session_timeout_mins} minutes of inactivity.
 - You can end a session at any time by sending the command `/end`.
 - Upon ending a session, you will be prompted to provide feedback about your experience (if you had bot interactions).
 - Your past sessions are not carried over to the next session.

@@ -5,6 +5,7 @@ from datetime import datetime
 import telegram
 from telegram.ext import ContextTypes
 
+from areyouok_telegram.config import CHAT_SESSION_TIMEOUT_MINS
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database
@@ -29,7 +30,7 @@ async def on_start_command_research(update: telegram.Update, context: ContextTyp
             await Sessions.create_session(db_conn, str(update.effective_chat.id), update.message.date)
             await context.bot.send_message(
                 chat_id=update.effective_chat.id,
-                text=RESEARCH_START_INFO,
+                text=RESEARCH_START_INFO.format(chat_session_timeout_mins=CHAT_SESSION_TIMEOUT_MINS),
             )
         else:
             await context.bot.send_message(

@@ -7,7 +7,7 @@ import pydantic_ai
 import telegram
 from telegram.ext import ContextTypes
 
-from areyouok_telegram.config import ENV
+from areyouok_telegram.config import CHAT_SESSION_TIMEOUT_MINS
 from areyouok_telegram.data import Context
 from areyouok_telegram.data import MediaFiles
 from areyouok_telegram.data import Messages
@@ -32,8 +32,6 @@ from .utils import close_chat_session
 from .utils import get_chat_session
 from .utils import log_bot_activity
 from .utils import save_session_context
-
-SESSION_TIMEOUT = timedelta(minutes=10) if ENV == "research" else timedelta(minutes=60)
 
 
 class ConversationJob(BaseJob):
@@ -80,7 +78,7 @@ class ConversationJob(BaseJob):
             if chat_session.last_user_activity:
                 inactivity_duration = self._run_timestamp - chat_session.last_user_activity
 
-                if inactivity_duration > SESSION_TIMEOUT:
+                if inactivity_duration > timedelta(minutes=CHAT_SESSION_TIMEOUT_MINS):
                     with logfire.span(
                         f"Closing chat session {chat_session.session_id} due to inactivity.",
                         _span_name="ConversationJob._run.close_session",
