@@ -1,5 +1,7 @@
+import asyncio
 from collections.abc import Callable
 from collections.abc import Iterable
+from functools import wraps
 from typing import Any
 from typing import TypeVar
 
@@ -13,6 +15,8 @@ from tenacity import stop_after_attempt
 from tenacity import wait_chain
 from tenacity import wait_fixed
 from tenacity import wait_random_exponential
+
+from areyouok_telegram.config import ENV
 
 F = TypeVar("F", bound=Callable[..., Any])
 
@@ -60,6 +64,38 @@ def traced(
             extract_args=extract_args,
             record_return=record_return,
         )(func)
+
+    return decorator
+
+
+def environment_override(func_map: dict[str, Callable]) -> Callable:
+    """
+    Decorator that switches function implementations based on the ENV environment variable.
+
+    This decorator allows you to define different implementations of a function for different
+    environments (production, staging, development, etc.) and automatically selects the
+    appropriate one at runtime. Works with both synchronous and asynchronous functions.
+    """
+
+    def decorator(default_func: Callable) -> Callable:
+        is_async = asyncio.iscoroutinefunction(default_func)
+
+        if is_async:
+
+            @wraps(default_func)
+            async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
+                func = func_map.get(ENV, default_func)
+                return await func(*args, **kwargs)
+
+            return async_wrapper
+        else:
+
+            @wraps(default_func)
+            def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
+                func = func_map.get(ENV, default_func)
+                return func(*args, **kwargs)
+
+            return sync_wrapper
 
     return decorator
 

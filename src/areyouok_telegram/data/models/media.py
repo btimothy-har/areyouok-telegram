@@ -135,7 +135,7 @@ class MediaFiles(Base):
         return media_files
 
     @classmethod
-    @traced(extract_args=["file_id"])
+    @traced(extract_args=["media_ids"])
     async def bulk_update_last_accessed(cls, db_conn: AsyncSession, media_ids: list[int]) -> None:
         """Update last_accessed_at timestamp for given media IDs.
 

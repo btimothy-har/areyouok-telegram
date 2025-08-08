@@ -49,7 +49,12 @@ if __name__ == "__main__":
     logging.getLogger("apscheduler.scheduler").setLevel(logging.ERROR)
     logging.getLogger("apscheduler.executors.default").setLevel(logging.WARNING)
 
-    console = False
+    console = logfire.ConsoleOptions(
+        span_style="show-parents",
+        show_project_link=False,
+        min_log_level="debug",
+        verbose=True,
+    )
     code_source = None
 
     if ENV in CONTROLLED_ENV:
@@ -58,17 +63,10 @@ if __name__ == "__main__":
                 repository=f"https://github.com/{GITHUB_REPOSITORY}",
                 revision=GITHUB_SHA,
             )
-    else:
-        console = logfire.ConsoleOptions(
-            span_style="show-parents",
-            show_project_link=False,
-            min_log_level="debug",
-            verbose=True,
-        )
 
     logfire.configure(
         send_to_logfire=True if LOGFIRE_TOKEN else False,
-        min_level="info" if ENV == "development" else "info",
+        min_level="debug" if ENV == "development" else "info",
         token=LOGFIRE_TOKEN,
         service_name="areyouok-telegram",
         service_version=version("areyouok-telegram"),

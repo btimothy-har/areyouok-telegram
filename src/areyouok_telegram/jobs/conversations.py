@@ -156,7 +156,7 @@ class ConversationJob(BaseJob):
         else:
             return agent_response
 
-    @traced(extract_args=["chat_session", "response"], record_return=True)
+    @traced(extract_args=["response"], record_return=True)
     async def execute_response(
         self, context: ContextTypes.DEFAULT_TYPE, response: AgentResponse
     ) -> MessageTypes | None:

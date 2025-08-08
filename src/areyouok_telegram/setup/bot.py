@@ -9,8 +9,10 @@ from telegram.ext import Application
 from telegram.ext import ContextTypes
 
 from areyouok_telegram.config import ENV
+from areyouok_telegram.research.setup import setup_bot_commands_research
 from areyouok_telegram.setup.exceptions import BotDescriptionSetupError
 from areyouok_telegram.setup.exceptions import BotNameSetupError
+from areyouok_telegram.utils import environment_override
 from areyouok_telegram.utils import traced
 
 
@@ -67,7 +69,10 @@ async def setup_bot_name(ctx: Application | ContextTypes.DEFAULT_TYPE):
     if not success:
         raise BotNameSetupError(new_name)
 
-    logfire.info(f"Bot name set to: {new_name}")
+    logfire.info(
+        "Bot name set.",
+        new_name=new_name,
+    )
 
 
 @traced(extract_args=False)
@@ -106,4 +111,15 @@ async def setup_bot_description(ctx: Application | ContextTypes.DEFAULT_TYPE):
     if not success:
         raise BotDescriptionSetupError()
 
-    logfire.info(f"Bot description set to: {new_description}")
+    logfire.info(
+        "Bot description set.",
+        new_description=new_description,
+    )
+
+
+@environment_override({
+    "research": setup_bot_commands_research,
+})
+@traced(extract_args=False)
+async def setup_bot_commands(ctx: Application | ContextTypes.DEFAULT_TYPE):
+    await ctx.bot.set_my_commands(commands=[])
