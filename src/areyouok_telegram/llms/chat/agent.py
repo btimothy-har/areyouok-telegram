@@ -19,7 +19,7 @@ from areyouok_telegram.llms.validators.content_check import ContentCheckDependen
 from areyouok_telegram.llms.validators.content_check import ContentCheckResponse
 from areyouok_telegram.llms.validators.content_check import content_check_agent
 
-from .personalities import EXPLORATION_PERSONALITY
+from .personalities import CELEBRATION_PERSONALITY
 
 
 @dataclass
@@ -130,7 +130,7 @@ If there is an important message for the user (not "None"), you MUST acknowledge
     in a supportive and understanding way.
 </important_message_for_user>
 
-{EXPLORATION_PERSONALITY}
+{CELEBRATION_PERSONALITY.as_prompt_string}
     """
 
 
