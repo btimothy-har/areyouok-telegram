@@ -11,6 +11,7 @@ from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database
 from areyouok_telegram.handlers.exceptions import NoMessageError
 from areyouok_telegram.handlers.media_utils import extract_media_from_telegram_message
+from areyouok_telegram.research.model import ResearchScenario
 
 from .constants import END_NO_ACTIVE_SESSION
 from .constants import FEEDBACK_REQUEST
@@ -27,7 +28,11 @@ async def on_start_command_research(update: telegram.Update, context: ContextTyp
         )
 
         if not active_session:
-            await Sessions.create_session(db_conn, str(update.effective_chat.id), update.message.date)
+            session = await Sessions.create_session(db_conn, str(update.effective_chat.id), update.message.date)
+            await ResearchScenario.generate_for_session(
+                db_conn=db_conn,
+                session_id=session.session_key,
+            )
             await context.bot.send_message(
                 chat_id=update.effective_chat.id,
                 text=RESEARCH_START_INFO.format(chat_session_timeout_mins=CHAT_SESSION_TIMEOUT_MINS),

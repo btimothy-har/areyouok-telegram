@@ -10,17 +10,21 @@ from areyouok_telegram.utils import traced
 
 @traced(extract_args=["update"])
 @db_retry()
-@environment_override({
-    "research": on_start_command_research,
-})
+@environment_override(
+    {
+        "research": on_start_command_research,
+    }
+)
 async def on_start_command(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):  # noqa: ARG001
     return
 
 
 @traced(extract_args=["update"])
 @db_retry()
-@environment_override({
-    "research": on_end_command_research,
-})
+@environment_override(
+    {
+        "research": on_end_command_research,
+    }
+)
 async def on_end_command(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):  # noqa: ARG001
     return
