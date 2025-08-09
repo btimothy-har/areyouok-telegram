@@ -1,5 +1,4 @@
 import hashlib
-from datetime import UTC
 from datetime import datetime
 from typing import Optional
 
@@ -49,11 +48,11 @@ class Sessions(Base):
     @property
     def has_bot_responded(self) -> bool:
         """Check if the bot has responded to the latest updates in the session."""
-        if not self.last_bot_activity:
-            return False
-
         if not self.last_user_activity:
             return True
+
+        if not self.last_bot_activity:
+            return False
 
         return self.last_bot_activity > self.last_user_activity
 
@@ -96,12 +95,8 @@ class Sessions(Base):
     @traced(extract_args=False)
     async def get_messages(self, db_conn: AsyncSession) -> list[telegram.Message]:
         """Retrieve all messages from this session."""
-        # Determine the end time - either session_end or current time for active sessions
-        end_time = self.session_end if self.session_end else datetime.now(UTC)
 
-        return await Messages.retrieve_by_chat(
-            db_conn=db_conn, chat_id=self.chat_id, from_time=self.session_start, to_time=end_time
-        )
+        return await Messages.retrieve_by_session(db_conn=db_conn, session_id=self.session_id)
 
     @classmethod
     @traced(extract_args=["chat_id", "timestamp"], record_return=True)

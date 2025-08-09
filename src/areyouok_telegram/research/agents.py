@@ -1,5 +1,6 @@
 import pydantic_ai
 
+from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database
 from areyouok_telegram.llms.chat import chat_agent
 from areyouok_telegram.llms.models import CHAT_GPT_5
@@ -17,7 +18,7 @@ MODEL_MAP = {
 
 
 async def generate_agent_for_research_session(
-    session_id: str,
+    chat_session: Sessions,
 ) -> pydantic_ai.Agent:
     """Insert a research scenario for a session, or return existing if already present.
 
@@ -33,7 +34,7 @@ async def generate_agent_for_research_session(
     async with async_database() as db_conn:
         scenario = await ResearchScenario.get_for_session_id(
             db_conn=db_conn,
-            session_id=session_id,
+            session_id=chat_session.session_id,
         )
 
     model = PERSONALITY_SCENARIOS.get(scenario.scenario_config, {}).get("model", None)

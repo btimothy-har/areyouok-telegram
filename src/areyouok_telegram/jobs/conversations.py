@@ -19,17 +19,15 @@ from areyouok_telegram.llms.chat import AgentResponse
 from areyouok_telegram.llms.chat import ChatAgentDependencies
 from areyouok_telegram.llms.chat import ReactionResponse
 from areyouok_telegram.llms.chat import TextResponse
-from areyouok_telegram.llms.chat import chat_agent
 from areyouok_telegram.llms.context_compression import ContextTemplate
 from areyouok_telegram.llms.context_compression import context_compression_agent
 from areyouok_telegram.llms.utils import context_to_model_message
 from areyouok_telegram.llms.utils import run_agent_with_tracking
 from areyouok_telegram.llms.utils import telegram_message_to_model_message
-from areyouok_telegram.research.agents import generate_agent_for_research_session
 from areyouok_telegram.utils import db_retry
-from areyouok_telegram.utils import environment_override
 from areyouok_telegram.utils import traced
 
+from .utils import _generate_chat_agent
 from .utils import close_chat_session
 from .utils import get_chat_session
 from .utils import log_bot_activity
@@ -130,9 +128,13 @@ class ConversationJob(BaseJob):
         """
         agent_run_payload = None
 
+        agent = await _generate_chat_agent(
+            chat_session=chat_session,
+        )
+
         try:
             agent_run_payload = await run_agent_with_tracking(
-                chat_agent,
+                agent,
                 chat_id=self.chat_id,
                 session_id=chat_session.session_id,
                 run_kwargs={
@@ -296,23 +298,6 @@ class ConversationJob(BaseJob):
                 )
 
             return message_history, media_instruction
-
-    @environment_override({
-        "research": generate_agent_for_research_session,
-    })
-    async def _generate_agent(self, context: ContextTypes.DEFAULT_TYPE, chat_session: Sessions) -> pydantic_ai.Agent:  # noqa: ARG002
-        """
-        Generate the chat agent for this conversation job.
-        Primarily used to allow for ENV-specific injection of different chat agents.
-
-        Args:
-            context: The context for the chat agent.
-            chat_session: The chat session for which the agent is being generated.
-
-        Returns:
-            pydantic_ai.Agent: The generated chat agent.
-        """
-        return chat_agent
 
     async def _execute_text_response(
         self, context: ContextTypes.DEFAULT_TYPE, response: TextResponse

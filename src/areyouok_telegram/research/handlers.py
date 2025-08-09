@@ -79,16 +79,20 @@ async def on_new_message_research(update: telegram.Update, context: ContextTypes
         raise NoMessageError(update.update_id)
 
     async with async_database() as db_conn:
-        # Save the message
-        await Messages.new_or_update(
-            db_conn=db_conn, user_id=update.effective_user.id, chat_id=update.effective_chat.id, message=update.message
-        )
-
         extract_media = asyncio.create_task(extract_media_from_telegram_message(db_conn, update.message))
 
         # Handle session management
         chat_id = str(update.effective_chat.id)
         active_session = await Sessions.get_active_session(db_conn, chat_id)
+
+        # Save the message
+        await Messages.new_or_update(
+            db_conn=db_conn,
+            user_id=update.effective_user.id,
+            chat_id=update.effective_chat.id,
+            message=update.message,
+            session_key=active_session.session_key if active_session else None,
+        )
 
         if active_session:
             # Record new user message if there is an active session - distinct from the main handler
