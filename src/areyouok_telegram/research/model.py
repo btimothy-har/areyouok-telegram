@@ -4,6 +4,7 @@ from datetime import datetime
 
 from sqlalchemy import Column
 from sqlalchemy import ForeignKey
+from sqlalchemy import Integer
 from sqlalchemy import String
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import TIMESTAMP
@@ -24,7 +25,7 @@ class ResearchScenario(Base):
     session_key = Column(String, ForeignKey(f"{ENV}.sessions.session_key"), nullable=False, unique=True)
     scenario_config = Column(String, nullable=False)
 
-    id = Column(String, primary_key=True, autoincrement=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False)
 
     @property

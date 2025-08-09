@@ -1,9 +1,6 @@
 from dataclasses import dataclass
 
 import pydantic_ai
-from pydantic_ai.models.anthropic import AnthropicModel
-from pydantic_ai.models.fallback import FallbackModel
-from pydantic_ai.models.openai import OpenAIModel
 from telegram.ext import ContextTypes
 
 from areyouok_telegram.data import Messages
@@ -12,7 +9,7 @@ from areyouok_telegram.llms.chat.responses import AgentResponse
 from areyouok_telegram.llms.exceptions import InvalidMessageError
 from areyouok_telegram.llms.exceptions import ReactToSelfError
 from areyouok_telegram.llms.exceptions import UnacknowledgedImportantMessageError
-from areyouok_telegram.llms.utils import openrouter_provider
+from areyouok_telegram.llms.models import CHAT_SONNET_4
 from areyouok_telegram.llms.utils import pydantic_ai_instrumentation
 from areyouok_telegram.llms.utils import run_agent_with_tracking
 from areyouok_telegram.llms.validators.content_check import ContentCheckDependencies
@@ -34,25 +31,8 @@ class ChatAgentDependencies:
     instruction: str | None = None
 
 
-model_settings = pydantic_ai.settings.ModelSettings(
-    temperature=0.6,
-    parallel_tool_calls=True,
-)
-
-agent_models = FallbackModel(
-    AnthropicModel(
-        model_name="claude-sonnet-4-20250514",
-        settings=model_settings,
-    ),
-    OpenAIModel(
-        model_name="anthropic/claude-sonnet-4",
-        provider=openrouter_provider,
-        settings=model_settings,
-    ),
-)
-
 chat_agent = pydantic_ai.Agent(
-    model=agent_models,
+    model=CHAT_SONNET_4.model,
     output_type=AgentResponse,
     deps_type=ChatAgentDependencies,
     name="areyouok_telegram_agent",

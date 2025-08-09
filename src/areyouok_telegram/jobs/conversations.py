@@ -25,7 +25,9 @@ from areyouok_telegram.llms.context_compression import context_compression_agent
 from areyouok_telegram.llms.utils import context_to_model_message
 from areyouok_telegram.llms.utils import run_agent_with_tracking
 from areyouok_telegram.llms.utils import telegram_message_to_model_message
+from areyouok_telegram.research.agents import generate_agent_for_research_session
 from areyouok_telegram.utils import db_retry
+from areyouok_telegram.utils import environment_override
 from areyouok_telegram.utils import traced
 
 from .utils import close_chat_session
@@ -280,9 +282,9 @@ class ConversationJob(BaseJob):
 
                 if media:
                     unsupported_media = [m for m in media if not m.is_anthropic_supported]
-                    unsupported_media_types.extend(
-                        [m.mime_type for m in unsupported_media if not m.mime_type.startswith("audio/")]
-                    )
+                    unsupported_media_types.extend([
+                        m.mime_type for m in unsupported_media if not m.mime_type.startswith("audio/")
+                    ])
 
             if len(unsupported_media_types) == 1:
                 media_instruction = (
@@ -294,6 +296,23 @@ class ConversationJob(BaseJob):
                 )
 
             return message_history, media_instruction
+
+    @environment_override({
+        "research": generate_agent_for_research_session,
+    })
+    async def _generate_agent(self, context: ContextTypes.DEFAULT_TYPE, chat_session: Sessions) -> pydantic_ai.Agent:  # noqa: ARG002
+        """
+        Generate the chat agent for this conversation job.
+        Primarily used to allow for ENV-specific injection of different chat agents.
+
+        Args:
+            context: The context for the chat agent.
+            chat_session: The chat session for which the agent is being generated.
+
+        Returns:
+            pydantic_ai.Agent: The generated chat agent.
+        """
+        return chat_agent
 
     async def _execute_text_response(
         self, context: ContextTypes.DEFAULT_TYPE, response: TextResponse

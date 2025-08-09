@@ -1,27 +1,10 @@
 import pydantic_ai
-from pydantic_ai.models.fallback import FallbackModel
-from pydantic_ai.models.openai import OpenAIModel
 
-from areyouok_telegram.llms.utils import openrouter_provider
+from areyouok_telegram.llms.models import VALIDATOR_GPT_5_NANO
 from areyouok_telegram.llms.utils import pydantic_ai_instrumentation
 
-model_settings = pydantic_ai.settings.ModelSettings(temperature=0.0)
-
-agent_models = FallbackModel(
-    OpenAIModel(
-        model_name="gpt-4.1-nano-2025-04-14",
-        settings=model_settings,
-    ),
-    OpenAIModel(
-        model_name="openai/gpt-4.1-nano",
-        provider=openrouter_provider,
-        settings=model_settings,
-    ),
-)
-
-
 anonymization_agent = pydantic_ai.Agent(
-    model=agent_models,
+    model=VALIDATOR_GPT_5_NANO.model,
     name="anonymization_agent",
     end_strategy="exhaustive",
     instrument=pydantic_ai_instrumentation,
