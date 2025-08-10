@@ -9,9 +9,11 @@ from unittest.mock import patch
 import pytest
 import telegram
 
+from areyouok_telegram.jobs.exceptions import UserNotFoundForChatError
 from areyouok_telegram.jobs.utils import close_chat_session
 from areyouok_telegram.jobs.utils import get_all_inactive_sessions
 from areyouok_telegram.jobs.utils import get_chat_session
+from areyouok_telegram.jobs.utils import get_user_encryption_key
 from areyouok_telegram.jobs.utils import log_bot_activity
 from areyouok_telegram.jobs.utils import save_session_context
 
@@ -92,6 +94,44 @@ class TestGetAllInactiveSessions:
         assert result == []
 
 
+class TestGetUserEncryptionKey:
+    """Test the get_user_encryption_key function."""
+
+    @pytest.mark.asyncio
+    async def test_get_user_encryption_key_success(self):
+        """Test successfully retrieving user encryption key."""
+        mock_user = MagicMock()
+        mock_user.retrieve_key = MagicMock(return_value="test_encryption_key")
+        mock_user.username = "testuser"
+
+        with patch("areyouok_telegram.jobs.utils.async_database") as mock_async_db:
+            mock_db_conn = AsyncMock()
+            mock_async_db.return_value.__aenter__.return_value = mock_db_conn
+
+            with patch(
+                "areyouok_telegram.jobs.utils.Users.get_by_id", new=AsyncMock(return_value=mock_user)
+            ) as mock_get_user:
+                result = await get_user_encryption_key("chat123")
+
+        assert result == "test_encryption_key"
+        mock_get_user.assert_called_once_with(mock_db_conn, "chat123")
+        mock_user.retrieve_key.assert_called_once_with("testuser")
+
+    @pytest.mark.asyncio
+    async def test_get_user_encryption_key_user_not_found(self):
+        """Test when user is not found (non-private chat)."""
+        with patch("areyouok_telegram.jobs.utils.async_database") as mock_async_db:
+            mock_db_conn = AsyncMock()
+            mock_async_db.return_value.__aenter__.return_value = mock_db_conn
+
+            with patch("areyouok_telegram.jobs.utils.Users.get_by_id", new=AsyncMock(return_value=None)):
+                with pytest.raises(UserNotFoundForChatError) as exc_info:
+                    await get_user_encryption_key("chat123")
+
+        assert exc_info.value.chat_id == "chat123"
+        assert "non-private chat" in str(exc_info.value)
+
+
 class TestLogBotActivity:
     """Test the log_bot_activity function."""
 
@@ -111,14 +151,20 @@ class TestLogBotActivity:
             mock_async_db.return_value.__aenter__.return_value = mock_db_conn
 
             with patch("areyouok_telegram.jobs.utils.Messages.new_or_update", new=AsyncMock()) as mock_new_or_update:
-                await log_bot_activity("bot123", "chat456", mock_session, mock_message)
+                await log_bot_activity(
+                    bot_id="bot123",
+                    user_encryption_key="test_encryption_key",
+                    chat_id="chat456",
+                    chat_session=mock_session,
+                    response_message=mock_message,
+                )
 
         # Verify new_activity was called with bot flag
         mock_session.new_activity.assert_called_once_with(db_conn=mock_db_conn, timestamp=frozen_time, is_user=False)
 
         # Verify message was saved
         mock_new_or_update.assert_called_once_with(
-            db_conn=mock_db_conn, user_id="bot123", chat_id="chat456", message=mock_message
+            mock_db_conn, "test_encryption_key", user_id="bot123", chat_id="chat456", message=mock_message
         )
 
         # Verify new_message was called for telegram.Message
@@ -139,14 +185,20 @@ class TestLogBotActivity:
             mock_async_db.return_value.__aenter__.return_value = mock_db_conn
 
             with patch("areyouok_telegram.jobs.utils.Messages.new_or_update", new=AsyncMock()) as mock_new_or_update:
-                await log_bot_activity("bot123", "chat456", mock_session, mock_reaction)
+                await log_bot_activity(
+                    bot_id="bot123",
+                    user_encryption_key="test_encryption_key",
+                    chat_id="chat456",
+                    chat_session=mock_session,
+                    response_message=mock_reaction,
+                )
 
         # Verify new_activity was called
         mock_session.new_activity.assert_called_once_with(db_conn=mock_db_conn, timestamp=frozen_time, is_user=False)
 
         # Verify message was saved
         mock_new_or_update.assert_called_once_with(
-            db_conn=mock_db_conn, user_id="bot123", chat_id="chat456", message=mock_reaction
+            mock_db_conn, "test_encryption_key", user_id="bot123", chat_id="chat456", message=mock_reaction
         )
 
         # Verify new_message was NOT called for MessageReactionUpdated
@@ -164,7 +216,13 @@ class TestLogBotActivity:
             mock_async_db.return_value.__aenter__.return_value = mock_db_conn
 
             with patch("areyouok_telegram.jobs.utils.Messages.new_or_update", new=AsyncMock()) as mock_new_or_update:
-                await log_bot_activity("bot123", "chat456", mock_session, None)
+                await log_bot_activity(
+                    bot_id="bot123",
+                    user_encryption_key="test_encryption_key",
+                    chat_id="chat456",
+                    chat_session=mock_session,
+                    response_message=None,
+                )
 
         # Verify new_activity was still called
         mock_session.new_activity.assert_called_once_with(db_conn=mock_db_conn, timestamp=frozen_time, is_user=False)
@@ -192,11 +250,12 @@ class TestSaveSessionContext:
             mock_async_db.return_value.__aenter__.return_value = mock_db_conn
 
             with patch("areyouok_telegram.jobs.utils.Context.new_or_update", new=AsyncMock()) as mock_new_or_update:
-                await save_session_context("chat456", mock_session, mock_context)
+                await save_session_context("test_encryption_key", "chat456", mock_session, mock_context)
 
         # Verify Context.new_or_update was called with correct args
         mock_new_or_update.assert_called_once_with(
-            db_conn=mock_db_conn,
+            mock_db_conn,
+            "test_encryption_key",
             chat_id="chat456",
             session_id="session123",
             ctype="session",

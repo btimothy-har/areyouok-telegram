@@ -56,8 +56,8 @@ async def on_end_command_research(update: telegram.Update, context: ContextTypes
         if active_session:
             await active_session.close_session(db_conn, datetime.now(UTC))
 
-            messages = await active_session.get_messages(db_conn)
-            if len(messages) < 0:
+            raw_messages = await active_session.get_messages(db_conn)
+            if len(raw_messages) <= 5:
                 await context.bot.send_message(
                     chat_id=update.effective_chat.id,
                     text=NO_FEEDBACK_REQUEST,

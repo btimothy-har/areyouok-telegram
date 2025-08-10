@@ -134,7 +134,7 @@ class TestSessionCleanupJob:
         with (
             patch("areyouok_telegram.jobs.session_cleanup.async_database") as mock_async_db,
             patch(
-                "areyouok_telegram.jobs.session_cleanup.Messages.retrieve_raw_by_session",
+                "areyouok_telegram.jobs.session_cleanup.Messages.retrieve_by_session",
                 new=AsyncMock(return_value=mock_messages),
             ) as mock_retrieve,
         ):
@@ -146,8 +146,8 @@ class TestSessionCleanupJob:
         # Verify correct number of messages were deleted
         assert result == 2  # Only 2 successful deletions
 
-        # Verify Messages.retrieve_raw_by_session was called correctly
-        mock_retrieve.assert_called_once_with(db_conn=mock_db_conn, session_id="session123")
+        # Verify Messages.retrieve_by_session was called correctly
+        mock_retrieve.assert_called_once_with(mock_db_conn, session_id="session123")
 
         # Verify each message's delete was called
         mock_msg1.delete.assert_called_once_with(db_conn=mock_db_conn)
@@ -167,7 +167,7 @@ class TestSessionCleanupJob:
         with (
             patch("areyouok_telegram.jobs.session_cleanup.async_database") as mock_async_db,
             patch(
-                "areyouok_telegram.jobs.session_cleanup.Messages.retrieve_raw_by_session",
+                "areyouok_telegram.jobs.session_cleanup.Messages.retrieve_by_session",
                 new=AsyncMock(return_value=[]),
             ) as mock_retrieve,
         ):
@@ -178,5 +178,5 @@ class TestSessionCleanupJob:
 
         assert result == 0
 
-        # Verify Messages.retrieve_raw_by_session was called
-        mock_retrieve.assert_called_once_with(db_conn=mock_db_conn, session_id="session123")
+        # Verify Messages.retrieve_by_session was called
+        mock_retrieve.assert_called_once_with(mock_db_conn, session_id="session123")

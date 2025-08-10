@@ -161,9 +161,7 @@ class TestSessions:
             result = await session.get_messages(mock_db_session)
 
             assert result == mock_messages
-            mock_messages_class.retrieve_by_session.assert_called_once_with(
-                db_conn=mock_db_session, session_id="session_123"
-            )
+            mock_messages_class.retrieve_by_session.assert_called_once_with(mock_db_session, session_id="session_123")
 
     @pytest.mark.asyncio
     async def test_create_session(self, mock_db_session):

@@ -45,6 +45,10 @@ class TestConversationJob:
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
 
         with (
+            patch(
+                "areyouok_telegram.jobs.conversations.get_user_encryption_key",
+                new=AsyncMock(return_value="test_encryption_key"),
+            ),
             patch("areyouok_telegram.jobs.conversations.get_chat_session", new=AsyncMock(return_value=mock_session)),
             patch("areyouok_telegram.jobs.conversations.logfire.debug") as mock_log_debug,
         ):
@@ -66,6 +70,10 @@ class TestConversationJob:
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
 
         with (
+            patch(
+                "areyouok_telegram.jobs.conversations.get_user_encryption_key",
+                new=AsyncMock(return_value="test_encryption_key"),
+            ),
             patch("areyouok_telegram.jobs.conversations.get_chat_session", new=AsyncMock(return_value=mock_session)),
             patch.object(job, "close_session", new=AsyncMock()) as mock_close,
             patch.object(job, "stop", new=AsyncMock()) as mock_stop,
@@ -74,7 +82,7 @@ class TestConversationJob:
             await job._run(mock_context)
 
         # Verify session was closed and job was stopped
-        mock_close.assert_called_once_with(chat_session=mock_session)
+        mock_close.assert_called_once_with("test_encryption_key", chat_session=mock_session)
         mock_stop.assert_called_once_with(mock_context)
 
     @pytest.mark.asyncio
@@ -95,6 +103,10 @@ class TestConversationJob:
         mock_message = MagicMock(spec=telegram.Message)
 
         with (
+            patch(
+                "areyouok_telegram.jobs.conversations.get_user_encryption_key",
+                new=AsyncMock(return_value="test_encryption_key"),
+            ),
             patch("areyouok_telegram.jobs.conversations.get_chat_session", new=AsyncMock(return_value=mock_session)),
             patch.object(job, "_prepare_conversation_input", new=AsyncMock(return_value=([], None))),
             patch.object(job, "generate_response", new=AsyncMock(return_value=mock_response)) as mock_generate,
@@ -107,10 +119,16 @@ class TestConversationJob:
         # Verify response was generated and executed
         assert job.last_response == "TextResponse"
         mock_generate.assert_called_once()
-        mock_execute.assert_called_once_with(context=mock_context, response=mock_response)
+        mock_execute.assert_called_once_with("test_encryption_key", context=mock_context, response=mock_response)
 
         # Verify bot activity was logged
-        mock_log_activity.assert_called_once_with("bot123", "123", mock_session, mock_message)
+        mock_log_activity.assert_called_once_with(
+            bot_id="bot123",
+            user_encryption_key="test_encryption_key",
+            chat_id="123",
+            chat_session=mock_session,
+            response_message=mock_message,
+        )
 
     @pytest.mark.asyncio
     async def test_generate_response_success(self):
@@ -130,7 +148,11 @@ class TestConversationJob:
             "areyouok_telegram.jobs.conversations.run_agent_with_tracking", new=AsyncMock(return_value=mock_payload)
         ):
             result = await job.generate_response(
-                context=mock_context, chat_session=mock_session, conversation_history=[], instructions=None
+                user_encryption_key="test_encryption_key",
+                context=mock_context,
+                chat_session=mock_session,
+                conversation_history=[],
+                instructions=None,
             )
 
         assert result == mock_response
@@ -152,7 +174,11 @@ class TestConversationJob:
             patch("areyouok_telegram.jobs.conversations.logfire.exception") as mock_log_exception,
         ):
             result = await job.generate_response(
-                context=mock_context, chat_session=mock_session, conversation_history=[], instructions=None
+                user_encryption_key="test_encryption_key",
+                context=mock_context,
+                chat_session=mock_session,
+                conversation_history=[],
+                instructions=None,
             )
 
         assert result is None
@@ -172,7 +198,7 @@ class TestConversationJob:
             patch.object(job, "_execute_text_response", new=AsyncMock(return_value=mock_message)) as mock_execute_text,
             patch("areyouok_telegram.jobs.conversations.logfire.info") as mock_log_info,
         ):
-            result = await job.execute_response(mock_context, mock_response)
+            result = await job.execute_response("test_encryption_key", context=mock_context, response=mock_response)
 
         assert result == mock_message
         mock_execute_text.assert_called_once_with(context=mock_context, response=mock_response)
@@ -205,7 +231,7 @@ class TestConversationJob:
             mock_db_conn = AsyncMock()
             mock_async_db.return_value.__aenter__.return_value = mock_db_conn
 
-            result = await job.execute_response(mock_context, mock_response)
+            result = await job.execute_response("test_encryption_key", context=mock_context, response=mock_response)
 
         assert result == mock_reaction
         mock_execute_reaction.assert_called_once_with(
@@ -234,7 +260,7 @@ class TestConversationJob:
             mock_db_conn = AsyncMock()
             mock_async_db.return_value.__aenter__.return_value = mock_db_conn
 
-            result = await job.execute_response(mock_context, mock_response)
+            result = await job.execute_response("test_encryption_key", context=mock_context, response=mock_response)
 
         assert result is None
         mock_log_warning.assert_called_once_with("Message 456 not found in chat 123, skipping reaction.")
@@ -324,7 +350,7 @@ class TestConversationJob:
             mock_db_conn = AsyncMock()
             mock_async_db.return_value.__aenter__.return_value = mock_db_conn
 
-            await job.close_session(mock_session)
+            await job.close_session("test_encryption_key", chat_session=mock_session)
 
         mock_log_warning.assert_called_once_with(
             "Context already exists for session, skipping compression.", session_id="session123"
@@ -348,7 +374,7 @@ class TestConversationJob:
             mock_db_conn = AsyncMock()
             mock_async_db.return_value.__aenter__.return_value = mock_db_conn
 
-            await job.close_session(mock_session)
+            await job.close_session("test_encryption_key", chat_session=mock_session)
 
         mock_log_warning.assert_called_once_with("No messages found in chat session session123, nothing to compress.")
 
@@ -376,11 +402,11 @@ class TestConversationJob:
             mock_db_conn = AsyncMock()
             mock_async_db.return_value.__aenter__.return_value = mock_db_conn
 
-            await job.close_session(mock_session)
+            await job.close_session("test_encryption_key", chat_session=mock_session)
 
         # Verify compression and closing
         # Note: Can't directly assert on job._compress_session_context since it's the original method
         # The mock_save and mock_close assertions below verify the flow worked
-        mock_save.assert_called_once_with("123", mock_session, mock_compressed)
+        mock_save.assert_called_once_with("test_encryption_key", "123", mock_session, mock_compressed)
         mock_close.assert_called_once_with(mock_session)
         mock_log_info.assert_called_once_with("Session session123 closed due to inactivity.")

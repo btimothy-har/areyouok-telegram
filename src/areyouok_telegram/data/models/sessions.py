@@ -2,7 +2,6 @@ import hashlib
 from datetime import datetime
 from typing import Optional
 
-import telegram
 from sqlalchemy import Column
 from sqlalchemy import Integer
 from sqlalchemy import String
@@ -95,10 +94,10 @@ class Sessions(Base):
         db_conn.add(self)
 
     @traced(extract_args=False)
-    async def get_messages(self, db_conn: AsyncSession) -> list[telegram.Message]:
-        """Retrieve all messages from this session."""
+    async def get_messages(self, db_conn: AsyncSession) -> list["Messages"]:
+        """Retrieve all raw messages from this session."""
 
-        return await Messages.retrieve_by_session(db_conn=db_conn, session_id=self.session_id)
+        return await Messages.retrieve_by_session(db_conn, session_id=self.session_id)
 
     @classmethod
     @traced(extract_args=["chat_id", "timestamp"], record_return=True)

@@ -220,19 +220,7 @@ class Messages(Base):
     async def retrieve_by_session(
         cls,
         db_conn: AsyncSession,
-        user_encryption_key: str,
         *,
-        session_id: str,
-    ) -> list[MessageTypes]:
-        """Retrieve messages by session_id, returning telegram.Message objects."""
-        messages = await cls.retrieve_raw_by_session(db_conn, session_id)
-        return [msg.to_telegram_object(user_encryption_key) for msg in messages]
-
-    @classmethod
-    @traced(extract_args=["session_id"])
-    async def retrieve_raw_by_session(
-        cls,
-        db_conn: AsyncSession,
         session_id: str,
     ) -> list["Messages"]:
         """Retrieve messages by session_id, returning SQLAlchemy Messages models."""
