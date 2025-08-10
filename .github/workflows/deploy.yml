@@ -1,0 +1,27 @@
+name: Deploy
+
+on:
+  push:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+  
+jobs:
+  test_connection:
+    name: Test SSH Connection
+    runs-on: ubuntu-latest
+
+    steps:    
+    - name: Checkout
+      uses: actions/checkout@v4
+    
+    - name: Connect to Host
+      uses: appleboy/ssh-action@v0.1.3
+      with:
+        host: ${{ secrets.HOST_ADDRESS }}
+        username: ${{ secrets.HOST_USERNAME }}
+        key: ${{ secrets.HOST_SSH_KEY }}
+        script: |
+          echo "Testing SSH connection..."
+    
