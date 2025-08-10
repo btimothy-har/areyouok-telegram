@@ -6,6 +6,7 @@ import telegram
 from telegram.ext import ContextTypes
 
 from areyouok_telegram.config import CHAT_SESSION_TIMEOUT_MINS
+from areyouok_telegram.config import FEEDBACK_URL
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database
@@ -63,7 +64,7 @@ async def on_end_command_research(update: telegram.Update, context: ContextTypes
             else:
                 await context.bot.send_message(
                     chat_id=update.effective_chat.id,
-                    text=FEEDBACK_REQUEST.format(feedback_url="https://yahoo.com"),
+                    text=FEEDBACK_REQUEST.format(feedback_url=FEEDBACK_URL),
                     link_preview_options=telegram.LinkPreviewOptions(is_disabled=False, show_above_text=False),
                 )
 

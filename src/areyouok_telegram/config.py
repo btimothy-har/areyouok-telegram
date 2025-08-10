@@ -22,5 +22,7 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-CHAT_SESSION_TIMEOUT_MINS = int(os.getenv("CHAT_SESSION_TIMEOUT", "60"))  # Default to 60 minutes
+CHAT_SESSION_TIMEOUT_MINS = int(os.getenv("CHAT_SESSION_TIMEOUT_MINS", "60"))  # Default to 60 minutes
 LOG_CHAT_MESSAGES = os.getenv("LOG_CHAT_MESSAGES", "false").lower() in ("true", "1", "yes")
+
+FEEDBACK_URL = os.getenv("FEEDBACK_URL", "NO_FEEDBACK_URL")

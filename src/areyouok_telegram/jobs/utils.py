@@ -3,6 +3,7 @@ from datetime import datetime
 
 import pydantic_ai
 import telegram
+from telegram.ext import ContextTypes
 
 from areyouok_telegram.data import Context
 from areyouok_telegram.data import Messages
@@ -11,6 +12,7 @@ from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database
 from areyouok_telegram.llms.chat import chat_agent
 from areyouok_telegram.llms.context_compression import ContextTemplate
+from areyouok_telegram.research.agents import close_research_session
 from areyouok_telegram.research.agents import generate_agent_for_research_session
 from areyouok_telegram.utils import db_retry
 from areyouok_telegram.utils import environment_override
@@ -93,7 +95,7 @@ async def close_chat_session(chat_session: Sessions):
 @environment_override({
     "research": generate_agent_for_research_session,
 })
-async def _generate_chat_agent(chat_session: Sessions) -> pydantic_ai.Agent:  # noqa: ARG001
+async def generate_chat_agent(chat_session: Sessions) -> pydantic_ai.Agent:  # noqa: ARG001
     """
     Generate the chat agent for a conversation job.
     Primarily used to allow for ENV-specific injection of different chat agents.
@@ -106,3 +108,16 @@ async def _generate_chat_agent(chat_session: Sessions) -> pydantic_ai.Agent:  # 
         pydantic_ai.Agent: The generated chat agent.
     """
     return chat_agent
+
+
+@environment_override({
+    "research": close_research_session,
+})
+async def post_cleanup_tasks(context: ContextTypes.DEFAULT_TYPE, chat_session: Sessions) -> None:  # noqa: ARG001
+    """
+    Perform any post-cleanup tasks after closing a chat session.
+    This can include logging, notifications, or other cleanup actions.
+
+    Primarily used to allow for ENV-specific injection of different post-cleanup tasks.
+    """
+    return

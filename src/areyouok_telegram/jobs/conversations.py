@@ -27,10 +27,11 @@ from areyouok_telegram.llms.utils import telegram_message_to_model_message
 from areyouok_telegram.utils import db_retry
 from areyouok_telegram.utils import traced
 
-from .utils import _generate_chat_agent
 from .utils import close_chat_session
+from .utils import generate_chat_agent
 from .utils import get_chat_session
 from .utils import log_bot_activity
+from .utils import post_cleanup_tasks
 from .utils import save_session_context
 
 
@@ -86,6 +87,7 @@ class ConversationJob(BaseJob):
                     ):
                         await self.close_session(chat_session=chat_session)
                         await self.stop(context)
+                        await post_cleanup_tasks(context, chat_session)
 
         else:
             with logfire.span(
@@ -128,7 +130,7 @@ class ConversationJob(BaseJob):
         """
         agent_run_payload = None
 
-        agent = await _generate_chat_agent(
+        agent = await generate_chat_agent(
             chat_session=chat_session,
         )
 

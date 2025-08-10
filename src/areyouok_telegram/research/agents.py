@@ -1,5 +1,8 @@
 import pydantic_ai
+import telegram
+from telegram.ext import ContextTypes
 
+from areyouok_telegram.config import FEEDBACK_URL
 from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database
 from areyouok_telegram.llms.chat import chat_agent
@@ -8,6 +11,8 @@ from areyouok_telegram.llms.models import CHAT_SONNET_3_5
 from areyouok_telegram.llms.models import CHAT_SONNET_4
 from areyouok_telegram.research.model import ResearchScenario
 
+from .constants import FEEDBACK_REQUEST
+from .constants import NO_FEEDBACK_REQUEST
 from .studies.personality_scenarios import PERSONALITY_SCENARIOS
 
 MODEL_MAP = {
@@ -43,3 +48,20 @@ async def generate_agent_for_research_session(
         agent.model = MODEL_MAP.get(model, CHAT_SONNET_4.model)
 
     return agent
+
+
+async def close_research_session(context: ContextTypes.DEFAULT_TYPE, chat_session: Sessions) -> None:
+    """Close the research session and clean up any resources."""
+    async with async_database() as db_conn:
+        messages = await chat_session.get_messages(db_conn)
+        if len(messages) <= 5:
+            await context.bot.send_message(
+                chat_id=chat_session.chat_id,
+                text=NO_FEEDBACK_REQUEST,
+            )
+        else:
+            await context.bot.send_message(
+                chat_id=chat_session.chat_id,
+                text=FEEDBACK_REQUEST.format(feedback_url=FEEDBACK_URL),
+                link_preview_options=telegram.LinkPreviewOptions(is_disabled=False, show_above_text=False),
+            )
