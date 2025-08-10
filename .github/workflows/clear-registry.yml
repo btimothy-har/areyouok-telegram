@@ -29,4 +29,5 @@ jobs:
         package-name: ${{ github.event.repository.name }}
         package-type: 'container'
         token: ${{ secrets.GITHUB_TOKEN }}
-        min-versions-to-keep: '3'
+        min-versions-to-keep: '1'
+        ignore-versions: 'latest'
