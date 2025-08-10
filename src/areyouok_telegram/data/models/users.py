@@ -38,8 +38,8 @@ class Users(Base):
     created_at = Column(TIMESTAMP(timezone=True), nullable=False)
     updated_at = Column(TIMESTAMP(timezone=True), nullable=False)
 
-    # TTL cache for decrypted keys (15 minutes TTL, max 1000 entries)
-    _key_cache: TTLCache[str, str] = TTLCache(maxsize=1000, ttl=900)
+    # TTL cache for decrypted keys (2 hours TTL, max 1000 entries)
+    _key_cache: TTLCache[str, str] = TTLCache(maxsize=1000, ttl=7200)
 
     @staticmethod
     def generate_user_key(user_id: str) -> str:
@@ -48,8 +48,8 @@ class Users(Base):
 
     @classmethod
     @traced(extract_args=["user"])
-    async def new_or_update(cls, db_conn: AsyncSession, user: telegram.User):
-        """Insert or update a user in the database."""
+    async def new_or_update(cls, db_conn: AsyncSession, user: telegram.User) -> "Users":
+        """Insert or update a user in the database and return the User object."""
         now = datetime.now(UTC)
 
         # Check if user already exists
@@ -87,6 +87,9 @@ class Users(Base):
 
         await db_conn.execute(stmt)
 
+        # Return the user object after upsert
+        return await cls.get_by_id(db_conn, str(user.id))
+
     @classmethod
     @traced(extract_args=["user_id"])
     async def get_by_id(cls, db_conn: AsyncSession, user_id: str) -> Optional["Users"]:
@@ -110,17 +113,14 @@ class Users(Base):
         if not self.encrypted_key:
             return None
 
-        # Create a cache key based on user_id and username
-        cache_key = f"{self.user_id}:{username}"
-
         # Check cache first
-        if cache_key in self._key_cache:
-            return self._key_cache[cache_key]
+        if self.user_key in self._key_cache:
+            return self._key_cache[self.user_key]
 
         # Decrypt the key
         decrypted_key = decrypt_user_key(self.encrypted_key, username)
 
         # Cache the result
-        self._key_cache[cache_key] = decrypted_key
+        self._key_cache[self.user_key] = decrypted_key
 
         return decrypted_key
