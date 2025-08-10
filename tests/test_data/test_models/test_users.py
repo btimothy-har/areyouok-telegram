@@ -175,3 +175,64 @@ class TestUsers:
 
         # Verify execute was called
         mock_db_session.execute.assert_called_once()
+
+    def test_retrieve_key_no_encrypted_key(self):
+        """Test retrieve_key returns None when no encrypted key is stored."""
+        user = Users()
+        user.user_id = "123"
+        user.encrypted_key = None
+
+        result = user.retrieve_key("testuser")
+        assert result is None
+
+    @patch("areyouok_telegram.data.models.users.decrypt_user_key")
+    def test_retrieve_key_decrypts_and_caches(self, mock_decrypt):
+        """Test retrieve_key decrypts key and caches the result."""
+        # Clear the cache before test
+        Users._key_cache.clear()
+
+        # Setup
+        user = Users()
+        user.user_id = "123"
+        user.encrypted_key = "encrypted_key_data"
+        username = "testuser"
+        decrypted_key = "decrypted_fernet_key"
+        mock_decrypt.return_value = decrypted_key
+
+        # First call - should decrypt
+        result1 = user.retrieve_key(username)
+        assert result1 == decrypted_key
+        mock_decrypt.assert_called_once_with("encrypted_key_data", username)
+
+        # Second call - should use cache
+        mock_decrypt.reset_mock()
+        result2 = user.retrieve_key(username)
+        assert result2 == decrypted_key
+        mock_decrypt.assert_not_called()  # Should not decrypt again
+
+    @patch("areyouok_telegram.data.models.users.decrypt_user_key")
+    def test_retrieve_key_cache_different_users(self, mock_decrypt):
+        """Test that cache is properly keyed by user_id and username."""
+        # Clear the cache before test
+        Users._key_cache.clear()
+
+        # Setup different users
+        user1 = Users()
+        user1.user_id = "123"
+        user1.encrypted_key = "encrypted_key_1"
+
+        user2 = Users()
+        user2.user_id = "456"
+        user2.encrypted_key = "encrypted_key_2"
+
+        username = "testuser"
+        mock_decrypt.side_effect = ["decrypted_key_1", "decrypted_key_2"]
+
+        # Call retrieve_key on both users
+        result1 = user1.retrieve_key(username)
+        result2 = user2.retrieve_key(username)
+
+        # Both should have been decrypted (different cache keys)
+        assert result1 == "decrypted_key_1"
+        assert result2 == "decrypted_key_2"
+        assert mock_decrypt.call_count == 2

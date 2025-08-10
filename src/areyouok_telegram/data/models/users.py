@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Optional
 
 import telegram
+from cachetools import TTLCache
 from sqlalchemy import BOOLEAN
 from sqlalchemy import Column
 from sqlalchemy import Integer
@@ -15,6 +16,7 @@ from sqlalchemy.sql import select
 
 from areyouok_telegram.config import ENV
 from areyouok_telegram.data import Base
+from areyouok_telegram.encryption import decrypt_user_key
 from areyouok_telegram.encryption import encrypt_user_key
 from areyouok_telegram.encryption import generate_user_key
 from areyouok_telegram.utils import traced
@@ -35,6 +37,9 @@ class Users(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False)
     updated_at = Column(TIMESTAMP(timezone=True), nullable=False)
+
+    # TTL cache for decrypted keys (15 minutes TTL, max 1000 entries)
+    _key_cache: TTLCache[str, str] = TTLCache(maxsize=1000, ttl=900)
 
     @staticmethod
     def generate_user_key(user_id: str) -> str:
@@ -89,3 +94,33 @@ class Users(Base):
         stmt = select(cls).where(cls.user_id == user_id)
         result = await db_conn.execute(stmt)
         return result.scalars().first()
+
+    def retrieve_key(self, username: str) -> str | None:
+        """Retrieve and decrypt the user's encryption key with caching.
+
+        Args:
+            username: The username to use for decryption
+
+        Returns:
+            str: The decrypted Fernet key, or None if no key is stored
+
+        Raises:
+            InvalidToken: If the key cannot be decrypted (wrong username or corrupted data)
+        """
+        if not self.encrypted_key:
+            return None
+
+        # Create a cache key based on user_id and username
+        cache_key = f"{self.user_id}:{username}"
+
+        # Check cache first
+        if cache_key in self._key_cache:
+            return self._key_cache[cache_key]
+
+        # Decrypt the key
+        decrypted_key = decrypt_user_key(self.encrypted_key, username)
+
+        # Cache the result
+        self._key_cache[cache_key] = decrypted_key
+
+        return decrypted_key

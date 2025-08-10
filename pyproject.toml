@@ -22,6 +22,7 @@ dependencies = [
     "openai~=1.92.0",
     "pydub~=0.25.1",
     "cryptography~=44.0.0",
+    "cachetools~=5.5.0",
 ]
 
 [dependency-groups]

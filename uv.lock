@@ -146,6 +146,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "asyncpg" },
+    { name = "cachetools" },
     { name = "cryptography" },
     { name = "greenlet" },
     { name = "logfire", extra = ["sqlalchemy"] },
@@ -177,6 +178,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "asyncpg", specifier = "~=0.30.0" },
+    { name = "cachetools", specifier = "~=5.5.0" },
     { name = "cryptography", specifier = "~=44.0.0" },
     { name = "greenlet" },
     { name = "logfire", specifier = "~=4.1.0" },

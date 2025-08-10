@@ -7,6 +7,7 @@ import pytest
 from cryptography.fernet import Fernet
 from cryptography.fernet import InvalidToken
 
+from areyouok_telegram.encryption.user_keys import decrypt_user_key
 from areyouok_telegram.encryption.user_keys import encrypt_user_key
 from areyouok_telegram.encryption.user_keys import generate_user_key
 
@@ -97,3 +98,29 @@ class TestUserKeys:
         with pytest.raises(InvalidToken):
             encrypted_bytes = base64.urlsafe_b64decode(encrypted.encode("utf-8"))
             wrong_fernet.decrypt(encrypted_bytes)
+
+    def test_decrypt_user_key(self):
+        """Test decrypting a user key with the correct username."""
+        # Generate and encrypt a test key
+        test_key = generate_user_key()
+        username = "testuser"
+        encrypted = encrypt_user_key(test_key, username)
+
+        # Decrypt it
+        decrypted = decrypt_user_key(encrypted, username)
+
+        # Should match the original key
+        assert decrypted == test_key
+
+    def test_decrypt_user_key_wrong_username_fails(self):
+        """Test that decrypt_user_key fails with wrong username."""
+        test_key = generate_user_key()
+        correct_username = "correct_user"
+        wrong_username = "wrong_user"
+
+        # Encrypt with correct username
+        encrypted = encrypt_user_key(test_key, correct_username)
+
+        # Try to decrypt with wrong username - should fail
+        with pytest.raises(InvalidToken):
+            decrypt_user_key(encrypted, wrong_username)
