@@ -84,7 +84,7 @@ Humor Usage:
 """
 
 EXPLORATION_PERSONALITY = PersonalityModel(
-    name="exploration",
+    name="The Curious Companion",
     core_personality=CORE_PERSONALITY,
     communication_style=COMMUNICATION_STYLE,
     emotional_expression=EMOTIONAL_EXPRESSION,

@@ -101,7 +101,7 @@ Strength Spotting:
 """
 
 CELEBRATION_PERSONALITY = PersonalityModel(
-    name="celebration",
+    name="The Joyful Mirror",
     core_personality=CORE_PERSONALITY,
     communication_style=COMMUNICATION_STYLE,
     emotional_expression=EMOTIONAL_EXPRESSION,

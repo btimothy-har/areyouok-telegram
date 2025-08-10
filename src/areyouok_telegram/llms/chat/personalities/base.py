@@ -5,6 +5,7 @@ from pydantic import Field
 
 PERSONALITY_TEMPLATE = """
 <core_personality>
+personality: {name}
 {core_personality}
 </core_personality>
 
@@ -61,6 +62,7 @@ class PersonalityModel(BaseModel):
     def as_prompt_string(self) -> str:
         """Convert the personality model to a prompt string format."""
         return PERSONALITY_TEMPLATE.format(
+            name=self.name,
             core_personality=self.core_personality,
             communication_style=self.communication_style,
             emotional_expression=self.emotional_expression,

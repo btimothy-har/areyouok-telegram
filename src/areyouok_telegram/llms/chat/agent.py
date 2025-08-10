@@ -3,6 +3,7 @@ from dataclasses import dataclass
 import pydantic_ai
 from telegram.ext import ContextTypes
 
+from areyouok_telegram.config import ENV
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data import async_database
 from areyouok_telegram.llms.chat.responses import AgentResponse
@@ -16,7 +17,10 @@ from areyouok_telegram.llms.validators.content_check import ContentCheckDependen
 from areyouok_telegram.llms.validators.content_check import ContentCheckResponse
 from areyouok_telegram.llms.validators.content_check import content_check_agent
 
+from .personalities import ANCHORING_PERSONALITY
 from .personalities import CELEBRATION_PERSONALITY
+from .personalities import EXPLORATION_PERSONALITY
+from .personalities import WITNESSING_PERSONALITY
 
 
 @dataclass
@@ -44,6 +48,31 @@ chat_agent = pydantic_ai.Agent(
 
 @chat_agent.instructions
 async def generate_instructions(ctx: pydantic_ai.RunContext[ChatAgentDependencies]) -> str:
+    # Temporary until we have a proper way to inject personality
+    if ENV == "research":
+        from areyouok_telegram.research.model import ResearchScenario  # noqa: PLC0415
+        from areyouok_telegram.research.studies.personality_scenarios import PERSONALITY_SCENARIOS  # noqa: PLC0415
+
+        personality_map = {
+            "EXPLORATION": EXPLORATION_PERSONALITY,
+            "ANCHORING": ANCHORING_PERSONALITY,
+            "CELEBRATION": CELEBRATION_PERSONALITY,
+            "WITNESSING": WITNESSING_PERSONALITY,
+        }
+
+        async with async_database() as db_conn:
+            scenario = await ResearchScenario.get_for_session_id(
+                db_conn=db_conn,
+                session_id=ctx.deps.tg_session_id,
+            )
+
+        personality_id = PERSONALITY_SCENARIOS.get(scenario.scenario_config, {}).get("personality", "default")
+
+        personality_text = personality_map.get(
+            personality_id,
+            EXPLORATION_PERSONALITY,  # Fallback to a default personality
+        ).as_prompt_string
+
     return f"""
 <identity>
 You are to identify yourself as "RUOK", if asked to do so. You are an empathetic and \
@@ -110,7 +139,7 @@ If there is an important message for the user (not "None"), you MUST acknowledge
     in a supportive and understanding way.
 </important_message_for_user>
 
-{CELEBRATION_PERSONALITY.as_prompt_string}
+{personality_text}
     """
 
 

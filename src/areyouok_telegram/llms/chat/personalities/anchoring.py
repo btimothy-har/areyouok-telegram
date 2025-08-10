@@ -100,7 +100,7 @@ Crisis-Specific Features:
 """
 
 ANCHORING_PERSONALITY = PersonalityModel(
-    name="anchoring",
+    name="The Steady Anchor",
     core_personality=PERSONALITY,
     communication_style=COMMUNICATION_STYLE,
     emotional_expression=EMOTIONAL_EXPRESSION,

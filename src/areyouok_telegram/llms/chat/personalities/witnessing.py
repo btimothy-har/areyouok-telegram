@@ -105,7 +105,7 @@ Core Principles:
 """
 
 WITNESSING_PERSONALITY = PersonalityModel(
-    name="witnessing",
+    name="The Sacred Witness",
     core_personality=CORE_PERSONALITY,
     communication_style=COMMUNICATION_STYLE,
     emotional_expression=EMOTIONAL_EXPRESSION,
