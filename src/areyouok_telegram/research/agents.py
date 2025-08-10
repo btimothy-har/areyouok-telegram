@@ -2,7 +2,6 @@ import pydantic_ai
 import telegram
 from telegram.ext import ContextTypes
 
-from areyouok_telegram.config import FEEDBACK_URL
 from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database
 from areyouok_telegram.llms.chat import chat_agent
@@ -14,6 +13,7 @@ from areyouok_telegram.research.model import ResearchScenario
 from .constants import FEEDBACK_REQUEST
 from .constants import NO_FEEDBACK_REQUEST
 from .studies.personality_scenarios import PERSONALITY_SCENARIOS
+from .utils import generate_feedback_url
 
 MODEL_MAP = {
     "sonnet-4": CHAT_SONNET_4.model,
@@ -60,8 +60,16 @@ async def close_research_session(context: ContextTypes.DEFAULT_TYPE, chat_sessio
                 text=NO_FEEDBACK_REQUEST,
             )
         else:
+            scenario = await ResearchScenario.get_for_session_id(
+                db_conn=db_conn,
+                session_id=chat_session.session_id,
+            )
+            feedback_url = await generate_feedback_url(
+                session_id=chat_session.session_id,
+                metadata=scenario.scenario_config if scenario else "No scenario",
+            )
             await context.bot.send_message(
                 chat_id=chat_session.chat_id,
-                text=FEEDBACK_REQUEST.format(feedback_url=FEEDBACK_URL),
+                text=FEEDBACK_REQUEST.format(feedback_url=feedback_url),
                 link_preview_options=telegram.LinkPreviewOptions(is_disabled=False, show_above_text=False),
             )

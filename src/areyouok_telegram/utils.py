@@ -5,6 +5,7 @@ from functools import wraps
 from typing import Any
 from typing import TypeVar
 
+import httpx
 import logfire
 from asyncpg.exceptions import ConnectionDoesNotExistError
 from asyncpg.exceptions import InterfaceError
@@ -17,6 +18,7 @@ from tenacity import wait_fixed
 from tenacity import wait_random_exponential
 
 from areyouok_telegram.config import ENV
+from areyouok_telegram.config import TINYURL_API_KEY
 
 F = TypeVar("F", bound=Callable[..., Any])
 
@@ -107,3 +109,27 @@ def db_retry():
         stop=stop_after_attempt(5),
         reraise=True,
     )
+
+
+@traced(record_return=True)
+async def shorten_url(url: str) -> str:
+    """
+    Shorten a URL using the TinyURL API.
+
+    Args:
+        url (str): The URL to shorten.
+
+    Returns:
+        str: The shortened URL.
+    """
+    api_url = "https://api.tinyurl.com/create"
+    headers = {
+        "Authorization": f"Bearer {TINYURL_API_KEY}",
+    }
+
+    payload = {"url": url}
+
+    async with httpx.AsyncClient() as client:
+        response = await client.post(api_url, json=payload, headers=headers)
+        response.raise_for_status()
+        return response.json().get("data", {}).get("tiny_url", url)
