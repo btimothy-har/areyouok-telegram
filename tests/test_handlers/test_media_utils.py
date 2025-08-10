@@ -121,19 +121,22 @@ class TestDownloadFile:
         mock_file.file_size = 1024
         mock_file.download_as_bytearray = AsyncMock(return_value=bytearray(b"file content"))
 
+        user_encryption_key = "test_encryption_key"
+
         with (
             patch("areyouok_telegram.handlers.media_utils.MediaFiles.create_file", new=AsyncMock()) as mock_create_file,
             patch("areyouok_telegram.handlers.media_utils.logfire.span"),
             patch("areyouok_telegram.handlers.media_utils.logfire.info"),
         ):
-            await _download_file(mock_db_session, mock_message, mock_file)
+            await _download_file(mock_db_session, user_encryption_key, message=mock_message, file=mock_file)
 
             # Verify file was downloaded
             mock_file.download_as_bytearray.assert_called_once()
 
             # Verify file was saved to database
             mock_create_file.assert_called_once_with(
-                db_conn=mock_db_session,
+                mock_db_session,
+                user_encryption_key,
                 file_id="file123",
                 file_unique_id="unique123",
                 chat_id="123",
@@ -161,6 +164,7 @@ class TestDownloadFile:
         mock_file.download_as_bytearray = AsyncMock(return_value=bytearray(b"voice content"))
 
         mock_transcription = "[Transcribed Audio] Hello world"
+        user_encryption_key = "test_encryption_key"
 
         with (
             patch("areyouok_telegram.handlers.media_utils.MediaFiles.create_file", new=AsyncMock()) as mock_create_file,
@@ -171,7 +175,7 @@ class TestDownloadFile:
             patch("areyouok_telegram.handlers.media_utils.logfire.span"),
             patch("areyouok_telegram.handlers.media_utils.logfire.info") as mock_log_info,
         ):
-            await _download_file(mock_db_session, mock_message, mock_file)
+            await _download_file(mock_db_session, user_encryption_key, message=mock_message, file=mock_file)
 
             # Verify file was downloaded
             mock_file.download_as_bytearray.assert_called_once()
@@ -179,16 +183,20 @@ class TestDownloadFile:
             # Verify both voice file and transcription were saved
             assert mock_create_file.call_count == 2
 
-            # First call saves the voice file
+            # First call saves the voice file (positional args: db_conn, user_encryption_key, then kwargs)
             first_call = mock_create_file.call_args_list[0]
-            assert first_call.kwargs["file_id"] == "voice123"
-            assert first_call.kwargs["content_bytes"] == b"voice content"
+            assert first_call[0][0] == mock_db_session  # db_conn
+            assert first_call[0][1] == user_encryption_key  # user_encryption_key
+            assert first_call[1]["file_id"] == "voice123"
+            assert first_call[1]["content_bytes"] == b"voice content"
 
             # Second call saves the transcription
             second_call = mock_create_file.call_args_list[1]
-            assert second_call.kwargs["file_id"] == "voice123_transcription"
-            assert second_call.kwargs["file_unique_id"] == "voice_unique123_transcription"
-            assert second_call.kwargs["content_bytes"] == mock_transcription.encode("utf-8")
+            assert second_call[0][0] == mock_db_session  # db_conn
+            assert second_call[0][1] == user_encryption_key  # user_encryption_key
+            assert second_call[1]["file_id"] == "voice123_transcription"
+            assert second_call[1]["file_unique_id"] == "voice_unique123_transcription"
+            assert second_call[1]["content_bytes"] == mock_transcription.encode("utf-8")
 
             # Verify logging
             mock_log_info.assert_called_with(
@@ -212,6 +220,7 @@ class TestDownloadFile:
         mock_file.file_unique_id = "voice_unique123"
         mock_file.file_size = 2048
         mock_file.download_as_bytearray = AsyncMock(return_value=bytearray(b"voice content"))
+        user_encryption_key = "test_encryption_key"
 
         with (
             patch("areyouok_telegram.handlers.media_utils.MediaFiles.create_file", new=AsyncMock()) as mock_create_file,
@@ -222,11 +231,12 @@ class TestDownloadFile:
             patch("areyouok_telegram.handlers.media_utils.logfire.span"),
             patch("areyouok_telegram.handlers.media_utils.logfire.exception") as mock_log_exception,
         ):
-            await _download_file(mock_db_session, mock_message, mock_file)
+            await _download_file(mock_db_session, user_encryption_key, message=mock_message, file=mock_file)
 
             # Verify voice file was saved but transcription was not
             mock_create_file.assert_called_once_with(
-                db_conn=mock_db_session,
+                mock_db_session,
+                user_encryption_key,
                 file_id="voice123",
                 file_unique_id="voice_unique123",
                 chat_id="123",
@@ -257,8 +267,10 @@ class TestDownloadFile:
         mock_file.file_unique_id = "unique123"
         mock_file.download_as_bytearray = AsyncMock(side_effect=Exception("Download failed"))
 
+        user_encryption_key = "test_encryption_key"
+
         with patch("areyouok_telegram.handlers.media_utils.logfire.exception") as mock_log_exception:
-            await _download_file(mock_db_session, mock_message, mock_file)
+            await _download_file(mock_db_session, user_encryption_key, message=mock_message, file=mock_file)
 
             # Verify error was logged
             mock_log_exception.assert_called_once()
@@ -286,7 +298,9 @@ class TestExtractMediaFromTelegramMessage:
             patch("areyouok_telegram.handlers.media_utils._download_file", new=AsyncMock()) as mock_download,
             patch("areyouok_telegram.handlers.media_utils.logfire.info") as mock_log_info,
         ):
-            result = await extract_media_from_telegram_message(mock_db_session, mock_message)
+            result = await extract_media_from_telegram_message(
+                mock_db_session, "test_encryption_key", message=mock_message
+            )
 
             assert result == 0
             mock_download.assert_not_called()
@@ -318,7 +332,9 @@ class TestExtractMediaFromTelegramMessage:
             patch("areyouok_telegram.handlers.media_utils._download_file", new=AsyncMock()) as mock_download,
             patch("areyouok_telegram.handlers.media_utils.logfire.info") as mock_log_info,
         ):
-            result = await extract_media_from_telegram_message(mock_db_session, mock_message)
+            result = await extract_media_from_telegram_message(
+                mock_db_session, "test_encryption_key", message=mock_message
+            )
 
             assert result == 1
             mock_download.assert_called_once()
@@ -357,7 +373,9 @@ class TestExtractMediaFromTelegramMessage:
             patch("areyouok_telegram.handlers.media_utils._download_file", new=AsyncMock()) as mock_download,
             patch("areyouok_telegram.handlers.media_utils.logfire.info") as mock_log_info,
         ):
-            result = await extract_media_from_telegram_message(mock_db_session, mock_message)
+            result = await extract_media_from_telegram_message(
+                mock_db_session, "test_encryption_key", message=mock_message
+            )
 
             assert result == 3
             assert mock_download.call_count == 3
@@ -408,7 +426,9 @@ class TestExtractMediaFromTelegramMessage:
             patch("areyouok_telegram.handlers.media_utils._download_file", new=AsyncMock()) as mock_download,
             patch("areyouok_telegram.handlers.media_utils.logfire.info") as mock_log_info,
         ):
-            result = await extract_media_from_telegram_message(mock_db_session, mock_message)
+            result = await extract_media_from_telegram_message(
+                mock_db_session, "test_encryption_key", message=mock_message
+            )
 
             assert result == 7
             assert mock_download.call_count == 7
@@ -446,7 +466,9 @@ class TestExtractMediaFromTelegramMessage:
             patch("areyouok_telegram.handlers.media_utils._download_file", mock_download),
             patch("areyouok_telegram.handlers.media_utils.logfire.info") as mock_log_info,
         ):
-            result = await extract_media_from_telegram_message(mock_db_session, mock_message)
+            result = await extract_media_from_telegram_message(
+                mock_db_session, "test_encryption_key", message=mock_message
+            )
 
             # Both files should be attempted, count is still 2
             assert result == 2

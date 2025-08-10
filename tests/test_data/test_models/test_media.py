@@ -74,7 +74,7 @@ class TestMediaFiles:
         test_data = b"test content"
         content_base64 = base64.b64encode(test_data).decode("ascii")
         user_key = Fernet.generate_key().decode("utf-8")
-        
+
         # Encrypt the base64 content
         media.encrypted_content_base64 = MediaFiles.encrypt_content_base64(content_base64, user_key)
 
@@ -155,7 +155,7 @@ class TestMediaFiles:
     async def test_create_file_without_content(self, mock_db_session):
         """Test creating a media file without content."""
         user_key = Fernet.generate_key().decode("utf-8")
-        
+
         with patch("areyouok_telegram.data.models.media.magic.from_buffer") as mock_magic:
             mock_result = AsyncMock()
             mock_db_session.execute.return_value = mock_result

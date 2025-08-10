@@ -62,11 +62,14 @@ def transcribe_voice_data_sync(voice_data: bytes) -> str:
 
 
 @traced(extract_args=["message", "file"])
-async def _download_file(db_conn: AsyncSession, message: telegram.Message, file: telegram.File) -> bytes:
+async def _download_file(
+    db_conn: AsyncSession, user_encryption_key: str, *, message: telegram.Message, file: telegram.File
+) -> bytes:
     """Download a Telegram file as bytes.
 
     Args:
         db_conn: Database connection
+        user_encryption_key: The user's Fernet encryption key
         message: Telegram message object
         file: Telegram file
     """
@@ -75,7 +78,8 @@ async def _download_file(db_conn: AsyncSession, message: telegram.Message, file:
 
         # Pass individual attributes to create_file
         await MediaFiles.create_file(
-            db_conn=db_conn,
+            db_conn,
+            user_encryption_key,
             file_id=file.file_id,
             file_unique_id=file.file_unique_id,
             chat_id=str(message.chat.id),
@@ -101,7 +105,8 @@ async def _download_file(db_conn: AsyncSession, message: telegram.Message, file:
                     # Store the transcription as a text file
                     transcription_bytes = transcription.encode("utf-8")
                     await MediaFiles.create_file(
-                        db_conn=db_conn,
+                        db_conn,
+                        user_encryption_key,
                         file_id=f"{file.file_id}_transcription",
                         file_unique_id=f"{file.file_unique_id}_transcription",
                         chat_id=str(message.chat.id),
@@ -133,13 +138,13 @@ async def _download_file(db_conn: AsyncSession, message: telegram.Message, file:
 
 @traced(extract_args=["message"])
 async def extract_media_from_telegram_message(
-    db_conn: AsyncSession,
-    message: telegram.Message,
+    db_conn: AsyncSession, user_encryption_key: str, *, message: telegram.Message
 ) -> int:
     """Process media files from a Telegram message.
 
     Args:
         db_conn: Database connection
+        user_encryption_key: The user's Fernet encryption key
         message: Telegram message object
 
     Returns:
@@ -175,7 +180,10 @@ async def extract_media_from_telegram_message(
         voice_file = await message.voice.get_file()
         media_files.append(voice_file)
 
-    await asyncio.gather(*[_download_file(db_conn, message, file) for file in media_files], return_exceptions=True)
+    await asyncio.gather(
+        *[_download_file(db_conn, user_encryption_key, message=message, file=file) for file in media_files],
+        return_exceptions=True,
+    )
 
     logfire.info(
         f"Processed {len(media_files)} media files from message.",
