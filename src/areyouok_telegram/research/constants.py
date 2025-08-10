@@ -9,9 +9,10 @@ You are using the research version of "Are You OK?" Please note the following:
 - Your past sessions are not carried over to the next session.
 
 Note that regardless of the version you use, your data and information is still protected:
-- Your messages and interactions are deleted within an hour of the session ending.
+- Your messages and interactions are deleted within an hour of the session ending. Only summaries of \
+    prior interactions are kept.
 - Your Telegram identifiers are never stored.
-- All stored data (even temporarily) is user-level encrypted.
+- All stored data (even temporarily) is encrypted at rest.
 
 This session is immediately started, and you can begin interacting with the bot.
 If you want to end this session, please send the command `/end`.
