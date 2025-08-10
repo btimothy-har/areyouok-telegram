@@ -1,6 +1,5 @@
 import asyncio
 
-import logfire
 import telegram
 from telegram.ext import ContextTypes
 
@@ -19,9 +18,11 @@ from areyouok_telegram.utils import traced
 
 @traced(extract_args=["update"])
 @db_retry()
-@environment_override({
-    "research": on_new_message_research,
-})
+@environment_override(
+    {
+        "research": on_new_message_research,
+    }
+)
 async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):  # noqa: ARG001
     if not update.message:
         raise NoMessageError(update.update_id)
@@ -78,12 +79,6 @@ async def on_edit_message(update: telegram.Update, context: ContextTypes.DEFAULT
                 timestamp=update.edited_message.edit_date or update.edited_message.date,
                 is_user=True,
             )
-        else:
-            logfire.info(
-                "Edited message is from before session start, not recording activity.",
-                message_id=update.edited_message.message_id,
-                session_start=active_session.session_start,
-            )
 
         await extract_media
 
@@ -117,10 +112,4 @@ async def on_message_react(update: telegram.Update, context: ContextTypes.DEFAUL
                 db_conn=db_conn,
                 timestamp=update.message_reaction.date,
                 is_user=True,
-            )
-        else:
-            logfire.info(
-                "Message reaction is from before session start, not recording activity.",
-                message_id=update.message_reaction.message_id,
-                session_start=active_session.session_start,
             )

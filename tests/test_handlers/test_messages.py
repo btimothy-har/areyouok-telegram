@@ -39,6 +39,7 @@ class TestOnNewMessage:
         # Create mock active session
         mock_active_session = MagicMock()
         mock_active_session.new_message = AsyncMock()
+        mock_active_session.session_key = "session_key_123"
 
         with (
             patch("areyouok_telegram.handlers.messages.Messages.new_or_update", new=AsyncMock()) as mock_msg_save,
@@ -55,12 +56,13 @@ class TestOnNewMessage:
         ):
             await on_new_message(mock_update, mock_context)
 
-            # Verify message was saved
+            # Verify message was saved with session key
             mock_msg_save.assert_called_once_with(
                 db_conn=mock_db_session,
                 user_id=456,
                 chat_id=789,
                 message=mock_update.message,
+                session_key="session_key_123",
             )
 
             # Verify media extraction was called
@@ -95,9 +97,10 @@ class TestOnNewMessage:
         # Create mock new session
         mock_new_session = MagicMock()
         mock_new_session.new_message = AsyncMock()
+        mock_new_session.session_key = "new_session_key"
 
         with (
-            patch("areyouok_telegram.handlers.messages.Messages.new_or_update", new=AsyncMock()),
+            patch("areyouok_telegram.handlers.messages.Messages.new_or_update", new=AsyncMock()) as mock_msg_save,
             patch("areyouok_telegram.handlers.messages.extract_media_from_telegram_message", new=AsyncMock()),
             patch(
                 "areyouok_telegram.handlers.messages.Sessions.get_active_session", new=AsyncMock(return_value=None)
@@ -114,6 +117,15 @@ class TestOnNewMessage:
 
             # Verify new session was created
             mock_create_session.assert_called_once_with(mock_db_session, "789", frozen_time)
+
+            # Verify message was saved with new session key
+            mock_msg_save.assert_called_once_with(
+                db_conn=mock_db_session,
+                user_id=456,
+                chat_id=789,
+                message=mock_update.message,
+                session_key="new_session_key",
+            )
 
             # Verify message was recorded in new session
             mock_new_session.new_message.assert_called_once_with(
@@ -160,6 +172,7 @@ class TestOnEditMessage:
         mock_active_session = MagicMock()
         mock_active_session.session_start = datetime(2024, 1, 1, 11, 0, 0, tzinfo=UTC)
         mock_active_session.new_activity = AsyncMock()
+        mock_active_session.session_key = "session_key_edit"
 
         with (
             patch("areyouok_telegram.handlers.messages.Messages.new_or_update", new=AsyncMock()) as mock_msg_save,
@@ -170,16 +183,16 @@ class TestOnEditMessage:
                 "areyouok_telegram.handlers.messages.Sessions.get_active_session",
                 new=AsyncMock(return_value=mock_active_session),
             ),
-            patch("areyouok_telegram.handlers.messages.logfire.info") as mock_log_info,
         ):
             await on_edit_message(mock_update, mock_context)
 
-            # Verify message was saved
+            # Verify message was saved with session key
             mock_msg_save.assert_called_once_with(
                 mock_db_session,
                 user_id=456,
                 chat_id=789,
                 message=mock_update.edited_message,
+                session_key="session_key_edit",
             )
 
             # Verify media extraction was called
@@ -192,11 +205,8 @@ class TestOnEditMessage:
                 is_user=True,
             )
 
-            # Should not log about message being before session
-            assert not any("before session start" in str(call) for call in mock_log_info.call_args_list)
-
     @pytest.mark.asyncio
-    async def test_on_edit_message_with_active_session_before_start(self):
+    async def test_on_edit_message_with_active_session_before_start(self, mock_db_session):
         """Test handling edited message where original message is before session start."""
         # Create mock update with edited message
         mock_update = MagicMock(spec=telegram.Update)
@@ -216,32 +226,38 @@ class TestOnEditMessage:
         mock_active_session = MagicMock()
         mock_active_session.session_start = datetime(2024, 1, 1, 11, 0, 0, tzinfo=UTC)
         mock_active_session.new_activity = AsyncMock()
+        mock_active_session.session_key = "session_key_before"
 
         with (
-            patch("areyouok_telegram.handlers.messages.Messages.new_or_update", new=AsyncMock()),
+            patch("areyouok_telegram.handlers.messages.Messages.new_or_update", new=AsyncMock()) as mock_msg_save,
             patch("areyouok_telegram.handlers.messages.extract_media_from_telegram_message", new=AsyncMock()),
             patch(
                 "areyouok_telegram.handlers.messages.Sessions.get_active_session",
                 new=AsyncMock(return_value=mock_active_session),
             ),
-            patch("areyouok_telegram.handlers.messages.logfire.info") as mock_log_info,
         ):
             await on_edit_message(mock_update, mock_context)
+
+            # Verify message was saved without session key (not part of session)
+            mock_msg_save.assert_called_once_with(
+                mock_db_session,
+                user_id=456,
+                chat_id=789,
+                message=mock_update.edited_message,
+                session_key=None,
+            )
 
             # Activity should not be recorded
             mock_active_session.new_activity.assert_not_called()
 
-            # Should log about message being before session
-            mock_log_info.assert_called()
-            assert any("before session start" in str(call) for call in mock_log_info.call_args_list)
-
     @pytest.mark.asyncio
-    async def test_on_edit_message_without_active_session(self):
+    async def test_on_edit_message_without_active_session(self, mock_db_session):
         """Test handling edited message without active session."""
         # Create mock update with edited message
         mock_update = MagicMock(spec=telegram.Update)
         mock_update.update_id = 123
         mock_update.edited_message = MagicMock(spec=telegram.Message)
+        mock_update.edited_message.date = datetime(2024, 1, 1, 10, 0, 0, tzinfo=UTC)
         mock_update.effective_user = MagicMock(spec=telegram.User)
         mock_update.effective_user.id = 456
         mock_update.effective_chat = MagicMock(spec=telegram.Chat)
@@ -250,20 +266,25 @@ class TestOnEditMessage:
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
 
         with (
-            patch("areyouok_telegram.handlers.messages.Messages.new_or_update", new=AsyncMock()),
+            patch("areyouok_telegram.handlers.messages.Messages.new_or_update", new=AsyncMock()) as mock_msg_save,
             patch(
                 "areyouok_telegram.handlers.messages.extract_media_from_telegram_message", new=AsyncMock()
             ) as mock_extract_media,
             patch("areyouok_telegram.handlers.messages.Sessions.get_active_session", new=AsyncMock(return_value=None)),
-            patch("areyouok_telegram.handlers.messages.logfire.info") as mock_log_info,
         ):
             await on_edit_message(mock_update, mock_context)
 
-            # Media extraction should not be called
-            mock_extract_media.assert_not_called()
+            # Verify message was saved without session key
+            mock_msg_save.assert_called_once_with(
+                mock_db_session,
+                user_id=456,
+                chat_id=789,
+                message=mock_update.edited_message,
+                session_key=None,
+            )
 
-            # Should log about no active session
-            mock_log_info.assert_called_with("No active session found for edited message, skipping session activity.")
+            # Media extraction should be called even without session
+            mock_extract_media.assert_called_once_with(mock_db_session, mock_update.edited_message)
 
     @pytest.mark.asyncio
     async def test_on_edit_message_without_edited_message_raises_error(self):
@@ -304,6 +325,7 @@ class TestOnMessageReact:
         mock_active_session = MagicMock()
         mock_active_session.session_start = datetime(2024, 1, 1, 11, 0, 0, tzinfo=UTC)
         mock_active_session.new_activity = AsyncMock()
+        mock_active_session.session_key = "session_key_react"
 
         with (
             patch("areyouok_telegram.handlers.messages.Messages.new_or_update", new=AsyncMock()) as mock_msg_save,
@@ -311,16 +333,16 @@ class TestOnMessageReact:
                 "areyouok_telegram.handlers.messages.Sessions.get_active_session",
                 new=AsyncMock(return_value=mock_active_session),
             ),
-            patch("areyouok_telegram.handlers.messages.logfire.info") as mock_log_info,
         ):
             await on_message_react(mock_update, mock_context)
 
-            # Verify message/reaction was saved
+            # Verify message/reaction was saved with session key
             mock_msg_save.assert_called_once_with(
-                mock_db_session,
+                db_conn=mock_db_session,
                 user_id=456,
                 chat_id=789,
                 message=mock_update.message_reaction,
+                session_key="session_key_react",
             )
 
             # Verify activity was recorded
@@ -330,11 +352,8 @@ class TestOnMessageReact:
                 is_user=True,
             )
 
-            # Should log about recording activity
-            mock_log_info.assert_called_with("Session activity recorded for message reaction.")
-
     @pytest.mark.asyncio
-    async def test_on_message_react_with_active_session_before_start(self):
+    async def test_on_message_react_with_active_session_before_start(self, mock_db_session):
         """Test handling message reaction where reaction is before session start."""
         # Create mock update with message reaction
         mock_update = MagicMock(spec=telegram.Update)
@@ -353,31 +372,37 @@ class TestOnMessageReact:
         mock_active_session = MagicMock()
         mock_active_session.session_start = datetime(2024, 1, 1, 11, 0, 0, tzinfo=UTC)
         mock_active_session.new_activity = AsyncMock()
+        mock_active_session.session_key = "session_key_before_react"
 
         with (
-            patch("areyouok_telegram.handlers.messages.Messages.new_or_update", new=AsyncMock()),
+            patch("areyouok_telegram.handlers.messages.Messages.new_or_update", new=AsyncMock()) as mock_msg_save,
             patch(
                 "areyouok_telegram.handlers.messages.Sessions.get_active_session",
                 new=AsyncMock(return_value=mock_active_session),
             ),
-            patch("areyouok_telegram.handlers.messages.logfire.info") as mock_log_info,
         ):
             await on_message_react(mock_update, mock_context)
+
+            # Verify message was saved without session key (not part of session)
+            mock_msg_save.assert_called_once_with(
+                db_conn=mock_db_session,
+                user_id=456,
+                chat_id=789,
+                message=mock_update.message_reaction,
+                session_key=None,
+            )
 
             # Activity should not be recorded
             mock_active_session.new_activity.assert_not_called()
 
-            # Should log about reaction being before session
-            mock_log_info.assert_called()
-            assert any("before session start" in str(call) for call in mock_log_info.call_args_list)
-
     @pytest.mark.asyncio
-    async def test_on_message_react_without_active_session(self):
+    async def test_on_message_react_without_active_session(self, mock_db_session):
         """Test handling message reaction without active session."""
         # Create mock update with message reaction
         mock_update = MagicMock(spec=telegram.Update)
         mock_update.update_id = 123
         mock_update.message_reaction = MagicMock(spec=telegram.MessageReactionUpdated)
+        mock_update.message_reaction.date = datetime(2024, 1, 1, 10, 0, 0, tzinfo=UTC)
         mock_update.effective_user = MagicMock(spec=telegram.User)
         mock_update.effective_user.id = 456
         mock_update.effective_chat = MagicMock(spec=telegram.Chat)
@@ -386,14 +411,19 @@ class TestOnMessageReact:
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
 
         with (
-            patch("areyouok_telegram.handlers.messages.Messages.new_or_update", new=AsyncMock()),
+            patch("areyouok_telegram.handlers.messages.Messages.new_or_update", new=AsyncMock()) as mock_msg_save,
             patch("areyouok_telegram.handlers.messages.Sessions.get_active_session", new=AsyncMock(return_value=None)),
-            patch("areyouok_telegram.handlers.messages.logfire.info") as mock_log_info,
         ):
             await on_message_react(mock_update, mock_context)
 
-            # Should log about no active session
-            mock_log_info.assert_called_with("No active session found for message reaction, skipping session activity.")
+            # Verify message was saved without session key
+            mock_msg_save.assert_called_once_with(
+                db_conn=mock_db_session,
+                user_id=456,
+                chat_id=789,
+                message=mock_update.message_reaction,
+                session_key=None,
+            )
 
     @pytest.mark.asyncio
     async def test_on_message_react_without_reaction_raises_error(self):

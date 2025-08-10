@@ -10,9 +10,9 @@ import telegram
 from pydub import AudioSegment
 
 from areyouok_telegram.handlers.exceptions import VoiceNotProcessableError
-from areyouok_telegram.handlers.utils import _download_file
-from areyouok_telegram.handlers.utils import extract_media_from_telegram_message
-from areyouok_telegram.handlers.utils import transcribe_voice_data_sync
+from areyouok_telegram.handlers.media_utils import _download_file
+from areyouok_telegram.handlers.media_utils import extract_media_from_telegram_message
+from areyouok_telegram.handlers.media_utils import transcribe_voice_data_sync
 
 
 class TestTranscribeVoiceDataSync:
@@ -35,9 +35,9 @@ class TestTranscribeVoiceDataSync:
         mock_client.audio.transcriptions.create.return_value = mock_transcription
 
         with (
-            patch("areyouok_telegram.handlers.utils.AudioSegment.from_ogg", return_value=mock_audio_segment),
-            patch("areyouok_telegram.handlers.utils.openai.OpenAI", return_value=mock_client),
-            patch("areyouok_telegram.handlers.utils.OPENAI_API_KEY", "test-key"),
+            patch("areyouok_telegram.handlers.media_utils.AudioSegment.from_ogg", return_value=mock_audio_segment),
+            patch("areyouok_telegram.handlers.media_utils.openai.OpenAI", return_value=mock_client),
+            patch("areyouok_telegram.handlers.media_utils.OPENAI_API_KEY", "test-key"),
         ):
             result = transcribe_voice_data_sync(mock_voice_data)
 
@@ -73,9 +73,9 @@ class TestTranscribeVoiceDataSync:
         mock_client.audio.transcriptions.create.side_effect = mock_transcriptions
 
         with (
-            patch("areyouok_telegram.handlers.utils.AudioSegment.from_ogg", return_value=mock_audio_segment),
-            patch("areyouok_telegram.handlers.utils.openai.OpenAI", return_value=mock_client),
-            patch("areyouok_telegram.handlers.utils.OPENAI_API_KEY", "test-key"),
+            patch("areyouok_telegram.handlers.media_utils.AudioSegment.from_ogg", return_value=mock_audio_segment),
+            patch("areyouok_telegram.handlers.media_utils.openai.OpenAI", return_value=mock_client),
+            patch("areyouok_telegram.handlers.media_utils.OPENAI_API_KEY", "test-key"),
         ):
             result = transcribe_voice_data_sync(mock_voice_data)
 
@@ -96,7 +96,7 @@ class TestTranscribeVoiceDataSync:
         mock_voice_data = b"fake audio data"
 
         with patch(
-            "areyouok_telegram.handlers.utils.AudioSegment.from_ogg",
+            "areyouok_telegram.handlers.media_utils.AudioSegment.from_ogg",
             side_effect=Exception("Audio processing error"),
         ):
             with pytest.raises(VoiceNotProcessableError):
@@ -122,9 +122,9 @@ class TestDownloadFile:
         mock_file.download_as_bytearray = AsyncMock(return_value=bytearray(b"file content"))
 
         with (
-            patch("areyouok_telegram.handlers.utils.MediaFiles.create_file", new=AsyncMock()) as mock_create_file,
-            patch("areyouok_telegram.handlers.utils.logfire.span"),
-            patch("areyouok_telegram.handlers.utils.logfire.info"),
+            patch("areyouok_telegram.handlers.media_utils.MediaFiles.create_file", new=AsyncMock()) as mock_create_file,
+            patch("areyouok_telegram.handlers.media_utils.logfire.span"),
+            patch("areyouok_telegram.handlers.media_utils.logfire.info"),
         ):
             await _download_file(mock_db_session, mock_message, mock_file)
 
@@ -163,10 +163,13 @@ class TestDownloadFile:
         mock_transcription = "[Transcribed Audio] Hello world"
 
         with (
-            patch("areyouok_telegram.handlers.utils.MediaFiles.create_file", new=AsyncMock()) as mock_create_file,
-            patch("areyouok_telegram.handlers.utils.asyncio.to_thread", new=AsyncMock(return_value=mock_transcription)),
-            patch("areyouok_telegram.handlers.utils.logfire.span"),
-            patch("areyouok_telegram.handlers.utils.logfire.info") as mock_log_info,
+            patch("areyouok_telegram.handlers.media_utils.MediaFiles.create_file", new=AsyncMock()) as mock_create_file,
+            patch(
+                "areyouok_telegram.handlers.media_utils.asyncio.to_thread",
+                new=AsyncMock(return_value=mock_transcription),
+            ),
+            patch("areyouok_telegram.handlers.media_utils.logfire.span"),
+            patch("areyouok_telegram.handlers.media_utils.logfire.info") as mock_log_info,
         ):
             await _download_file(mock_db_session, mock_message, mock_file)
 
@@ -211,13 +214,13 @@ class TestDownloadFile:
         mock_file.download_as_bytearray = AsyncMock(return_value=bytearray(b"voice content"))
 
         with (
-            patch("areyouok_telegram.handlers.utils.MediaFiles.create_file", new=AsyncMock()) as mock_create_file,
+            patch("areyouok_telegram.handlers.media_utils.MediaFiles.create_file", new=AsyncMock()) as mock_create_file,
             patch(
-                "areyouok_telegram.handlers.utils.asyncio.to_thread",
+                "areyouok_telegram.handlers.media_utils.asyncio.to_thread",
                 new=AsyncMock(side_effect=VoiceNotProcessableError()),
             ),
-            patch("areyouok_telegram.handlers.utils.logfire.span"),
-            patch("areyouok_telegram.handlers.utils.logfire.exception") as mock_log_exception,
+            patch("areyouok_telegram.handlers.media_utils.logfire.span"),
+            patch("areyouok_telegram.handlers.media_utils.logfire.exception") as mock_log_exception,
         ):
             await _download_file(mock_db_session, mock_message, mock_file)
 
@@ -254,7 +257,7 @@ class TestDownloadFile:
         mock_file.file_unique_id = "unique123"
         mock_file.download_as_bytearray = AsyncMock(side_effect=Exception("Download failed"))
 
-        with patch("areyouok_telegram.handlers.utils.logfire.exception") as mock_log_exception:
+        with patch("areyouok_telegram.handlers.media_utils.logfire.exception") as mock_log_exception:
             await _download_file(mock_db_session, mock_message, mock_file)
 
             # Verify error was logged
@@ -280,8 +283,8 @@ class TestExtractMediaFromTelegramMessage:
         mock_message.chat.id = 456
 
         with (
-            patch("areyouok_telegram.handlers.utils._download_file", new=AsyncMock()) as mock_download,
-            patch("areyouok_telegram.handlers.utils.logfire.info") as mock_log_info,
+            patch("areyouok_telegram.handlers.media_utils._download_file", new=AsyncMock()) as mock_download,
+            patch("areyouok_telegram.handlers.media_utils.logfire.info") as mock_log_info,
         ):
             result = await extract_media_from_telegram_message(mock_db_session, mock_message)
 
@@ -312,8 +315,8 @@ class TestExtractMediaFromTelegramMessage:
         mock_message.chat.id = 456
 
         with (
-            patch("areyouok_telegram.handlers.utils._download_file", new=AsyncMock()) as mock_download,
-            patch("areyouok_telegram.handlers.utils.logfire.info") as mock_log_info,
+            patch("areyouok_telegram.handlers.media_utils._download_file", new=AsyncMock()) as mock_download,
+            patch("areyouok_telegram.handlers.media_utils.logfire.info") as mock_log_info,
         ):
             result = await extract_media_from_telegram_message(mock_db_session, mock_message)
 
@@ -351,8 +354,8 @@ class TestExtractMediaFromTelegramMessage:
         mock_message.chat.id = 456
 
         with (
-            patch("areyouok_telegram.handlers.utils._download_file", new=AsyncMock()) as mock_download,
-            patch("areyouok_telegram.handlers.utils.logfire.info") as mock_log_info,
+            patch("areyouok_telegram.handlers.media_utils._download_file", new=AsyncMock()) as mock_download,
+            patch("areyouok_telegram.handlers.media_utils.logfire.info") as mock_log_info,
         ):
             result = await extract_media_from_telegram_message(mock_db_session, mock_message)
 
@@ -402,8 +405,8 @@ class TestExtractMediaFromTelegramMessage:
         mock_message.chat.id = 456
 
         with (
-            patch("areyouok_telegram.handlers.utils._download_file", new=AsyncMock()) as mock_download,
-            patch("areyouok_telegram.handlers.utils.logfire.info") as mock_log_info,
+            patch("areyouok_telegram.handlers.media_utils._download_file", new=AsyncMock()) as mock_download,
+            patch("areyouok_telegram.handlers.media_utils.logfire.info") as mock_log_info,
         ):
             result = await extract_media_from_telegram_message(mock_db_session, mock_message)
 
@@ -440,8 +443,8 @@ class TestExtractMediaFromTelegramMessage:
         mock_download = AsyncMock(side_effect=[Exception("Download failed"), None])
 
         with (
-            patch("areyouok_telegram.handlers.utils._download_file", mock_download),
-            patch("areyouok_telegram.handlers.utils.logfire.info") as mock_log_info,
+            patch("areyouok_telegram.handlers.media_utils._download_file", mock_download),
+            patch("areyouok_telegram.handlers.media_utils.logfire.info") as mock_log_info,
         ):
             result = await extract_media_from_telegram_message(mock_db_session, mock_message)
 

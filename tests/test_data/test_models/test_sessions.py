@@ -148,20 +148,21 @@ class TestSessions:
         """Test retrieving messages for a session."""
         session = Sessions()
         session.chat_id = "123"
+        session.session_key = "session_123"  # Use session_key, not session_id
         session.session_start = datetime(2025, 1, 1, 11, 0, 0, tzinfo=UTC)
         session.session_end = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
 
         mock_messages = [MagicMock(spec=telegram.Message)]
 
         with patch("areyouok_telegram.data.models.sessions.Messages") as mock_messages_class:
-            # Make retrieve_by_chat an async mock
-            mock_messages_class.retrieve_by_chat = AsyncMock(return_value=mock_messages)
+            # Make retrieve_by_session an async mock
+            mock_messages_class.retrieve_by_session = AsyncMock(return_value=mock_messages)
 
             result = await session.get_messages(mock_db_session)
 
             assert result == mock_messages
-            mock_messages_class.retrieve_by_chat.assert_called_once_with(
-                db_conn=mock_db_session, chat_id="123", from_time=session.session_start, to_time=session.session_end
+            mock_messages_class.retrieve_by_session.assert_called_once_with(
+                db_conn=mock_db_session, session_id="session_123"
             )
 
     @pytest.mark.asyncio
@@ -170,12 +171,24 @@ class TestSessions:
         chat_id = "123"
         timestamp = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
 
+        # Create a mock session that will be returned
+        mock_session = MagicMock(spec=Sessions)
+        mock_session.chat_id = chat_id
+        mock_session.session_start = timestamp
+        mock_session.session_key = Sessions.generate_session_key(chat_id, timestamp)
+
+        # Mock the database execute result
+        mock_result = MagicMock()
+        mock_result.scalar_one.return_value = mock_session
+        mock_db_session.execute = AsyncMock(return_value=mock_result)
+
         session = await Sessions.create_session(mock_db_session, chat_id, timestamp)
 
+        assert session == mock_session
         assert session.chat_id == chat_id
         assert session.session_start == timestamp
         assert session.session_key == Sessions.generate_session_key(chat_id, timestamp)
-        mock_db_session.add.assert_called_once_with(session)
+        mock_db_session.execute.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_get_active_session_found(self, mock_db_session):

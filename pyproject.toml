@@ -112,6 +112,7 @@ omit = [
     "*/llms/chat/responses.py",
     "*/llms/context_compression/constants.py",
     "*/research/**",
+    "*/setup/**",
 ]
 
 [tool.coverage.report]
