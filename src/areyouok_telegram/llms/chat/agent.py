@@ -11,7 +11,6 @@ from areyouok_telegram.llms.exceptions import InvalidMessageError
 from areyouok_telegram.llms.exceptions import ReactToSelfError
 from areyouok_telegram.llms.exceptions import UnacknowledgedImportantMessageError
 from areyouok_telegram.llms.models import CHAT_SONNET_4
-from areyouok_telegram.llms.utils import pydantic_ai_instrumentation
 from areyouok_telegram.llms.utils import run_agent_with_tracking
 from areyouok_telegram.llms.validators.content_check import ContentCheckDependencies
 from areyouok_telegram.llms.validators.content_check import ContentCheckResponse
@@ -41,7 +40,6 @@ chat_agent = pydantic_ai.Agent(
     deps_type=ChatAgentDependencies,
     name="areyouok_telegram_agent",
     end_strategy="exhaustive",
-    instrument=pydantic_ai_instrumentation,
     retries=3,
 )
 

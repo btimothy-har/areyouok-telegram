@@ -2,7 +2,6 @@ import pydantic
 import pydantic_ai
 
 from areyouok_telegram.llms.models import CONTEXT_COMPRESSION_CLAUDE_3_5_HAIKU
-from areyouok_telegram.llms.utils import pydantic_ai_instrumentation
 
 from .constants import CONNECTION_DESC
 from .constants import CONTEXT_TEMPLATE
@@ -57,7 +56,6 @@ context_compression_agent = pydantic_ai.Agent(
     output_type=ContextTemplate,
     name="context_compression_agent",
     end_strategy="exhaustive",
-    instrument=pydantic_ai_instrumentation,
 )
 
 

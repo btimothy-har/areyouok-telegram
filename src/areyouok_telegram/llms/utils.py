@@ -7,21 +7,12 @@ from datetime import datetime
 import logfire
 import pydantic_ai
 import telegram
-from pydantic_ai.models.instrumented import InstrumentationSettings
-from pydantic_ai.providers.openrouter import OpenRouterProvider
 
-from areyouok_telegram.config import CONTROLLED_ENV
-from areyouok_telegram.config import ENV
-from areyouok_telegram.config import OPENROUTER_API_KEY
 from areyouok_telegram.data import Context
 from areyouok_telegram.data import LLMUsage
 from areyouok_telegram.data import MediaFiles
 from areyouok_telegram.data import MessageTypes
 from areyouok_telegram.data import async_database
-
-pydantic_ai_instrumentation = InstrumentationSettings(include_content=False if ENV in CONTROLLED_ENV else True)
-
-openrouter_provider = OpenRouterProvider(api_key=OPENROUTER_API_KEY)
 
 
 async def run_agent_with_tracking(
@@ -96,9 +87,9 @@ def telegram_message_to_dict(message: MessageTypes, ts_reference: datetime | Non
     elif isinstance(message, telegram.MessageReactionUpdated):
         # Handle reactions, assuming only emoji reactions for simplicity
         # TODO: Handle custom and paid reactions
-        reaction_string = ", ".join(
-            [r.emoji for r in message.new_reaction if r.type == telegram.constants.ReactionType.EMOJI]
-        )
+        reaction_string = ", ".join([
+            r.emoji for r in message.new_reaction if r.type == telegram.constants.ReactionType.EMOJI
+        ])
         return {
             "reaction": reaction_string,
             "to_message_id": str(message.message_id),
@@ -119,12 +110,10 @@ def context_to_model_message(
     model_message = pydantic_ai.messages.ModelResponse(
         parts=[
             pydantic_ai.messages.TextPart(
-                content=json.dumps(
-                    {
-                        "timestamp": (f"{(ts_reference - context.created_at).total_seconds()} seconds ago"),
-                        "content": f"Summary of prior conversation:\n\n{context.content}",
-                    }
-                ),
+                content=json.dumps({
+                    "timestamp": (f"{(ts_reference - context.created_at).total_seconds()} seconds ago"),
+                    "content": f"Summary of prior conversation:\n\n{context.content}",
+                }),
                 part_kind="text",
             )
         ],

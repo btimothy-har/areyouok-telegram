@@ -4,7 +4,6 @@ import pydantic
 import pydantic_ai
 
 from areyouok_telegram.llms.models import VALIDATOR_GPT_5_NANO
-from areyouok_telegram.llms.utils import pydantic_ai_instrumentation
 
 
 @dataclass
@@ -30,7 +29,6 @@ content_check_agent = pydantic_ai.Agent(
     output_type=ContentCheckResponse,
     name="content_check_agent",
     end_strategy="exhaustive",
-    instrument=pydantic_ai_instrumentation,
 )
 
 

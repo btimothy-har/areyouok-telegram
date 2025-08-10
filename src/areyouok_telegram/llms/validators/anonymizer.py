@@ -1,13 +1,11 @@
 import pydantic_ai
 
 from areyouok_telegram.llms.models import VALIDATOR_GPT_5_NANO
-from areyouok_telegram.llms.utils import pydantic_ai_instrumentation
 
 anonymization_agent = pydantic_ai.Agent(
     model=VALIDATOR_GPT_5_NANO.model,
     name="anonymization_agent",
     end_strategy="exhaustive",
-    instrument=pydantic_ai_instrumentation,
 )
 
 
