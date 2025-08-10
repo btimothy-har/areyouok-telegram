@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 from unittest.mock import patch
 
 import pytest
+from cryptography.fernet import Fernet
 
 from areyouok_telegram.data.models.media import MediaFiles
 
@@ -19,24 +20,73 @@ class TestMediaFiles:
         chat_id = "123"
         message_id = "456"
         file_unique_id = "unique789"
+        encrypted_content = "encrypted_test_content"
 
-        expected = hashlib.sha256(f"{chat_id}:{message_id}:{file_unique_id}".encode()).hexdigest()
-        assert MediaFiles.generate_file_key(chat_id, message_id, file_unique_id) == expected
+        key_string = f"{chat_id}:{message_id}:{file_unique_id}:{encrypted_content}"
+        expected = hashlib.sha256(key_string.encode()).hexdigest()
+        assert MediaFiles.generate_file_key(chat_id, message_id, file_unique_id, encrypted_content) == expected
+
+    def test_encrypt_content_base64(self):
+        """Test base64 content encryption."""
+        content_base64 = base64.b64encode(b"test content").decode("ascii")
+        user_key = Fernet.generate_key().decode("utf-8")
+
+        encrypted = MediaFiles.encrypt_content_base64(content_base64, user_key)
+
+        # Should be a string (base64 encoded encrypted data)
+        assert isinstance(encrypted, str)
+        assert len(encrypted) > 0
+
+        # Should be able to decrypt it back
+        fernet = Fernet(user_key.encode())
+        decrypted_bytes = fernet.decrypt(encrypted.encode("utf-8"))
+        decrypted_content = decrypted_bytes.decode("utf-8")
+        assert decrypted_content == content_base64
+
+    def test_decrypt_content_base64(self):
+        """Test base64 content decryption."""
+        content_base64 = base64.b64encode(b"another test content").decode("ascii")
+        user_key = Fernet.generate_key().decode("utf-8")
+
+        # First encrypt
+        encrypted = MediaFiles.encrypt_content_base64(content_base64, user_key)
+
+        # Create media instance with encrypted content
+        media = MediaFiles()
+        media.encrypted_content_base64 = encrypted
+
+        # Decrypt should return original base64 content
+        decrypted = media.decrypt_content_base64(user_key)
+        assert decrypted == content_base64
+
+    def test_decrypt_content_base64_no_encrypted_content(self):
+        """Test decrypt_content_base64 returns None when no encrypted content."""
+        media = MediaFiles()
+        media.encrypted_content_base64 = None
+        user_key = Fernet.generate_key().decode("utf-8")
+
+        result = media.decrypt_content_base64(user_key)
+        assert result is None
 
     def test_bytes_data_with_content(self):
-        """Test decoding base64 content to bytes."""
+        """Test decoding encrypted base64 content to bytes."""
         media = MediaFiles()
         test_data = b"test content"
-        media.content_base64 = base64.b64encode(test_data).decode("ascii")
+        content_base64 = base64.b64encode(test_data).decode("ascii")
+        user_key = Fernet.generate_key().decode("utf-8")
+        
+        # Encrypt the base64 content
+        media.encrypted_content_base64 = MediaFiles.encrypt_content_base64(content_base64, user_key)
 
-        assert media.bytes_data == test_data
+        assert media.bytes_data(user_key) == test_data
 
     def test_bytes_data_without_content(self):
-        """Test bytes_data returns None when no content."""
+        """Test bytes_data returns None when no encrypted content."""
         media = MediaFiles()
-        media.content_base64 = None
+        media.encrypted_content_base64 = None
+        user_key = Fernet.generate_key().decode("utf-8")
 
-        assert media.bytes_data is None
+        assert media.bytes_data(user_key) is None
 
     def test_is_anthropic_supported_image(self):
         """Test image files are marked as Anthropic-supported."""
@@ -70,6 +120,7 @@ class TestMediaFiles:
     async def test_create_file_with_content(self, mock_db_session):
         """Test creating a media file with content."""
         test_content = b"test file content"
+        user_key = Fernet.generate_key().decode("utf-8")
 
         # Mock magic.from_buffer
         with patch("areyouok_telegram.data.models.media.magic.from_buffer") as mock_magic:
@@ -80,6 +131,7 @@ class TestMediaFiles:
 
             await MediaFiles.create_file(
                 mock_db_session,
+                user_key,
                 file_id="file123",
                 file_unique_id="unique123",
                 chat_id="chat456",
@@ -102,12 +154,15 @@ class TestMediaFiles:
     @pytest.mark.asyncio
     async def test_create_file_without_content(self, mock_db_session):
         """Test creating a media file without content."""
+        user_key = Fernet.generate_key().decode("utf-8")
+        
         with patch("areyouok_telegram.data.models.media.magic.from_buffer") as mock_magic:
             mock_result = AsyncMock()
             mock_db_session.execute.return_value = mock_result
 
             await MediaFiles.create_file(
                 mock_db_session,
+                user_key,
                 file_id="file456",
                 file_unique_id="unique456",
                 chat_id="chat789",

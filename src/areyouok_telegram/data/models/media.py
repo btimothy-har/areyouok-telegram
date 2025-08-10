@@ -4,6 +4,7 @@ from datetime import UTC
 from datetime import datetime
 
 import magic
+from cryptography.fernet import Fernet
 from sqlalchemy import Column
 from sqlalchemy import Integer
 from sqlalchemy import String
@@ -35,7 +36,7 @@ class MediaFiles(Base):
 
     mime_type = Column(String, nullable=False)
     file_size = Column(Integer, nullable=True)
-    content_base64 = Column(Text, nullable=True)
+    encrypted_content_base64 = Column(Text, nullable=True)
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False)
@@ -43,15 +44,55 @@ class MediaFiles(Base):
     last_accessed_at = Column(TIMESTAMP(timezone=True), nullable=True)
 
     @staticmethod
-    def generate_file_key(chat_id: str, message_id: str, file_unique_id: str) -> str:
-        """Generate a unique key for a file based on its chat ID, message ID, and unique ID."""
-        return hashlib.sha256(f"{chat_id}:{message_id}:{file_unique_id}".encode()).hexdigest()
+    def generate_file_key(chat_id: str, message_id: str, file_unique_id: str, encrypted_content_base64: str) -> str:
+        """Generate a unique key for a file based on its chat ID, message ID, unique ID, and encrypted content."""
+        key_string = f"{chat_id}:{message_id}:{file_unique_id}:{encrypted_content_base64}"
+        return hashlib.sha256(key_string.encode()).hexdigest()
 
-    @property
-    def bytes_data(self) -> bytes | None:
-        """Decode base64 content back to bytes."""
-        if self.content_base64:
-            return base64.b64decode(self.content_base64)
+    @classmethod
+    def encrypt_content_base64(cls, content_base64: str, user_encryption_key: str) -> str:
+        """Encrypt the base64 content using the user's encryption key.
+
+        Args:
+            content_base64: The base64 content string to encrypt
+            user_encryption_key: The user's Fernet encryption key
+
+        Returns:
+            str: The encrypted content as base64-encoded string
+        """
+        fernet = Fernet(user_encryption_key.encode())
+        encrypted_bytes = fernet.encrypt(content_base64.encode("utf-8"))
+        return encrypted_bytes.decode("utf-8")
+
+    def decrypt_content_base64(self, user_encryption_key: str) -> str | None:
+        """Decrypt the base64 content using the user's encryption key.
+
+        Args:
+            user_encryption_key: The user's Fernet encryption key
+
+        Returns:
+            str: The decrypted base64 content string, or None if no encrypted content
+        """
+        if not self.encrypted_content_base64:
+            return None
+
+        fernet = Fernet(user_encryption_key.encode())
+        encrypted_bytes = self.encrypted_content_base64.encode("utf-8")
+        decrypted_bytes = fernet.decrypt(encrypted_bytes)
+        return decrypted_bytes.decode("utf-8")
+
+    def bytes_data(self, user_encryption_key: str) -> bytes | None:
+        """Decode encrypted base64 content back to bytes.
+
+        Args:
+            user_encryption_key: The user's Fernet encryption key
+
+        Returns:
+            bytes: The decrypted file content as bytes, or None if no encrypted content
+        """
+        decrypted_base64 = self.decrypt_content_base64(user_encryption_key)
+        if decrypted_base64:
+            return base64.b64decode(decrypted_base64)
         return None
 
     @property
@@ -71,6 +112,8 @@ class MediaFiles(Base):
     async def create_file(
         cls,
         db_conn: AsyncSession,
+        user_encryption_key: str,
+        *,
         file_id: str,
         file_unique_id: str,
         chat_id: str,
@@ -78,10 +121,11 @@ class MediaFiles(Base):
         file_size: int,
         content_bytes: bytes,
     ):
-        """Create a media file entry.
+        """Create a media file entry with encrypted content.
 
         Args:
             db_conn: Database connection
+            user_encryption_key: The user's Fernet encryption key
             file_id: Telegram file ID
             file_unique_id: Telegram unique file ID
             chat_id: Chat ID where the file was sent
@@ -94,25 +138,35 @@ class MediaFiles(Base):
         # Use python-magic to get MIME type
         mime_type = magic.from_buffer(content_bytes, mime=True) if content_bytes else None
 
+        # Encrypt the base64 content if we have content
+        encrypted_content_base64 = None
+        if content_bytes:
+            content_base64 = base64.b64encode(content_bytes).decode("ascii")
+            encrypted_content_base64 = cls.encrypt_content_base64(content_base64, user_encryption_key)
+
+        # Generate file key with encrypted content
+        file_key = cls.generate_file_key(chat_id, message_id, file_unique_id, encrypted_content_base64 or "")
+
         # Create new media entry
         stmt = pg_insert(cls).values(
+            file_key=file_key,
             file_id=file_id,
             file_unique_id=file_unique_id,
             chat_id=chat_id,
             message_id=message_id,
             mime_type=mime_type,
             file_size=file_size,
-            content_base64=base64.b64encode(content_bytes).decode("ascii") if content_bytes else None,
+            encrypted_content_base64=encrypted_content_base64,
             created_at=now,
             updated_at=now,
         )
-        stmt.on_conflict_do_update(
-            index_elements=["file_unique_id"],
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["file_key"],
             set_={
                 "file_unique_id": stmt.excluded.file_unique_id,
                 "mime_type": stmt.excluded.mime_type,
                 "file_size": stmt.excluded.file_size,
-                "content_base64": stmt.excluded.content_base64,
+                "encrypted_content_base64": stmt.excluded.encrypted_content_base64,
                 "updated_at": datetime.now(UTC),
             },
         )
