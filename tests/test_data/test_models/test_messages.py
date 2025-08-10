@@ -1,12 +1,14 @@
 """Tests for Messages model."""
 
 import hashlib
+import json
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
 import pytest
 import telegram
+from cryptography.fernet import Fernet
 
 from areyouok_telegram.data.models.messages import InvalidMessageTypeError
 from areyouok_telegram.data.models.messages import Messages
@@ -47,45 +49,92 @@ class TestMessages:
 
         assert exc_info.value.message_type == "InvalidType"
 
-    def test_to_telegram_object_with_payload(self):
-        """Test converting database record to Telegram object."""
+    def test_encrypt_payload(self):
+        """Test payload encryption."""
+        payload_dict = {"message_id": 123, "text": "test message"}
+        user_key = Fernet.generate_key().decode("utf-8")
+
+        encrypted = Messages.encrypt_payload(payload_dict, user_key)
+
+        # Should be a string (base64 encoded encrypted data)
+        assert isinstance(encrypted, str)
+        assert len(encrypted) > 0
+
+        # Should be able to decrypt it back
+        fernet = Fernet(user_key.encode())
+        decrypted_bytes = fernet.decrypt(encrypted.encode("utf-8"))
+        decrypted_dict = json.loads(decrypted_bytes.decode("utf-8"))
+        assert decrypted_dict == payload_dict
+
+    def test_decrypt_payload(self):
+        """Test payload decryption."""
+        payload_dict = {"message_id": 456, "text": "another test"}
+        user_key = Fernet.generate_key().decode("utf-8")
+
+        # First encrypt
+        encrypted = Messages.encrypt_payload(payload_dict, user_key)
+
+        # Create message instance with encrypted payload
+        msg = Messages()
+        msg.encrypted_payload = encrypted
+
+        # Decrypt should return original dict
+        decrypted = msg.decrypt_payload(user_key)
+        assert decrypted == payload_dict
+
+    def test_decrypt_payload_no_encrypted_payload(self):
+        """Test decrypt_payload returns None when no encrypted payload."""
+        msg = Messages()
+        msg.encrypted_payload = None
+        user_key = Fernet.generate_key().decode("utf-8")
+
+        result = msg.decrypt_payload(user_key)
+        assert result is None
+
+    def test_to_telegram_object_with_encrypted_payload(self):
+        """Test converting database record to Telegram object with encrypted payload."""
         msg = Messages()
         msg.message_type = "Message"
-        msg.payload = {"message_id": 123, "text": "test"}
+        payload_dict = {"message_id": 123, "text": "test"}
+        user_key = Fernet.generate_key().decode("utf-8")
+
+        # Encrypt the payload
+        msg.encrypted_payload = Messages.encrypt_payload(payload_dict, user_key)
 
         # Mock the de_json method
         with patch.object(telegram.Message, "de_json") as mock_de_json:
             mock_de_json.return_value = MagicMock(spec=telegram.Message)
-            result = msg.to_telegram_object()
+            result = msg.to_telegram_object(user_key)
 
-            mock_de_json.assert_called_once_with(msg.payload, None)
+            mock_de_json.assert_called_once_with(payload_dict, None)
             assert result == mock_de_json.return_value
 
     def test_to_telegram_object_soft_deleted(self):
         """Test soft deleted message returns None."""
         msg = Messages()
         msg.message_type = "Message"
-        msg.payload = None
+        msg.encrypted_payload = None
+        user_key = Fernet.generate_key().decode("utf-8")
 
-        assert msg.to_telegram_object() is None
+        assert msg.to_telegram_object(user_key) is None
 
     @pytest.mark.asyncio
     async def test_delete_soft_deletes_message(self, mock_db_session):
         """Test soft deleting a message."""
         msg = Messages()
-        msg.payload = {"message_id": 123}
+        msg.encrypted_payload = "encrypted_data"
 
         result = await msg.delete(mock_db_session)
 
         assert result is True
-        assert msg.payload is None
+        assert msg.encrypted_payload is None
         mock_db_session.add.assert_called_once_with(msg)
 
     @pytest.mark.asyncio
     async def test_delete_already_deleted(self, mock_db_session):
         """Test deleting an already soft-deleted message."""
         msg = Messages()
-        msg.payload = None
+        msg.encrypted_payload = None
 
         result = await msg.delete(mock_db_session)
 
@@ -97,12 +146,17 @@ class TestMessages:
         """Test inserting a new message."""
         mock_result = AsyncMock()
         mock_db_session.execute.return_value = mock_result
+        user_key = Fernet.generate_key().decode("utf-8")
+
+        # Mock to_dict to return a proper dictionary
+        mock_telegram_message.to_dict.return_value = {"message_id": 123, "text": "test message", "chat": {"id": 456}}
 
         await Messages.new_or_update(
             mock_db_session,
-            str(mock_telegram_message.from_user.id),
-            str(mock_telegram_message.chat.id),
-            mock_telegram_message,
+            user_key,
+            user_id=str(mock_telegram_message.from_user.id),
+            chat_id=str(mock_telegram_message.chat.id),
+            message=mock_telegram_message,
         )
 
         # Verify execute was called
