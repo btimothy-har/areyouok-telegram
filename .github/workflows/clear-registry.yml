@@ -10,6 +10,9 @@ jobs:
   clear_registry:
     name: Clear Registry
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
 
     steps:
     - name: Clear Untagged Versions
