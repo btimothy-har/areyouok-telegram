@@ -59,6 +59,7 @@ def mock_telegram_user():
     user.is_bot = False
     user.language_code = "en"
     user.is_premium = True
+    user.username = "testuser"
     return user
 
 

@@ -1,6 +1,7 @@
 import hashlib
 from datetime import UTC
 from datetime import datetime
+from typing import Optional
 
 import telegram
 from sqlalchemy import BOOLEAN
@@ -14,6 +15,8 @@ from sqlalchemy.sql import select
 
 from areyouok_telegram.config import ENV
 from areyouok_telegram.data import Base
+from areyouok_telegram.encryption import encrypt_user_key
+from areyouok_telegram.encryption import generate_user_key
 from areyouok_telegram.utils import traced
 
 
@@ -22,6 +25,7 @@ class Users(Base):
     __table_args__ = {"schema": ENV}
 
     user_key = Column(String, nullable=False, unique=True)
+    encrypted_key = Column(String, nullable=True)
 
     user_id = Column(String, nullable=False)
     is_bot = Column(BOOLEAN, nullable=False)
@@ -43,8 +47,20 @@ class Users(Base):
         """Insert or update a user in the database."""
         now = datetime.now(UTC)
 
+        # Check if user already exists
+        existing_user = await cls.get_by_id(db_conn, str(user.id))
+
+        # Generate and encrypt key only for new users with username
+        encrypted_key = None
+        if not existing_user and user.username:
+            # Generate a new Fernet key for the user
+            new_key = generate_user_key()
+            # Encrypt it using their username
+            encrypted_key = encrypt_user_key(new_key, user.username)
+
         stmt = pg_insert(cls).values(
             user_key=cls.generate_user_key(str(user.id)),
+            encrypted_key=encrypted_key,
             user_id=str(user.id),
             is_bot=user.is_bot,
             language_code=user.language_code,
@@ -60,6 +76,7 @@ class Users(Base):
                 "language_code": stmt.excluded.language_code,
                 "is_premium": stmt.excluded.is_premium,
                 "updated_at": stmt.excluded.updated_at,
+                # Don't update encrypted_key if user already exists
             },
         )
 
@@ -67,7 +84,7 @@ class Users(Base):
 
     @classmethod
     @traced(extract_args=["user_id"])
-    async def get_by_id(cls, db_conn: AsyncSession, user_id: str) -> "Users | None":
+    async def get_by_id(cls, db_conn: AsyncSession, user_id: str) -> Optional["Users"]:
         """Retrieve a user by their ID."""
         stmt = select(cls).where(cls.user_id == user_id)
         result = await db_conn.execute(stmt)

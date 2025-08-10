@@ -3,6 +3,7 @@
 import hashlib
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
+from unittest.mock import patch
 
 import pytest
 import telegram
@@ -26,7 +27,9 @@ class TestUsers:
         mock_result = AsyncMock()
         mock_db_session.execute.return_value = mock_result
 
-        await Users.new_or_update(mock_db_session, mock_telegram_user)
+        # Mock get_by_id to return None (new user)
+        with patch.object(Users, "get_by_id", return_value=None):
+            await Users.new_or_update(mock_db_session, mock_telegram_user)
 
         # Verify execute was called
         mock_db_session.execute.assert_called_once()
@@ -48,7 +51,10 @@ class TestUsers:
         mock_telegram_user.is_premium = False
         mock_telegram_user.language_code = "es"
 
-        await Users.new_or_update(mock_db_session, mock_telegram_user)
+        # Mock get_by_id to return an existing user
+        mock_existing_user = MagicMock(spec=Users)
+        with patch.object(Users, "get_by_id", return_value=mock_existing_user):
+            await Users.new_or_update(mock_db_session, mock_telegram_user)
 
         # Verify execute was called with upsert
         mock_db_session.execute.assert_called_once()
@@ -61,8 +67,11 @@ class TestUsers:
         user.is_bot = True
         user.language_code = "fr"
         user.is_premium = None  # No premium status
+        user.username = None  # No username
 
-        await Users.new_or_update(mock_db_session, user)
+        # Mock get_by_id to return None (new user)
+        with patch.object(Users, "get_by_id", return_value=None):
+            await Users.new_or_update(mock_db_session, user)
 
         # Verify execute was called
         mock_db_session.execute.assert_called_once()
@@ -99,4 +108,70 @@ class TestUsers:
         result = await Users.get_by_id(mock_db_session, "nonexistent")
 
         assert result is None
+        mock_db_session.execute.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch("areyouok_telegram.data.models.users.generate_user_key")
+    @patch("areyouok_telegram.data.models.users.encrypt_user_key")
+    async def test_new_user_with_username_generates_encrypted_key(
+        self, mock_encrypt, mock_generate, mock_db_session, mock_telegram_user
+    ):
+        """Test that new user with username gets an encrypted key."""
+        # Setup mocks
+        mock_telegram_user.username = "testuser"
+        mock_generate.return_value = "test_key"
+        mock_encrypt.return_value = "encrypted_key"
+
+        # Mock get_by_id to return None (new user)
+        with patch.object(Users, "get_by_id", return_value=None):
+            await Users.new_or_update(mock_db_session, mock_telegram_user)
+
+        # Verify key generation and encryption were called
+        mock_generate.assert_called_once()
+        mock_encrypt.assert_called_once_with("test_key", "testuser")
+
+        # Verify execute was called
+        mock_db_session.execute.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch("areyouok_telegram.data.models.users.generate_user_key")
+    @patch("areyouok_telegram.data.models.users.encrypt_user_key")
+    async def test_new_user_without_username_no_key_generated(
+        self, mock_encrypt, mock_generate, mock_db_session, mock_telegram_user
+    ):
+        """Test that new user without username doesn't get a key."""
+        # Setup mocks
+        mock_telegram_user.username = None
+
+        # Mock get_by_id to return None (new user)
+        with patch.object(Users, "get_by_id", return_value=None):
+            await Users.new_or_update(mock_db_session, mock_telegram_user)
+
+        # Verify key generation and encryption were NOT called
+        mock_generate.assert_not_called()
+        mock_encrypt.assert_not_called()
+
+        # Verify execute was called
+        mock_db_session.execute.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch("areyouok_telegram.data.models.users.generate_user_key")
+    @patch("areyouok_telegram.data.models.users.encrypt_user_key")
+    async def test_existing_user_no_key_generated(
+        self, mock_encrypt, mock_generate, mock_db_session, mock_telegram_user
+    ):
+        """Test that existing user doesn't get a new key."""
+        # Setup mocks
+        mock_telegram_user.username = "existinguser"
+        mock_existing_user = MagicMock(spec=Users)
+
+        # Mock get_by_id to return an existing user
+        with patch.object(Users, "get_by_id", return_value=mock_existing_user):
+            await Users.new_or_update(mock_db_session, mock_telegram_user)
+
+        # Verify key generation and encryption were NOT called
+        mock_generate.assert_not_called()
+        mock_encrypt.assert_not_called()
+
+        # Verify execute was called
         mock_db_session.execute.assert_called_once()

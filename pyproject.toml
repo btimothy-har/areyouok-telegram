@@ -21,6 +21,7 @@ dependencies = [
     "python-magic~=0.4.27",
     "openai~=1.92.0",
     "pydub~=0.25.1",
+    "cryptography~=44.0.0",
 ]
 
 [dependency-groups]
