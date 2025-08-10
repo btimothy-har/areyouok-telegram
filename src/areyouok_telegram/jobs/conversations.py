@@ -7,6 +7,7 @@ import pydantic_ai
 import telegram
 from telegram.ext import ContextTypes
 
+from areyouok_telegram.config import CHAT_SESSION_TIMEOUT_MINS
 from areyouok_telegram.data import Context
 from areyouok_telegram.data import MediaFiles
 from areyouok_telegram.data import Messages
@@ -18,7 +19,6 @@ from areyouok_telegram.llms.chat import AgentResponse
 from areyouok_telegram.llms.chat import ChatAgentDependencies
 from areyouok_telegram.llms.chat import ReactionResponse
 from areyouok_telegram.llms.chat import TextResponse
-from areyouok_telegram.llms.chat import chat_agent
 from areyouok_telegram.llms.context_compression import ContextTemplate
 from areyouok_telegram.llms.context_compression import context_compression_agent
 from areyouok_telegram.llms.utils import context_to_model_message
@@ -28,8 +28,10 @@ from areyouok_telegram.utils import db_retry
 from areyouok_telegram.utils import traced
 
 from .utils import close_chat_session
+from .utils import generate_chat_agent
 from .utils import get_chat_session
 from .utils import log_bot_activity
+from .utils import post_cleanup_tasks
 from .utils import save_session_context
 
 
@@ -77,7 +79,7 @@ class ConversationJob(BaseJob):
             if chat_session.last_user_activity:
                 inactivity_duration = self._run_timestamp - chat_session.last_user_activity
 
-                if inactivity_duration > timedelta(seconds=60 * 60):  # 1 hour
+                if inactivity_duration > timedelta(minutes=CHAT_SESSION_TIMEOUT_MINS):
                     with logfire.span(
                         f"Closing chat session {chat_session.session_id} due to inactivity.",
                         _span_name="ConversationJob._run.close_session",
@@ -85,6 +87,7 @@ class ConversationJob(BaseJob):
                     ):
                         await self.close_session(chat_session=chat_session)
                         await self.stop(context)
+                        await post_cleanup_tasks(context, chat_session)
 
         else:
             with logfire.span(
@@ -127,9 +130,13 @@ class ConversationJob(BaseJob):
         """
         agent_run_payload = None
 
+        agent = await generate_chat_agent(
+            chat_session=chat_session,
+        )
+
         try:
             agent_run_payload = await run_agent_with_tracking(
-                chat_agent,
+                agent,
                 chat_id=self.chat_id,
                 session_id=chat_session.session_id,
                 run_kwargs={
@@ -153,7 +160,7 @@ class ConversationJob(BaseJob):
         else:
             return agent_response
 
-    @traced(extract_args=["chat_session", "response"], record_return=True)
+    @traced(extract_args=["response"], record_return=True)
     async def execute_response(
         self, context: ContextTypes.DEFAULT_TYPE, response: AgentResponse
     ) -> MessageTypes | None:

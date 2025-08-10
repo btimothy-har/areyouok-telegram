@@ -7,20 +7,12 @@ from datetime import datetime
 import logfire
 import pydantic_ai
 import telegram
-from pydantic_ai.models.instrumented import InstrumentationSettings
-from pydantic_ai.providers.openrouter import OpenRouterProvider
 
-from areyouok_telegram.config import ENV
-from areyouok_telegram.config import OPENROUTER_API_KEY
 from areyouok_telegram.data import Context
 from areyouok_telegram.data import LLMUsage
 from areyouok_telegram.data import MediaFiles
 from areyouok_telegram.data import MessageTypes
 from areyouok_telegram.data import async_database
-
-pydantic_ai_instrumentation = InstrumentationSettings(include_content=True if ENV == "development" else False)
-
-openrouter_provider = OpenRouterProvider(api_key=OPENROUTER_API_KEY)
 
 
 async def run_agent_with_tracking(

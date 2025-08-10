@@ -1,5 +1,4 @@
 import hashlib
-from datetime import UTC
 from datetime import datetime
 from typing import Optional
 
@@ -9,6 +8,7 @@ from sqlalchemy import Integer
 from sqlalchemy import String
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import TIMESTAMP
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from areyouok_telegram.config import ENV
@@ -48,11 +48,11 @@ class Sessions(Base):
     @property
     def has_bot_responded(self) -> bool:
         """Check if the bot has responded to the latest updates in the session."""
-        if not self.last_bot_activity:
-            return False
-
         if not self.last_user_activity:
             return True
+
+        if not self.last_bot_activity:
+            return False
 
         return self.last_bot_activity > self.last_user_activity
 
@@ -95,27 +95,39 @@ class Sessions(Base):
     @traced(extract_args=False)
     async def get_messages(self, db_conn: AsyncSession) -> list[telegram.Message]:
         """Retrieve all messages from this session."""
-        # Determine the end time - either session_end or current time for active sessions
-        end_time = self.session_end if self.session_end else datetime.now(UTC)
 
-        return await Messages.retrieve_by_chat(
-            db_conn=db_conn, chat_id=self.chat_id, from_time=self.session_start, to_time=end_time
-        )
+        return await Messages.retrieve_by_session(db_conn=db_conn, session_id=self.session_id)
 
     @classmethod
-    @traced(extract_args=["chat_id", "timestamp"])
+    @traced(extract_args=["chat_id", "timestamp"], record_return=True)
     async def create_session(cls, db_conn: AsyncSession, chat_id: str, timestamp: datetime) -> "Sessions":
-        """Create a new session for a chat."""
+        """Create a new session for a chat.
+        If a session already exists, it will return the currently active session.
+
+        Args:
+            db_conn: The database connection to use for the query.
+            chat_id: The unique identifier for the chat.
+            timestamp: The start time of the session.
+        Returns:
+            The active session object, either newly created or existing.
+        """
         session_key = cls.generate_session_key(chat_id, timestamp)
 
-        new_session = cls(
+        stmt = pg_insert(cls).values(
             session_key=session_key,
             chat_id=chat_id,
             session_start=timestamp,
         )
 
-        db_conn.add(new_session)
-        return new_session
+        # On conflict, update the session_start to ensure we always return something
+        # This handles race conditions where the same session might be created twice
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["session_key"],
+            set_={"session_start": timestamp},  # Update timestamp to latest attempt
+        ).returning(cls)
+
+        result = await db_conn.execute(stmt)
+        return result.scalar_one()  # Always returns the active session object
 
     @classmethod
     async def get_active_session(cls, db_conn: AsyncSession, chat_id: str) -> Optional["Sessions"]:

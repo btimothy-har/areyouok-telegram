@@ -1,8 +1,11 @@
+import asyncio
 from collections.abc import Callable
 from collections.abc import Iterable
+from functools import wraps
 from typing import Any
 from typing import TypeVar
 
+import httpx
 import logfire
 from asyncpg.exceptions import ConnectionDoesNotExistError
 from asyncpg.exceptions import InterfaceError
@@ -13,6 +16,9 @@ from tenacity import stop_after_attempt
 from tenacity import wait_chain
 from tenacity import wait_fixed
 from tenacity import wait_random_exponential
+
+from areyouok_telegram.config import ENV
+from areyouok_telegram.config import TINYURL_API_KEY
 
 F = TypeVar("F", bound=Callable[..., Any])
 
@@ -64,6 +70,38 @@ def traced(
     return decorator
 
 
+def environment_override(func_map: dict[str, Callable]) -> Callable:
+    """
+    Decorator that switches function implementations based on the ENV environment variable.
+
+    This decorator allows you to define different implementations of a function for different
+    environments (production, staging, development, etc.) and automatically selects the
+    appropriate one at runtime. Works with both synchronous and asynchronous functions.
+    """
+
+    def decorator(default_func: Callable) -> Callable:
+        is_async = asyncio.iscoroutinefunction(default_func)
+
+        if is_async:
+
+            @wraps(default_func)
+            async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
+                func = func_map.get(ENV, default_func)
+                return await func(*args, **kwargs)
+
+            return async_wrapper
+        else:
+
+            @wraps(default_func)
+            def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
+                func = func_map.get(ENV, default_func)
+                return func(*args, **kwargs)
+
+            return sync_wrapper
+
+    return decorator
+
+
 def db_retry():
     return retry(
         retry=retry_if_exception_type((ConnectionDoesNotExistError, DBAPIError, InterfaceError)),
@@ -71,3 +109,27 @@ def db_retry():
         stop=stop_after_attempt(5),
         reraise=True,
     )
+
+
+@traced(record_return=True)
+async def shorten_url(url: str) -> str:
+    """
+    Shorten a URL using the TinyURL API.
+
+    Args:
+        url (str): The URL to shorten.
+
+    Returns:
+        str: The shortened URL.
+    """
+    api_url = "https://api.tinyurl.com/create"
+    headers = {
+        "Authorization": f"Bearer {TINYURL_API_KEY}",
+    }
+
+    payload = {"url": url}
+
+    async with httpx.AsyncClient() as client:
+        response = await client.post(api_url, json=payload, headers=headers)
+        response.raise_for_status()
+        return response.json().get("data", {}).get("tiny_url", url)

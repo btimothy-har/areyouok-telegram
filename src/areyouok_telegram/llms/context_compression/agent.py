@@ -1,11 +1,7 @@
 import pydantic
 import pydantic_ai
-from pydantic_ai.models.anthropic import AnthropicModel
-from pydantic_ai.models.fallback import FallbackModel
-from pydantic_ai.models.openai import OpenAIModel
 
-from areyouok_telegram.llms.utils import openrouter_provider
-from areyouok_telegram.llms.utils import pydantic_ai_instrumentation
+from areyouok_telegram.llms.models import CONTEXT_COMPRESSION_CLAUDE_3_5_HAIKU
 
 from .constants import CONNECTION_DESC
 from .constants import CONTEXT_TEMPLATE
@@ -55,26 +51,11 @@ class ContextTemplate(pydantic.BaseModel):
         )
 
 
-model_settings = pydantic_ai.settings.ModelSettings(temperature=0.4)
-
-agent_models = FallbackModel(
-    AnthropicModel(
-        model_name="claude-3-5-haiku-20241022",
-        settings=model_settings,
-    ),
-    OpenAIModel(
-        model_name="anthropic/claude-3.5-haiku",
-        provider=openrouter_provider,
-        settings=model_settings,
-    ),
-)
-
 context_compression_agent = pydantic_ai.Agent(
-    model=agent_models,
+    model=CONTEXT_COMPRESSION_CLAUDE_3_5_HAIKU.model,
     output_type=ContextTemplate,
     name="context_compression_agent",
     end_strategy="exhaustive",
-    instrument=pydantic_ai_instrumentation,
 )
 
 

@@ -1,5 +1,6 @@
 """Shared fixtures for data layer testing."""
 
+import os
 from datetime import UTC
 from datetime import datetime
 from unittest.mock import AsyncMock
@@ -10,6 +11,11 @@ import pytest
 import telegram
 from freezegun import freeze_time
 from sqlalchemy.ext.asyncio import AsyncSession
+
+# Set test environment
+os.environ["ENV"] = "test_env"
+os.environ["CHAT_SESSION_TIMEOUT_MINS"] = "60"  # Set default timeout for tests
+
 
 FROZEN_TIME = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
 

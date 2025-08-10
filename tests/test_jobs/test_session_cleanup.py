@@ -72,8 +72,7 @@ class TestSessionCleanupJob:
                 new=AsyncMock(return_value=mock_sessions),
             ),
             patch.object(job, "_cleanup_session", new=AsyncMock(side_effect=[5, 3])) as mock_cleanup,
-            patch("areyouok_telegram.jobs.session_cleanup.logfire.info") as mock_log_info,
-            patch("areyouok_telegram.jobs.session_cleanup.logfire.span"),
+            patch.object(job, "_cleanup_orphan_messages", new=AsyncMock(return_value=2)) as mock_cleanup_orphan,
         ):
             await job._run(mock_context)
 
@@ -82,8 +81,8 @@ class TestSessionCleanupJob:
         mock_cleanup.assert_any_call(mock_session1)
         mock_cleanup.assert_any_call(mock_session2)
 
-        # Verify logging
-        mock_log_info.assert_called_with("Session cleanup completed. Deleted 8 messages from 2 sessions.")
+        # Verify orphan cleanup was called
+        mock_cleanup_orphan.assert_called_once()
 
         # Verify last_cleanup_timestamp was updated
         assert job.last_cleanup_timestamp == frozen_time
@@ -135,10 +134,9 @@ class TestSessionCleanupJob:
         with (
             patch("areyouok_telegram.jobs.session_cleanup.async_database") as mock_async_db,
             patch(
-                "areyouok_telegram.jobs.session_cleanup.Messages.retrieve_raw_by_chat",
+                "areyouok_telegram.jobs.session_cleanup.Messages.retrieve_raw_by_session",
                 new=AsyncMock(return_value=mock_messages),
             ) as mock_retrieve,
-            patch("areyouok_telegram.jobs.session_cleanup.logfire.info") as mock_log_info,
         ):
             mock_db_conn = AsyncMock()
             mock_async_db.return_value.__aenter__.return_value = mock_db_conn
@@ -148,16 +146,13 @@ class TestSessionCleanupJob:
         # Verify correct number of messages were deleted
         assert result == 2  # Only 2 successful deletions
 
-        # Verify Messages.retrieve_raw_by_chat was called correctly
-        mock_retrieve.assert_called_once_with(db_conn=mock_db_conn, chat_id="chat456", to_time=mock_session.session_end)
+        # Verify Messages.retrieve_raw_by_session was called correctly
+        mock_retrieve.assert_called_once_with(db_conn=mock_db_conn, session_id="session123")
 
         # Verify each message's delete was called
         mock_msg1.delete.assert_called_once_with(db_conn=mock_db_conn)
         mock_msg2.delete.assert_called_once_with(db_conn=mock_db_conn)
         mock_msg3.delete.assert_called_once_with(db_conn=mock_db_conn)
-
-        # Verify logging
-        mock_log_info.assert_called_once_with("Cleaned up 2 messages for session session123 in chat chat456.")
 
     @pytest.mark.asyncio
     async def test_cleanup_session_no_messages(self):
@@ -172,9 +167,9 @@ class TestSessionCleanupJob:
         with (
             patch("areyouok_telegram.jobs.session_cleanup.async_database") as mock_async_db,
             patch(
-                "areyouok_telegram.jobs.session_cleanup.Messages.retrieve_raw_by_chat", new=AsyncMock(return_value=[])
-            ),
-            patch("areyouok_telegram.jobs.session_cleanup.logfire.info") as mock_log_info,
+                "areyouok_telegram.jobs.session_cleanup.Messages.retrieve_raw_by_session",
+                new=AsyncMock(return_value=[]),
+            ) as mock_retrieve,
         ):
             mock_db_conn = AsyncMock()
             mock_async_db.return_value.__aenter__.return_value = mock_db_conn
@@ -183,5 +178,5 @@ class TestSessionCleanupJob:
 
         assert result == 0
 
-        # Verify logging
-        mock_log_info.assert_called_once_with("Cleaned up 0 messages for session session123 in chat chat456.")
+        # Verify Messages.retrieve_raw_by_session was called
+        mock_retrieve.assert_called_once_with(db_conn=mock_db_conn, session_id="session123")

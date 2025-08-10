@@ -38,6 +38,8 @@ class Messages(Base):
     payload = Column(JSONB, nullable=True)
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    # Associate with a session key if needed
+    session_key = Column(String, nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False)
     updated_at = Column(TIMESTAMP(timezone=True), nullable=False)
 
@@ -92,6 +94,7 @@ class Messages(Base):
         user_id: str,
         chat_id: str,
         message: MessageTypes,
+        session_key: str | None = None,
     ):
         """Insert or update a message in the database."""
         now = datetime.now(UTC)
@@ -108,6 +111,7 @@ class Messages(Base):
             user_id=str(user_id),
             chat_id=str(chat_id),
             payload=message.to_dict(),
+            session_key=session_key,
             created_at=now,
             updated_at=now,
         )
@@ -167,45 +171,32 @@ class Messages(Base):
         return rt_message, reaction_objects if include_reactions else None
 
     @classmethod
-    @traced(extract_args=["chat_id"])
-    async def retrieve_by_chat(
+    @traced(extract_args=["session_id"])
+    async def retrieve_by_session(
         cls,
         db_conn: AsyncSession,
-        chat_id: str,
-        from_time: datetime | None = None,
-        to_time: datetime | None = None,
-        limit: int | None = None,
+        session_id: str,
     ) -> list[MessageTypes]:
-        """Retrieve messages by chat_id and optional time range, returning telegram.Message objects."""
-        messages = await cls.retrieve_raw_by_chat(db_conn, chat_id, from_time, to_time, limit)
+        """Retrieve messages by session_id, returning telegram.Message objects."""
+        messages = await cls.retrieve_raw_by_session(db_conn, session_id)
         return [msg.to_telegram_object() for msg in messages]
 
     @classmethod
-    @traced(extract_args=["chat_id"])
-    async def retrieve_raw_by_chat(
+    @traced(extract_args=["session_id"])
+    async def retrieve_raw_by_session(
         cls,
         db_conn: AsyncSession,
-        chat_id: str,
-        from_time: datetime | None = None,
-        to_time: datetime | None = None,
-        limit: int | None = None,
+        session_id: str,
     ) -> list["Messages"]:
-        """Retrieve messages by chat_id and optional time range, returning SQLAlchemy Messages models."""
-        stmt = select(cls).where(
-            cls.chat_id == chat_id,
-            cls.payload.isnot(None),  # Exclude soft-deleted messages
+        """Retrieve messages by session_id, returning SQLAlchemy Messages models."""
+        stmt = (
+            select(cls)
+            .where(
+                cls.session_key == session_id,
+                cls.payload.isnot(None),  # Exclude soft-deleted messages
+            )
+            .order_by(cls.created_at)
         )
-
-        if from_time:
-            stmt = stmt.where(cls.created_at >= from_time)
-
-        if to_time:
-            stmt = stmt.where(cls.created_at <= to_time)
-
-        stmt = stmt.order_by(cls.created_at)
-
-        if limit:
-            stmt = stmt.limit(limit)
 
         result = await db_conn.execute(stmt)
         messages = result.scalars().all()

@@ -1,7 +1,9 @@
+from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
 
 import logfire
+from sqlalchemy import select
 from telegram.ext import ContextTypes
 
 from areyouok_telegram.data import Messages
@@ -64,18 +66,19 @@ class SessionCleanupJob(BaseJob):
 
             logfire.info(f"Session cleanup completed. Deleted {total_deleted} messages from {len(sessions)} sessions.")
 
-            # Update the last cleanup timestamp
-            self.last_cleanup_timestamp = self._run_timestamp
+        await self._cleanup_orphan_messages()
+
+        # Update the last cleanup timestamp
+        self.last_cleanup_timestamp = self._run_timestamp
 
     @db_retry()
     async def _cleanup_session(self, chat_session: Sessions) -> int:
         """Clean up messages for a specific chat session."""
 
         async with async_database() as db_conn:
-            messages = await Messages.retrieve_raw_by_chat(
+            messages = await Messages.retrieve_raw_by_session(
                 db_conn=db_conn,
-                chat_id=chat_session.chat_id,
-                to_time=chat_session.session_end,
+                session_id=chat_session.session_id,
             )
 
             ct = 0
@@ -83,7 +86,30 @@ class SessionCleanupJob(BaseJob):
                 deleted = await msg.delete(db_conn=db_conn)
                 ct += 1 if deleted else 0
 
-            logfire.info(
-                f"Cleaned up {ct} messages for session {chat_session.session_id} in chat {chat_session.chat_id}."
+            logfire.info(f"Cleaned up {ct} messages for session {chat_session.session_id}.")
+            return ct
+
+    @db_retry()
+    async def _cleanup_orphan_messages(self) -> int:
+        """Clean up orphaned messages that are not linked to any session."""
+        async with async_database() as db_conn:
+            stmt = (
+                select(Messages)
+                .where(
+                    Messages.session_key.is_(None),  # Orphaned messages have no session
+                    Messages.payload.isnot(None),  # Exclude already soft-deleted messages
+                    Messages.created_at < datetime.now(UTC) - timedelta(hours=6),
+                )
+                .order_by(Messages.created_at)
             )
+
+            result = await db_conn.execute(stmt)
+            orphaned_messages = result.scalars().all()
+
+            ct = 0
+            for msg in orphaned_messages:
+                deleted = await msg.delete(db_conn=db_conn)
+                ct += 1 if deleted else 0
+
+            logfire.info(f"Cleaned up {ct} orphaned messages.")
             return ct

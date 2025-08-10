@@ -1,6 +1,26 @@
 import pydantic_ai
 
 
+class BaseModelError(Exception):
+    """Base class for all model-related exceptions."""
+
+
+class ModelInputError(BaseModelError):
+    """Exception raised for errors in model input."""
+
+    def __init__(self):
+        message = "Either model_id or openrouter_id must be provided."
+        super().__init__(message)
+
+
+class ModelConfigurationError(BaseModelError):
+    """Exception raised for errors in model configuration."""
+
+    def __init__(self):
+        message = "No valid model configuration found. Ensure either primary or OpenRouter model is set."
+        super().__init__(message)
+
+
 class InvalidMessageError(pydantic_ai.ModelRetry):
     """Exception raised when a message ID cannot be found."""
 
