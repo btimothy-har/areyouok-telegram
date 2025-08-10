@@ -2,14 +2,6 @@ name: Build
 
 on:
   push:
-    paths:
-      - "src/**"
-      - ".github/workflows/build.yml"
-      - ".dockerignore"
-      - ".python-version"
-      - "Dockerfile"
-      - "pyproject.toml"
-      - "uv.lock"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
