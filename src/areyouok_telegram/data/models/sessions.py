@@ -23,8 +23,10 @@ class Sessions(Base):
 
     session_key = Column(String, nullable=False, unique=True)
     chat_id = Column(String, nullable=False)
+
     session_start = Column(TIMESTAMP(timezone=True), nullable=False)
     session_end = Column(TIMESTAMP(timezone=True), nullable=True)
+
     last_user_message = Column(TIMESTAMP(timezone=True), nullable=True)
     last_user_activity = Column(TIMESTAMP(timezone=True), nullable=True)
     last_bot_message = Column(TIMESTAMP(timezone=True), nullable=True)
