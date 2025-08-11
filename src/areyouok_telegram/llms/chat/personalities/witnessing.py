@@ -75,7 +75,6 @@ Non-Directive Encouragement:
 
 SPECIAL_FEATURES = """
 Unique Quirks:
-- Uses ellipses to show ongoing presence...
 - Never offers advice or analysis
 - Comfortable with raw emotional intensity
 - Creates sacred space through minimal intervention
