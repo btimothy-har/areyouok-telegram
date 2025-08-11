@@ -70,17 +70,27 @@ class ConversationJob(BaseJob):
         try:
             user_encryption_key = await get_user_encryption_key(self.chat_id)
         except UserNotFoundForChatError:
-            logfire.warning(f"Stopping conversation job for chat {self.chat_id} - no user found (non-private chat).")
-            await self.stop(context)
-            return
+            with logfire.span(
+                f"Stopping conversation job for chat {self.chat_id} - no user found.",
+                _span_name="ConversationJob._run.no_user",
+                _level="warning",
+                chat_id=self.chat_id,
+            ):
+                await self.stop(context)
+                return
 
         chat_session = await get_chat_session(chat_id=self.chat_id)
 
         if not chat_session:
             # If no active session is found, log a warning and stop the job
             # This can happen if the user submits a command without chatting
-            logfire.warning("Conversation job started without an active session.")
-            await self.stop(context)
+            with logfire.span(
+                "Conversation job started without an active session.",
+                _span_name="ConversationJob._run.active_session",
+                _level="warning",
+                chat_id=self.chat_id,
+            ):
+                await self.stop(context)
 
         elif chat_session.has_bot_responded:
             logfire.debug("No new updates, nothing to do.")

@@ -26,7 +26,7 @@ class DataLogWarningJob(BaseJob):
     async def _run(self, context: ContextTypes.DEFAULT_TYPE) -> None:  # noqa: ARG002
         if LOG_CHAT_MESSAGES and ENV in CONTROLLED_ENV:
             logfire.warning(
-                "Logging chat messages is enabled in a controlled environment. "
+                "Logging chat messages in a controlled environment. "
                 "This may expose sensitive user data. Ensure this is intentional."
             )
 

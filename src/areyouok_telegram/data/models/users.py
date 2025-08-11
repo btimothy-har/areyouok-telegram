@@ -90,7 +90,6 @@ class Users(Base):
         return await cls.get_by_id(db_conn, str(user.id))
 
     @classmethod
-    @traced(extract_args=["user_id"])
     async def get_by_id(cls, db_conn: AsyncSession, user_id: str) -> Optional["Users"]:
         """Retrieve a user by their ID."""
         stmt = select(cls).where(cls.user_id == user_id)

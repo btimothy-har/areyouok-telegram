@@ -24,6 +24,7 @@ async def on_new_update(update: telegram.Update, context: ContextTypes.DEFAULT_T
     with logfire.span(
         "New update received.",
         _span_name="handlers.globals.on_new_update",
+        update=update,
     ):
         async with async_database() as db_conn:
             if update.effective_user:
