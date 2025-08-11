@@ -8,8 +8,10 @@ from unittest.mock import patch
 
 import pytest
 from cryptography.fernet import Fernet
+from cryptography.fernet import InvalidToken
 
 from areyouok_telegram.data.models.media import MediaFiles
+from areyouok_telegram.encryption.exceptions import ContentNotDecryptedError
 
 
 class TestMediaFiles:
@@ -62,7 +64,7 @@ class TestMediaFiles:
 
     def test_decrypt_content_base64_no_encrypted_content(self):
         """Test decrypt_content with invalid content."""
-        from cryptography.fernet import InvalidToken
+
         media = MediaFiles()
         media.encrypted_content_base64 = "invalid_base64"
         media.file_key = "test_file_key"
@@ -78,11 +80,12 @@ class TestMediaFiles:
 
         media = MediaFiles()
         test_data = b"test content"
-        content_base64 = base64.b64encode(test_data).decode("ascii")
         user_key = Fernet.generate_key().decode("utf-8")
 
         # Encrypt the content
-        media.encrypted_content_base64 = MediaFiles.encrypt_content(content_bytes=test_data, user_encryption_key=user_key)
+        media.encrypted_content_base64 = MediaFiles.encrypt_content(
+            content_bytes=test_data, user_encryption_key=user_key
+        )
         media.file_key = "test_file_key_for_content"
 
         # First decrypt the content
@@ -93,7 +96,6 @@ class TestMediaFiles:
 
     def test_bytes_data_without_content(self):
         """Test bytes_data raises error when content not decrypted."""
-        from areyouok_telegram.encryption.exceptions import ContentNotDecryptedError
 
         # Clear the cache to ensure clean test
         MediaFiles._data_cache.clear()

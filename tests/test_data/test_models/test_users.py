@@ -263,4 +263,3 @@ class TestUsers:
         # Should return cached key without decrypting
         result = user.retrieve_key()
         assert result == cached_key
-

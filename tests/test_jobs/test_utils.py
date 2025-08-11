@@ -165,7 +165,12 @@ class TestLogBotActivity:
 
         # Verify message was saved
         mock_new_or_update.assert_called_once_with(
-            mock_db_conn, "test_encryption_key", user_id="bot123", chat_id="chat456", message=mock_message, session_key="session_key_123"
+            mock_db_conn,
+            "test_encryption_key",
+            user_id="bot123",
+            chat_id="chat456",
+            message=mock_message,
+            session_key="session_key_123",
         )
 
         # Verify new_message was called for telegram.Message
@@ -200,7 +205,12 @@ class TestLogBotActivity:
 
         # Verify message was saved
         mock_new_or_update.assert_called_once_with(
-            mock_db_conn, "test_encryption_key", user_id="bot123", chat_id="chat456", message=mock_reaction, session_key="session_key_123"
+            mock_db_conn,
+            "test_encryption_key",
+            user_id="bot123",
+            chat_id="chat456",
+            message=mock_reaction,
+            session_key="session_key_123",
         )
 
         # Verify new_message was NOT called for MessageReactionUpdated
