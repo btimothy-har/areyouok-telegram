@@ -1,8 +1,6 @@
-from areyouok_telegram.config import FEEDBACK_URL
-from areyouok_telegram.config import FORM_NUM_PAGES
-from areyouok_telegram.config import METADATA_FIELD
-from areyouok_telegram.config import SESSION_ID_FIELD
 from areyouok_telegram.utils import shorten_url
+
+PERSONALITY_FEEDBACK_URL = "https://docs.google.com/forms/d/e/1FAIpQLSetAAqBeLnnjpW39Z5sVeDVjaVbrR-OEJ_tE8OhMIvKVmtV_A/viewform?usp=pp_url&&entry.1140367297={session_id}&entry.604567897={metadata}&pageHistory=0,1,2,3"
 
 
 async def generate_feedback_url(session_id: str, metadata: str) -> str:
@@ -16,9 +14,9 @@ async def generate_feedback_url(session_id: str, metadata: str) -> str:
     Returns:
         str: The generated feedback URL.
     """
-    page_history = ",".join(str(i) for i in range(FORM_NUM_PAGES + 1))
-    raw_url = (
-        f"{FEEDBACK_URL}{SESSION_ID_FIELD}={session_id}{METADATA_FIELD}={metadata.upper()}&pageHistory={page_history}"
+    raw_url = PERSONALITY_FEEDBACK_URL.format(
+        session_id=session_id,
+        metadata=metadata.upper(),
     )
 
     return await shorten_url(raw_url)
