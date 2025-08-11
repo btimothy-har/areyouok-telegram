@@ -15,6 +15,7 @@ from areyouok_telegram.data import MessageTypes
 from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database
 from areyouok_telegram.jobs import BaseJob
+from areyouok_telegram.jobs.exceptions import UserNotFoundForChatError
 from areyouok_telegram.llms.chat import AgentResponse
 from areyouok_telegram.llms.chat import ChatAgentDependencies
 from areyouok_telegram.llms.chat import ReactionResponse
@@ -30,6 +31,7 @@ from areyouok_telegram.utils import traced
 from .utils import close_chat_session
 from .utils import generate_chat_agent
 from .utils import get_chat_session
+from .utils import get_user_encryption_key
 from .utils import log_bot_activity
 from .utils import post_cleanup_tasks
 from .utils import save_session_context
@@ -64,13 +66,31 @@ class ConversationJob(BaseJob):
     async def _run(self, context: ContextTypes.DEFAULT_TYPE) -> None:  # noqa: ARG002
         """Process conversation for this chat."""
 
+        # Get user encryption key - this will fail for non-private chats
+        try:
+            user_encryption_key = await get_user_encryption_key(self.chat_id)
+        except UserNotFoundForChatError:
+            with logfire.span(
+                f"Stopping conversation job for chat {self.chat_id} - no user found.",
+                _span_name="ConversationJob._run.no_user",
+                _level="warning",
+                chat_id=self.chat_id,
+            ):
+                await self.stop(context)
+                return
+
         chat_session = await get_chat_session(chat_id=self.chat_id)
 
         if not chat_session:
             # If no active session is found, log a warning and stop the job
             # This can happen if the user submits a command without chatting
-            logfire.warning("Conversation job started without an active session.")
-            await self.stop(context)
+            with logfire.span(
+                "Conversation job started without an active session.",
+                _span_name="ConversationJob._run.active_session",
+                _level="warning",
+                chat_id=self.chat_id,
+            ):
+                await self.stop(context)
 
         elif chat_session.has_bot_responded:
             logfire.debug("No new updates, nothing to do.")
@@ -85,9 +105,9 @@ class ConversationJob(BaseJob):
                         _span_name="ConversationJob._run.close_session",
                         chat_id=self.chat_id,
                     ):
-                        await self.close_session(chat_session=chat_session)
+                        await self.close_session(user_encryption_key, chat_session=chat_session)
                         await self.stop(context)
-                        await post_cleanup_tasks(context, chat_session)
+                        await post_cleanup_tasks(context=context, chat_session=chat_session)
 
         else:
             with logfire.span(
@@ -96,11 +116,11 @@ class ConversationJob(BaseJob):
                 chat_id=self.chat_id,
             ):
                 message_history, instructions = await self._prepare_conversation_input(
-                    chat_session=chat_session,
-                    include_context=True,  # Include context in the conversation input
+                    user_encryption_key, chat_session=chat_session, include_context=True
                 )
                 response = await self.generate_response(
                     context=context,
+                    user_encryption_key=user_encryption_key,
                     chat_session=chat_session,
                     conversation_history=message_history,
                     instructions=instructions or None,
@@ -108,17 +128,22 @@ class ConversationJob(BaseJob):
 
                 self.last_response = response.response_type
 
-                response_message = await self.execute_response(
-                    context=context,
-                    response=response,
-                )
+                response_message = await self.execute_response(user_encryption_key, context=context, response=response)
 
-                await log_bot_activity(context.bot.id, self.chat_id, chat_session, response_message)
+                await log_bot_activity(
+                    bot_id=context.bot.id,
+                    user_encryption_key=user_encryption_key,
+                    chat_id=self.chat_id,
+                    chat_session=chat_session,
+                    response_message=response_message,
+                )
 
     @traced(extract_args=["chat_session", "instructions"])
     async def generate_response(
         self,
+        *,
         context: ContextTypes.DEFAULT_TYPE,
+        user_encryption_key: str,
         chat_session: Sessions,
         conversation_history: list[pydantic_ai.messages.ModelMessage],
         instructions: str | None = None,
@@ -146,6 +171,7 @@ class ConversationJob(BaseJob):
                         tg_chat_id=self.chat_id,
                         tg_session_id=chat_session.session_id,
                         last_response_type=self.last_response,
+                        user_encryption_key=user_encryption_key,
                         instruction=instructions or None,
                     ),
                 },
@@ -162,7 +188,11 @@ class ConversationJob(BaseJob):
 
     @traced(extract_args=["response"], record_return=True)
     async def execute_response(
-        self, context: ContextTypes.DEFAULT_TYPE, response: AgentResponse
+        self,
+        user_encryption_key: str,
+        *,
+        context: ContextTypes.DEFAULT_TYPE,
+        response: AgentResponse,
     ) -> MessageTypes | None:
         """Execute the response action in the given context."""
 
@@ -175,7 +205,8 @@ class ConversationJob(BaseJob):
             # Get the message to react to
             async with async_database() as db_conn:
                 message, _ = await Messages.retrieve_message_by_id(
-                    db_conn=db_conn,
+                    db_conn,
+                    user_encryption_key,
                     message_id=response.react_to_message_id,
                     chat_id=self.chat_id,
                     include_reactions=False,
@@ -196,12 +227,17 @@ class ConversationJob(BaseJob):
         return response_message
 
     @traced(extract_args=["chat_session"])
-    async def close_session(self, chat_session: Sessions) -> None:
+    async def close_session(
+        self,
+        user_encryption_key: str,
+        *,
+        chat_session: Sessions,
+    ) -> None:
         """Closes the chat session and compresses the context."""
 
         async with async_database() as db_conn:
             context = await Context.get_by_session_id(
-                db_conn=db_conn,
+                db_conn,
                 session_id=chat_session.session_key,
                 ctype="session",
             )
@@ -214,8 +250,9 @@ class ConversationJob(BaseJob):
             return
 
         message_history, _ = await self._prepare_conversation_input(
+            user_encryption_key,
             chat_session=chat_session,
-            include_context=False,  # Include context in the conversation input
+            include_context=False,
         )
 
         if len(message_history) == 0:
@@ -223,10 +260,11 @@ class ConversationJob(BaseJob):
             return
 
         compressed_context = await self._compress_session_context(
-            chat_session=chat_session, message_history=message_history
+            chat_session=chat_session,
+            message_history=message_history,
         )
 
-        await save_session_context(self.chat_id, chat_session, compressed_context)
+        await save_session_context(user_encryption_key, self.chat_id, chat_session, compressed_context)
         await close_chat_session(chat_session)
 
         logfire.info(f"Session {chat_session.session_id} closed due to inactivity.")
@@ -234,7 +272,11 @@ class ConversationJob(BaseJob):
     @traced(extract_args=["chat_session", "include_context"])
     @db_retry()
     async def _prepare_conversation_input(
-        self, chat_session: Sessions, *, include_context: bool = True
+        self,
+        user_encryption_key: str,
+        *,
+        chat_session: Sessions,
+        include_context: bool = True,
     ) -> tuple[list[pydantic_ai.messages.ModelMessage], str | None]:
         """Prepare the conversation input for the chat session.
         This method gathers the message history and checks for unsupported media types.
@@ -247,27 +289,29 @@ class ConversationJob(BaseJob):
             if include_context:
                 # Gather chat context
                 last_context = await Context.retrieve_context_by_chat(
-                    db_conn=db_conn,
+                    db_conn,
                     chat_id=self.chat_id,
                     ctype="session",
                 )
+
                 if last_context:
                     last_context.sort(key=lambda c: c.created_at)
+                    [c.decrypt_content(user_encryption_key=user_encryption_key) for c in last_context]
 
-                    last_context = last_context or []
                     message_history.extend([context_to_model_message(c) for c in last_context])
 
             # Get all messages from the session
             media_instruction = None
             unsupported_media_types = []
 
-            messages = await chat_session.get_messages(db_conn)
+            raw_messages = await chat_session.get_messages(db_conn)
+            messages = [msg.to_telegram_object(user_encryption_key) for msg in raw_messages]
             messages.sort(key=lambda msg: msg.date)  # Sort messages by date
 
             for msg in messages:
                 if isinstance(msg, telegram.Message):
                     media = await MediaFiles.get_by_message_id(
-                        db_conn=db_conn,
+                        db_conn,
                         chat_id=self.chat_id,
                         message_id=str(msg.message_id),
                     )
@@ -275,6 +319,9 @@ class ConversationJob(BaseJob):
                 elif isinstance(msg, telegram.MessageReactionUpdated):
                     media = []
                     user = msg.user.id
+
+                if media:
+                    [m.decrypt_content(user_encryption_key=user_encryption_key) for m in media]
 
                 as_model_message = telegram_message_to_model_message(
                     message=msg,

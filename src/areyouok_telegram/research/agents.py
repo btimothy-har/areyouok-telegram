@@ -50,11 +50,16 @@ async def generate_agent_for_research_session(
     return agent
 
 
-async def close_research_session(context: ContextTypes.DEFAULT_TYPE, chat_session: Sessions) -> None:
+async def close_research_session(
+    *,
+    context: ContextTypes.DEFAULT_TYPE,
+    chat_session: Sessions,
+) -> None:
     """Close the research session and clean up any resources."""
     async with async_database() as db_conn:
-        messages = await chat_session.get_messages(db_conn)
-        if len(messages) <= 5:
+        raw_messages = await chat_session.get_messages(db_conn)
+
+        if len(raw_messages) <= 5:
             await context.bot.send_message(
                 chat_id=chat_session.chat_id,
                 text=NO_FEEDBACK_REQUEST,

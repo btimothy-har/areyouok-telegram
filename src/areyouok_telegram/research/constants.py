@@ -29,7 +29,7 @@ You are not in an active session. Please start a new session by sending the comm
 """
 
 NO_FEEDBACK_REQUEST = """
-Thanks for your interest in "Are You OK?"!
+Thanks for your interest in "Are You OK?"! Your session is now ended.
 
 You didn't really interact with the bot in this session, so we won't ask for your feedback.
 
@@ -37,7 +37,11 @@ If you want to start a new session, please send the command `/start`.
 """
 
 FEEDBACK_REQUEST = """
-Thanks for participating in our research! If you'd like, you may start a new session by sending the command `/start`.
+Thanks for your interest in "Are You OK?"! Your session is now ended. If you'd like, you may start a new session by \
+    sending the command `/start`.
 
-We value your feedback to improve the bot's performance. Please share your thoughts and suggestions at {feedback_url}
+We value your feedback to improve the bot's performance. We would really appreciate it if you could share \
+    your thoughts and suggestions at {feedback_url}.
+
+Rest assured that your feedback is provided anonymously, and your chat history is not shared with us.
 """

@@ -31,6 +31,7 @@ class ChatAgentDependencies:
     tg_chat_id: str
     tg_session_id: str
     last_response_type: str
+    user_encryption_key: str
     instruction: str | None = None
 
 
@@ -70,6 +71,9 @@ async def generate_instructions(ctx: pydantic_ai.RunContext[ChatAgentDependencie
             personality_id,
             EXPLORATION_PERSONALITY,  # Fallback to a default personality
         ).as_prompt_string
+
+    else:
+        personality_text = EXPLORATION_PERSONALITY.as_prompt_string
 
     return f"""
 <identity>
@@ -149,6 +153,7 @@ async def validate_agent_response(
         async with async_database() as db_conn:
             message, _ = await Messages.retrieve_message_by_id(
                 db_conn=db_conn,
+                user_encryption_key=ctx.deps.user_encryption_key,
                 message_id=data.react_to_message_id,
                 chat_id=ctx.deps.tg_chat_id,
             )

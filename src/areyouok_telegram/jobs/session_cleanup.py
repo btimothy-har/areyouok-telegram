@@ -76,10 +76,7 @@ class SessionCleanupJob(BaseJob):
         """Clean up messages for a specific chat session."""
 
         async with async_database() as db_conn:
-            messages = await Messages.retrieve_raw_by_session(
-                db_conn=db_conn,
-                session_id=chat_session.session_id,
-            )
+            messages = await Messages.retrieve_by_session(db_conn, session_id=chat_session.session_id)
 
             ct = 0
             for msg in messages:

@@ -5,6 +5,7 @@ from telegram.ext import ContextTypes
 
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data import Sessions
+from areyouok_telegram.data import Users
 from areyouok_telegram.data import async_database
 from areyouok_telegram.handlers.exceptions import NoEditedMessageError
 from areyouok_telegram.handlers.exceptions import NoMessageError
@@ -28,7 +29,13 @@ async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_
         raise NoMessageError(update.update_id)
 
     async with async_database() as db_conn:
-        extract_media = asyncio.create_task(extract_media_from_telegram_message(db_conn, update.message))
+        # Get user and their encryption key
+        user_obj = await Users.get_by_id(db_conn, str(update.effective_user.id))
+        user_encryption_key = user_obj.retrieve_key()
+
+        extract_media = asyncio.create_task(
+            extract_media_from_telegram_message(db_conn, user_encryption_key, message=update.message)
+        )
 
         # Handle session management
         chat_id = str(update.effective_chat.id)
@@ -39,7 +46,8 @@ async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_
 
         # Save the message
         await Messages.new_or_update(
-            db_conn=db_conn,
+            db_conn,
+            user_encryption_key,
             user_id=update.effective_user.id,
             chat_id=update.effective_chat.id,
             message=update.message,
@@ -56,7 +64,13 @@ async def on_edit_message(update: telegram.Update, context: ContextTypes.DEFAULT
         raise NoEditedMessageError(update.update_id)
 
     async with async_database() as db_conn:
-        extract_media = asyncio.create_task(extract_media_from_telegram_message(db_conn, update.edited_message))
+        # Get user and their encryption key
+        user_obj = await Users.get_by_id(db_conn, str(update.effective_user.id))
+        user_encryption_key = user_obj.retrieve_key()
+
+        extract_media = asyncio.create_task(
+            extract_media_from_telegram_message(db_conn, user_encryption_key, message=update.edited_message)
+        )
 
         # Handle session management for edits
         active_session = await Sessions.get_active_session(db_conn, str(update.effective_chat.id))
@@ -66,6 +80,7 @@ async def on_edit_message(update: telegram.Update, context: ContextTypes.DEFAULT
 
         await Messages.new_or_update(
             db_conn,
+            user_encryption_key,
             user_id=update.effective_user.id,
             chat_id=update.effective_chat.id,
             message=update.edited_message,
@@ -91,6 +106,10 @@ async def on_message_react(update: telegram.Update, context: ContextTypes.DEFAUL
         raise NoMessageReactionError(update.update_id)
 
     async with async_database() as db_conn:
+        # Get user and their encryption key
+        user_obj = await Users.get_by_id(db_conn, str(update.effective_user.id))
+        user_encryption_key = user_obj.retrieve_key()
+
         # Handle session management for reactions
         active_session = await Sessions.get_active_session(db_conn, str(update.effective_chat.id))
         react_is_part_of_session = (
@@ -99,7 +118,8 @@ async def on_message_react(update: telegram.Update, context: ContextTypes.DEFAUL
 
         # Save the reaction
         await Messages.new_or_update(
-            db_conn=db_conn,
+            db_conn,
+            user_encryption_key,
             user_id=update.effective_user.id,
             chat_id=update.effective_chat.id,
             message=update.message_reaction,

@@ -9,7 +9,9 @@ from areyouok_telegram.data import Context
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data import MessageTypes
 from areyouok_telegram.data import Sessions
+from areyouok_telegram.data import Users
 from areyouok_telegram.data import async_database
+from areyouok_telegram.jobs.exceptions import UserNotFoundForChatError
 from areyouok_telegram.llms.chat import chat_agent
 from areyouok_telegram.llms.context_compression import ContextTemplate
 from areyouok_telegram.research.agents import close_research_session
@@ -28,6 +30,30 @@ async def get_chat_session(chat_id: str) -> "Sessions":
 
 
 @db_retry()
+async def get_user_encryption_key(chat_id: str) -> str:
+    """
+    Get the user encryption key for a given chat_id.
+    For private chats, chat_id equals user_id.
+
+    Args:
+        chat_id: The chat ID to get the encryption key for
+
+    Returns:
+        The user's encryption key
+
+    Raises:
+        UserNotFoundForChatError: If no user is found (non-private chat)
+    """
+    async with async_database() as db_conn:
+        user_obj = await Users.get_by_id(db_conn, chat_id)
+
+        if not user_obj:
+            raise UserNotFoundForChatError(chat_id)
+
+        return user_obj.retrieve_key()
+
+
+@db_retry()
 async def get_all_inactive_sessions(from_dt: datetime, to_dt: datetime) -> list["Sessions"]:
     """
     Retrieve all inactive sessions that ended within the specified time range.
@@ -38,7 +64,12 @@ async def get_all_inactive_sessions(from_dt: datetime, to_dt: datetime) -> list[
 
 @db_retry()
 async def log_bot_activity(
-    bot_id: str, chat_id: str, chat_session: Sessions, response_message: MessageTypes | None
+    *,
+    bot_id: str,
+    user_encryption_key: str,
+    chat_id: str,
+    chat_session: Sessions,
+    response_message: MessageTypes | None,
 ) -> None:
     async with async_database() as db_conn:
         # Always create a new activity for the bot, even if no response message is provided
@@ -50,10 +81,12 @@ async def log_bot_activity(
 
         if response_message:
             await Messages.new_or_update(
-                db_conn=db_conn,
+                db_conn,
+                user_encryption_key,
                 user_id=bot_id,  # Bot's user ID as the sender
                 chat_id=chat_id,
                 message=response_message,
+                session_key=chat_session.session_id,  # Use the session key for the chat session
             )
 
             if isinstance(response_message, telegram.Message):
@@ -65,14 +98,17 @@ async def log_bot_activity(
 
 
 @db_retry()
-async def save_session_context(chat_id: str, chat_session: Sessions, context: ContextTemplate):
+async def save_session_context(
+    user_encryption_key: str, chat_id: str, chat_session: Sessions, context: ContextTemplate
+):
     """
     Create a session context for the given chat ID.
     If no session exists, create a new one.
     """
     async with async_database() as db_conn:
         await Context.new_or_update(
-            db_conn=db_conn,
+            db_conn,
+            user_encryption_key,
             chat_id=chat_id,
             session_id=chat_session.session_id,
             ctype="session",
@@ -117,7 +153,11 @@ async def generate_chat_agent(chat_session: Sessions) -> pydantic_ai.Agent:  # n
         "research": close_research_session,
     }
 )
-async def post_cleanup_tasks(context: ContextTypes.DEFAULT_TYPE, chat_session: Sessions) -> None:  # noqa: ARG001
+async def post_cleanup_tasks(
+    *,
+    context: ContextTypes.DEFAULT_TYPE,  # noqa: ARG001
+    chat_session: Sessions,  # noqa: ARG001
+) -> None:
     """
     Perform any post-cleanup tasks after closing a chat session.
     This can include logging, notifications, or other cleanup actions.

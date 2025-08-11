@@ -25,14 +25,22 @@ class TestOnNewUpdate:
         mock_update = MagicMock(spec=telegram.Update)
         mock_update.effective_user = MagicMock(spec=telegram.User)
         mock_update.effective_user.id = 123
+        mock_update.effective_user.username = "testuser"
         mock_update.effective_chat = MagicMock(spec=telegram.Chat)
         mock_update.effective_chat.id = 456
 
         # Create mock context
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
 
+        # Create mock user object returned from new_or_update
+        mock_user_obj = MagicMock()
+        mock_user_obj.encrypted_key = "encrypted_key"
+        mock_user_obj.retrieve_key = MagicMock(return_value="decrypted_key")
+
         with (
-            patch("areyouok_telegram.handlers.globals.Users.new_or_update", new=AsyncMock()) as mock_user_update,
+            patch(
+                "areyouok_telegram.handlers.globals.Users.new_or_update", new=AsyncMock(return_value=mock_user_obj)
+            ) as mock_user_update,
             patch("areyouok_telegram.handlers.globals.Chats.new_or_update", new=AsyncMock()) as mock_chat_update,
             patch("areyouok_telegram.handlers.globals.schedule_job", new=AsyncMock()) as mock_schedule_job,
             patch("areyouok_telegram.handlers.globals.ConversationJob") as mock_conversation_job,
@@ -44,6 +52,9 @@ class TestOnNewUpdate:
             # Verify database operations
             mock_user_update.assert_called_once_with(db_conn=mock_db_session, user=mock_update.effective_user)
             mock_chat_update.assert_called_once_with(db_conn=mock_db_session, chat=mock_update.effective_chat)
+
+            # Verify key unlock was called
+            mock_user_obj.retrieve_key.assert_called_once_with()
 
             # Verify job scheduling
             mock_conversation_job.assert_called_once_with(chat_id="456")
@@ -89,12 +100,20 @@ class TestOnNewUpdate:
         mock_update = MagicMock(spec=telegram.Update)
         mock_update.effective_user = MagicMock(spec=telegram.User)
         mock_update.effective_user.id = 123
+        mock_update.effective_user.username = "testuser"
         mock_update.effective_chat = None
 
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
 
+        # Create mock user object returned from new_or_update
+        mock_user_obj = MagicMock()
+        mock_user_obj.encrypted_key = "encrypted_key"
+        mock_user_obj.retrieve_key = MagicMock(return_value="decrypted_key")
+
         with (
-            patch("areyouok_telegram.handlers.globals.Users.new_or_update", new=AsyncMock()) as mock_user_update,
+            patch(
+                "areyouok_telegram.handlers.globals.Users.new_or_update", new=AsyncMock(return_value=mock_user_obj)
+            ) as mock_user_update,
             patch("areyouok_telegram.handlers.globals.Chats.new_or_update", new=AsyncMock()) as mock_chat_update,
             patch("areyouok_telegram.handlers.globals.schedule_job", new=AsyncMock()) as mock_schedule_job,
             patch("areyouok_telegram.handlers.globals.ConversationJob") as mock_conversation_job,
@@ -106,6 +125,8 @@ class TestOnNewUpdate:
 
             # User update should be called
             mock_user_update.assert_called_once_with(db_conn=mock_db_session, user=mock_update.effective_user)
+            # Key unlock should be called
+            mock_user_obj.retrieve_key.assert_called_once_with()
             # Chat update should not be called
             mock_chat_update.assert_not_called()
             # Job should not be scheduled

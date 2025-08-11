@@ -24,10 +24,13 @@ async def on_new_update(update: telegram.Update, context: ContextTypes.DEFAULT_T
     with logfire.span(
         "New update received.",
         _span_name="handlers.globals.on_new_update",
+        update=update,
     ):
         async with async_database() as db_conn:
             if update.effective_user:
-                await Users.new_or_update(db_conn=db_conn, user=update.effective_user)
+                user_obj = await Users.new_or_update(db_conn=db_conn, user=update.effective_user)
+                # Decrypt user's encryption key
+                user_obj.retrieve_key()
 
             if update.effective_chat:
                 await Chats.new_or_update(db_conn=db_conn, chat=update.effective_chat)
