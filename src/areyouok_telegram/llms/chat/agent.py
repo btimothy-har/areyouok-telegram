@@ -72,6 +72,9 @@ async def generate_instructions(ctx: pydantic_ai.RunContext[ChatAgentDependencie
             EXPLORATION_PERSONALITY,  # Fallback to a default personality
         ).as_prompt_string
 
+    else:
+        personality_text = EXPLORATION_PERSONALITY.as_prompt_string
+
     return f"""
 <identity>
 You are to identify yourself as "RUOK", if asked to do so. You are an empathetic and \

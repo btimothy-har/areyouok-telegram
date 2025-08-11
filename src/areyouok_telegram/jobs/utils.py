@@ -50,7 +50,7 @@ async def get_user_encryption_key(chat_id: str) -> str:
         if not user_obj:
             raise UserNotFoundForChatError(chat_id)
 
-        return user_obj.retrieve_key(user_obj.username)
+        return user_obj.retrieve_key()
 
 
 @db_retry()
@@ -86,6 +86,7 @@ async def log_bot_activity(
                 user_id=bot_id,  # Bot's user ID as the sender
                 chat_id=chat_id,
                 message=response_message,
+                session_key=chat_session.session_id,  # Use the session key for the chat session
             )
 
             if isinstance(response_message, telegram.Message):
@@ -127,11 +128,9 @@ async def close_chat_session(chat_session: Sessions):
         )
 
 
-@environment_override(
-    {
-        "research": generate_agent_for_research_session,
-    }
-)
+@environment_override({
+    "research": generate_agent_for_research_session,
+})
 async def generate_chat_agent(chat_session: Sessions) -> pydantic_ai.Agent:  # noqa: ARG001
     """
     Generate the chat agent for a conversation job.
@@ -147,11 +146,9 @@ async def generate_chat_agent(chat_session: Sessions) -> pydantic_ai.Agent:  # n
     return chat_agent
 
 
-@environment_override(
-    {
-        "research": close_research_session,
-    }
-)
+@environment_override({
+    "research": close_research_session,
+})
 async def post_cleanup_tasks(
     *,
     context: ContextTypes.DEFAULT_TYPE,  # noqa: ARG001

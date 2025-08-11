@@ -2,6 +2,7 @@ import hashlib
 from datetime import UTC
 from datetime import datetime
 
+from cachetools import TTLCache
 from cryptography.fernet import Fernet
 from sqlalchemy import Column
 from sqlalchemy import Integer
@@ -13,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from areyouok_telegram.config import ENV
 from areyouok_telegram.data import Base
+from areyouok_telegram.encryption.exceptions import ContentNotDecryptedError
 from areyouok_telegram.utils import traced
 
 VALID_CONTEXT_TYPES = [
@@ -39,6 +41,9 @@ class Context(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False)
+
+    # TTL cache for decrypted content (2 hours TTL, max 1000 entries)
+    _data_cache: TTLCache[str, bytes] = TTLCache(maxsize=1000, ttl=2 * 60 * 60)
 
     @staticmethod
     def generate_context_key(chat_id: str, ctype: str, encrypted_content: str) -> str:
@@ -75,6 +80,17 @@ class Context(Base):
         fernet = Fernet(user_encryption_key.encode())
         encrypted_bytes = self.encrypted_content.encode("utf-8")
         decrypted_bytes = fernet.decrypt(encrypted_bytes)
+
+        self._data_cache[self.context_key] = decrypted_bytes
+        return decrypted_bytes.decode("utf-8")
+
+    @property
+    def content(self) -> str:
+        """Return the decrypted content from the cache."""
+        decrypted_bytes = self._data_cache.get(self.context_key)
+        if decrypted_bytes is None:
+            raise ContentNotDecryptedError(self.context_key)
+
         return decrypted_bytes.decode("utf-8")
 
     @classmethod
@@ -123,6 +139,7 @@ class Context(Base):
     async def get_by_session_id(
         cls,
         db_conn: AsyncSession,
+        *,
         session_id: str,
         ctype: str | None = None,
     ) -> list["Context"] | None:
@@ -146,6 +163,7 @@ class Context(Base):
     async def get_by_chat_id(
         cls,
         db_conn: AsyncSession,
+        *,
         chat_id: str,
         ctype: str | None = None,
     ) -> list["Context"] | None:
@@ -169,6 +187,7 @@ class Context(Base):
     async def retrieve_context_by_chat(
         cls,
         db_conn: AsyncSession,
+        *,
         chat_id: str,
         ctype: str | None = None,
         limit: int = 3,

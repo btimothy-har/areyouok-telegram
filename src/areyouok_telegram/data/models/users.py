@@ -19,6 +19,7 @@ from areyouok_telegram.data import Base
 from areyouok_telegram.encryption import decrypt_user_key
 from areyouok_telegram.encryption import encrypt_user_key
 from areyouok_telegram.encryption import generate_user_key
+from areyouok_telegram.encryption.exceptions import ProfileNotDecryptedError
 from areyouok_telegram.utils import traced
 
 
@@ -98,29 +99,35 @@ class Users(Base):
         result = await db_conn.execute(stmt)
         return result.scalars().first()
 
-    def retrieve_key(self, username: str) -> str | None:
-        """Retrieve and decrypt the user's encryption key with caching.
+    def retrieve_key(self, username: str | None = None) -> str | None:
+        """Retrieve the user's encryption key, optionally decrypting it.
 
         Args:
-            username: The username to use for decryption
+            username: The username to use for decryption. If None, will not attempt decryption.
 
         Returns:
             str: The decrypted Fernet key, or None if no key is stored
 
         Raises:
             InvalidToken: If the key cannot be decrypted (wrong username or corrupted data)
+            ProfileNotDecryptedError: If username is None and key is not in cache
         """
         if not self.encrypted_key:
             return None
 
-        # Check cache first
-        if self.user_key in self._key_cache:
-            return self._key_cache[self.user_key]
+        if username:
+            # Username provided: attempt to decrypt and extend cache
+            # Check cache first
+            if self.user_key in self._key_cache:
+                return self._key_cache[self.user_key]
 
-        # Decrypt the key
-        decrypted_key = decrypt_user_key(self.encrypted_key, username)
-
-        # Cache the result
-        self._key_cache[self.user_key] = decrypted_key
-
-        return decrypted_key
+            # Decrypt the key and cache it
+            decrypted_key = decrypt_user_key(self.encrypted_key, username)
+            self._key_cache[self.user_key] = decrypted_key
+            return decrypted_key
+        else:
+            # Username not provided: return from cache or raise error
+            if self.user_key in self._key_cache:
+                return self._key_cache[self.user_key]
+            else:
+                raise ProfileNotDecryptedError(self.user_id)

@@ -9,6 +9,7 @@ import pytest
 import telegram
 
 from areyouok_telegram.data.models.users import Users
+from areyouok_telegram.encryption.exceptions import ProfileNotDecryptedError
 
 
 class TestUsers:
@@ -276,3 +277,58 @@ class TestUsers:
         assert result1 == "decrypted_key_1"
         assert result2 == "decrypted_key_2"
         assert mock_decrypt.call_count == 2
+
+    def test_retrieve_key_username_none_with_cached_key(self):
+        """Test retrieve_key with username=None returns cached key."""
+        # Clear the cache before test
+        Users._key_cache.clear()
+
+        # Setup
+        user = Users()
+        user.user_id = "123"
+        user.user_key = "user_key_123"
+        user.encrypted_key = "encrypted_key_data"
+
+        # Manually add key to cache
+        cached_key = "cached_decrypted_key"
+        Users._key_cache[user.user_key] = cached_key
+
+        # Call with username=None - should return cached key
+        result = user.retrieve_key(None)
+        assert result == cached_key
+
+    def test_retrieve_key_username_none_no_cached_key_raises_error(self):
+        """Test retrieve_key with username=None and no cached key raises ProfileNotDecryptedError."""
+        # Clear the cache before test
+        Users._key_cache.clear()
+
+        # Setup
+        user = Users()
+        user.user_id = "123"
+        user.user_key = "user_key_123"
+        user.encrypted_key = "encrypted_key_data"
+
+        # Call with username=None and no cached key - should raise error
+        with pytest.raises(ProfileNotDecryptedError):
+            user.retrieve_key(None)
+
+    @patch("areyouok_telegram.data.models.users.decrypt_user_key")
+    def test_retrieve_key_username_provided_uses_cache_when_available(self, mock_decrypt):
+        """Test retrieve_key with username provided uses cache when key is already cached."""
+        # Clear the cache before test
+        Users._key_cache.clear()
+
+        # Setup
+        user = Users()
+        user.user_id = "123"
+        user.user_key = "user_key_123"
+        user.encrypted_key = "encrypted_key_data"
+
+        # Manually add key to cache
+        cached_key = "cached_decrypted_key"
+        Users._key_cache[user.user_key] = cached_key
+
+        # Call with username provided - should return cached key without decrypting
+        result = user.retrieve_key("testuser")
+        assert result == cached_key
+        mock_decrypt.assert_not_called()

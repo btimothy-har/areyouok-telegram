@@ -178,7 +178,11 @@ class ConversationJob(BaseJob):
 
     @traced(extract_args=["response"], record_return=True)
     async def execute_response(
-        self, user_encryption_key: str, *, context: ContextTypes.DEFAULT_TYPE, response: AgentResponse
+        self,
+        user_encryption_key: str,
+        *,
+        context: ContextTypes.DEFAULT_TYPE,
+        response: AgentResponse,
     ) -> MessageTypes | None:
         """Execute the response action in the given context."""
 
@@ -213,12 +217,19 @@ class ConversationJob(BaseJob):
         return response_message
 
     @traced(extract_args=["chat_session"])
-    async def close_session(self, user_encryption_key: str, *, chat_session: Sessions) -> None:
+    async def close_session(
+        self,
+        user_encryption_key: str,
+        *,
+        chat_session: Sessions,
+    ) -> None:
         """Closes the chat session and compresses the context."""
 
         async with async_database() as db_conn:
             context = await Context.get_by_session_id(
-                db_conn, user_encryption_key, session_id=chat_session.session_key, ctype="session"
+                db_conn,
+                session_id=chat_session.session_key,
+                ctype="session",
             )
 
         if context:
@@ -229,7 +240,9 @@ class ConversationJob(BaseJob):
             return
 
         message_history, _ = await self._prepare_conversation_input(
-            user_encryption_key, chat_session=chat_session, include_context=False
+            user_encryption_key,
+            chat_session=chat_session,
+            include_context=False,
         )
 
         if len(message_history) == 0:
@@ -237,7 +250,8 @@ class ConversationJob(BaseJob):
             return
 
         compressed_context = await self._compress_session_context(
-            chat_session=chat_session, message_history=message_history
+            chat_session=chat_session,
+            message_history=message_history,
         )
 
         await save_session_context(user_encryption_key, self.chat_id, chat_session, compressed_context)
@@ -248,7 +262,11 @@ class ConversationJob(BaseJob):
     @traced(extract_args=["chat_session", "include_context"])
     @db_retry()
     async def _prepare_conversation_input(
-        self, user_encryption_key: str, *, chat_session: Sessions, include_context: bool = True
+        self,
+        user_encryption_key: str,
+        *,
+        chat_session: Sessions,
+        include_context: bool = True,
     ) -> tuple[list[pydantic_ai.messages.ModelMessage], str | None]:
         """Prepare the conversation input for the chat session.
         This method gathers the message history and checks for unsupported media types.
@@ -261,12 +279,15 @@ class ConversationJob(BaseJob):
             if include_context:
                 # Gather chat context
                 last_context = await Context.retrieve_context_by_chat(
-                    db_conn, user_encryption_key, chat_id=self.chat_id, ctype="session"
+                    db_conn,
+                    chat_id=self.chat_id,
+                    ctype="session",
                 )
+
                 if last_context:
                     last_context.sort(key=lambda c: c.created_at)
+                    [c.decrypt_content(user_encryption_key) for c in last_context]
 
-                    last_context = last_context or []
                     message_history.extend([context_to_model_message(c) for c in last_context])
 
             # Get all messages from the session
@@ -280,12 +301,17 @@ class ConversationJob(BaseJob):
             for msg in messages:
                 if isinstance(msg, telegram.Message):
                     media = await MediaFiles.get_by_message_id(
-                        db_conn, user_encryption_key, chat_id=self.chat_id, message_id=str(msg.message_id)
+                        db_conn,
+                        chat_id=self.chat_id,
+                        message_id=str(msg.message_id),
                     )
                     user = msg.from_user.id
                 elif isinstance(msg, telegram.MessageReactionUpdated):
                     media = []
                     user = msg.user.id
+
+                if media:
+                    [m.decrypt_content(user_encryption_key) for m in media]
 
                 as_model_message = telegram_message_to_model_message(
                     message=msg,

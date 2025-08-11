@@ -4,6 +4,7 @@ from datetime import UTC
 from datetime import datetime
 
 import magic
+from cachetools import TTLCache
 from cryptography.fernet import Fernet
 from sqlalchemy import Column
 from sqlalchemy import Integer
@@ -17,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from areyouok_telegram.config import ENV
 from areyouok_telegram.data import Base
+from areyouok_telegram.encryption.exceptions import ContentNotDecryptedError
 from areyouok_telegram.utils import traced
 
 
@@ -36,12 +38,15 @@ class MediaFiles(Base):
 
     mime_type = Column(String, nullable=False)
     file_size = Column(Integer, nullable=True)
-    encrypted_content_base64 = Column(Text, nullable=True)
+    encrypted_content_base64 = Column(Text, nullable=False)
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False)
     updated_at = Column(TIMESTAMP(timezone=True), nullable=False)
     last_accessed_at = Column(TIMESTAMP(timezone=True), nullable=True)
+
+    # TTL cache for decrypted content (2 hours TTL, max 1000 entries)
+    _data_cache: TTLCache[str, bytes] = TTLCache(maxsize=1000, ttl=2 * 60 * 60)
 
     @staticmethod
     def generate_file_key(chat_id: str, message_id: str, file_unique_id: str, encrypted_content_base64: str) -> str:
@@ -50,39 +55,22 @@ class MediaFiles(Base):
         return hashlib.sha256(key_string.encode()).hexdigest()
 
     @classmethod
-    def encrypt_content_base64(cls, content_base64: str, user_encryption_key: str) -> str:
-        """Encrypt the base64 content using the user's encryption key.
+    def encrypt_content(cls, content_bytes: bytes, user_encryption_key: str) -> str:
+        """Encrypt the byte content using the user's encryption key.
 
         Args:
-            content_base64: The base64 content string to encrypt
+            content_bytes: The raw byte content to encrypt
             user_encryption_key: The user's Fernet encryption key
 
         Returns:
-            str: The encrypted content as base64-encoded string
+            str: The encrypted content as base64-encoded string for storage
         """
         fernet = Fernet(user_encryption_key.encode())
-        encrypted_bytes = fernet.encrypt(content_base64.encode("utf-8"))
-        return encrypted_bytes.decode("utf-8")
+        encrypted_bytes = fernet.encrypt(content_bytes)
+        return base64.b64encode(encrypted_bytes).decode("ascii")
 
-    def decrypt_content_base64(self, user_encryption_key: str) -> str | None:
-        """Decrypt the base64 content using the user's encryption key.
-
-        Args:
-            user_encryption_key: The user's Fernet encryption key
-
-        Returns:
-            str: The decrypted base64 content string, or None if no encrypted content
-        """
-        if not self.encrypted_content_base64:
-            return None
-
-        fernet = Fernet(user_encryption_key.encode())
-        encrypted_bytes = self.encrypted_content_base64.encode("utf-8")
-        decrypted_bytes = fernet.decrypt(encrypted_bytes)
-        return decrypted_bytes.decode("utf-8")
-
-    def bytes_data(self, user_encryption_key: str) -> bytes | None:
-        """Decode encrypted base64 content back to bytes.
+    def decrypt_content(self, user_encryption_key: str) -> bytes:
+        """Decrypt the content using the user's encryption key.
 
         Args:
             user_encryption_key: The user's Fernet encryption key
@@ -90,10 +78,29 @@ class MediaFiles(Base):
         Returns:
             bytes: The decrypted file content as bytes, or None if no encrypted content
         """
-        decrypted_base64 = self.decrypt_content_base64(user_encryption_key)
-        if decrypted_base64:
-            return base64.b64decode(decrypted_base64)
-        return None
+        fernet = Fernet(user_encryption_key.encode())
+        encrypted_bytes = base64.b64decode(self.encrypted_content_base64.encode("ascii"))
+        decrypted_bytes = fernet.decrypt(encrypted_bytes)
+
+        self._data_cache[self.file_key] = decrypted_bytes
+        return decrypted_bytes
+
+    @property
+    def bytes_data(self) -> bytes:
+        """Get the decrypted file content as bytes.
+
+        Returns:
+            bytes: The decrypted file content as bytes
+
+        Raises:
+            ContentNotDecryptedError: If content hasn't been decrypted yet
+        """
+        decrypted_bytes = self._data_cache.get(self.file_key)
+        if decrypted_bytes is None:
+            # If not in cache, content needs to be decrypted first
+            raise ContentNotDecryptedError(self.file_key)
+
+        return decrypted_bytes
 
     @property
     def is_anthropic_supported(self) -> bool:
@@ -137,12 +144,7 @@ class MediaFiles(Base):
 
         # Use python-magic to get MIME type
         mime_type = magic.from_buffer(content_bytes, mime=True) if content_bytes else None
-
-        # Encrypt the base64 content if we have content
-        encrypted_content_base64 = None
-        if content_bytes:
-            content_base64 = base64.b64encode(content_bytes).decode("ascii")
-            encrypted_content_base64 = cls.encrypt_content_base64(content_base64, user_encryption_key)
+        encrypted_content_base64 = cls.encrypt_content(content_bytes, user_encryption_key)
 
         # Generate file key with encrypted content
         file_key = cls.generate_file_key(chat_id, message_id, file_unique_id, encrypted_content_base64 or "")
@@ -175,7 +177,7 @@ class MediaFiles(Base):
 
     @classmethod
     @traced(extract_args=["chat_id", "message_id"])
-    async def get_by_message_id(cls, db_conn: AsyncSession, chat_id: str, message_id: str) -> list["MediaFiles"]:
+    async def get_by_message_id(cls, db_conn: AsyncSession, *, chat_id: str, message_id: str) -> list["MediaFiles"]:
         """Retrieve all media files by chat_id and message_id and update last_accessed_at."""
         stmt = select(cls).where((cls.chat_id == chat_id) & (cls.message_id == message_id))
         result = await db_conn.execute(stmt)
@@ -184,13 +186,13 @@ class MediaFiles(Base):
         # Update last_accessed_at for all found media files
         if media_files:
             media_ids = [media.id for media in media_files]
-            await cls.bulk_update_last_accessed(db_conn, media_ids)
+            await cls.bulk_update_last_accessed(db_conn, media_ids=media_ids)
 
         return media_files
 
     @classmethod
     @traced(extract_args=["media_ids"])
-    async def bulk_update_last_accessed(cls, db_conn: AsyncSession, media_ids: list[int]) -> None:
+    async def bulk_update_last_accessed(cls, db_conn: AsyncSession, *, media_ids: list[int]) -> None:
         """Update last_accessed_at timestamp for given media IDs.
 
         Args:
