@@ -94,7 +94,7 @@ class SessionCleanupJob(BaseJob):
                 select(Messages)
                 .where(
                     Messages.session_key.is_(None),  # Orphaned messages have no session
-                    Messages.payload.isnot(None),  # Exclude already soft-deleted messages
+                    Messages.encrypted_payload.isnot(None),  # Exclude already soft-deleted messages
                     Messages.created_at < datetime.now(UTC) - timedelta(hours=6),
                 )
                 .order_by(Messages.created_at)
