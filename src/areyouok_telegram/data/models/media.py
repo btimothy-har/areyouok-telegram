@@ -143,7 +143,7 @@ class MediaFiles(Base):
         now = datetime.now(UTC)
 
         # Use python-magic to get MIME type
-        mime_type = magic.from_buffer(content_bytes, mime=True) if content_bytes else None
+        mime_type = magic.from_buffer(content_bytes, mime=True)
         encrypted_content_base64 = cls.encrypt_content(content_bytes, user_encryption_key)
 
         # Generate file key with encrypted content

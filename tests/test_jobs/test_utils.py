@@ -115,7 +115,7 @@ class TestGetUserEncryptionKey:
 
         assert result == "test_encryption_key"
         mock_get_user.assert_called_once_with(mock_db_conn, "chat123")
-        mock_user.retrieve_key.assert_called_once_with("testuser")
+        mock_user.retrieve_key.assert_called_once_with()  # No username parameter
 
     @pytest.mark.asyncio
     async def test_get_user_encryption_key_user_not_found(self):
@@ -139,6 +139,7 @@ class TestLogBotActivity:
     async def test_log_bot_activity_with_message(self, frozen_time):
         """Test logging bot activity with a response message."""
         mock_session = MagicMock()
+        mock_session.session_id = "session_key_123"
         mock_session.new_activity = AsyncMock()
         mock_session.new_message = AsyncMock()
 
@@ -164,7 +165,7 @@ class TestLogBotActivity:
 
         # Verify message was saved
         mock_new_or_update.assert_called_once_with(
-            mock_db_conn, "test_encryption_key", user_id="bot123", chat_id="chat456", message=mock_message
+            mock_db_conn, "test_encryption_key", user_id="bot123", chat_id="chat456", message=mock_message, session_key="session_key_123"
         )
 
         # Verify new_message was called for telegram.Message
@@ -174,6 +175,7 @@ class TestLogBotActivity:
     async def test_log_bot_activity_with_reaction(self, frozen_time):
         """Test logging bot activity with a reaction message."""
         mock_session = MagicMock()
+        mock_session.session_id = "session_key_123"
         mock_session.new_activity = AsyncMock()
         mock_session.new_message = AsyncMock()
 
@@ -198,7 +200,7 @@ class TestLogBotActivity:
 
         # Verify message was saved
         mock_new_or_update.assert_called_once_with(
-            mock_db_conn, "test_encryption_key", user_id="bot123", chat_id="chat456", message=mock_reaction
+            mock_db_conn, "test_encryption_key", user_id="bot123", chat_id="chat456", message=mock_reaction, session_key="session_key_123"
         )
 
         # Verify new_message was NOT called for MessageReactionUpdated
@@ -208,6 +210,7 @@ class TestLogBotActivity:
     async def test_log_bot_activity_no_message(self, frozen_time):
         """Test logging bot activity without a response message."""
         mock_session = MagicMock()
+        mock_session.session_id = "session_key_123"
         mock_session.new_activity = AsyncMock()
         mock_session.new_message = AsyncMock()
 

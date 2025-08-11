@@ -116,7 +116,7 @@ class TestContext:
         mock_result.scalars.return_value = mock_scalars
         mock_db_session.execute.return_value = mock_result
 
-        result = await Context.get_by_session_id(mock_db_session, "session_456")
+        result = await Context.get_by_session_id(mock_db_session, session_id="session_456")
 
         assert result == [mock_context1, mock_context2]
         mock_db_session.execute.assert_called_once()
@@ -131,7 +131,7 @@ class TestContext:
         mock_result.scalars.return_value = mock_scalars
         mock_db_session.execute.return_value = mock_result
 
-        result = await Context.get_by_session_id(mock_db_session, "nonexistent")
+        result = await Context.get_by_session_id(mock_db_session, session_id="nonexistent")
 
         assert result is None
         mock_db_session.execute.assert_called_once()
@@ -146,7 +146,7 @@ class TestContext:
         mock_result.scalars.return_value = mock_scalars
         mock_db_session.execute.return_value = mock_result
 
-        result = await Context.get_by_session_id(mock_db_session, "session_456", ctype="session")
+        result = await Context.get_by_session_id(mock_db_session, session_id="session_456", ctype="session")
 
         assert result == [mock_context]
         mock_db_session.execute.assert_called_once()
@@ -155,7 +155,7 @@ class TestContext:
     async def test_get_by_session_id_invalid_type(self, mock_db_session):
         """Test retrieving contexts with invalid type raises error."""
         with pytest.raises(InvalidContextTypeError):
-            await Context.get_by_session_id(mock_db_session, "session_456", ctype="invalid")
+            await Context.get_by_session_id(mock_db_session, session_id="session_456", ctype="invalid")
 
         mock_db_session.execute.assert_not_called()
 
@@ -169,7 +169,7 @@ class TestContext:
         mock_result.scalars.return_value = mock_scalars
         mock_db_session.execute.return_value = mock_result
 
-        result = await Context.get_by_chat_id(mock_db_session, "123")
+        result = await Context.get_by_chat_id(mock_db_session, chat_id="123")
 
         assert result == [mock_context]
         mock_db_session.execute.assert_called_once()
@@ -185,7 +185,7 @@ class TestContext:
         mock_result.scalars.return_value = mock_scalars
         mock_db_session.execute.return_value = mock_result
 
-        result = await Context.retrieve_context_by_chat(mock_db_session, "123", limit=2)
+        result = await Context.retrieve_context_by_chat(mock_db_session, chat_id="123", limit=2)
 
         assert result == [mock_context1, mock_context2]
         mock_db_session.execute.assert_called_once()
@@ -199,6 +199,6 @@ class TestContext:
         mock_result.scalars.return_value = mock_scalars
         mock_db_session.execute.return_value = mock_result
 
-        result = await Context.retrieve_context_by_chat(mock_db_session, "123")
+        result = await Context.retrieve_context_by_chat(mock_db_session, chat_id="123")
 
         assert result is None

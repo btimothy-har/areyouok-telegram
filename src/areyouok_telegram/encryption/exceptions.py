@@ -1,20 +1,17 @@
-class BaseEncryptionError(Exception):
-    """Base class for all encryption-related errors."""
-
-    pass
+"""Exceptions for encryption-related operations."""
 
 
-class ProfileNotDecryptedError(BaseEncryptionError):
-    """Raised when a profile is not decrypted."""
+class ContentNotDecryptedError(Exception):
+    """Raised when trying to access content that hasn't been decrypted yet."""
+
+    def __init__(self, key: str):
+        self.key = key
+        super().__init__(f"Content for key '{key}' has not been decrypted yet. Call decrypt_content() first.")
+
+
+class ProfileNotDecryptedError(Exception):
+    """Raised when trying to access a user's encryption key without providing username."""
 
     def __init__(self, user_id: str):
-        super().__init__(f"Profile for user_id {user_id} is not decrypted.")
         self.user_id = user_id
-
-
-class ContentNotDecryptedError(BaseEncryptionError):
-    """Raised when content cannot be decrypted."""
-
-    def __init__(self, file_key: str):
-        super().__init__(f"Content for file_key {file_key} is not decrypted.")
-        self.file_key = file_key
+        super().__init__(f"User profile for user_id '{user_id}' has not been decrypted. Provide username to decrypt.")

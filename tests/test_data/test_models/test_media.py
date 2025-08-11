@@ -27,66 +27,83 @@ class TestMediaFiles:
         assert MediaFiles.generate_file_key(chat_id, message_id, file_unique_id, encrypted_content) == expected
 
     def test_encrypt_content_base64(self):
-        """Test base64 content encryption."""
-        content_base64 = base64.b64encode(b"test content").decode("ascii")
+        """Test byte content encryption."""
+        content_bytes = b"test content"
         user_key = Fernet.generate_key().decode("utf-8")
 
-        encrypted = MediaFiles.encrypt_content_base64(content_base64, user_key)
+        encrypted = MediaFiles.encrypt_content(content_bytes, user_key)
 
-        # Should be a string (base64 encoded encrypted data)
+        # Should be a base64 string
         assert isinstance(encrypted, str)
         assert len(encrypted) > 0
 
         # Should be able to decrypt it back
         fernet = Fernet(user_key.encode())
-        decrypted_bytes = fernet.decrypt(encrypted.encode("utf-8"))
-        decrypted_content = decrypted_bytes.decode("utf-8")
-        assert decrypted_content == content_base64
+        encrypted_bytes = base64.b64decode(encrypted.encode("ascii"))
+        decrypted_bytes = fernet.decrypt(encrypted_bytes)
+        assert decrypted_bytes == content_bytes
 
     def test_decrypt_content_base64(self):
-        """Test base64 content decryption."""
-        content_base64 = base64.b64encode(b"another test content").decode("ascii")
+        """Test content decryption."""
+        content_bytes = b"another test content"
         user_key = Fernet.generate_key().decode("utf-8")
 
         # First encrypt
-        encrypted = MediaFiles.encrypt_content_base64(content_base64, user_key)
+        encrypted = MediaFiles.encrypt_content(content_bytes, user_key)
 
         # Create media instance with encrypted content
         media = MediaFiles()
         media.encrypted_content_base64 = encrypted
+        media.file_key = "test_file_key"
 
-        # Decrypt should return original base64 content
-        decrypted = media.decrypt_content_base64(user_key)
-        assert decrypted == content_base64
+        # Decrypt should return original bytes
+        decrypted = media.decrypt_content(user_key)
+        assert decrypted == content_bytes
 
     def test_decrypt_content_base64_no_encrypted_content(self):
-        """Test decrypt_content_base64 returns None when no encrypted content."""
+        """Test decrypt_content with invalid content."""
+        from cryptography.fernet import InvalidToken
         media = MediaFiles()
-        media.encrypted_content_base64 = None
+        media.encrypted_content_base64 = "invalid_base64"
+        media.file_key = "test_file_key"
         user_key = Fernet.generate_key().decode("utf-8")
 
-        result = media.decrypt_content_base64(user_key)
-        assert result is None
+        with pytest.raises((InvalidToken, ValueError)):
+            media.decrypt_content(user_key)
 
     def test_bytes_data_with_content(self):
         """Test decoding encrypted base64 content to bytes."""
+        # Clear the cache to ensure clean test
+        MediaFiles._data_cache.clear()
+        
         media = MediaFiles()
         test_data = b"test content"
         content_base64 = base64.b64encode(test_data).decode("ascii")
         user_key = Fernet.generate_key().decode("utf-8")
 
-        # Encrypt the base64 content
-        media.encrypted_content_base64 = MediaFiles.encrypt_content_base64(content_base64, user_key)
+        # Encrypt the content
+        media.encrypted_content_base64 = MediaFiles.encrypt_content(test_data, user_key)
+        media.file_key = "test_file_key_for_content"
 
-        assert media.bytes_data(user_key) == test_data
+        # First decrypt the content
+        media.decrypt_content(user_key)
+
+        # Now bytes_data property should return the decrypted data
+        assert media.bytes_data == test_data
 
     def test_bytes_data_without_content(self):
-        """Test bytes_data returns None when no encrypted content."""
+        """Test bytes_data raises error when content not decrypted."""
+        from areyouok_telegram.encryption.exceptions import ContentNotDecryptedError
+        
+        # Clear the cache to ensure clean test
+        MediaFiles._data_cache.clear()
+        
         media = MediaFiles()
-        media.encrypted_content_base64 = None
-        user_key = Fernet.generate_key().decode("utf-8")
+        media.file_key = "test_file_key_unique"
+        media.encrypted_content_base64 = "some_encrypted_data"
 
-        assert media.bytes_data(user_key) is None
+        with pytest.raises(ContentNotDecryptedError):
+            _ = media.bytes_data
 
     def test_is_anthropic_supported_image(self):
         """Test image files are marked as Anthropic-supported."""
@@ -157,6 +174,7 @@ class TestMediaFiles:
         user_key = Fernet.generate_key().decode("utf-8")
 
         with patch("areyouok_telegram.data.models.media.magic.from_buffer") as mock_magic:
+            mock_magic.return_value = "application/octet-stream"  # Default MIME for empty
             mock_result = AsyncMock()
             mock_db_session.execute.return_value = mock_result
 
@@ -168,14 +186,14 @@ class TestMediaFiles:
                 chat_id="chat789",
                 message_id="msg012",
                 file_size=0,
-                content_bytes=None,
+                content_bytes=b"",  # Empty bytes instead of None
             )
 
             # Verify execute was called
             mock_db_session.execute.assert_called_once()
 
-            # Magic should not be called with None content
-            mock_magic.assert_not_called()
+            # Magic should be called with empty bytes
+            mock_magic.assert_called_once_with(b"", mime=True)
 
     @pytest.mark.asyncio
     async def test_get_by_message_id_found(self, mock_db_session):
@@ -193,7 +211,7 @@ class TestMediaFiles:
         mock_result.scalars.return_value = mock_scalars
         mock_db_session.execute.return_value = mock_result
 
-        result = await MediaFiles.get_by_message_id(mock_db_session, "chat123", "msg456")
+        result = await MediaFiles.get_by_message_id(mock_db_session, chat_id="chat123", message_id="msg456")
 
         assert result == [mock_media1, mock_media2]
 
@@ -210,7 +228,7 @@ class TestMediaFiles:
         mock_result.scalars.return_value = mock_scalars
         mock_db_session.execute.return_value = mock_result
 
-        result = await MediaFiles.get_by_message_id(mock_db_session, "chat999", "msg999")
+        result = await MediaFiles.get_by_message_id(mock_db_session, chat_id="chat999", message_id="msg999")
 
         assert result == []
 
@@ -223,7 +241,7 @@ class TestMediaFiles:
         mock_result = AsyncMock()
         mock_db_session.execute.return_value = mock_result
 
-        await MediaFiles.bulk_update_last_accessed(mock_db_session, [1, 2, 3])
+        await MediaFiles.bulk_update_last_accessed(mock_db_session, media_ids=[1, 2, 3])
 
         # Verify execute was called
         mock_db_session.execute.assert_called_once()
@@ -236,7 +254,7 @@ class TestMediaFiles:
     @pytest.mark.asyncio
     async def test_bulk_update_last_accessed_empty_list(self, mock_db_session):
         """Test bulk update with empty list does nothing."""
-        await MediaFiles.bulk_update_last_accessed(mock_db_session, [])
+        await MediaFiles.bulk_update_last_accessed(mock_db_session, media_ids=[])
 
         # Verify execute was not called
         mock_db_session.execute.assert_not_called()
