@@ -8,7 +8,7 @@ CONTROLLED_ENV = ["staging", "production", "staging", "research"]
 ENV = os.getenv("ENV", "development")
 
 # Encryption salt for user keys - should be a secure random string
-USER_ENCRYPTION_SALT = os.getenv("USER_ENCRYPTION_SALT", "default-salt-change-in-production")
+USER_ENCRYPTION_SALT = os.getenv("USER_ENCRYPTION_SALT", "default-salt")
 
 GITHUB_REPOSITORY = os.getenv("GITHUB_REPOSITORY")
 GITHUB_SHA = os.getenv("GITHUB_SHA")

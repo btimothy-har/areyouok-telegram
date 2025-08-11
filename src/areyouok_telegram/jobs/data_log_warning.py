@@ -4,6 +4,7 @@ from telegram.ext import ContextTypes
 from areyouok_telegram.config import CONTROLLED_ENV
 from areyouok_telegram.config import ENV
 from areyouok_telegram.config import LOG_CHAT_MESSAGES
+from areyouok_telegram.config import USER_ENCRYPTION_SALT
 from areyouok_telegram.jobs import BaseJob
 
 
@@ -27,4 +28,10 @@ class DataLogWarningJob(BaseJob):
             logfire.warning(
                 "Logging chat messages is enabled in a controlled environment. "
                 "This may expose sensitive user data. Ensure this is intentional."
+            )
+
+        if USER_ENCRYPTION_SALT == "default-salt" and ENV in CONTROLLED_ENV:
+            logfire.warning(
+                "USER_ENCRYPTION_SALT is set to the default value. "
+                "This should be changed in production to ensure user data security."
             )
