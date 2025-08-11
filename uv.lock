@@ -142,7 +142,7 @@ wheels = [
 
 [[package]]
 name = "areyouok-telegram"
-version = "0.1.0"
+version = "3.0.0a1"
 source = { editable = "." }
 dependencies = [
     { name = "asyncpg" },
