@@ -45,8 +45,8 @@ class MediaFiles(Base):
     updated_at = Column(TIMESTAMP(timezone=True), nullable=False)
     last_accessed_at = Column(TIMESTAMP(timezone=True), nullable=True)
 
-    # TTL cache for decrypted content (2 hours TTL, max 1000 entries)
-    _data_cache: TTLCache[str, bytes] = TTLCache(maxsize=1000, ttl=2 * 60 * 60)
+    # TTL cache for decrypted content (1 hour TTL, max 1000 entries)
+    _data_cache: TTLCache[str, bytes] = TTLCache(maxsize=1000, ttl=1 * 60 * 60)
 
     @staticmethod
     def generate_file_key(chat_id: str, message_id: str, file_unique_id: str, encrypted_content_base64: str) -> str:
@@ -55,7 +55,7 @@ class MediaFiles(Base):
         return hashlib.sha256(key_string.encode()).hexdigest()
 
     @classmethod
-    def encrypt_content(cls, content_bytes: bytes, user_encryption_key: str) -> str:
+    def encrypt_content(cls, *, content_bytes: bytes, user_encryption_key: str) -> str:
         """Encrypt the byte content using the user's encryption key.
 
         Args:
@@ -69,7 +69,7 @@ class MediaFiles(Base):
         encrypted_bytes = fernet.encrypt(content_bytes)
         return base64.b64encode(encrypted_bytes).decode("ascii")
 
-    def decrypt_content(self, user_encryption_key: str) -> bytes:
+    def decrypt_content(self, *, user_encryption_key: str) -> bytes:
         """Decrypt the content using the user's encryption key.
 
         Args:
@@ -144,7 +144,10 @@ class MediaFiles(Base):
 
         # Use python-magic to get MIME type
         mime_type = magic.from_buffer(content_bytes, mime=True)
-        encrypted_content_base64 = cls.encrypt_content(content_bytes, user_encryption_key)
+        encrypted_content_base64 = cls.encrypt_content(
+            content_bytes=content_bytes,
+            user_encryption_key=user_encryption_key,
+        )
 
         # Generate file key with encrypted content
         file_key = cls.generate_file_key(chat_id, message_id, file_unique_id, encrypted_content_base64 or "")

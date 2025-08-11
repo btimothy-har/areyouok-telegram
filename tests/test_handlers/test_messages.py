@@ -70,7 +70,7 @@ class TestOnNewMessage:
             mock_get_user.assert_called_once_with(mock_db_session, str(mock_telegram_user.id))
 
             # Verify user key retrieval was called
-            mock_user_obj.retrieve_key.assert_called_once_with(mock_telegram_user.username)
+            mock_user_obj.retrieve_key.assert_called_once_with()
 
             # Verify message was saved with session key
             mock_msg_save.assert_called_once_with(
@@ -143,7 +143,7 @@ class TestOnNewMessage:
             mock_get_user.assert_called_once_with(mock_db_session, str(mock_telegram_user.id))
 
             # Verify user key retrieval was called
-            mock_user_obj.retrieve_key.assert_called_once_with(mock_telegram_user.username)
+            mock_user_obj.retrieve_key.assert_called_once_with()
 
             # Verify session lookup
             mock_get_session.assert_called_once_with(mock_db_session, "789")
@@ -237,7 +237,7 @@ class TestOnEditMessage:
             mock_get_user.assert_called_once_with(mock_db_session, str(mock_telegram_user.id))
 
             # Verify user key retrieval was called
-            mock_user_obj.retrieve_key.assert_called_once_with(mock_telegram_user.username)
+            mock_user_obj.retrieve_key.assert_called_once_with()
 
             # Verify message was saved with session key
             mock_msg_save.assert_called_once_with(
@@ -306,7 +306,7 @@ class TestOnEditMessage:
             mock_get_user.assert_called_once_with(mock_db_session, str(mock_telegram_user.id))
 
             # Verify user key retrieval was called
-            mock_user_obj.retrieve_key.assert_called_once_with(mock_telegram_user.username)
+            mock_user_obj.retrieve_key.assert_called_once_with()
 
             # Verify message was saved without session key (not part of session)
             mock_msg_save.assert_called_once_with(
@@ -360,7 +360,7 @@ class TestOnEditMessage:
             mock_get_user.assert_called_once_with(mock_db_session, str(mock_telegram_user.id))
 
             # Verify user key retrieval was called
-            mock_user_obj.retrieve_key.assert_called_once_with(mock_telegram_user.username)
+            mock_user_obj.retrieve_key.assert_called_once_with()
 
             # Verify message was saved without session key
             mock_msg_save.assert_called_once_with(
@@ -439,7 +439,7 @@ class TestOnMessageReact:
             mock_get_user.assert_called_once_with(mock_db_session, str(mock_telegram_user.id))
 
             # Verify user key retrieval was called
-            mock_user_obj.retrieve_key.assert_called_once_with(mock_telegram_user.username)
+            mock_user_obj.retrieve_key.assert_called_once_with()
 
             # Verify message/reaction was saved with session key
             mock_msg_save.assert_called_once_with(
@@ -499,7 +499,7 @@ class TestOnMessageReact:
             mock_get_user.assert_called_once_with(mock_db_session, str(mock_telegram_user.id))
 
             # Verify user key retrieval was called
-            mock_user_obj.retrieve_key.assert_called_once_with(mock_telegram_user.username)
+            mock_user_obj.retrieve_key.assert_called_once_with()
 
             # Verify message was saved without session key (not part of session)
             mock_msg_save.assert_called_once_with(
@@ -545,7 +545,7 @@ class TestOnMessageReact:
             mock_get_user.assert_called_once_with(mock_db_session, str(mock_telegram_user.id))
 
             # Verify user key retrieval was called
-            mock_user_obj.retrieve_key.assert_called_once_with(mock_telegram_user.username)
+            mock_user_obj.retrieve_key.assert_called_once_with()
 
             # Verify message was saved without session key
             mock_msg_save.assert_called_once_with(

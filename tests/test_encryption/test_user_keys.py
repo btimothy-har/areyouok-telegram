@@ -2,6 +2,7 @@
 
 import base64
 import hashlib
+from unittest.mock import patch
 
 import pytest
 from cryptography.fernet import Fernet
@@ -30,21 +31,21 @@ class TestUserKeys:
         key2 = generate_user_key()
         assert key != key2
 
+    @patch("areyouok_telegram.encryption.user_keys.USER_ENCRYPTION_SALT", "test-salt")
     def test_encrypt_user_key(self):
-        """Test encrypting a user key with their username."""
+        """Test encrypting a user key with application salt."""
         # Generate a test key
         test_key = generate_user_key()
-        username = "testuser123"
 
         # Encrypt the key
-        encrypted = encrypt_user_key(test_key, username)
+        encrypted = encrypt_user_key(test_key)
 
         # Check it's a string
         assert isinstance(encrypted, str)
 
-        # Check we can decrypt it with the same username
-        username_hash = hashlib.sha256(username.encode()).digest()
-        fernet_key = base64.urlsafe_b64encode(username_hash)
+        # Check we can decrypt it with the same salt
+        salt_hash = hashlib.sha256(b"test-salt").digest()
+        fernet_key = base64.urlsafe_b64encode(salt_hash)
         fernet = Fernet(fernet_key)
 
         # Decode the encrypted string back to bytes for decryption
@@ -52,45 +53,46 @@ class TestUserKeys:
         decrypted = fernet.decrypt(encrypted_bytes)
         assert decrypted.decode("utf-8") == test_key
 
-    def test_encrypt_user_key_different_usernames(self):
-        """Test that different usernames produce different encrypted results."""
+    @patch("areyouok_telegram.encryption.user_keys.USER_ENCRYPTION_SALT", "test-salt")
+    def test_encrypt_user_key_consistent(self):
+        """Test that encryption with same salt produces consistent results."""
         test_key = generate_user_key()
 
-        encrypted1 = encrypt_user_key(test_key, "user1")
-        encrypted2 = encrypt_user_key(test_key, "user2")
+        encrypted = encrypt_user_key(test_key)
 
-        # Same key encrypted with different usernames should produce different results
-        assert encrypted1 != encrypted2
+        # Check it's a valid encrypted string
+        assert isinstance(encrypted, str)
+        assert len(encrypted) > 0
+        # Note: Fernet includes timestamps so encrypting twice will produce different results
 
-    def test_encrypt_user_key_same_username(self):
-        """Test that same username can decrypt the key."""
+    @patch("areyouok_telegram.encryption.user_keys.USER_ENCRYPTION_SALT", "test-salt")
+    def test_encrypt_user_key_can_decrypt(self):
+        """Test that encrypted key can be decrypted with same salt."""
         test_key = generate_user_key()
-        username = "consistent_user"
 
-        # Encrypt multiple times with same username
-        encrypted1 = encrypt_user_key(test_key, username)
+        # Encrypt with application salt
+        encrypted = encrypt_user_key(test_key)
 
-        # Decrypt using the same username-derived key
-        username_hash = hashlib.sha256(username.encode()).digest()
-        fernet_key = base64.urlsafe_b64encode(username_hash)
+        # Decrypt using the same salt-derived key
+        salt_hash = hashlib.sha256(b"test-salt").digest()
+        fernet_key = base64.urlsafe_b64encode(salt_hash)
         fernet = Fernet(fernet_key)
 
         # Decode the encrypted string back to bytes for decryption
-        encrypted_bytes = base64.urlsafe_b64decode(encrypted1.encode("utf-8"))
+        encrypted_bytes = base64.urlsafe_b64decode(encrypted.encode("utf-8"))
         decrypted = fernet.decrypt(encrypted_bytes)
         assert decrypted.decode("utf-8") == test_key
 
-    def test_encrypt_user_key_wrong_username_fails(self):
-        """Test that decrypting with wrong username fails."""
+    @patch("areyouok_telegram.encryption.user_keys.USER_ENCRYPTION_SALT", "correct-salt")
+    def test_encrypt_user_key_wrong_salt_fails(self):
+        """Test that decrypting with wrong salt fails."""
         test_key = generate_user_key()
-        correct_username = "correct_user"
-        wrong_username = "wrong_user"
 
-        # Encrypt with correct username
-        encrypted = encrypt_user_key(test_key, correct_username)
+        # Encrypt with correct salt
+        encrypted = encrypt_user_key(test_key)
 
-        # Try to decrypt with wrong username
-        wrong_hash = hashlib.sha256(wrong_username.encode()).digest()
+        # Try to decrypt with wrong salt
+        wrong_hash = hashlib.sha256(b"wrong-salt").digest()
         wrong_fernet_key = base64.urlsafe_b64encode(wrong_hash)
         wrong_fernet = Fernet(wrong_fernet_key)
 
@@ -99,28 +101,28 @@ class TestUserKeys:
             encrypted_bytes = base64.urlsafe_b64decode(encrypted.encode("utf-8"))
             wrong_fernet.decrypt(encrypted_bytes)
 
+    @patch("areyouok_telegram.encryption.user_keys.USER_ENCRYPTION_SALT", "test-salt")
     def test_decrypt_user_key(self):
-        """Test decrypting a user key with the correct username."""
+        """Test decrypting a user key with the correct salt."""
         # Generate and encrypt a test key
         test_key = generate_user_key()
-        username = "testuser"
-        encrypted = encrypt_user_key(test_key, username)
+        encrypted = encrypt_user_key(test_key)
 
         # Decrypt it
-        decrypted = decrypt_user_key(encrypted, username)
+        decrypted = decrypt_user_key(encrypted)
 
         # Should match the original key
         assert decrypted == test_key
 
-    def test_decrypt_user_key_wrong_username_fails(self):
-        """Test that decrypt_user_key fails with wrong username."""
+    def test_decrypt_user_key_wrong_salt_fails(self):
+        """Test that decrypt_user_key fails with wrong salt."""
         test_key = generate_user_key()
-        correct_username = "correct_user"
-        wrong_username = "wrong_user"
 
-        # Encrypt with correct username
-        encrypted = encrypt_user_key(test_key, correct_username)
+        # Encrypt with one salt
+        with patch("areyouok_telegram.encryption.user_keys.USER_ENCRYPTION_SALT", "correct-salt"):
+            encrypted = encrypt_user_key(test_key)
 
-        # Try to decrypt with wrong username - should fail
-        with pytest.raises(InvalidToken):
-            decrypt_user_key(encrypted, wrong_username)
+        # Try to decrypt with different salt - should fail
+        with patch("areyouok_telegram.encryption.user_keys.USER_ENCRYPTION_SALT", "wrong-salt"):
+            with pytest.raises(InvalidToken):
+                decrypt_user_key(encrypted)

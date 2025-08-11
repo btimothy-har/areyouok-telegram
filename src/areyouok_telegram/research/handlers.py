@@ -92,7 +92,7 @@ async def on_new_message_research(update: telegram.Update, context: ContextTypes
     async with async_database() as db_conn:
         # Get user and their encryption key
         user_obj = await Users.get_by_id(db_conn, str(update.effective_user.id))
-        user_encryption_key = user_obj.retrieve_key(update.effective_user.username)
+        user_encryption_key = user_obj.retrieve_key()
 
         extract_media = asyncio.create_task(
             extract_media_from_telegram_message(db_conn, user_encryption_key, message=update.message)

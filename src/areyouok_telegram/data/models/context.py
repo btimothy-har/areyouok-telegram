@@ -42,8 +42,8 @@ class Context(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False)
 
-    # TTL cache for decrypted content (2 hours TTL, max 1000 entries)
-    _data_cache: TTLCache[str, bytes] = TTLCache(maxsize=1000, ttl=2 * 60 * 60)
+    # TTL cache for decrypted content (1 hour TTL, max 1000 entries)
+    _data_cache: TTLCache[str, bytes] = TTLCache(maxsize=1000, ttl=1 * 60 * 60)
 
     @staticmethod
     def generate_context_key(chat_id: str, ctype: str, encrypted_content: str) -> str:
@@ -51,7 +51,7 @@ class Context(Base):
         return hashlib.sha256(f"{chat_id}:{ctype}:{encrypted_content}".encode()).hexdigest()
 
     @classmethod
-    def encrypt_content(cls, content: str, user_encryption_key: str) -> str:
+    def encrypt_content(cls, *, content: str, user_encryption_key: str) -> str:
         """Encrypt the content using the user's encryption key.
 
         Args:
@@ -65,7 +65,7 @@ class Context(Base):
         encrypted_bytes = fernet.encrypt(content.encode("utf-8"))
         return encrypted_bytes.decode("utf-8")
 
-    def decrypt_content(self, user_encryption_key: str) -> str | None:
+    def decrypt_content(self, *, user_encryption_key: str) -> str | None:
         """Decrypt the content using the user's encryption key.
 
         Args:
@@ -112,7 +112,10 @@ class Context(Base):
             raise InvalidContextTypeError(ctype)
 
         # Encrypt the content
-        encrypted_content = cls.encrypt_content(content, user_encryption_key)
+        encrypted_content = cls.encrypt_content(
+            content=content,
+            user_encryption_key=user_encryption_key,
+        )
 
         stmt = pg_insert(cls).values(
             context_key=cls.generate_context_key(chat_id, ctype, encrypted_content),

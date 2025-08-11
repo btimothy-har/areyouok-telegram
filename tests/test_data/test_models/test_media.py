@@ -31,7 +31,7 @@ class TestMediaFiles:
         content_bytes = b"test content"
         user_key = Fernet.generate_key().decode("utf-8")
 
-        encrypted = MediaFiles.encrypt_content(content_bytes, user_key)
+        encrypted = MediaFiles.encrypt_content(content_bytes=content_bytes, user_encryption_key=user_key)
 
         # Should be a base64 string
         assert isinstance(encrypted, str)
@@ -49,7 +49,7 @@ class TestMediaFiles:
         user_key = Fernet.generate_key().decode("utf-8")
 
         # First encrypt
-        encrypted = MediaFiles.encrypt_content(content_bytes, user_key)
+        encrypted = MediaFiles.encrypt_content(content_bytes=content_bytes, user_encryption_key=user_key)
 
         # Create media instance with encrypted content
         media = MediaFiles()
@@ -57,7 +57,7 @@ class TestMediaFiles:
         media.file_key = "test_file_key"
 
         # Decrypt should return original bytes
-        decrypted = media.decrypt_content(user_key)
+        decrypted = media.decrypt_content(user_encryption_key=user_key)
         assert decrypted == content_bytes
 
     def test_decrypt_content_base64_no_encrypted_content(self):
@@ -69,24 +69,24 @@ class TestMediaFiles:
         user_key = Fernet.generate_key().decode("utf-8")
 
         with pytest.raises((InvalidToken, ValueError)):
-            media.decrypt_content(user_key)
+            media.decrypt_content(user_encryption_key=user_key)
 
     def test_bytes_data_with_content(self):
         """Test decoding encrypted base64 content to bytes."""
         # Clear the cache to ensure clean test
         MediaFiles._data_cache.clear()
-        
+
         media = MediaFiles()
         test_data = b"test content"
         content_base64 = base64.b64encode(test_data).decode("ascii")
         user_key = Fernet.generate_key().decode("utf-8")
 
         # Encrypt the content
-        media.encrypted_content_base64 = MediaFiles.encrypt_content(test_data, user_key)
+        media.encrypted_content_base64 = MediaFiles.encrypt_content(content_bytes=test_data, user_encryption_key=user_key)
         media.file_key = "test_file_key_for_content"
 
         # First decrypt the content
-        media.decrypt_content(user_key)
+        media.decrypt_content(user_encryption_key=user_key)
 
         # Now bytes_data property should return the decrypted data
         assert media.bytes_data == test_data
@@ -94,10 +94,10 @@ class TestMediaFiles:
     def test_bytes_data_without_content(self):
         """Test bytes_data raises error when content not decrypted."""
         from areyouok_telegram.encryption.exceptions import ContentNotDecryptedError
-        
+
         # Clear the cache to ensure clean test
         MediaFiles._data_cache.clear()
-        
+
         media = MediaFiles()
         media.file_key = "test_file_key_unique"
         media.encrypted_content_base64 = "some_encrypted_data"

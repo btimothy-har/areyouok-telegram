@@ -286,7 +286,7 @@ class ConversationJob(BaseJob):
 
                 if last_context:
                     last_context.sort(key=lambda c: c.created_at)
-                    [c.decrypt_content(user_encryption_key) for c in last_context]
+                    [c.decrypt_content(user_encryption_key=user_encryption_key) for c in last_context]
 
                     message_history.extend([context_to_model_message(c) for c in last_context])
 
@@ -311,7 +311,7 @@ class ConversationJob(BaseJob):
                     user = msg.user.id
 
                 if media:
-                    [m.decrypt_content(user_encryption_key) for m in media]
+                    [m.decrypt_content(user_encryption_key=user_encryption_key) for m in media]
 
                 as_model_message = telegram_message_to_model_message(
                     message=msg,

@@ -19,7 +19,6 @@ from areyouok_telegram.data import Base
 from areyouok_telegram.encryption import decrypt_user_key
 from areyouok_telegram.encryption import encrypt_user_key
 from areyouok_telegram.encryption import generate_user_key
-from areyouok_telegram.encryption.exceptions import ProfileNotDecryptedError
 from areyouok_telegram.utils import traced
 
 
@@ -39,8 +38,8 @@ class Users(Base):
     created_at = Column(TIMESTAMP(timezone=True), nullable=False)
     updated_at = Column(TIMESTAMP(timezone=True), nullable=False)
 
-    # TTL cache for decrypted keys (2 hours TTL, max 1000 entries)
-    _key_cache: TTLCache[str, str] = TTLCache(maxsize=1000, ttl=7200)
+    # TTL cache for decrypted keys (10 minutes TTL, max 1000 entries)
+    _key_cache: TTLCache[str, str] = TTLCache(maxsize=1000, ttl=10 * 60)
 
     @staticmethod
     def generate_user_key(user_id: str) -> str:
@@ -56,13 +55,12 @@ class Users(Base):
         # Check if user already exists
         existing_user = await cls.get_by_id(db_conn, str(user.id))
 
-        # Generate and encrypt key only for new users with username
         encrypted_key = None
-        if not existing_user and user.username:
+        if not existing_user:
             # Generate a new Fernet key for the user
             new_key = generate_user_key()
-            # Encrypt it using their username
-            encrypted_key = encrypt_user_key(new_key, user.username)
+            # Encrypt it using the application salt
+            encrypted_key = encrypt_user_key(new_key)
 
         stmt = pg_insert(cls).values(
             user_key=cls.generate_user_key(str(user.id)),
@@ -99,35 +97,23 @@ class Users(Base):
         result = await db_conn.execute(stmt)
         return result.scalars().first()
 
-    def retrieve_key(self, username: str | None = None) -> str | None:
-        """Retrieve the user's encryption key, optionally decrypting it.
-
-        Args:
-            username: The username to use for decryption. If None, will not attempt decryption.
+    def retrieve_key(self) -> str | None:
+        """Retrieve the user's encryption key.
 
         Returns:
             str: The decrypted Fernet key, or None if no key is stored
 
         Raises:
-            InvalidToken: If the key cannot be decrypted (wrong username or corrupted data)
-            ProfileNotDecryptedError: If username is None and key is not in cache
+            InvalidToken: If the key cannot be decrypted (corrupted data)
         """
         if not self.encrypted_key:
             return None
 
-        if username:
-            # Username provided: attempt to decrypt and extend cache
-            # Check cache first
-            if self.user_key in self._key_cache:
-                return self._key_cache[self.user_key]
+        # Check cache first
+        if self.user_key in self._key_cache:
+            return self._key_cache[self.user_key]
 
-            # Decrypt the key and cache it
-            decrypted_key = decrypt_user_key(self.encrypted_key, username)
-            self._key_cache[self.user_key] = decrypted_key
-            return decrypted_key
-        else:
-            # Username not provided: return from cache or raise error
-            if self.user_key in self._key_cache:
-                return self._key_cache[self.user_key]
-            else:
-                raise ProfileNotDecryptedError(self.user_id)
+        # Decrypt the key and cache it
+        decrypted_key = decrypt_user_key(self.encrypted_key)
+        self._key_cache[self.user_key] = decrypted_key
+        return decrypted_key

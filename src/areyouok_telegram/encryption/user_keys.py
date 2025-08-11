@@ -3,6 +3,8 @@ import hashlib
 
 from cryptography.fernet import Fernet
 
+from areyouok_telegram.config import USER_ENCRYPTION_SALT
+
 
 def generate_user_key() -> str:
     """Generate a new Fernet encryption key for a user.
@@ -13,21 +15,20 @@ def generate_user_key() -> str:
     return Fernet.generate_key().decode("utf-8")
 
 
-def encrypt_user_key(key: str, username: str) -> str:
-    """Encrypt a user's key using their username as the encryption key.
+def encrypt_user_key(key: str) -> str:
+    """Encrypt a user's key using the application salt.
 
     Args:
         key: The Fernet key to encrypt (base64-encoded string)
-        username: The username to use as the encryption key
 
     Returns:
         str: The encrypted key as base64-encoded string
     """
-    # Derive a Fernet-compatible key from the username
+    # Derive a Fernet-compatible key from the application salt
     # Fernet requires a 32-byte key encoded as base64
-    username_hash = hashlib.sha256(username.encode()).digest()
+    salt_hash = hashlib.sha256(USER_ENCRYPTION_SALT.encode()).digest()
     # Fernet needs base64-encoded 32-byte key
-    fernet_key = base64.urlsafe_b64encode(username_hash)
+    fernet_key = base64.urlsafe_b64encode(salt_hash)
 
     # Create Fernet instance with the derived key
     fernet = Fernet(fernet_key)
@@ -39,22 +40,21 @@ def encrypt_user_key(key: str, username: str) -> str:
     return base64.urlsafe_b64encode(encrypted_key).decode("utf-8")
 
 
-def decrypt_user_key(encrypted_key: str, username: str) -> str:
-    """Decrypt a user's key using their username as the decryption key.
+def decrypt_user_key(encrypted_key: str) -> str:
+    """Decrypt a user's key using the application salt.
 
     Args:
         encrypted_key: The encrypted key as base64-encoded string
-        username: The username to use as the decryption key
 
     Returns:
         str: The decrypted Fernet key as base64-encoded string
 
     Raises:
-        InvalidToken: If the key cannot be decrypted (wrong username or corrupted data)
+        InvalidToken: If the key cannot be decrypted (corrupted data)
     """
-    # Derive a Fernet-compatible key from the username
-    username_hash = hashlib.sha256(username.encode()).digest()
-    fernet_key = base64.urlsafe_b64encode(username_hash)
+    # Derive a Fernet-compatible key from the application salt
+    salt_hash = hashlib.sha256(USER_ENCRYPTION_SALT.encode()).digest()
+    fernet_key = base64.urlsafe_b64encode(salt_hash)
 
     # Create Fernet instance with the derived key
     fernet = Fernet(fernet_key)

@@ -54,7 +54,7 @@ class TestOnNewUpdate:
             mock_chat_update.assert_called_once_with(db_conn=mock_db_session, chat=mock_update.effective_chat)
 
             # Verify key unlock was called
-            mock_user_obj.retrieve_key.assert_called_once_with("testuser")
+            mock_user_obj.retrieve_key.assert_called_once_with()
 
             # Verify job scheduling
             mock_conversation_job.assert_called_once_with(chat_id="456")
@@ -126,7 +126,7 @@ class TestOnNewUpdate:
             # User update should be called
             mock_user_update.assert_called_once_with(db_conn=mock_db_session, user=mock_update.effective_user)
             # Key unlock should be called
-            mock_user_obj.retrieve_key.assert_called_once_with("testuser")
+            mock_user_obj.retrieve_key.assert_called_once_with()
             # Chat update should not be called
             mock_chat_update.assert_not_called()
             # Job should not be scheduled

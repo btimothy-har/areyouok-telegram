@@ -65,7 +65,7 @@ class TestContext:
         content = "test content to encrypt"
         user_key = Fernet.generate_key().decode("utf-8")
 
-        encrypted = Context.encrypt_content(content, user_key)
+        encrypted = Context.encrypt_content(content=content, user_encryption_key=user_key)
 
         # Should be a string (base64 encoded encrypted data)
         assert isinstance(encrypted, str)
@@ -83,14 +83,14 @@ class TestContext:
         user_key = Fernet.generate_key().decode("utf-8")
 
         # First encrypt
-        encrypted = Context.encrypt_content(content, user_key)
+        encrypted = Context.encrypt_content(content=content, user_encryption_key=user_key)
 
         # Create context instance with encrypted content
         ctx = Context()
         ctx.encrypted_content = encrypted
 
         # Decrypt should return original content
-        decrypted = ctx.decrypt_content(user_key)
+        decrypted = ctx.decrypt_content(user_encryption_key=user_key)
         assert decrypted == content
 
     def test_decrypt_content_no_encrypted_content(self):
@@ -99,7 +99,7 @@ class TestContext:
         ctx.encrypted_content = None
         user_key = Fernet.generate_key().decode("utf-8")
 
-        result = ctx.decrypt_content(user_key)
+        result = ctx.decrypt_content(user_encryption_key=user_key)
         assert result is None
 
     @pytest.mark.asyncio

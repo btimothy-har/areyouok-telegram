@@ -31,7 +31,7 @@ async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_
     async with async_database() as db_conn:
         # Get user and their encryption key
         user_obj = await Users.get_by_id(db_conn, str(update.effective_user.id))
-        user_encryption_key = user_obj.retrieve_key(update.effective_user.username)
+        user_encryption_key = user_obj.retrieve_key()
 
         extract_media = asyncio.create_task(
             extract_media_from_telegram_message(db_conn, user_encryption_key, message=update.message)
@@ -66,7 +66,7 @@ async def on_edit_message(update: telegram.Update, context: ContextTypes.DEFAULT
     async with async_database() as db_conn:
         # Get user and their encryption key
         user_obj = await Users.get_by_id(db_conn, str(update.effective_user.id))
-        user_encryption_key = user_obj.retrieve_key(update.effective_user.username)
+        user_encryption_key = user_obj.retrieve_key()
 
         extract_media = asyncio.create_task(
             extract_media_from_telegram_message(db_conn, user_encryption_key, message=update.edited_message)
@@ -108,7 +108,7 @@ async def on_message_react(update: telegram.Update, context: ContextTypes.DEFAUL
     async with async_database() as db_conn:
         # Get user and their encryption key
         user_obj = await Users.get_by_id(db_conn, str(update.effective_user.id))
-        user_encryption_key = user_obj.retrieve_key(update.effective_user.username)
+        user_encryption_key = user_obj.retrieve_key()
 
         # Handle session management for reactions
         active_session = await Sessions.get_active_session(db_conn, str(update.effective_chat.id))
