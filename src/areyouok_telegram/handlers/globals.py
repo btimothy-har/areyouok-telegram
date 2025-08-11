@@ -9,6 +9,7 @@ from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
 from areyouok_telegram.config import DEVELOPER_CHAT_ID
+from areyouok_telegram.config import DEVELOPER_THREAD_ID
 from areyouok_telegram.data import Chats
 from areyouok_telegram.data import Updates
 from areyouok_telegram.data import Users
@@ -56,8 +57,17 @@ async def on_error_event(update: telegram.Update, context: ContextTypes.DEFAULT_
         tb_list = traceback.format_exception(None, context.error, context.error.__traceback__)
         tb_string = "".join(tb_list)
 
-        message = f"An exception was raised while handling an update\n\n{tb_string}"
+        # Escape backticks in the traceback for MarkdownV2 code block
+        tb_string = tb_string.replace("`", "\\`")
 
-        await context.bot.send_message(chat_id=DEVELOPER_CHAT_ID, text=message, parse_mode=ParseMode.MARKDOWN_V2)
+        message = f"An exception was raised while handling an update\n\n```\n{tb_string}\n```"
+
+        await context.bot.send_message(
+            chat_id=DEVELOPER_CHAT_ID,
+            message_thread_id=DEVELOPER_THREAD_ID,
+            text=message,
+            disable_notification=True,
+            parse_mode=ParseMode.MARKDOWN_V2,
+        )
 
         logfire.info("Error notification sent to developer.")
