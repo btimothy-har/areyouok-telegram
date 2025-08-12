@@ -43,6 +43,7 @@ class TestOnNewMessage:
         mock_active_session = MagicMock()
         mock_active_session.new_message = AsyncMock()
         mock_active_session.session_key = "session_key_123"
+        mock_active_session.session_id = "session_id_123"
 
         # Create mock user with encryption key
         mock_user_obj = MagicMock()
@@ -84,7 +85,10 @@ class TestOnNewMessage:
 
             # Verify media extraction was called
             mock_extract_media.assert_called_once_with(
-                mock_db_session, "test_encryption_key", message=mock_update.message
+                mock_db_session,
+                "test_encryption_key",
+                message=mock_update.message,
+                session_id=mock_active_session.session_id,
             )
 
             # Verify session lookup
@@ -120,6 +124,7 @@ class TestOnNewMessage:
         mock_new_session = MagicMock()
         mock_new_session.new_message = AsyncMock()
         mock_new_session.session_key = "new_session_key"
+        mock_new_session.session_id = "new_session_id"
 
         with (
             patch(
@@ -163,7 +168,10 @@ class TestOnNewMessage:
 
             # Verify media extraction was called
             mock_extract_media.assert_called_once_with(
-                mock_db_session, "test_encryption_key", message=mock_update.message
+                mock_db_session,
+                "test_encryption_key",
+                message=mock_update.message,
+                session_id=mock_new_session.session_id,
             )
 
             # Verify message was recorded in new session
@@ -217,6 +225,7 @@ class TestOnEditMessage:
         mock_active_session.session_start = datetime(2024, 1, 1, 11, 0, 0, tzinfo=UTC)
         mock_active_session.new_activity = AsyncMock()
         mock_active_session.session_key = "session_key_edit"
+        mock_active_session.session_id = "session_id_edit"
 
         with (
             patch(
@@ -251,7 +260,10 @@ class TestOnEditMessage:
 
             # Verify media extraction was called
             mock_extract_media.assert_called_once_with(
-                mock_db_session, "test_encryption_key", message=mock_update.edited_message
+                mock_db_session,
+                "test_encryption_key",
+                message=mock_update.edited_message,
+                session_id=mock_active_session.session_id,
             )
 
             # Verify activity was recorded
@@ -286,6 +298,7 @@ class TestOnEditMessage:
         mock_active_session.session_start = datetime(2024, 1, 1, 11, 0, 0, tzinfo=UTC)
         mock_active_session.new_activity = AsyncMock()
         mock_active_session.session_key = "session_key_before"
+        mock_active_session.session_id = "session_id_before"
 
         with (
             patch(
@@ -320,7 +333,7 @@ class TestOnEditMessage:
 
             # Verify media extraction was called
             mock_extract_media.assert_called_once_with(
-                mock_db_session, "test_encryption_key", message=mock_update.edited_message
+                mock_db_session, "test_encryption_key", message=mock_update.edited_message, session_id=None
             )
 
             # Activity should not be recorded
@@ -374,7 +387,7 @@ class TestOnEditMessage:
 
             # Media extraction should be called even without session
             mock_extract_media.assert_called_once_with(
-                mock_db_session, "test_encryption_key", message=mock_update.edited_message
+                mock_db_session, "test_encryption_key", message=mock_update.edited_message, session_id=None
             )
 
     @pytest.mark.asyncio

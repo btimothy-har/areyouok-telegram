@@ -182,7 +182,7 @@ class TestDownloadFile:
         mock_transcription.usage.input_tokens = 10
         mock_transcription.usage.output_tokens = 5
         mock_transcriptions = [mock_transcription]
-        
+
         user_encryption_key = "test_encryption_key"
 
         with (
@@ -191,7 +191,9 @@ class TestDownloadFile:
                 "areyouok_telegram.handlers.media_utils.asyncio.to_thread",
                 new=AsyncMock(return_value=mock_transcriptions),
             ),
-            patch("areyouok_telegram.handlers.media_utils.LLMUsage.track_generic_usage", new=AsyncMock()) as mock_track_usage,
+            patch(
+                "areyouok_telegram.handlers.media_utils.LLMUsage.track_generic_usage", new=AsyncMock()
+            ) as mock_track_usage,
             patch("areyouok_telegram.handlers.media_utils.logfire.span"),
             patch("areyouok_telegram.handlers.media_utils.logfire.info") as mock_log_info,
         ):
