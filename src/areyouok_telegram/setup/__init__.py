@@ -7,6 +7,7 @@ from areyouok_telegram.setup.bot import setup_bot_name
 from areyouok_telegram.setup.database import database_setup
 from areyouok_telegram.setup.jobs import restore_active_sessions
 from areyouok_telegram.setup.jobs import start_data_warning_job
+from areyouok_telegram.setup.jobs import start_ping_job
 
 __all__ = [
     "database_setup",
@@ -16,4 +17,5 @@ __all__ = [
     "restore_active_sessions",
     "setup_bot_commands",
     "start_data_warning_job",
+    "start_ping_job",
 ]

@@ -10,6 +10,7 @@ from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database
 from areyouok_telegram.jobs import ConversationJob
 from areyouok_telegram.jobs import DataLogWarningJob
+from areyouok_telegram.jobs import PingJob
 from areyouok_telegram.jobs import schedule_job
 
 
@@ -44,4 +45,19 @@ async def start_data_warning_job(ctx: Application | ContextTypes.DEFAULT_TYPE):
         job=DataLogWarningJob(),
         interval=timedelta(minutes=5),  # Run every 5 minutes
         first=start_time,
+    )
+
+
+async def start_ping_job(ctx: Application | ContextTypes.DEFAULT_TYPE):
+    """Start the ping job to run at the top of every hour."""
+    # Calculate the next top of the hour
+    now = datetime.now(UTC)
+    # Move to the next hour and zero out minutes/seconds/microseconds
+    next_hour = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+
+    await schedule_job(
+        context=ctx,
+        job=PingJob(),
+        interval=timedelta(hours=1),  # Run every hour
+        first=next_hour,
     )
