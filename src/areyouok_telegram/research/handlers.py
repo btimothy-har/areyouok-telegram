@@ -94,13 +94,18 @@ async def on_new_message_research(update: telegram.Update, context: ContextTypes
         user_obj = await Users.get_by_id(db_conn, str(update.effective_user.id))
         user_encryption_key = user_obj.retrieve_key()
 
-        extract_media = asyncio.create_task(
-            extract_media_from_telegram_message(db_conn, user_encryption_key, message=update.message)
-        )
-
         # Handle session management
         chat_id = str(update.effective_chat.id)
         active_session = await Sessions.get_active_session(db_conn, chat_id)
+
+        extract_media = asyncio.create_task(
+            extract_media_from_telegram_message(
+                db_conn,
+                user_encryption_key,
+                message=update.message,
+                session_id=active_session.session_id if active_session else None,
+            )
+        )
 
         # Save the message
         await Messages.new_or_update(

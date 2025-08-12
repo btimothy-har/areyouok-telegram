@@ -4,17 +4,19 @@ from io import BytesIO
 import logfire
 import openai
 import telegram
+from openai.types import audio as openai_audio
 from pydub import AudioSegment
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from areyouok_telegram.config import OPENAI_API_KEY
+from areyouok_telegram.data import LLMUsage
 from areyouok_telegram.data import MediaFiles
 from areyouok_telegram.handlers.exceptions import VoiceNotProcessableError
 from areyouok_telegram.utils import traced
 
 
-def transcribe_voice_data_sync(voice_data: bytes) -> str:
-    """Synchronously transcribe voice data using OpenAI Whisper.
+def transcribe_voice_data_sync(voice_data: bytes) -> list[openai_audio.transcription.Transcription]:
+    """Synchronously transcribe voice data using OpenAI.
 
     Args:
         voice_data: Voice file content as bytes
@@ -45,25 +47,30 @@ def transcribe_voice_data_sync(voice_data: bytes) -> str:
             audio_file.name = "segment.mp3"
 
             transcription = client.audio.transcriptions.create(
-                model="gpt-4o-transcribe",
                 file=audio_file,
-                response_format="text",
+                model="gpt-4o-transcribe",
+                chunking_strategy="auto",
                 language="en",
                 prompt=transcriptions[-1] if transcriptions else None,
-                temperature=0.0,
+                temperature=0.2,
             )
             transcriptions.append(transcription)
             start = end
 
-        return "[Transcribed Audio] " + " ".join(transcriptions)
-
     except Exception as e:
         raise VoiceNotProcessableError() from e
+
+    return transcriptions
 
 
 @traced(extract_args=["message", "file"])
 async def _download_file(
-    db_conn: AsyncSession, user_encryption_key: str, *, message: telegram.Message, file: telegram.File
+    db_conn: AsyncSession,
+    user_encryption_key: str,
+    *,
+    message: telegram.Message,
+    file: telegram.File,
+    session_id: str | None = None,
 ) -> bytes:
     """Download a Telegram file as bytes.
 
@@ -100,10 +107,22 @@ async def _download_file(
             ):
                 try:
                     # Transcribe the voice message in a separate thread
-                    transcription = await asyncio.to_thread(transcribe_voice_data_sync, bytes(content_bytes))
+                    transcriptions = await asyncio.to_thread(transcribe_voice_data_sync, bytes(content_bytes))
+                    transcription_text = "[Transcribed Audio] " + " ".join([t.text for t in transcriptions if t.text])
+
+                    await LLMUsage.track_generic_usage(
+                        db_conn,
+                        chat_id=str(message.chat.id),
+                        session_id=session_id,
+                        usage_type="openai.voice_transcription",
+                        model="openai/gpt-4o-transcribe",
+                        provider="openai",
+                        input_tokens=sum(t.usage.input_tokens for t in transcriptions),
+                        output_tokens=sum(t.usage.output_tokens for t in transcriptions),
+                    )
 
                     # Store the transcription as a text file
-                    transcription_bytes = transcription.encode("utf-8")
+                    transcription_bytes = transcription_text.encode("utf-8")
                     await MediaFiles.create_file(
                         db_conn,
                         user_encryption_key,
@@ -114,7 +133,9 @@ async def _download_file(
                         file_size=len(transcription_bytes),
                         content_bytes=transcription_bytes,
                     )
-                    logfire.info(f"Transcription is {len(transcription)} characters long.", chat_id=message.chat.id)
+                    logfire.info(
+                        f"Transcription is {len(transcription_text)} characters long.", chat_id=message.chat.id
+                    )
 
                 except VoiceNotProcessableError:
                     logfire.exception(
@@ -138,7 +159,11 @@ async def _download_file(
 
 @traced(extract_args=["message"])
 async def extract_media_from_telegram_message(
-    db_conn: AsyncSession, user_encryption_key: str, *, message: telegram.Message
+    db_conn: AsyncSession,
+    user_encryption_key: str,
+    *,
+    message: telegram.Message,
+    session_id: str | None = None,
 ) -> int:
     """Process media files from a Telegram message.
 
@@ -181,7 +206,16 @@ async def extract_media_from_telegram_message(
         media_files.append(voice_file)
 
     await asyncio.gather(
-        *[_download_file(db_conn, user_encryption_key, message=message, file=file) for file in media_files],
+        *[
+            _download_file(
+                db_conn,
+                user_encryption_key,
+                session_id=session_id,
+                message=message,
+                file=file,
+            )
+            for file in media_files
+        ],
         return_exceptions=True,
     )
 
