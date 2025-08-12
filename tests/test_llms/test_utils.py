@@ -37,9 +37,10 @@ class TestRunAgentWithTracking:
         mock_agent.run.return_value = mock_result
 
         # Mock database and tracking
-        with patch("areyouok_telegram.llms.utils.async_database") as mock_db, patch(
-            "areyouok_telegram.llms.utils.LLMUsage.track_pydantic_usage"
-        ) as mock_track:
+        with (
+            patch("areyouok_telegram.llms.utils.async_database") as mock_db,
+            patch("areyouok_telegram.llms.utils.LLMUsage.track_pydantic_usage") as mock_track,
+        ):
             mock_db_conn = AsyncMock()
             mock_db.return_value.__aenter__.return_value = mock_db_conn
 
@@ -68,9 +69,7 @@ class TestRunAgentWithTracking:
         mock_agent = MagicMock(spec=pydantic_ai.Agent)
 
         with pytest.raises(ValueError, match="Either 'user_prompt' or 'message_history' must be provided"):
-            await run_agent_with_tracking(
-                agent=mock_agent, chat_id="123", session_id="session123", run_kwargs={}
-            )
+            await run_agent_with_tracking(agent=mock_agent, chat_id="123", session_id="session123", run_kwargs={})
 
     @pytest.mark.asyncio
     async def test_run_agent_with_tracking_logs_error(self):
@@ -86,9 +85,10 @@ class TestRunAgentWithTracking:
         mock_agent.run.return_value = mock_result
 
         # Mock database to raise an error
-        with patch("areyouok_telegram.llms.utils.async_database") as mock_db, patch.object(
-            logfire, "exception"
-        ) as mock_log:
+        with (
+            patch("areyouok_telegram.llms.utils.async_database") as mock_db,
+            patch.object(logfire, "exception") as mock_log,
+        ):
             mock_db.side_effect = Exception("Database error")
 
             result = await run_agent_with_tracking(
@@ -168,7 +168,7 @@ class TestMessageToDict:
             "text": "Bot response",
             "message_id": "789",
             "timestamp": "0 seconds ago",
-            "reasoning": "This is AI reasoning"
+            "reasoning": "This is AI reasoning",
         }
 
 
@@ -232,9 +232,7 @@ class TestMessageToModelMessage:
         mock_telegram_obj.date = frozen_time - timedelta(seconds=10)
         mock_messages.telegram_object = mock_telegram_obj
 
-        result = message_to_model_message(
-            message=mock_messages, media=[], ts_reference=frozen_time, is_user=True
-        )
+        result = message_to_model_message(message=mock_messages, media=[], ts_reference=frozen_time, is_user=True)
 
         assert isinstance(result, pydantic_ai.messages.ModelRequest)
         assert result.kind == "request"
@@ -265,9 +263,7 @@ class TestMessageToModelMessage:
         mock_telegram_obj.date = frozen_time
         mock_messages.telegram_object = mock_telegram_obj
 
-        result = message_to_model_message(
-            message=mock_messages, media=[], ts_reference=frozen_time, is_user=False
-        )
+        result = message_to_model_message(message=mock_messages, media=[], ts_reference=frozen_time, is_user=False)
 
         assert isinstance(result, pydantic_ai.messages.ModelResponse)
         assert result.kind == "response"

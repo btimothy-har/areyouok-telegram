@@ -212,7 +212,7 @@ class TestMessages:
             user_id=str(mock_telegram_message.from_user.id),
             chat_id=str(mock_telegram_message.chat.id),
             message=mock_telegram_message,
-            reasoning="This is AI reasoning"
+            reasoning="This is AI reasoning",
         )
 
         # Verify execute was called with reasoning

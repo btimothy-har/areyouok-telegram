@@ -88,9 +88,9 @@ def message_to_dict(message: Messages, ts_reference: datetime | None = None) -> 
     elif isinstance(message, telegram.MessageReactionUpdated):
         # Handle reactions, assuming only emoji reactions for simplicity
         # TODO: Handle custom and paid reactions
-        reaction_string = ", ".join([
-            r.emoji for r in message.telegram_object.new_reaction if r.type == telegram.constants.ReactionType.EMOJI
-        ])
+        reaction_string = ", ".join(
+            [r.emoji for r in message.telegram_object.new_reaction if r.type == telegram.constants.ReactionType.EMOJI]
+        )
         payload = {
             "reaction": reaction_string,
             "to_message_id": str(message.message_id),
@@ -116,10 +116,12 @@ def context_to_model_message(
     model_message = pydantic_ai.messages.ModelResponse(
         parts=[
             pydantic_ai.messages.TextPart(
-                content=json.dumps({
-                    "timestamp": (f"{(ts_reference - context.created_at).total_seconds()} seconds ago"),
-                    "content": f"Summary of prior conversation:\n\n{context.content}",
-                }),
+                content=json.dumps(
+                    {
+                        "timestamp": (f"{(ts_reference - context.created_at).total_seconds()} seconds ago"),
+                        "content": f"Summary of prior conversation:\n\n{context.content}",
+                    }
+                ),
                 part_kind="text",
             )
         ],
