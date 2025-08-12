@@ -10,12 +10,7 @@ on:
         options:
           - production
           - research
-          - internal
-      tag:
-        description: 'Image tag (only for internal environment)'
-        required: false
-        type: string
-        default: 'latest'
+          - staging
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.environment }}
@@ -27,15 +22,40 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
 
-    steps:    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+    
     - name: Set Image Tag
       id: set-tag
       run: |
-        if [[ "${{ inputs.environment }}" == "internal" && "${{ inputs.tag }}" != "" ]]; then
-          echo "IMAGE_TAG=${{ inputs.tag }}" >> $GITHUB_OUTPUT
+        if [[ "${{ inputs.environment }}" == "staging" ]]; then
+          # For staging, use the current branch name
+          BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+          echo "IMAGE_TAG=${BRANCH_NAME}" >> $GITHUB_OUTPUT
+          echo "BRANCH_NAME=${BRANCH_NAME}" >> $GITHUB_OUTPUT
         else
+          # For production/research, use 'latest' tag
           echo "IMAGE_TAG=latest" >> $GITHUB_OUTPUT
+          echo "BRANCH_NAME=${{ github.event.repository.default_branch }}" >> $GITHUB_OUTPUT
         fi
+        echo "Environment: ${{ inputs.environment }}"
+        echo "Branch: $(cat $GITHUB_OUTPUT | grep BRANCH_NAME | cut -d'=' -f2)"
+        echo "Image Tag: $(cat $GITHUB_OUTPUT | grep IMAGE_TAG | cut -d'=' -f2)"
+    
+    - name: Set Deploy SHA
+      id: set-sha
+      run: |
+        if [[ "${{ inputs.environment }}" == "staging" ]]; then
+          # For staging, use current commit SHA
+          echo "DEPLOY_SHA=${{ github.sha }}" >> $GITHUB_OUTPUT
+        else
+          # For production/research, use main branch SHA
+          git fetch origin ${{ github.event.repository.default_branch }} --depth=1
+          MAIN_SHA=$(git rev-parse origin/${{ github.event.repository.default_branch }})
+          echo "DEPLOY_SHA=${MAIN_SHA}" >> $GITHUB_OUTPUT
+        fi
+        echo "Deploy SHA: $(cat $GITHUB_OUTPUT | grep DEPLOY_SHA | cut -d'=' -f2)"
     
     - name: Pull Image
       uses: appleboy/ssh-action@v0.1.3
@@ -51,4 +71,70 @@ jobs:
         GH_PACKAGE_TOKEN: ${{ secrets.GH_PACKAGE_TOKEN }}
         GH_ACTOR: ${{ github.actor }}
         IMAGE_TAG: ${{ steps.set-tag.outputs.IMAGE_TAG }}
+    
+    - name: Deploy Container
+      uses: appleboy/ssh-action@v0.1.3
+      with:
+        host: ${{ secrets.HOST_ADDRESS }}
+        username: ${{ secrets.HOST_USERNAME }}
+        key: ${{ secrets.HOST_SSH_KEY }}
+        envs: |
+          IMAGE_TAG,
+          ENV,
+          USER_ENCRYPTION_SALT,
+          GITHUB_REPOSITORY,
+          GITHUB_SHA,
+          LOGFIRE_TOKEN,
+          TELEGRAM_BOT_TOKEN,
+          DEVELOPER_CHAT_ID,
+          DEVELOPER_THREAD_ID,
+          PG_CONNECTION_STRING,
+          OPENROUTER_API_KEY,
+          ANTHROPIC_API_KEY,
+          OPENAI_API_KEY,
+          TINYURL_API_KEY,
+          CHAT_SESSION_TIMEOUT_MINS,
+          LOG_CHAT_MESSAGES
+        script: |
+          # Stop and remove existing container for this environment if it exists
+          docker stop areyouok-telegram-$ENV || true
+          docker rm areyouok-telegram-$ENV || true
+          
+          # Run new container with environment variables
+          docker run -d \
+            --name areyouok-telegram-$ENV \
+            --restart unless-stopped \
+            -e ENV="$ENV" \
+            -e USER_ENCRYPTION_SALT="$USER_ENCRYPTION_SALT" \
+            -e GITHUB_REPOSITORY="$GITHUB_REPOSITORY" \
+            -e GITHUB_SHA="$GITHUB_SHA" \
+            -e LOGFIRE_TOKEN="$LOGFIRE_TOKEN" \
+            -e TELEGRAM_BOT_TOKEN="$TELEGRAM_BOT_TOKEN" \
+            -e DEVELOPER_CHAT_ID="$DEVELOPER_CHAT_ID" \
+            -e DEVELOPER_THREAD_ID="$DEVELOPER_THREAD_ID" \
+            -e PG_CONNECTION_STRING="$PG_CONNECTION_STRING" \
+            -e OPENROUTER_API_KEY="$OPENROUTER_API_KEY" \
+            -e ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" \
+            -e OPENAI_API_KEY="$OPENAI_API_KEY" \
+            -e TINYURL_API_KEY="$TINYURL_API_KEY" \
+            -e CHAT_SESSION_TIMEOUT_MINS="$CHAT_SESSION_TIMEOUT_MINS" \
+            -e LOG_CHAT_MESSAGES="$LOG_CHAT_MESSAGES" \
+            ghcr.io/btimothy-har/areyouok-telegram:$IMAGE_TAG
+      env:
+        IMAGE_TAG: ${{ steps.set-tag.outputs.IMAGE_TAG }}
+        ENV: ${{ inputs.environment }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        GITHUB_SHA: ${{ steps.set-sha.outputs.DEPLOY_SHA }}
+        LOGFIRE_TOKEN: ${{ secrets.LOGFIRE_TOKEN }}
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        USER_ENCRYPTION_SALT: ${{ secrets.USER_ENCRYPTION_SALT }}
+        PG_CONNECTION_STRING: ${{ secrets.PG_CONNECTION_STRING }}
+        OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        TINYURL_API_KEY: ${{ secrets.TINYURL_API_KEY }}
+        DEVELOPER_CHAT_ID: ${{ vars.DEVELOPER_CHAT_ID }}
+        DEVELOPER_THREAD_ID: ${{ vars.DEVELOPER_THREAD_ID }}
+        CHAT_SESSION_TIMEOUT_MINS: ${{ vars.CHAT_SESSION_TIMEOUT_MINS }}
+        LOG_CHAT_MESSAGES: ${{ vars.LOG_CHAT_MESSAGES }}
     

@@ -5,6 +5,7 @@ from datetime import timedelta
 
 import logfire
 import telegram
+from telegram.constants import ChatType
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
@@ -36,12 +37,15 @@ async def on_new_update(update: telegram.Update, context: ContextTypes.DEFAULT_T
             if update.effective_chat:
                 await Chats.new_or_update(db_conn=db_conn, chat=update.effective_chat)
 
-    await schedule_job(
-        context=context,
-        job=ConversationJob(chat_id=str(update.effective_chat.id)),
-        interval=timedelta(seconds=10),
-        first=datetime.now(UTC) + timedelta(seconds=10),
-    )
+    # Only schedule the job if the update is from a private chat
+    # This prevents unnecessary job scheduling for group chats or channel, which we don't support yet.
+    if update.effective_chat and update.effective_chat.type == ChatType.PRIVATE:
+        await schedule_job(
+            context=context,
+            job=ConversationJob(chat_id=str(update.effective_chat.id)),
+            interval=timedelta(seconds=10),
+            first=datetime.now(UTC) + timedelta(seconds=10),
+        )
 
 
 async def on_error_event(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> None:
