@@ -11,6 +11,7 @@ from areyouok_telegram.llms.models import CHAT_SONNET_4
 from areyouok_telegram.research.model import ResearchScenario
 from areyouok_telegram.utils import db_retry
 from areyouok_telegram.utils import telegram_retry
+from areyouok_telegram.utils import traced
 
 from .constants import FEEDBACK_REQUEST
 from .constants import NO_FEEDBACK_REQUEST
@@ -53,6 +54,7 @@ async def generate_agent_for_research_session(
     return agent
 
 
+@traced(extract_args=["chat_session"])
 @telegram_retry()
 async def close_research_session(
     *,
