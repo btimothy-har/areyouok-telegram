@@ -22,10 +22,13 @@ def scrub_telegram_data(data: logfire.ScrubMatch) -> Any | None:
     sensitive_paths = [
         ("message", "text"),
         ("chat", "first_name"),
+        ("chat", "last_name"),
         ("chat", "username"),
         ("from", "first_name"),
+        ("from", "last_name"),
         ("from", "username"),
         ("user", "first_name"),
+        ("user", "last_name"),
         ("user", "username"),
         ("return", "text"),
         ("response", "message_text"),
