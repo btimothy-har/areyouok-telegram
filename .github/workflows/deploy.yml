@@ -10,12 +10,7 @@ on:
         options:
           - production
           - research
-          - internal
-      tag:
-        description: 'Image tag (only for internal environment)'
-        required: false
-        type: string
-        default: 'latest'
+          - staging
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.environment }}
@@ -27,15 +22,34 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
 
-    steps:    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+    
     - name: Set Image Tag
       id: set-tag
       run: |
-        if [[ "${{ inputs.environment }}" == "internal" && "${{ inputs.tag }}" != "" ]]; then
-          echo "IMAGE_TAG=${{ inputs.tag }}" >> $GITHUB_OUTPUT
+        if [[ "${{ inputs.environment }}" == "staging" ]]; then
+
+          # For staging, use the current branch name
+          BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+          echo "IMAGE_TAG=${BRANCH_NAME}" >> $GITHUB_OUTPUT
+          echo "BRANCH_NAME=${BRANCH_NAME}" >> $GITHUB_OUTPUT
+
+          # Use current SHA
+          echo "DEPLOY_SHA=${{ github.sha }}" >> $GITHUB_OUTPUT
+          
         else
+          # For production/research, use the default branch (main)
           echo "IMAGE_TAG=latest" >> $GITHUB_OUTPUT
+          echo "BRANCH_NAME=${{ github.event.repository.default_branch }}" >> $GITHUB_OUTPUT
+
+          # For production/research, we'll need to fetch and use main branch SHA
+          git fetch origin ${{ github.event.repository.default_branch }} --depth=1
+          echo "DEPLOY_SHA=$(git rev-parse origin/${{ github.event.repository.default_branch }})" >> $GITHUB_OUTPUT
         fi
+        echo "Using branch: $(cat $GITHUB_OUTPUT | grep BRANCH_NAME | cut -d'=' -f2)"
+        echo "Using SHA: $(cat $GITHUB_OUTPUT | grep DEPLOY_SHA | cut -d'=' -f2)"
     
     - name: Pull Image
       uses: appleboy/ssh-action@v0.1.3
@@ -76,13 +90,13 @@ jobs:
           CHAT_SESSION_TIMEOUT_MINS,
           LOG_CHAT_MESSAGES
         script: |
-          # Stop and remove existing container if it exists
-          docker stop areyouok-telegram || true
-          docker rm areyouok-telegram || true
+          # Stop and remove existing container for this environment if it exists
+          docker stop areyouok-telegram-$ENV || true
+          docker rm areyouok-telegram-$ENV || true
           
           # Run new container with environment variables
           docker run -d \
-            --name areyouok-telegram \
+            --name areyouok-telegram-$ENV \
             --restart unless-stopped \
             -e ENV="$ENV" \
             -e USER_ENCRYPTION_SALT="$USER_ENCRYPTION_SALT" \
@@ -104,7 +118,7 @@ jobs:
         IMAGE_TAG: ${{ steps.set-tag.outputs.IMAGE_TAG }}
         ENV: ${{ inputs.environment }}
         GITHUB_REPOSITORY: ${{ github.repository }}
-        GITHUB_SHA: ${{ github.sha }}
+        GITHUB_SHA: ${{ steps.set-tag.outputs.DEPLOY_SHA }}
         LOGFIRE_TOKEN: ${{ secrets.LOGFIRE_TOKEN }}
         TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         USER_ENCRYPTION_SALT: ${{ secrets.USER_ENCRYPTION_SALT }}
