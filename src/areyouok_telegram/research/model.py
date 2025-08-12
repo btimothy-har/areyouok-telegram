@@ -20,7 +20,7 @@ from .studies.personality_scenarios import PERSONALITY_SCENARIOS
 
 class ResearchScenario(Base):
     __tablename__ = "scenarios"
-    __table_args__ = {"schema": "research"}
+    __table_args__ = {"schema": ENV}
 
     session_key = Column(String, ForeignKey(f"{ENV}.sessions.session_key"), nullable=False, unique=True)
     scenario_config = Column(String, nullable=False)
