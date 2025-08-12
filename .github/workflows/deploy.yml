@@ -104,6 +104,7 @@ jobs:
           docker run -d \
             --name areyouok-telegram-$ENV \
             --restart unless-stopped \
+            -e PTB_TIMEDELTA="1" \
             -e ENV="$ENV" \
             -e USER_ENCRYPTION_SALT="$USER_ENCRYPTION_SALT" \
             -e GITHUB_REPOSITORY="$GITHUB_REPOSITORY" \
