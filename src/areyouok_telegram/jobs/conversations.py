@@ -23,8 +23,8 @@ from areyouok_telegram.llms.chat import TextResponse
 from areyouok_telegram.llms.context_compression import ContextTemplate
 from areyouok_telegram.llms.context_compression import context_compression_agent
 from areyouok_telegram.llms.utils import context_to_model_message
+from areyouok_telegram.llms.utils import message_to_model_message
 from areyouok_telegram.llms.utils import run_agent_with_tracking
-from areyouok_telegram.llms.utils import telegram_message_to_model_message
 from areyouok_telegram.utils import db_retry
 from areyouok_telegram.utils import traced
 
@@ -136,6 +136,7 @@ class ConversationJob(BaseJob):
                     chat_id=self.chat_id,
                     chat_session=chat_session,
                     response_message=response_message,
+                    reasoning=response.reasoning,
                 )
 
     @traced(extract_args=["chat_session", "instructions"])
@@ -206,7 +207,6 @@ class ConversationJob(BaseJob):
             async with async_database() as db_conn:
                 message, _ = await Messages.retrieve_message_by_id(
                     db_conn,
-                    user_encryption_key,
                     message_id=response.react_to_message_id,
                     chat_id=self.chat_id,
                     include_reactions=False,
@@ -218,8 +218,12 @@ class ConversationJob(BaseJob):
                 )
                 return
 
+            # Decrypt the message to get the telegram object
+            message.decrypt_payload(user_encryption_key)
+            telegram_message = message.telegram_object
+
             response_message = await self._execute_reaction_response(
-                context=context, response=response, message=message
+                context=context, response=response, message=telegram_message
             )
 
         logfire.info(f"Response executed in chat {self.chat_id}: {response.response_type}.")
@@ -305,25 +309,29 @@ class ConversationJob(BaseJob):
             unsupported_media_types = []
 
             raw_messages = await chat_session.get_messages(db_conn)
-            messages = [msg.to_telegram_object(user_encryption_key) for msg in raw_messages]
-            messages.sort(key=lambda msg: msg.date)  # Sort messages by date
+            # Filter out soft-deleted messages and decrypt the rest
+            valid_messages = [msg for msg in raw_messages if msg.encrypted_payload]
+            [msg.decrypt_payload(user_encryption_key) for msg in valid_messages]
+            valid_messages.sort(key=lambda msg: msg.created_at)  # Sort messages by date
 
-            for msg in messages:
-                if isinstance(msg, telegram.Message):
+            for msg in valid_messages:
+                if msg.message_type == "Message":
                     media = await MediaFiles.get_by_message_id(
                         db_conn,
                         chat_id=self.chat_id,
-                        message_id=str(msg.message_id),
+                        message_id=msg.message_id,
                     )
-                    user = msg.from_user.id
-                elif isinstance(msg, telegram.MessageReactionUpdated):
+                    user = msg.telegram_object.from_user.id
+                elif msg.message_type == "MessageReactionUpdated":
                     media = []
-                    user = msg.user.id
+                    user = msg.telegram_object.user.id
+                else:
+                    continue  # Skip unknown message types
 
                 if media:
                     [m.decrypt_content(user_encryption_key=user_encryption_key) for m in media]
 
-                as_model_message = telegram_message_to_model_message(
+                as_model_message = message_to_model_message(
                     message=msg,
                     media=media,
                     ts_reference=self._run_timestamp,

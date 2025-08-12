@@ -11,8 +11,9 @@ import telegram
 from areyouok_telegram.data import Context
 from areyouok_telegram.data import LLMUsage
 from areyouok_telegram.data import MediaFiles
-from areyouok_telegram.data import MessageTypes
+from areyouok_telegram.data import Messages
 from areyouok_telegram.data import async_database
+from areyouok_telegram.llms.exceptions import MessageAlreadyDeletedError
 
 
 async def run_agent_with_tracking(
@@ -63,7 +64,7 @@ async def run_agent_with_tracking(
     return result
 
 
-def telegram_message_to_dict(message: MessageTypes, ts_reference: datetime | None = None) -> dict:
+def message_to_dict(message: Messages, ts_reference: datetime | None = None) -> dict:
     """
     Convert a Telegram message to a simplified dictionary format for LLM processing.
 
@@ -77,29 +78,34 @@ def telegram_message_to_dict(message: MessageTypes, ts_reference: datetime | Non
 
     ts_reference = ts_reference or datetime.now(UTC)
 
-    if isinstance(message, telegram.Message):
-        return {
-            "text": message.text or message.caption or "",
+    if message.message_type == "Message":
+        payload = {
+            "text": message.telegram_object.text or message.telegram_object.caption or "",
             "message_id": str(message.message_id),
-            "timestamp": f"{int((ts_reference - message.date).total_seconds())} seconds ago",
+            "timestamp": f"{int((ts_reference - message.telegram_object.date).total_seconds())} seconds ago",
         }
 
     elif isinstance(message, telegram.MessageReactionUpdated):
         # Handle reactions, assuming only emoji reactions for simplicity
         # TODO: Handle custom and paid reactions
         reaction_string = ", ".join(
-            [r.emoji for r in message.new_reaction if r.type == telegram.constants.ReactionType.EMOJI]
+            [r.emoji for r in message.telegram_object.new_reaction if r.type == telegram.constants.ReactionType.EMOJI]
         )
-        return {
+        payload = {
             "reaction": reaction_string,
             "to_message_id": str(message.message_id),
-            "timestamp": f"{int((ts_reference - message.date).total_seconds())} seconds ago",
+            "timestamp": f"{int((ts_reference - message.telegram_object.date).total_seconds())} seconds ago",
         }
 
     else:
         raise TypeError(
             f"Unsupported message type: {type(message)}. Only Message and MessageReactionUpdated are supported."
         )
+
+    if message.reasoning:
+        payload["reasoning"] = message.reasoning
+
+    return payload
 
 
 def context_to_model_message(
@@ -126,29 +132,39 @@ def context_to_model_message(
     return model_message
 
 
-def telegram_message_to_model_message(
-    message: MessageTypes,
+def message_to_model_message(
+    message: Messages,
     media: list[MediaFiles],
     ts_reference: datetime | None = None,
     *,
     is_user: bool = False,
 ) -> pydantic_ai.messages.ModelMessage:
-    """Helper function to convert a Telegram message/reaction to a model request or response."""
+    """Helper function to convert a Messages SQLAlchemy object to a model request or response.
+
+    Note: The message must have its payload decrypted before calling this function.
+    """
+
+    # Check if message is soft-deleted
+    telegram_obj = message.telegram_object  # Will raise ContentNotDecryptedError if not decrypted
+    if telegram_obj is None:
+        raise MessageAlreadyDeletedError(message.message_id)
+
     ts_reference = ts_reference or datetime.now(UTC)
 
-    if isinstance(message, telegram.MessageReactionUpdated):
-        return _telegram_reaction_to_model_message(message, ts_reference, is_user=is_user)
+    if message.message_type == "MessageReactionUpdated":
+        return _reaction_to_model_message(message, ts_reference, is_user=is_user)
+    elif message.message_type == "Message":
+        return _message_to_model_message(message, media, ts_reference, is_user=is_user)
+    else:
+        raise TypeError(f"Unsupported message type: {message.message_type}")
 
-    if isinstance(message, telegram.Message):
-        return _telegram_message_to_model_message(message, media, ts_reference, is_user=is_user)
 
-
-def _telegram_message_to_model_message(
-    message: telegram.Message, media: list[MediaFiles], ts_reference: datetime, *, is_user: bool = False
+def _message_to_model_message(
+    message: Messages, media: list[MediaFiles], ts_reference: datetime, *, is_user: bool = False
 ) -> pydantic_ai.messages.ModelMessage:
-    """Convert a Telegram message to a model request or response."""
+    """Convert a Messages SQLAlchemy object to a model request or response."""
 
-    msg_dict = telegram_message_to_dict(message, ts_reference)
+    msg_dict = message_to_dict(message, ts_reference)
 
     if is_user:
         user_content = [json.dumps(msg_dict)]
@@ -170,7 +186,7 @@ def _telegram_message_to_model_message(
             parts=[
                 pydantic_ai.messages.UserPromptPart(
                     content=user_content if len(user_content) > 1 else user_content[0],
-                    timestamp=message.date,
+                    timestamp=message.telegram_object.date,
                     part_kind="user-prompt",
                 )
             ],
@@ -179,26 +195,26 @@ def _telegram_message_to_model_message(
     else:
         model_message = pydantic_ai.messages.ModelResponse(
             parts=[pydantic_ai.messages.TextPart(content=json.dumps(msg_dict), part_kind="text")],
-            timestamp=message.date,
+            timestamp=message.telegram_object.date,
             kind="response",
         )
 
     return model_message
 
 
-def _telegram_reaction_to_model_message(
-    reaction: telegram.MessageReactionUpdated, ts_reference: datetime, *, is_user: bool = False
+def _reaction_to_model_message(
+    message: "Messages", ts_reference: datetime, *, is_user: bool = False
 ) -> pydantic_ai.messages.ModelMessage:
-    """Convert a Telegram message reaction to a model request or response."""
+    """Convert a Messages SQLAlchemy object (reaction type) to a model request or response."""
 
-    msg_dict = telegram_message_to_dict(reaction, ts_reference)
+    msg_dict = message_to_dict(message, ts_reference)
 
     if is_user:
         return pydantic_ai.messages.ModelRequest(
             parts=[
                 pydantic_ai.messages.UserPromptPart(
                     content=json.dumps(msg_dict),
-                    timestamp=reaction.date,
+                    timestamp=message.telegram_object.date,
                     part_kind="user-prompt",
                 )
             ],
@@ -207,6 +223,6 @@ def _telegram_reaction_to_model_message(
     else:
         return pydantic_ai.messages.ModelResponse(
             parts=[pydantic_ai.messages.TextPart(content=json.dumps(msg_dict), part_kind="text")],
-            timestamp=reaction.date,
+            timestamp=message.telegram_object.date,
             kind="response",
         )
