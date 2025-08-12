@@ -121,13 +121,14 @@ class TestConversationJob:
         mock_generate.assert_called_once()
         mock_execute.assert_called_once_with("test_encryption_key", context=mock_context, response=mock_response)
 
-        # Verify bot activity was logged
+        # Verify bot activity was logged with reasoning
         mock_log_activity.assert_called_once_with(
             bot_id="bot123",
             user_encryption_key="test_encryption_key",
             chat_id="123",
             chat_session=mock_session,
             response_message=mock_message,
+            reasoning="Test reasoning",
         )
 
     @pytest.mark.asyncio
@@ -214,7 +215,11 @@ class TestConversationJob:
             reasoning="Test reasoning", react_to_message_id="456", emoji=ReactionEmoji.THUMBS_UP
         )
 
-        mock_message = MagicMock(spec=telegram.Message)
+        # Create a Messages mock (SQLAlchemy object), not a telegram.Message
+        mock_message = MagicMock()
+        mock_message.decrypt_payload = MagicMock(return_value='{"message_id": 456}')
+        mock_message.telegram_object = MagicMock(spec=telegram.Message)
+
         mock_reaction = MagicMock(spec=telegram.MessageReactionUpdated)
 
         with (
@@ -235,7 +240,7 @@ class TestConversationJob:
 
         assert result == mock_reaction
         mock_execute_reaction.assert_called_once_with(
-            context=mock_context, response=mock_response, message=mock_message
+            context=mock_context, response=mock_response, message=mock_message.telegram_object
         )
         mock_log_info.assert_called_once_with("Response executed in chat 123: ReactionResponse.")
 

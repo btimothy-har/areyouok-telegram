@@ -70,6 +70,7 @@ async def log_bot_activity(
     chat_id: str,
     chat_session: Sessions,
     response_message: MessageTypes | None,
+    reasoning: str | None = None,
 ) -> None:
     async with async_database() as db_conn:
         # Always create a new activity for the bot, even if no response message is provided
@@ -87,6 +88,7 @@ async def log_bot_activity(
                 chat_id=chat_id,
                 message=response_message,
                 session_key=chat_session.session_id,  # Use the session key for the chat session
+                reasoning=reasoning,  # Store AI reasoning
             )
 
             if isinstance(response_message, telegram.Message):

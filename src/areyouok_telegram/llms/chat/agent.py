@@ -124,6 +124,7 @@ For each message in the current chat history, you are provided with the followin
 - The message ID;
 - How long ago the message was sent, in seconds;
 - The message content;
+- For your own messages, your earlier reasoning, if any, that led to the message being sent;
 
 In addition to the current chat history, you are also provided with:
 1) a compact summary from the last three conversation sessions with the user.
@@ -153,7 +154,6 @@ async def validate_agent_response(
         async with async_database() as db_conn:
             message, _ = await Messages.retrieve_message_by_id(
                 db_conn=db_conn,
-                user_encryption_key=ctx.deps.user_encryption_key,
                 message_id=data.react_to_message_id,
                 chat_id=ctx.deps.tg_chat_id,
             )
@@ -161,7 +161,7 @@ async def validate_agent_response(
         if not message:
             raise InvalidMessageError(data.react_to_message_id)
 
-        if message.from_user.id == ctx.deps.tg_context.bot.id:
+        if message.user_id == str(ctx.deps.tg_context.bot.id):
             raise ReactToSelfError(data.react_to_message_id)
 
     if ctx.deps.instruction:

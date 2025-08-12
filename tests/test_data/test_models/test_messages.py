@@ -12,6 +12,15 @@ from cryptography.fernet import Fernet
 
 from areyouok_telegram.data.models.messages import InvalidMessageTypeError
 from areyouok_telegram.data.models.messages import Messages
+from areyouok_telegram.encryption.exceptions import ContentNotDecryptedError
+
+
+@pytest.fixture(autouse=True)
+def clear_cache():
+    """Clear the data cache before and after each test."""
+    Messages._data_cache.clear()
+    yield
+    Messages._data_cache.clear()
 
 
 class TestMessages:
@@ -74,13 +83,17 @@ class TestMessages:
         # First encrypt
         encrypted = Messages.encrypt_payload(payload_dict, user_key)
 
-        # Create message instance with encrypted payload
+        # Create message instance with encrypted payload and message_key
         msg = Messages()
+        msg.message_key = "test_key"
         msg.encrypted_payload = encrypted
 
-        # Decrypt should return original dict
+        # Decrypt should return JSON string
         decrypted = msg.decrypt_payload(user_key)
-        assert decrypted == payload_dict
+        assert decrypted == json.dumps(payload_dict)
+
+        # Verify it's cached
+        assert msg._data_cache["test_key"] == json.dumps(payload_dict)
 
     def test_decrypt_payload_no_encrypted_payload(self):
         """Test decrypt_payload returns None when no encrypted payload."""
@@ -91,32 +104,48 @@ class TestMessages:
         result = msg.decrypt_payload(user_key)
         assert result is None
 
-    def test_to_telegram_object_with_encrypted_payload(self):
-        """Test converting database record to Telegram object with encrypted payload."""
+    def test_telegram_object_with_decrypted_payload(self):
+        """Test accessing telegram_object property after decryption."""
         msg = Messages()
         msg.message_type = "Message"
+        msg.message_key = "test_key"
         payload_dict = {"message_id": 123, "text": "test"}
         user_key = Fernet.generate_key().decode("utf-8")
 
         # Encrypt the payload
         msg.encrypted_payload = Messages.encrypt_payload(payload_dict, user_key)
 
+        # First decrypt the payload to cache it
+        msg.decrypt_payload(user_key)
+
         # Mock the de_json method
         with patch.object(telegram.Message, "de_json") as mock_de_json:
             mock_de_json.return_value = MagicMock(spec=telegram.Message)
-            result = msg.to_telegram_object(user_key)
+            result = msg.telegram_object
 
             mock_de_json.assert_called_once_with(payload_dict, None)
             assert result == mock_de_json.return_value
 
-    def test_to_telegram_object_soft_deleted(self):
+    def test_telegram_object_soft_deleted(self):
         """Test soft deleted message returns None."""
         msg = Messages()
         msg.message_type = "Message"
+        msg.message_key = "test_key"
         msg.encrypted_payload = None
-        user_key = Fernet.generate_key().decode("utf-8")
+        # Don't cache anything - when encrypted_payload is None, telegram_object should return None
 
-        assert msg.to_telegram_object(user_key) is None
+        assert msg.telegram_object is None
+
+    def test_telegram_object_not_decrypted(self):
+        """Test accessing telegram_object before decryption raises error."""
+        msg = Messages()
+        msg.message_type = "Message"
+        msg.message_key = "test_key"
+        msg.encrypted_payload = "some_encrypted_data"
+        # Don't cache anything - should raise ContentNotDecryptedError
+
+        with pytest.raises(ContentNotDecryptedError):
+            _ = msg.telegram_object
 
     @pytest.mark.asyncio
     async def test_delete_soft_deletes_message(self, mock_db_session):
@@ -166,3 +195,29 @@ class TestMessages:
         call_args = mock_db_session.execute.call_args[0][0]
         assert hasattr(call_args, "table")
         assert call_args.table.name == "messages"
+
+    @pytest.mark.asyncio
+    async def test_new_or_update_message_with_reasoning(self, mock_db_session, mock_telegram_message):
+        """Test inserting a message with reasoning."""
+        mock_result = AsyncMock()
+        mock_db_session.execute.return_value = mock_result
+        user_key = Fernet.generate_key().decode("utf-8")
+
+        # Mock to_dict to return a proper dictionary
+        mock_telegram_message.to_dict.return_value = {"message_id": 123, "text": "test message", "chat": {"id": 456}}
+
+        await Messages.new_or_update(
+            mock_db_session,
+            user_key,
+            user_id=str(mock_telegram_message.from_user.id),
+            chat_id=str(mock_telegram_message.chat.id),
+            message=mock_telegram_message,
+            reasoning="This is AI reasoning"
+        )
+
+        # Verify execute was called with reasoning
+        mock_db_session.execute.assert_called_once()
+        call_args = mock_db_session.execute.call_args[0][0]
+
+        # Check that reasoning is included in the insert values
+        assert "reasoning" in str(call_args)

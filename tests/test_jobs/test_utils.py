@@ -163,7 +163,7 @@ class TestLogBotActivity:
         # Verify new_activity was called with bot flag
         mock_session.new_activity.assert_called_once_with(db_conn=mock_db_conn, timestamp=frozen_time, is_user=False)
 
-        # Verify message was saved
+        # Verify message was saved with reasoning=None by default
         mock_new_or_update.assert_called_once_with(
             mock_db_conn,
             "test_encryption_key",
@@ -171,6 +171,7 @@ class TestLogBotActivity:
             chat_id="chat456",
             message=mock_message,
             session_key="session_key_123",
+            reasoning=None,
         )
 
         # Verify new_message was called for telegram.Message
@@ -203,7 +204,7 @@ class TestLogBotActivity:
         # Verify new_activity was called
         mock_session.new_activity.assert_called_once_with(db_conn=mock_db_conn, timestamp=frozen_time, is_user=False)
 
-        # Verify message was saved
+        # Verify message was saved with reasoning=None by default
         mock_new_or_update.assert_called_once_with(
             mock_db_conn,
             "test_encryption_key",
@@ -211,6 +212,7 @@ class TestLogBotActivity:
             chat_id="chat456",
             message=mock_reaction,
             session_key="session_key_123",
+            reasoning=None,
         )
 
         # Verify new_message was NOT called for MessageReactionUpdated
@@ -243,6 +245,41 @@ class TestLogBotActivity:
         # Verify message operations were not called
         mock_new_or_update.assert_not_called()
         mock_session.new_message.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_log_bot_activity_with_reasoning(self, frozen_time):
+        """Test logging bot activity with reasoning."""
+        mock_session = MagicMock()
+        mock_session.session_id = "session_key_123"
+        mock_session.new_activity = AsyncMock()
+        mock_session.new_message = AsyncMock()
+
+        mock_message = MagicMock(spec=telegram.Message)
+
+        with patch("areyouok_telegram.jobs.utils.async_database") as mock_async_db:
+            mock_db_conn = AsyncMock()
+            mock_async_db.return_value.__aenter__.return_value = mock_db_conn
+
+            with patch("areyouok_telegram.jobs.utils.Messages.new_or_update", new=AsyncMock()) as mock_new_or_update:
+                await log_bot_activity(
+                    bot_id="bot123",
+                    user_encryption_key="test_encryption_key",
+                    chat_id="chat456",
+                    chat_session=mock_session,
+                    response_message=mock_message,
+                    reasoning="This is my reasoning",
+                )
+
+        # Verify message was saved with reasoning
+        mock_new_or_update.assert_called_once_with(
+            mock_db_conn,
+            "test_encryption_key",
+            user_id="bot123",
+            chat_id="chat456",
+            message=mock_message,
+            session_key="session_key_123",
+            reasoning="This is my reasoning",
+        )
 
 
 class TestSaveSessionContext:
