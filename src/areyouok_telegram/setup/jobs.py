@@ -10,7 +10,6 @@ from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database
 from areyouok_telegram.jobs import ConversationJob
 from areyouok_telegram.jobs import DataLogWarningJob
-from areyouok_telegram.jobs import SessionCleanupJob
 from areyouok_telegram.jobs import schedule_job
 
 
@@ -33,21 +32,6 @@ async def restore_active_sessions(ctx: Application | ContextTypes.DEFAULT_TYPE):
             )
 
     logfire.info(f"Restored {len(active_sessions)} active sessions.")
-
-
-async def start_session_cleanups(ctx: Application | ContextTypes.DEFAULT_TYPE):
-    """Start the session cleanup job."""
-    # Schedule the job to run every hour, starting at the next 15-minute mark
-    start_time = datetime.now(UTC).replace(second=0, microsecond=0) + timedelta(
-        minutes=15 - datetime.now(UTC).minute % 15
-    )
-
-    await schedule_job(
-        context=ctx,
-        job=SessionCleanupJob(),
-        interval=timedelta(minutes=15),  # Run every 15 minutes
-        first=start_time,
-    )
 
 
 async def start_data_warning_job(ctx: Application | ContextTypes.DEFAULT_TYPE):

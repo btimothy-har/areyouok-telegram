@@ -372,6 +372,7 @@ class TestConversationJob:
             patch("areyouok_telegram.jobs.conversations.async_database") as mock_async_db,
             patch("areyouok_telegram.jobs.conversations.Context.get_by_session_id", new=AsyncMock(return_value=None)),
             patch.object(job, "_prepare_conversation_input", new=AsyncMock(return_value=([], None))),
+            patch("areyouok_telegram.jobs.conversations.close_chat_session", new=AsyncMock()),
             patch("areyouok_telegram.jobs.conversations.logfire.warning") as mock_log_warning,
         ):
             mock_db_conn = AsyncMock()

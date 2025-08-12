@@ -253,18 +253,17 @@ class ConversationJob(BaseJob):
             include_context=False,
         )
 
-        if len(message_history) == 0:
+        if len(message_history) > 0:
+            compressed_context = await self._compress_session_context(
+                chat_session=chat_session,
+                message_history=message_history,
+            )
+            await save_session_context(user_encryption_key, self.chat_id, chat_session, compressed_context)
+
+        else:
             logfire.warning(f"No messages found in chat session {chat_session.session_id}, nothing to compress.")
-            return
 
-        compressed_context = await self._compress_session_context(
-            chat_session=chat_session,
-            message_history=message_history,
-        )
-
-        await save_session_context(user_encryption_key, self.chat_id, chat_session, compressed_context)
         await close_chat_session(chat_session)
-
         logfire.info(f"Session {chat_session.session_id} closed due to inactivity.")
 
     @traced(extract_args=["chat_session", "include_context"])
@@ -303,12 +302,10 @@ class ConversationJob(BaseJob):
             unsupported_media_types = []
 
             raw_messages = await chat_session.get_messages(db_conn)
-            # Filter out soft-deleted messages and decrypt the rest
-            valid_messages = [msg for msg in raw_messages if msg.encrypted_payload]
-            [msg.decrypt_payload(user_encryption_key) for msg in valid_messages]
-            valid_messages.sort(key=lambda msg: msg.created_at)  # Sort messages by date
+            [msg.decrypt_payload(user_encryption_key) for msg in raw_messages]
+            raw_messages.sort(key=lambda msg: msg.created_at)  # Sort messages by date
 
-            for msg in valid_messages:
+            for msg in raw_messages:
                 if msg.message_type == "Message":
                     media = await MediaFiles.get_by_message_id(
                         db_conn,

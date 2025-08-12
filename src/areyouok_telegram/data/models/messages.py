@@ -41,7 +41,7 @@ class Messages(Base):
     message_type = Column(String, nullable=False)
     user_id = Column(String, nullable=False)
     chat_id = Column(String, nullable=False)
-    encrypted_payload = Column(String, nullable=True)
+    encrypted_payload = Column(String, nullable=False)
     reasoning = Column(Text, nullable=True)  # Store AI reasoning, non-encrypted
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -117,31 +117,10 @@ class Messages(Base):
         """
         payload_json = self._data_cache.get(self.message_key)
         if payload_json is None:
-            if self.encrypted_payload is None:
-                return None  # Soft deleted message
             raise ContentNotDecryptedError(self.message_key)
 
         payload_dict = json.loads(payload_json)
         return self.message_type_obj.de_json(payload_dict, None)
-
-    async def delete(self, db_conn: AsyncSession) -> bool:
-        """Soft delete the message by clearing its encrypted payload.
-
-        Args:
-            db_conn: Database connection for persisting changes
-
-        Returns:
-            bool: True if the message was soft deleted, False if it was already deleted.
-        """
-        # Check if already soft deleted
-        if self.encrypted_payload is None:
-            return False
-
-        # Clear the encrypted payload directly on the instance
-        self.encrypted_payload = None
-        db_conn.add(self)
-
-        return True
 
     @classmethod
     @traced(extract_args=["user_id", "chat_id", "message"])
@@ -226,7 +205,6 @@ class Messages(Base):
             cls.message_id == message_id,
             cls.chat_id == chat_id,
             cls.message_type == "Message",
-            cls.encrypted_payload.isnot(None),  # Exclude soft-deleted messages
         )
 
         result = await db_conn.execute(stmt)
@@ -239,7 +217,6 @@ class Messages(Base):
                 cls.message_id == message_id,
                 cls.chat_id == chat_id,
                 cls.message_type == "MessageReactionUpdated",
-                cls.encrypted_payload.isnot(None),  # Exclude soft-deleted reactions
             )
             reaction_result = await db_conn.execute(stmt)
             reactions = list(reaction_result.scalars().all())
@@ -259,7 +236,6 @@ class Messages(Base):
             select(cls)
             .where(
                 cls.session_key == session_id,
-                cls.encrypted_payload.isnot(None),  # Exclude soft-deleted messages
             )
             .order_by(cls.created_at)
         )

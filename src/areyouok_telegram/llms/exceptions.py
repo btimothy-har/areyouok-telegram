@@ -44,11 +44,3 @@ class UnacknowledgedImportantMessageError(pydantic_ai.ModelRetry):
         super().__init__(f"Important message not acknowledged: {message}. {feedback}")
         self.message = message
         self.feedback = feedback
-
-
-class MessageAlreadyDeletedError(BaseModelError):
-    """Exception raised when trying to process a soft-deleted message."""
-
-    def __init__(self, message_id: str):
-        super().__init__(f"Message {message_id} has been soft-deleted and cannot be processed")
-        self.message_id = message_id
