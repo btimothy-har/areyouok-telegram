@@ -84,3 +84,43 @@ class LLMUsage(Base):
             return 0
 
         return result.rowcount
+
+    @classmethod
+    @traced(extract_args=["chat_id", "session_id", "usage_type", "model", "provider", "input_tokens", "output_tokens"])
+    async def track_generic_usage(
+        cls,
+        db_conn: AsyncSession,
+        *,
+        chat_id: str = None,
+        session_id: str = None,
+        usage_type: str = None,
+        model: str = None,
+        provider: str = None,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+    ) -> int:
+        """Log generic usage data in the database."""
+
+        try:
+            now = datetime.now(UTC)
+
+            stmt = pg_insert(cls).values(
+                chat_id=str(chat_id),
+                session_id=session_id,
+                timestamp=now,
+                usage_type=usage_type,
+                model=model,
+                provider=provider,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+            )
+
+            result = await db_conn.execute(stmt)
+
+        # Catch exceptions here to avoid breaking application flow
+        # This is a best-effort logging, so we log the exception but don't raise it
+        except Exception as e:
+            logfire.exception(f"Failed to insert usage record: {e}")
+            return 0
+
+        return result.rowcount

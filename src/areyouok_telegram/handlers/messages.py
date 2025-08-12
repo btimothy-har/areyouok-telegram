@@ -19,11 +19,9 @@ from areyouok_telegram.utils import traced
 
 @traced(extract_args=["update"])
 @db_retry()
-@environment_override(
-    {
-        "research": on_new_message_research,
-    }
-)
+@environment_override({
+    "research": on_new_message_research,
+})
 async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):  # noqa: ARG001
     if not update.message:
         raise NoMessageError(update.update_id)
@@ -33,16 +31,21 @@ async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_
         user_obj = await Users.get_by_id(db_conn, str(update.effective_user.id))
         user_encryption_key = user_obj.retrieve_key()
 
-        extract_media = asyncio.create_task(
-            extract_media_from_telegram_message(db_conn, user_encryption_key, message=update.message)
-        )
-
         # Handle session management
         chat_id = str(update.effective_chat.id)
         active_session = await Sessions.get_active_session(db_conn, chat_id)
 
         if not active_session:
             active_session = await Sessions.create_session(db_conn, chat_id, update.message.date)
+
+        extract_media = asyncio.create_task(
+            extract_media_from_telegram_message(
+                db_conn,
+                user_encryption_key,
+                message=update.message,
+                session_id=active_session.session_id,
+            )
+        )
 
         # Save the message
         await Messages.new_or_update(
@@ -68,14 +71,19 @@ async def on_edit_message(update: telegram.Update, context: ContextTypes.DEFAULT
         user_obj = await Users.get_by_id(db_conn, str(update.effective_user.id))
         user_encryption_key = user_obj.retrieve_key()
 
-        extract_media = asyncio.create_task(
-            extract_media_from_telegram_message(db_conn, user_encryption_key, message=update.edited_message)
-        )
-
         # Handle session management for edits
         active_session = await Sessions.get_active_session(db_conn, str(update.effective_chat.id))
         edit_is_part_of_session = (
             update.edited_message.date >= active_session.session_start if active_session else False
+        )
+
+        extract_media = asyncio.create_task(
+            extract_media_from_telegram_message(
+                db_conn,
+                user_encryption_key,
+                message=update.edited_message,
+                session_id=active_session.session_id if edit_is_part_of_session else None,
+            )
         )
 
         await Messages.new_or_update(

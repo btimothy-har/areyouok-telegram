@@ -29,9 +29,12 @@ class TestTranscribeVoiceDataSync:
         mock_audio_segment.__getitem__.return_value = mock_audio_segment
         mock_audio_segment.export = MagicMock()
 
-        # Mock OpenAI client
+        # Mock OpenAI client and transcription response
         mock_client = MagicMock()
-        mock_transcription = "This is a test transcription"
+        mock_transcription = MagicMock()
+        mock_transcription.text = "This is a test transcription"
+        mock_transcription.usage.input_tokens = 10
+        mock_transcription.usage.output_tokens = 5
         mock_client.audio.transcriptions.create.return_value = mock_transcription
 
         with (
@@ -41,20 +44,21 @@ class TestTranscribeVoiceDataSync:
         ):
             result = transcribe_voice_data_sync(mock_voice_data)
 
-            # Verify the result
-            assert result == "[Transcribed Audio] This is a test transcription"
+            # Verify the result is a list of transcriptions
+            assert len(result) == 1
+            assert result[0].text == "This is a test transcription"
 
             # Verify AudioSegment was created from the voice data
             AudioSegment.from_ogg.assert_called_once()
 
             # Verify OpenAI transcription was called once (single segment)
             mock_client.audio.transcriptions.create.assert_called_once_with(
-                model="gpt-4o-transcribe",
                 file=mock_audio_segment.export.call_args[0][0],
-                response_format="text",
+                model="gpt-4o-transcribe",
+                chunking_strategy="auto",
                 language="en",
                 prompt=None,
-                temperature=0.0,
+                temperature=0.2,
             )
 
     def test_transcribe_long_audio_multiple_segments(self):
@@ -67,9 +71,15 @@ class TestTranscribeVoiceDataSync:
         mock_audio_segment.__getitem__.return_value = mock_audio_segment
         mock_audio_segment.export = MagicMock()
 
-        # Mock OpenAI client
+        # Mock OpenAI client with multiple transcription responses
         mock_client = MagicMock()
-        mock_transcriptions = ["First segment", "Second segment", "Third segment"]
+        mock_transcriptions = []
+        for text in ["First segment", "Second segment", "Third segment"]:
+            mock_transcription = MagicMock()
+            mock_transcription.text = text
+            mock_transcription.usage.input_tokens = 10
+            mock_transcription.usage.output_tokens = 5
+            mock_transcriptions.append(mock_transcription)
         mock_client.audio.transcriptions.create.side_effect = mock_transcriptions
 
         with (
@@ -79,17 +89,20 @@ class TestTranscribeVoiceDataSync:
         ):
             result = transcribe_voice_data_sync(mock_voice_data)
 
-            # Verify the result concatenates all segments
-            assert result == "[Transcribed Audio] First segment Second segment Third segment"
+            # Verify the result is a list of transcriptions
+            assert len(result) == 3
+            assert result[0].text == "First segment"
+            assert result[1].text == "Second segment"
+            assert result[2].text == "Third segment"
 
             # Verify OpenAI transcription was called 3 times (3 segments)
             assert mock_client.audio.transcriptions.create.call_count == 3
 
-            # Verify the prompt for second and third segments uses previous transcription
+            # Verify the prompt for second and third segments uses previous transcription object
             calls = mock_client.audio.transcriptions.create.call_args_list
             assert calls[0][1]["prompt"] is None
-            assert calls[1][1]["prompt"] == "First segment"
-            assert calls[2][1]["prompt"] == "Second segment"
+            assert calls[1][1]["prompt"] == mock_transcriptions[0]
+            assert calls[2][1]["prompt"] == mock_transcriptions[1]
 
     def test_transcribe_voice_data_sync_exception(self):
         """Test that exceptions are wrapped in VoiceNotProcessableError."""
@@ -163,15 +176,22 @@ class TestDownloadFile:
         mock_file.file_size = 2048
         mock_file.download_as_bytearray = AsyncMock(return_value=bytearray(b"voice content"))
 
-        mock_transcription = "[Transcribed Audio] Hello world"
+        # Create mock transcription objects
+        mock_transcription = MagicMock()
+        mock_transcription.text = "Hello world"
+        mock_transcription.usage.input_tokens = 10
+        mock_transcription.usage.output_tokens = 5
+        mock_transcriptions = [mock_transcription]
+        
         user_encryption_key = "test_encryption_key"
 
         with (
             patch("areyouok_telegram.handlers.media_utils.MediaFiles.create_file", new=AsyncMock()) as mock_create_file,
             patch(
                 "areyouok_telegram.handlers.media_utils.asyncio.to_thread",
-                new=AsyncMock(return_value=mock_transcription),
+                new=AsyncMock(return_value=mock_transcriptions),
             ),
+            patch("areyouok_telegram.handlers.media_utils.LLMUsage.track_generic_usage", new=AsyncMock()) as mock_track_usage,
             patch("areyouok_telegram.handlers.media_utils.logfire.span"),
             patch("areyouok_telegram.handlers.media_utils.logfire.info") as mock_log_info,
         ):
@@ -196,11 +216,24 @@ class TestDownloadFile:
             assert second_call[0][1] == user_encryption_key  # user_encryption_key
             assert second_call[1]["file_id"] == "voice123_transcription"
             assert second_call[1]["file_unique_id"] == "voice_unique123_transcription"
-            assert second_call[1]["content_bytes"] == mock_transcription.encode("utf-8")
+            transcription_text = "[Transcribed Audio] Hello world"
+            assert second_call[1]["content_bytes"] == transcription_text.encode("utf-8")
+
+            # Verify LLM usage was tracked
+            mock_track_usage.assert_called_once_with(
+                mock_db_session,
+                chat_id="123",
+                session_id=None,
+                usage_type="openai.voice_transcription",
+                model="openai/gpt-4o-transcribe",
+                provider="openai",
+                input_tokens=10,
+                output_tokens=5,
+            )
 
             # Verify logging
             mock_log_info.assert_called_with(
-                f"Transcription is {len(mock_transcription)} characters long.", chat_id=123
+                f"Transcription is {len(transcription_text)} characters long.", chat_id=123
             )
 
     @pytest.mark.asyncio
