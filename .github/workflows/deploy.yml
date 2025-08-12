@@ -59,6 +59,8 @@ jobs:
         key: ${{ secrets.HOST_SSH_KEY }}
         envs: GH_PACKAGE_TOKEN,GH_ACTOR,IMAGE_TAG
         script: |
+          echo "DEBUG: IMAGE_TAG is: '$IMAGE_TAG'"
+          echo "DEBUG: Full image path: ghcr.io/btimothy-har/areyouok-telegram:$IMAGE_TAG"
           echo "$GH_PACKAGE_TOKEN" | docker login ghcr.io -u "$GH_ACTOR" --password-stdin
           docker pull ghcr.io/btimothy-har/areyouok-telegram:$IMAGE_TAG
       env:
