@@ -9,8 +9,10 @@ import pytest
 from telegram.ext import Application
 
 from areyouok_telegram.jobs import DataLogWarningJob
+from areyouok_telegram.jobs import PingJob
 from areyouok_telegram.setup.jobs import restore_active_sessions
 from areyouok_telegram.setup.jobs import start_data_warning_job
+from areyouok_telegram.setup.jobs import start_ping_job
 
 
 class TestRestoreActiveSessions:
@@ -127,3 +129,41 @@ class TestStartDataWarningJob:
         """Verify DataLogWarningJob is imported and can be instantiated."""
         job = DataLogWarningJob()
         assert job.name == "data_log_warning"
+
+
+class TestStartPingJob:
+    """Test the start_ping_job function."""
+
+    @pytest.mark.asyncio
+    async def test_start_ping_job(self, frozen_time):
+        """Test start_ping_job schedules the ping job at top of next hour."""
+        mock_app = MagicMock(spec=Application)
+
+        with (
+            patch("areyouok_telegram.setup.jobs.schedule_job", new=AsyncMock()) as mock_schedule,
+            patch("areyouok_telegram.setup.jobs.PingJob") as mock_ping_job,
+        ):
+            mock_job_instance = MagicMock()
+            mock_ping_job.return_value = mock_job_instance
+
+            await start_ping_job(mock_app)
+
+        # Verify PingJob was created
+        mock_ping_job.assert_called_once()
+
+        # Verify schedule_job was called with correct parameters
+        # frozen_time is 2025-01-01 12:00:00, so next hour is 13:00:00
+        expected_start = frozen_time.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+
+        mock_schedule.assert_called_once_with(
+            context=mock_app,
+            job=mock_job_instance,
+            interval=timedelta(hours=1),
+            first=expected_start,
+        )
+
+    @pytest.mark.asyncio
+    async def test_ping_job_is_included_in_app_setup(self):
+        """Verify PingJob is imported and can be instantiated."""
+        job = PingJob()
+        assert job.name == "ping_status"
