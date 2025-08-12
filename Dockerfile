@@ -8,6 +8,12 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
+ARG GITHUB_REPOSITORY
+ARG GITHUB_SHA
+
+ENV GITHUB_REPOSITORY=${GITHUB_REPOSITORY}
+ENV GITHUB_SHA=${GITHUB_SHA}
+
 COPY . .
 RUN uv sync --frozen
 

@@ -47,20 +47,6 @@ jobs:
         echo "Branch: $(cat $GITHUB_OUTPUT | grep BRANCH_NAME | cut -d'=' -f2)"
         echo "Image Tag: $(cat $GITHUB_OUTPUT | grep IMAGE_TAG | cut -d'=' -f2)"
     
-    - name: Set Deploy SHA
-      id: set-sha
-      run: |
-        if [[ "${{ inputs.environment }}" == "staging" ]]; then
-          # For staging, use current commit SHA
-          echo "DEPLOY_SHA=${{ github.sha }}" >> $GITHUB_OUTPUT
-        else
-          # For production/research, use main branch SHA
-          git fetch origin ${{ github.event.repository.default_branch }} --depth=1
-          MAIN_SHA=$(git rev-parse origin/${{ github.event.repository.default_branch }})
-          echo "DEPLOY_SHA=${MAIN_SHA}" >> $GITHUB_OUTPUT
-        fi
-        echo "Deploy SHA: $(cat $GITHUB_OUTPUT | grep DEPLOY_SHA | cut -d'=' -f2)"
-    
     - name: Pull Image
       uses: appleboy/ssh-action@v0.1.3
       with:
@@ -86,8 +72,6 @@ jobs:
           IMAGE_TAG,
           ENV,
           USER_ENCRYPTION_SALT,
-          GITHUB_REPOSITORY,
-          GITHUB_SHA,
           LOGFIRE_TOKEN,
           TELEGRAM_BOT_TOKEN,
           DEVELOPER_CHAT_ID,
@@ -111,8 +95,6 @@ jobs:
             -e PTB_TIMEDELTA="1" \
             -e ENV="$ENV" \
             -e USER_ENCRYPTION_SALT="$USER_ENCRYPTION_SALT" \
-            -e GITHUB_REPOSITORY="$GITHUB_REPOSITORY" \
-            -e GITHUB_SHA="$GITHUB_SHA" \
             -e LOGFIRE_TOKEN="$LOGFIRE_TOKEN" \
             -e TELEGRAM_BOT_TOKEN="$TELEGRAM_BOT_TOKEN" \
             -e DEVELOPER_CHAT_ID="$DEVELOPER_CHAT_ID" \
@@ -128,8 +110,6 @@ jobs:
       env:
         IMAGE_TAG: ${{ steps.set-tag.outputs.IMAGE_TAG }}
         ENV: ${{ inputs.environment }}
-        GITHUB_REPOSITORY: ${{ github.repository }}
-        GITHUB_SHA: ${{ steps.set-sha.outputs.DEPLOY_SHA }}
         LOGFIRE_TOKEN: ${{ secrets.LOGFIRE_TOKEN }}
         TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         USER_ENCRYPTION_SALT: ${{ secrets.USER_ENCRYPTION_SALT }}
