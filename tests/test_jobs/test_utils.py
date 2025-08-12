@@ -247,7 +247,7 @@ class TestLogBotActivity:
         mock_session.new_message.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_log_bot_activity_with_reasoning(self, frozen_time):
+    async def test_log_bot_activity_with_reasoning(self):
         """Test logging bot activity with reasoning."""
         mock_session = MagicMock()
         mock_session.session_id = "session_key_123"
