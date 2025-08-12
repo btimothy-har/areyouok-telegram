@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 import pytest
 import telegram
+from telegram.constants import ChatType
 from telegram.ext import ContextTypes
 
 from areyouok_telegram.handlers.globals import on_error_event
@@ -28,6 +29,7 @@ class TestOnNewUpdate:
         mock_update.effective_user.username = "testuser"
         mock_update.effective_chat = MagicMock(spec=telegram.Chat)
         mock_update.effective_chat.id = 456
+        mock_update.effective_chat.type = ChatType.PRIVATE
 
         # Create mock context
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
@@ -69,6 +71,92 @@ class TestOnNewUpdate:
             assert abs((first_time - expected_time).total_seconds()) < 1
 
     @pytest.mark.asyncio
+    async def test_on_new_update_with_group_chat(self, mock_db_session):
+        """Test on_new_update with group chat - job should not be scheduled."""
+        # Create mock update with user and group chat
+        mock_update = MagicMock(spec=telegram.Update)
+        mock_update.effective_user = MagicMock(spec=telegram.User)
+        mock_update.effective_user.id = 123
+        mock_update.effective_user.username = "testuser"
+        mock_update.effective_chat = MagicMock(spec=telegram.Chat)
+        mock_update.effective_chat.id = 456
+        mock_update.effective_chat.type = ChatType.GROUP
+
+        # Create mock context
+        mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
+
+        # Create mock user object returned from new_or_update
+        mock_user_obj = MagicMock()
+        mock_user_obj.encrypted_key = "encrypted_key"
+        mock_user_obj.retrieve_key = MagicMock(return_value="decrypted_key")
+
+        with (
+            patch(
+                "areyouok_telegram.handlers.globals.Users.new_or_update", new=AsyncMock(return_value=mock_user_obj)
+            ) as mock_user_update,
+            patch("areyouok_telegram.handlers.globals.Chats.new_or_update", new=AsyncMock()) as mock_chat_update,
+            patch("areyouok_telegram.handlers.globals.schedule_job", new=AsyncMock()) as mock_schedule_job,
+            patch("areyouok_telegram.handlers.globals.ConversationJob") as mock_conversation_job,
+            patch("areyouok_telegram.handlers.globals.logfire.span"),
+        ):
+            # Call the handler
+            await on_new_update(mock_update, mock_context)
+
+            # Verify database operations
+            mock_user_update.assert_called_once_with(db_conn=mock_db_session, user=mock_update.effective_user)
+            mock_chat_update.assert_called_once_with(db_conn=mock_db_session, chat=mock_update.effective_chat)
+
+            # Verify key unlock was called
+            mock_user_obj.retrieve_key.assert_called_once_with()
+
+            # Verify job scheduling DID NOT happen for group chat
+            mock_conversation_job.assert_not_called()
+            mock_schedule_job.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_on_new_update_with_channel(self, mock_db_session):
+        """Test on_new_update with channel - job should not be scheduled."""
+        # Create mock update with user and channel
+        mock_update = MagicMock(spec=telegram.Update)
+        mock_update.effective_user = MagicMock(spec=telegram.User)
+        mock_update.effective_user.id = 123
+        mock_update.effective_user.username = "testuser"
+        mock_update.effective_chat = MagicMock(spec=telegram.Chat)
+        mock_update.effective_chat.id = 456
+        mock_update.effective_chat.type = ChatType.CHANNEL
+
+        # Create mock context
+        mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
+
+        # Create mock user object returned from new_or_update
+        mock_user_obj = MagicMock()
+        mock_user_obj.encrypted_key = "encrypted_key"
+        mock_user_obj.retrieve_key = MagicMock(return_value="decrypted_key")
+
+        with (
+            patch(
+                "areyouok_telegram.handlers.globals.Users.new_or_update", new=AsyncMock(return_value=mock_user_obj)
+            ) as mock_user_update,
+            patch("areyouok_telegram.handlers.globals.Chats.new_or_update", new=AsyncMock()) as mock_chat_update,
+            patch("areyouok_telegram.handlers.globals.schedule_job", new=AsyncMock()) as mock_schedule_job,
+            patch("areyouok_telegram.handlers.globals.ConversationJob") as mock_conversation_job,
+            patch("areyouok_telegram.handlers.globals.logfire.span"),
+        ):
+            # Call the handler
+            await on_new_update(mock_update, mock_context)
+
+            # Verify database operations
+            mock_user_update.assert_called_once_with(db_conn=mock_db_session, user=mock_update.effective_user)
+            mock_chat_update.assert_called_once_with(db_conn=mock_db_session, chat=mock_update.effective_chat)
+
+            # Verify key unlock was called
+            mock_user_obj.retrieve_key.assert_called_once_with()
+
+            # Verify job scheduling DID NOT happen for channel
+            mock_conversation_job.assert_not_called()
+            mock_schedule_job.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_on_new_update_without_user(self, mock_db_session):
         """Test on_new_update when update has no user."""
         # Create mock update without user
@@ -76,6 +164,7 @@ class TestOnNewUpdate:
         mock_update.effective_user = None
         mock_update.effective_chat = MagicMock(spec=telegram.Chat)
         mock_update.effective_chat.id = 456
+        mock_update.effective_chat.type = ChatType.PRIVATE
 
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
 
@@ -119,9 +208,8 @@ class TestOnNewUpdate:
             patch("areyouok_telegram.handlers.globals.ConversationJob") as mock_conversation_job,
             patch("areyouok_telegram.handlers.globals.logfire.span"),
         ):
-            # This should raise an AttributeError when trying to access chat.id
-            with pytest.raises(AttributeError):
-                await on_new_update(mock_update, mock_context)
+            # Call the handler - it should complete successfully without chat
+            await on_new_update(mock_update, mock_context)
 
             # User update should be called
             mock_user_update.assert_called_once_with(db_conn=mock_db_session, user=mock_update.effective_user)
@@ -129,7 +217,7 @@ class TestOnNewUpdate:
             mock_user_obj.retrieve_key.assert_called_once_with()
             # Chat update should not be called
             mock_chat_update.assert_not_called()
-            # Job should not be scheduled
+            # Job should not be scheduled since there's no chat
             mock_schedule_job.assert_not_called()
             mock_conversation_job.assert_not_called()
 
