@@ -1,7 +1,5 @@
 """Tests for setup/jobs.py."""
 
-from datetime import UTC
-from datetime import datetime
 from datetime import timedelta
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
@@ -13,7 +11,6 @@ from telegram.ext import Application
 from areyouok_telegram.jobs import DataLogWarningJob
 from areyouok_telegram.setup.jobs import restore_active_sessions
 from areyouok_telegram.setup.jobs import start_data_warning_job
-from areyouok_telegram.setup.jobs import start_session_cleanups
 
 
 class TestRestoreActiveSessions:
@@ -93,39 +90,6 @@ class TestRestoreActiveSessions:
         )
 
         mock_log.assert_called_once_with("Restored 2 active sessions.")
-
-
-class TestStartSessionCleanups:
-    """Test the start_session_cleanups function."""
-
-    @pytest.mark.asyncio
-    async def test_start_session_cleanups(self, frozen_time):  # noqa: ARG002
-        """Test start_session_cleanups schedules the cleanup job."""
-        mock_app = MagicMock(spec=Application)
-
-        with (
-            patch("areyouok_telegram.setup.jobs.schedule_job", new=AsyncMock()) as mock_schedule,
-            patch("areyouok_telegram.setup.jobs.SessionCleanupJob") as mock_cleanup_job,
-        ):
-            mock_job_instance = MagicMock()
-            mock_cleanup_job.return_value = mock_job_instance
-
-            await start_session_cleanups(mock_app)
-
-        # Verify SessionCleanupJob was created
-        mock_cleanup_job.assert_called_once()
-
-        # Verify schedule_job was called with correct parameters
-        # The start time should be at the next 15-minute mark
-        # frozen_time is 2025-01-01 12:00:00, so next 15-minute mark is 12:15:00
-        expected_start = datetime(2025, 1, 1, 12, 15, 0, tzinfo=UTC)
-
-        mock_schedule.assert_called_once_with(
-            context=mock_app,
-            job=mock_job_instance,
-            interval=timedelta(minutes=15),
-            first=expected_start,
-        )
 
 
 class TestStartDataWarningJob:

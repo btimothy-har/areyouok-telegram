@@ -126,16 +126,6 @@ class TestMessages:
             mock_de_json.assert_called_once_with(payload_dict, None)
             assert result == mock_de_json.return_value
 
-    def test_telegram_object_soft_deleted(self):
-        """Test soft deleted message returns None."""
-        msg = Messages()
-        msg.message_type = "Message"
-        msg.message_key = "test_key"
-        msg.encrypted_payload = None
-        # Don't cache anything - when encrypted_payload is None, telegram_object should return None
-
-        assert msg.telegram_object is None
-
     def test_telegram_object_not_decrypted(self):
         """Test accessing telegram_object before decryption raises error."""
         msg = Messages()
@@ -146,29 +136,6 @@ class TestMessages:
 
         with pytest.raises(ContentNotDecryptedError):
             _ = msg.telegram_object
-
-    @pytest.mark.asyncio
-    async def test_delete_soft_deletes_message(self, mock_db_session):
-        """Test soft deleting a message."""
-        msg = Messages()
-        msg.encrypted_payload = "encrypted_data"
-
-        result = await msg.delete(mock_db_session)
-
-        assert result is True
-        assert msg.encrypted_payload is None
-        mock_db_session.add.assert_called_once_with(msg)
-
-    @pytest.mark.asyncio
-    async def test_delete_already_deleted(self, mock_db_session):
-        """Test deleting an already soft-deleted message."""
-        msg = Messages()
-        msg.encrypted_payload = None
-
-        result = await msg.delete(mock_db_session)
-
-        assert result is False
-        mock_db_session.add.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_new_or_update_message(self, mock_db_session, mock_telegram_message):

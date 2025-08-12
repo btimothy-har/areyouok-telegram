@@ -21,7 +21,6 @@ from areyouok_telegram.data import LLMUsage
 from areyouok_telegram.data import MediaFiles
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data import async_database
-from areyouok_telegram.llms.exceptions import MessageAlreadyDeletedError
 
 
 def should_retry_llm_error(e: Exception) -> bool:
@@ -179,11 +178,7 @@ def message_to_model_message(
     Note: The message must have its payload decrypted before calling this function.
     """
 
-    # Check if message is soft-deleted
-    telegram_obj = message.telegram_object  # Will raise ContentNotDecryptedError if not decrypted
-    if telegram_obj is None:
-        raise MessageAlreadyDeletedError(message.message_id)
-
+    _ = message.telegram_object  # Will raise ContentNotDecryptedError if not decrypted
     ts_reference = ts_reference or datetime.now(UTC)
 
     if message.message_type == "MessageReactionUpdated":
