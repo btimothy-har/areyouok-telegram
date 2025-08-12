@@ -6,11 +6,10 @@ You are using the research version of "Are You OK?" Please note the following:
 - Sessions are automatically ended after {chat_session_timeout_mins} minutes of inactivity.
 - You can end a session at any time by sending the command `/end`.
 - Upon ending a session, you will be prompted to provide feedback about your experience (if you had bot interactions).
-- Your past sessions are not carried over to the next session.
 
 Note that regardless of the version you use, your data and information is still protected:
 - Your messages and interactions are deleted within an hour of the session ending. Only summaries of \
-    prior interactions are kept.
+prior interactions are kept.
 - Your Telegram identifiers are never stored.
 - All stored data (even temporarily) is encrypted at rest.
 
@@ -38,10 +37,10 @@ If you want to start a new session, please send the command `/start`.
 
 FEEDBACK_REQUEST = """
 Thanks for your interest in "Are You OK?"! Your session is now ended. If you'd like, you may start a new session by \
-    sending the command `/start`.
+sending the command `/start`.
 
 We value your feedback to improve the bot's performance. We would really appreciate it if you could share \
-    your thoughts and suggestions at {feedback_url}.
+your thoughts and suggestions at {feedback_url}.
 
 Rest assured that your feedback is provided anonymously, and your chat history is not shared with us.
 """
