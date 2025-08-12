@@ -29,10 +29,14 @@ jobs:
     - name: Set Image Tag
       id: set-tag
       run: |
+        BRANCH_NAME="${GITHUB_REF#refs/heads/}"
         if [[ "${{ inputs.environment }}" == "staging" ]]; then
-          # For staging, use the current branch name
-          BRANCH_NAME="${GITHUB_REF#refs/heads/}"
-          echo "IMAGE_TAG=${BRANCH_NAME}" >> $GITHUB_OUTPUT
+          # For staging from main branch, use 'latest' tag; otherwise use branch name
+          if [[ "${BRANCH_NAME}" == "${{ github.event.repository.default_branch }}" ]]; then
+            echo "IMAGE_TAG=latest" >> $GITHUB_OUTPUT
+          else
+            echo "IMAGE_TAG=${BRANCH_NAME}" >> $GITHUB_OUTPUT
+          fi
           echo "BRANCH_NAME=${BRANCH_NAME}" >> $GITHUB_OUTPUT
         else
           # For production/research, use 'latest' tag
