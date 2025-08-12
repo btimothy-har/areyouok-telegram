@@ -97,18 +97,18 @@ class ConversationJob(BaseJob):
             logfire.debug("No new updates, nothing to do.")
 
             # If the last user activity was more than an hour ago, stop the job
-            if chat_session.last_user_activity:
-                inactivity_duration = self._run_timestamp - chat_session.last_user_activity
+            reference_ts = chat_session.last_user_activity or chat_session.session_start
+            inactivity_duration = self._run_timestamp - reference_ts
 
-                if inactivity_duration > timedelta(minutes=CHAT_SESSION_TIMEOUT_MINS):
-                    with logfire.span(
-                        f"Closing chat session {chat_session.session_id} due to inactivity.",
-                        _span_name="ConversationJob._run.close_session",
-                        chat_id=self.chat_id,
-                    ):
-                        await self.close_session(user_encryption_key, chat_session=chat_session)
-                        await self.stop(context)
-                        await post_cleanup_tasks(context=context, chat_session=chat_session)
+            if inactivity_duration > timedelta(minutes=CHAT_SESSION_TIMEOUT_MINS):
+                with logfire.span(
+                    f"Closing chat session {chat_session.session_id} due to inactivity.",
+                    _span_name="ConversationJob._run.close_session",
+                    chat_id=self.chat_id,
+                ):
+                    await self.close_session(user_encryption_key, chat_session=chat_session)
+                    await self.stop(context)
+                    await post_cleanup_tasks(context=context, chat_session=chat_session)
 
         else:
             with logfire.span(
@@ -335,9 +335,9 @@ class ConversationJob(BaseJob):
 
                 if media:
                     unsupported_media = [m for m in media if not m.is_anthropic_supported]
-                    unsupported_media_types.extend(
-                        [m.mime_type for m in unsupported_media if not m.mime_type.startswith("audio/")]
-                    )
+                    unsupported_media_types.extend([
+                        m.mime_type for m in unsupported_media if not m.mime_type.startswith("audio/")
+                    ])
 
             if len(unsupported_media_types) == 1:
                 media_instruction = (
