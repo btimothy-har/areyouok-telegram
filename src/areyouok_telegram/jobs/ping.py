@@ -43,5 +43,4 @@ class PingJob(BaseJob):
             uptime_seconds=uptime.total_seconds(),
             uptime_formatted=str(uptime),
             job_queue_size=len(context.job_queue.jobs()),
-            status="online",
         )
