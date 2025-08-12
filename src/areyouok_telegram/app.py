@@ -22,9 +22,11 @@ from areyouok_telegram.setup import setup_bot_description
 from areyouok_telegram.setup import setup_bot_name
 from areyouok_telegram.setup import start_data_warning_job
 from areyouok_telegram.setup import start_session_cleanups
+from areyouok_telegram.utils import telegram_retry
 from areyouok_telegram.utils import traced
 
 
+@telegram_retry()
 async def application_post_init(application: Application):
     """Configure bot metadata on startup."""
     await setup_bot_name(application)

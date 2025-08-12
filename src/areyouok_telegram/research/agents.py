@@ -9,6 +9,8 @@ from areyouok_telegram.llms.models import CHAT_GPT_5
 from areyouok_telegram.llms.models import CHAT_SONNET_3_5
 from areyouok_telegram.llms.models import CHAT_SONNET_4
 from areyouok_telegram.research.model import ResearchScenario
+from areyouok_telegram.utils import db_retry
+from areyouok_telegram.utils import telegram_retry
 
 from .constants import FEEDBACK_REQUEST
 from .constants import NO_FEEDBACK_REQUEST
@@ -22,6 +24,7 @@ MODEL_MAP = {
 }
 
 
+@db_retry()
 async def generate_agent_for_research_session(
     chat_session: Sessions,
 ) -> pydantic_ai.Agent:
@@ -50,6 +53,7 @@ async def generate_agent_for_research_session(
     return agent
 
 
+@telegram_retry()
 async def close_research_session(
     *,
     context: ContextTypes.DEFAULT_TYPE,

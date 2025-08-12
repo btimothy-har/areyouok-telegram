@@ -18,6 +18,7 @@ from areyouok_telegram.data import async_database
 from areyouok_telegram.jobs import ConversationJob
 from areyouok_telegram.jobs import schedule_job
 from areyouok_telegram.utils import db_retry
+from areyouok_telegram.utils import telegram_retry
 
 
 @db_retry()
@@ -43,13 +44,24 @@ async def on_new_update(update: telegram.Update, context: ContextTypes.DEFAULT_T
         await schedule_job(
             context=context,
             job=ConversationJob(chat_id=str(update.effective_chat.id)),
-            interval=timedelta(seconds=10),
+            interval=timedelta(seconds=5),
             first=datetime.now(UTC) + timedelta(seconds=10),
         )
 
 
+@db_retry()
 async def on_error_event(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Log the error and send a telegram message to notify the developer."""
+
+    @telegram_retry()
+    async def send_message_to_developer(message: str):
+        await context.bot.send_message(
+            chat_id=DEVELOPER_CHAT_ID,
+            message_thread_id=DEVELOPER_THREAD_ID,
+            text=message,
+            disable_notification=True,
+            parse_mode=ParseMode.MARKDOWN_V2,
+        )
 
     logfire.exception(str(context.error), _exc_info=context.error)
 
@@ -65,13 +77,6 @@ async def on_error_event(update: telegram.Update, context: ContextTypes.DEFAULT_
         tb_string = tb_string.replace("`", "\\`")
 
         message = f"An exception was raised while handling an update\n\n```\n{tb_string}\n```"
-
-        await context.bot.send_message(
-            chat_id=DEVELOPER_CHAT_ID,
-            message_thread_id=DEVELOPER_THREAD_ID,
-            text=message,
-            disable_notification=True,
-            parse_mode=ParseMode.MARKDOWN_V2,
-        )
+        await send_message_to_developer(message)
 
         logfire.info("Error notification sent to developer.")

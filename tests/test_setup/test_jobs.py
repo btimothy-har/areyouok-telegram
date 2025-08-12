@@ -82,13 +82,13 @@ class TestRestoreActiveSessions:
         mock_schedule.assert_any_call(
             context=mock_app,
             job=mock_job1,
-            interval=timedelta(seconds=10),
+            interval=timedelta(seconds=5),
             first=expected_first_time,
         )
         mock_schedule.assert_any_call(
             context=mock_app,
             job=mock_job2,
-            interval=timedelta(seconds=10),
+            interval=timedelta(seconds=5),
             first=expected_first_time,
         )
 

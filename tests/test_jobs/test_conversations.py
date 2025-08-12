@@ -160,7 +160,7 @@ class TestConversationJob:
 
     @pytest.mark.asyncio
     async def test_generate_response_exception(self):
-        """Test generate_response handles exceptions."""
+        """Test generate_response raises exceptions (no internal error handling)."""
         job = ConversationJob("123")
 
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
@@ -172,18 +172,16 @@ class TestConversationJob:
                 "areyouok_telegram.jobs.conversations.run_agent_with_tracking",
                 new=AsyncMock(side_effect=Exception("Test error")),
             ),
-            patch("areyouok_telegram.jobs.conversations.logfire.exception") as mock_log_exception,
+            patch("areyouok_telegram.jobs.conversations.generate_chat_agent", new=AsyncMock()),
         ):
-            result = await job.generate_response(
-                user_encryption_key="test_encryption_key",
-                context=mock_context,
-                chat_session=mock_session,
-                conversation_history=[],
-                instructions=None,
-            )
-
-        assert result is None
-        mock_log_exception.assert_called_once_with("Failed to generate response for chat 123")
+            with pytest.raises(Exception, match="Test error"):
+                await job.generate_response(
+                    user_encryption_key="test_encryption_key",
+                    context=mock_context,
+                    chat_session=mock_session,
+                    conversation_history=[],
+                    instructions=None,
+                )
 
     @pytest.mark.asyncio
     async def test_execute_response_text(self):

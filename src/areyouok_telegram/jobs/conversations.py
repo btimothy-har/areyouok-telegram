@@ -26,6 +26,7 @@ from areyouok_telegram.llms.utils import context_to_model_message
 from areyouok_telegram.llms.utils import message_to_model_message
 from areyouok_telegram.llms.utils import run_agent_with_tracking
 from areyouok_telegram.utils import db_retry
+from areyouok_telegram.utils import telegram_retry
 from areyouok_telegram.utils import traced
 
 from .utils import close_chat_session
@@ -160,32 +161,25 @@ class ConversationJob(BaseJob):
             chat_session=chat_session,
         )
 
-        try:
-            agent_run_payload = await run_agent_with_tracking(
-                agent,
-                chat_id=self.chat_id,
-                session_id=chat_session.session_id,
-                run_kwargs={
-                    "message_history": conversation_history,
-                    "deps": ChatAgentDependencies(
-                        tg_context=context,
-                        tg_chat_id=self.chat_id,
-                        tg_session_id=chat_session.session_id,
-                        last_response_type=self.last_response,
-                        user_encryption_key=user_encryption_key,
-                        instruction=instructions or None,
-                    ),
-                },
-            )
+        agent_run_payload = await run_agent_with_tracking(
+            agent,
+            chat_id=self.chat_id,
+            session_id=chat_session.session_id,
+            run_kwargs={
+                "message_history": conversation_history,
+                "deps": ChatAgentDependencies(
+                    tg_context=context,
+                    tg_chat_id=self.chat_id,
+                    tg_session_id=chat_session.session_id,
+                    last_response_type=self.last_response,
+                    user_encryption_key=user_encryption_key,
+                    instruction=instructions or None,
+                ),
+            },
+        )
 
-            agent_response: AgentResponse = agent_run_payload.output
-
-        except Exception:
-            # TODO: Handle LLM errors
-            logfire.exception(f"Failed to generate response for chat {self.chat_id}")
-
-        else:
-            return agent_response
+        agent_response: AgentResponse = agent_run_payload.output
+        return agent_response
 
     @traced(extract_args=["response"], record_return=True)
     async def execute_response(
@@ -356,6 +350,7 @@ class ConversationJob(BaseJob):
 
             return message_history, media_instruction
 
+    @telegram_retry()
     async def _execute_text_response(
         self, context: ContextTypes.DEFAULT_TYPE, response: TextResponse
     ) -> telegram.Message | None:
@@ -370,46 +365,35 @@ class ConversationJob(BaseJob):
         else:
             reply_parameters = None
 
-        try:
-            reply_message = await context.bot.send_message(
-                chat_id=int(self.chat_id),
-                text=response.message_text,
-                reply_parameters=reply_parameters,
-            )
-        except Exception:
-            logfire.exception(f"Failed to send text reply to chat {self.chat_id}")
-            raise
+        reply_message = await context.bot.send_message(
+            chat_id=int(self.chat_id),
+            text=response.message_text,
+            reply_parameters=reply_parameters,
+        )
 
         return reply_message
 
+    @telegram_retry()
     async def _execute_reaction_response(
         self, context: ContextTypes.DEFAULT_TYPE, response: ReactionResponse, message: telegram.Message
     ):
-        try:
-            react_sent = await context.bot.set_message_reaction(
-                chat_id=int(self.chat_id),
+        react_sent = await context.bot.set_message_reaction(
+            chat_id=int(self.chat_id),
+            message_id=int(response.react_to_message_id),
+            reaction=response.emoji,
+        )
+
+        if react_sent:
+            # Manually create MessageReactionUpdated object as Telegram API does not return it
+            reaction_message = telegram.MessageReactionUpdated(
+                chat=message.chat,
                 message_id=int(response.react_to_message_id),
-                reaction=response.emoji,
+                date=datetime.now(UTC),
+                old_reaction=(),
+                new_reaction=(telegram.ReactionTypeEmoji(emoji=response.emoji),),
+                user=await context.bot.get_me(),
             )
-
-        except Exception:
-            logfire.exception(
-                f"Failed to send reaction to message {response.react_to_message_id} in chat {self.chat_id}"
-            )
-            raise
-
-        else:
-            if react_sent:
-                # Manually create MessageReactionUpdated object as Telegram API does not return it
-                reaction_message = telegram.MessageReactionUpdated(
-                    chat=message.chat,
-                    message_id=int(response.react_to_message_id),
-                    date=datetime.now(UTC),
-                    old_reaction=(),
-                    new_reaction=(telegram.ReactionTypeEmoji(emoji=response.emoji),),
-                    user=await context.bot.get_me(),
-                )
-                return reaction_message
+            return reaction_message
 
         return None
 
@@ -420,24 +404,14 @@ class ConversationJob(BaseJob):
         Compress the session context for this chat.
         """
 
-        context_run_payload = None
+        context_run_payload = await run_agent_with_tracking(
+            context_compression_agent,
+            chat_id=self.chat_id,
+            session_id=chat_session.session_id,
+            run_kwargs={
+                "message_history": message_history,
+            },
+        )
 
-        try:
-            context_run_payload = await run_agent_with_tracking(
-                context_compression_agent,
-                chat_id=self.chat_id,
-                session_id=chat_session.session_id,
-                run_kwargs={
-                    "message_history": message_history,
-                },
-            )
-
-            context_report: ContextTemplate = context_run_payload.output
-
-        except Exception:
-            logfire.exception(
-                f"Failed to compress context for chat {self.chat_id} with session key {chat_session.session_key}."
-            )
-
-        else:
-            return context_report
+        context_report: ContextTemplate = context_run_payload.output
+        return context_report

@@ -7,6 +7,7 @@ from typing import TypeVar
 
 import httpx
 import logfire
+import telegram.error
 from asyncpg.exceptions import ConnectionDoesNotExistError
 from asyncpg.exceptions import InterfaceError
 from sqlalchemy.exc import DBAPIError
@@ -106,6 +107,24 @@ def db_retry():
     return retry(
         retry=retry_if_exception_type((ConnectionDoesNotExistError, DBAPIError, InterfaceError)),
         wait=wait_chain(*[wait_fixed(0.5) for _ in range(2)] + [wait_random_exponential(multiplier=0.5, max=5)]),
+        stop=stop_after_attempt(5),
+        reraise=True,
+    )
+
+
+def telegram_retry():
+    """
+    Retry decorator for Telegram API calls.
+
+    Handles:
+    - NetworkError: Network connectivity issues
+    - TimedOut: Request timeout errors
+
+    Uses exponential backoff with jitter for retries.
+    """
+    return retry(
+        retry=retry_if_exception_type((telegram.error.NetworkError, telegram.error.TimedOut)),
+        wait=wait_random_exponential(multiplier=0.25, max=5),
         stop=stop_after_attempt(5),
         reraise=True,
     )
