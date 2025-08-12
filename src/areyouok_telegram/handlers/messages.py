@@ -18,12 +18,12 @@ from areyouok_telegram.utils import traced
 
 
 @traced(extract_args=["update"])
-@db_retry()
 @environment_override(
     {
         "research": on_new_message_research,
     }
 )
+@db_retry()
 async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):  # noqa: ARG001
     if not update.message:
         raise NoMessageError(update.update_id)

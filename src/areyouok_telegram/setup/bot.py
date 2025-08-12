@@ -117,11 +117,11 @@ async def setup_bot_description(ctx: Application | ContextTypes.DEFAULT_TYPE):
     )
 
 
+@traced(extract_args=False)
 @environment_override(
     {
         "research": setup_bot_commands_research,
     }
 )
-@traced(extract_args=False)
 async def setup_bot_commands(ctx: Application | ContextTypes.DEFAULT_TYPE):
     await ctx.bot.set_my_commands(commands=[])

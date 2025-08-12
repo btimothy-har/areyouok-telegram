@@ -11,6 +11,7 @@ from areyouok_telegram.config import OPENAI_API_KEY
 from areyouok_telegram.config import OPENROUTER_API_KEY
 from areyouok_telegram.llms.exceptions import ModelConfigurationError
 from areyouok_telegram.llms.exceptions import ModelInputError
+from areyouok_telegram.llms.utils import should_retry_llm_error
 
 
 class BaseModelConfig:
@@ -37,7 +38,11 @@ class BaseModelConfig:
     @property
     def model(self) -> pydantic_ai.models.Model:
         if self.primary_model and self.openrouter_model:
-            return FallbackModel(self.primary_model, self.openrouter_model)
+            return FallbackModel(
+                self.primary_model,
+                self.openrouter_model,
+                fallback_on=should_retry_llm_error,
+            )
         elif self.primary_model:
             return self.primary_model
         elif self.openrouter_model:

@@ -13,6 +13,8 @@ from areyouok_telegram.data import async_database
 from areyouok_telegram.handlers.exceptions import NoMessageError
 from areyouok_telegram.handlers.media_utils import extract_media_from_telegram_message
 from areyouok_telegram.research.model import ResearchScenario
+from areyouok_telegram.utils import db_retry
+from areyouok_telegram.utils import telegram_retry
 
 from .constants import END_NO_ACTIVE_SESSION
 from .constants import FEEDBACK_REQUEST
@@ -22,6 +24,8 @@ from .constants import RESEARCH_START_INFO
 from .utils import generate_feedback_url
 
 
+@db_retry()
+@telegram_retry()
 async def on_start_command_research(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):  # noqa: ARG001
     async with async_database() as db_conn:
         active_session = await Sessions.get_active_session(
@@ -46,6 +50,8 @@ async def on_start_command_research(update: telegram.Update, context: ContextTyp
             )
 
 
+@db_retry()
+@telegram_retry()
 async def on_end_command_research(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):  # noqa: ARG001
     async with async_database() as db_conn:
         active_session = await Sessions.get_active_session(
@@ -85,6 +91,7 @@ async def on_end_command_research(update: telegram.Update, context: ContextTypes
             )
 
 
+@db_retry()
 async def on_new_message_research(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):  # noqa: ARG001
     if not update.message:
         raise NoMessageError(update.update_id)

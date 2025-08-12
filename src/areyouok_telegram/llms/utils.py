@@ -4,9 +4,17 @@ import json
 from datetime import UTC
 from datetime import datetime
 
+import anthropic
 import logfire
+import openai
 import pydantic_ai
 import telegram
+from tenacity import retry
+from tenacity import retry_if_exception
+from tenacity import stop_after_attempt
+from tenacity import wait_chain
+from tenacity import wait_fixed
+from tenacity import wait_random_exponential
 
 from areyouok_telegram.data import Context
 from areyouok_telegram.data import LLMUsage
@@ -16,6 +24,33 @@ from areyouok_telegram.data import async_database
 from areyouok_telegram.llms.exceptions import MessageAlreadyDeletedError
 
 
+def should_retry_llm_error(e: Exception) -> bool:
+    """
+    Determine if an exception should trigger a retry for LLM operations.
+
+    Args:
+        e: The exception to check
+
+    Returns:
+        True if the exception is retryable, False otherwise
+    """
+    if isinstance(e, anthropic.APITimeoutError):
+        return True
+    if isinstance(e, anthropic.APIStatusError):
+        # Retry on 5xx errors
+        return 500 <= e.status_code < 600
+    if isinstance(e, openai.APITimeoutError):
+        return True
+    if isinstance(e, openai.APIStatusError):
+        return 500 <= e.http_status < 600
+
+
+@retry(
+    retry=retry_if_exception(should_retry_llm_error),
+    wait=wait_chain(*[wait_fixed(0.5) for _ in range(2)] + [wait_random_exponential(multiplier=0.5, max=5)]),
+    stop=stop_after_attempt(5),
+    reraise=True,
+)
 async def run_agent_with_tracking(
     agent: pydantic_ai.Agent,
     *,

@@ -12,6 +12,7 @@ from areyouok_telegram.config import OPENAI_API_KEY
 from areyouok_telegram.data import LLMUsage
 from areyouok_telegram.data import MediaFiles
 from areyouok_telegram.handlers.exceptions import VoiceNotProcessableError
+from areyouok_telegram.utils import telegram_retry
 from areyouok_telegram.utils import traced
 
 
@@ -158,6 +159,7 @@ async def _download_file(
 
 
 @traced(extract_args=["message"])
+@telegram_retry()
 async def extract_media_from_telegram_message(
     db_conn: AsyncSession,
     user_encryption_key: str,
