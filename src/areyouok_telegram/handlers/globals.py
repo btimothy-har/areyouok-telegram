@@ -18,6 +18,7 @@ from areyouok_telegram.data import async_database
 from areyouok_telegram.jobs import ConversationJob
 from areyouok_telegram.jobs import schedule_job
 from areyouok_telegram.utils import db_retry
+from areyouok_telegram.utils import split_long_message
 from areyouok_telegram.utils import telegram_retry
 
 
@@ -53,13 +54,28 @@ async def on_error_event(update: telegram.Update, context: ContextTypes.DEFAULT_
 
     @telegram_retry()
     async def send_message_to_developer(message: str):
-        await context.bot.send_message(
-            chat_id=DEVELOPER_CHAT_ID,
-            message_thread_id=DEVELOPER_THREAD_ID,
-            text=message,
-            disable_notification=True,
-            parse_mode=ParseMode.MARKDOWN_V2,
-        )
+        try:
+            await context.bot.send_message(
+                chat_id=DEVELOPER_CHAT_ID,
+                message_thread_id=DEVELOPER_THREAD_ID,
+                text=message,
+                disable_notification=True,
+                parse_mode=ParseMode.MARKDOWN_V2,
+            )
+        except Exception as e:
+            logfire.exception(
+                "Failed to send error notification to developer",
+                _exc_info=e,
+                chat_id=DEVELOPER_CHAT_ID,
+                thread_id=DEVELOPER_THREAD_ID,
+            )
+
+            await context.bot.send_message(
+                chat_id=DEVELOPER_CHAT_ID,
+                message_thread_id=DEVELOPER_THREAD_ID,
+                text="Error: Failed to send error notification to developer. Please check logs.",
+                disable_notification=True,
+            )
 
     logfire.exception(str(context.error), _exc_info=context.error)
 
@@ -73,8 +89,18 @@ async def on_error_event(update: telegram.Update, context: ContextTypes.DEFAULT_
 
         # Escape backticks in the traceback for MarkdownV2 code block
         tb_string = tb_string.replace("`", "\\`")
+        full_message = f"An exception was raised while handling an update\n\n```\n{tb_string}\n```"
 
-        message = f"An exception was raised while handling an update\n\n```\n{tb_string}\n```"
-        await send_message_to_developer(message)
+        # Split the message if it's too long
+        message_chunks = split_long_message(full_message)
 
-        logfire.info("Error notification sent to developer.")
+        for i, message_chunk in enumerate(message_chunks):
+            final_message = message_chunk
+            if len(message_chunks) > 1:
+                # Add part indicator for multi-part messages
+                chunk_header = f"*Part {i + 1}/{len(message_chunks)}*\n\n"
+                final_message = chunk_header + message_chunk
+
+            await send_message_to_developer(final_message)
+
+        logfire.info(f"Error notification sent to developer ({len(message_chunks)} parts).")

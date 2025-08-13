@@ -68,6 +68,7 @@ async def log_bot_activity(
     chat_encryption_key: str,
     chat_id: str,
     chat_session: Sessions,
+    timestamp: datetime,
     response_message: MessageTypes | None,
     reasoning: str | None = None,
 ) -> None:
@@ -75,7 +76,7 @@ async def log_bot_activity(
         # Always create a new activity for the bot, even if no response message is provided
         await chat_session.new_activity(
             db_conn=db_conn,
-            timestamp=datetime.now(UTC),
+            timestamp=timestamp,
             is_user=False,  # This is a bot response
         )
 
@@ -93,7 +94,7 @@ async def log_bot_activity(
             if isinstance(response_message, telegram.Message):
                 await chat_session.new_message(
                     db_conn=db_conn,
-                    timestamp=response_message.date,
+                    timestamp=timestamp,
                     is_user=False,  # This is a bot response
                 )
 

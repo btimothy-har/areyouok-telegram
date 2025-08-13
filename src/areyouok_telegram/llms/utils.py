@@ -119,7 +119,7 @@ def message_to_dict(message: Messages, ts_reference: datetime | None = None) -> 
             "timestamp": f"{int((ts_reference - message.telegram_object.date).total_seconds())} seconds ago",
         }
 
-    elif isinstance(message, telegram.MessageReactionUpdated):
+    elif message.message_type == "MessageReactionUpdated":
         # Handle reactions, assuming only emoji reactions for simplicity
         # TODO: Handle custom and paid reactions
         reaction_string = ", ".join(

@@ -136,6 +136,7 @@ class ConversationJob(BaseJob):
                     chat_encryption_key=chat_encryption_key,
                     chat_id=self.chat_id,
                     chat_session=chat_session,
+                    timestamp=self._run_timestamp,
                     response_message=response_message,
                     reasoning=response.reasoning,
                 )

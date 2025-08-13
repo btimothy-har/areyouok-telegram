@@ -241,7 +241,7 @@ class TestOnErrorEvent:
             assert call_args.kwargs["parse_mode"] == telegram.constants.ParseMode.MARKDOWN_V2
 
             # Verify info log
-            mock_log_info.assert_called_once_with("Error notification sent to developer.")
+            mock_log_info.assert_called_once_with("Error notification sent to developer (1 parts).")
 
     @pytest.mark.asyncio
     async def test_on_error_event_without_update(self):
@@ -268,7 +268,7 @@ class TestOnErrorEvent:
 
             # Developer notification should still be sent
             mock_context.bot.send_message.assert_called_once()
-            mock_log_info.assert_called_once_with("Error notification sent to developer.")
+            mock_log_info.assert_called_once_with("Error notification sent to developer (1 parts).")
 
     @pytest.mark.asyncio
     async def test_on_error_event_without_developer_chat(self, mock_db_session):
