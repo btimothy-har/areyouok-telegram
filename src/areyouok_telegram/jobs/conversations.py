@@ -293,6 +293,9 @@ class ConversationJob(BaseJob):
                 )
 
                 if last_context:
+                    last_context = [
+                        c for c in last_context if c.created_at >= (self._run_timestamp - timedelta(days=1))
+                    ]
                     last_context.sort(key=lambda c: c.created_at)
                     [c.decrypt_content(chat_encryption_key=chat_encryption_key) for c in last_context]
 
@@ -303,6 +306,9 @@ class ConversationJob(BaseJob):
             unsupported_media_types = []
 
             raw_messages = await chat_session.get_messages(db_conn)
+
+            # Filter messages to only those created before the run timestamp
+            raw_messages = [msg for msg in raw_messages if msg.created_at <= self._run_timestamp]
             [msg.decrypt_payload(chat_encryption_key) for msg in raw_messages]
             raw_messages.sort(key=lambda msg: msg.created_at)  # Sort messages by date
 

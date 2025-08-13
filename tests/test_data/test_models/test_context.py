@@ -185,7 +185,7 @@ class TestContext:
         mock_result.scalars.return_value = mock_scalars
         mock_db_session.execute.return_value = mock_result
 
-        result = await Context.retrieve_context_by_chat(mock_db_session, chat_id="123", limit=2)
+        result = await Context.retrieve_context_by_chat(mock_db_session, chat_id="123")
 
         assert result == [mock_context1, mock_context2]
         mock_db_session.execute.assert_called_once()
