@@ -1,7 +1,7 @@
 import pydantic
 import pydantic_ai
 
-from areyouok_telegram.llms.models import CONTEXT_COMPRESSION_CLAUDE_3_5_HAIKU
+from areyouok_telegram.llms.models import CHAT_SONNET_4
 
 from .constants import CONNECTION_DESC
 from .constants import CONTEXT_TEMPLATE
@@ -52,7 +52,7 @@ class ContextTemplate(pydantic.BaseModel):
 
 
 context_compression_agent = pydantic_ai.Agent(
-    model=CONTEXT_COMPRESSION_CLAUDE_3_5_HAIKU.model,
+    model=CHAT_SONNET_4.model,
     output_type=ContextTemplate,
     name="context_compression_agent",
     end_strategy="exhaustive",

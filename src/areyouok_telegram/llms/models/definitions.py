@@ -44,13 +44,3 @@ VALIDATOR_GPT_5_NANO = BaseModelConfig(
         temperature=0.0,
     ),
 )
-
-CONTEXT_COMPRESSION_CLAUDE_3_5_HAIKU = BaseModelConfig(
-    model_name="anthropic/claude-3.5-haiku",
-    provider="anthropic",
-    model_id="claude-3-5-haiku-20241022",
-    openrouter_id="anthropic/claude-3.5-haiku",
-    model_settings=pydantic_ai.settings.ModelSettings(
-        temperature=0.4,
-    ),
-)
