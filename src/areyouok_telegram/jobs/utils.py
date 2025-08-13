@@ -5,11 +5,11 @@ import pydantic_ai
 import telegram
 from telegram.ext import ContextTypes
 
+from areyouok_telegram.data import Chats
 from areyouok_telegram.data import Context
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data import MessageTypes
 from areyouok_telegram.data import Sessions
-from areyouok_telegram.data import Users
 from areyouok_telegram.data import async_database
 from areyouok_telegram.jobs.exceptions import UserNotFoundForChatError
 from areyouok_telegram.llms.chat import chat_agent
@@ -30,27 +30,26 @@ async def get_chat_session(chat_id: str) -> "Sessions":
 
 
 @db_retry()
-async def get_user_encryption_key(chat_id: str) -> str:
+async def get_chat_encryption_key(chat_id: str) -> str:
     """
-    Get the user encryption key for a given chat_id.
-    For private chats, chat_id equals user_id.
+    Get the chat encryption key for a given chat_id.
 
     Args:
         chat_id: The chat ID to get the encryption key for
 
     Returns:
-        The user's encryption key
+        The chat's encryption key
 
     Raises:
-        UserNotFoundForChatError: If no user is found (non-private chat)
+        UserNotFoundForChatError: If no chat is found (will be renamed to ChatNotFoundError later)
     """
     async with async_database() as db_conn:
-        user_obj = await Users.get_by_id(db_conn, chat_id)
+        chat_obj = await Chats.get_by_id(db_conn, chat_id)
 
-        if not user_obj:
+        if not chat_obj:
             raise UserNotFoundForChatError(chat_id)
 
-        return user_obj.retrieve_key()
+        return chat_obj.retrieve_key()
 
 
 @db_retry()
@@ -66,7 +65,7 @@ async def get_all_inactive_sessions(from_dt: datetime, to_dt: datetime) -> list[
 async def log_bot_activity(
     *,
     bot_id: str,
-    user_encryption_key: str,
+    chat_encryption_key: str,
     chat_id: str,
     chat_session: Sessions,
     response_message: MessageTypes | None,
@@ -83,7 +82,7 @@ async def log_bot_activity(
         if response_message:
             await Messages.new_or_update(
                 db_conn,
-                user_encryption_key,
+                chat_encryption_key,
                 user_id=bot_id,  # Bot's user ID as the sender
                 chat_id=chat_id,
                 message=response_message,
@@ -101,7 +100,7 @@ async def log_bot_activity(
 
 @db_retry()
 async def save_session_context(
-    user_encryption_key: str, chat_id: str, chat_session: Sessions, context: ContextTemplate
+    chat_encryption_key: str, chat_id: str, chat_session: Sessions, context: ContextTemplate
 ):
     """
     Create a session context for the given chat ID.
@@ -110,7 +109,7 @@ async def save_session_context(
     async with async_database() as db_conn:
         await Context.new_or_update(
             db_conn,
-            user_encryption_key,
+            chat_encryption_key,
             chat_id=chat_id,
             session_id=chat_session.session_id,
             ctype="session",

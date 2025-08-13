@@ -35,9 +35,9 @@ class TestOnNewMessage:
 
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
 
-        # Create mock user with encryption key
-        mock_user_obj = MagicMock()
-        mock_user_obj.retrieve_key = MagicMock(return_value="test_encryption_key")
+        # Create mock chat with encryption key
+        mock_chat_obj = MagicMock()
+        mock_chat_obj.retrieve_key = MagicMock(return_value="test_encryption_key")
 
         # Create mock active session
         mock_active_session = MagicMock()
@@ -45,14 +45,10 @@ class TestOnNewMessage:
         mock_active_session.session_key = "session_key_123"
         mock_active_session.session_id = "session_id_123"
 
-        # Create mock user with encryption key
-        mock_user_obj = MagicMock()
-        mock_user_obj.retrieve_key = MagicMock(return_value="test_encryption_key")
-
         with (
             patch(
-                "areyouok_telegram.handlers.messages.Users.get_by_id", new=AsyncMock(return_value=mock_user_obj)
-            ) as mock_get_user,
+                "areyouok_telegram.handlers.messages.Chats.get_by_id", new=AsyncMock(return_value=mock_chat_obj)
+            ) as mock_get_chat,
             patch("areyouok_telegram.handlers.messages.Messages.new_or_update", new=AsyncMock()) as mock_msg_save,
             patch(
                 "areyouok_telegram.handlers.messages.extract_media_from_telegram_message", new=AsyncMock()
@@ -67,11 +63,11 @@ class TestOnNewMessage:
         ):
             await on_new_message(mock_update, mock_context)
 
-            # Verify user lookup was called
-            mock_get_user.assert_called_once_with(mock_db_session, str(mock_telegram_user.id))
+            # Verify chat lookup was called
+            mock_get_chat.assert_called_once_with(mock_db_session, str(mock_update.effective_chat.id))
 
-            # Verify user key retrieval was called
-            mock_user_obj.retrieve_key.assert_called_once_with()
+            # Verify chat key retrieval was called
+            mock_chat_obj.retrieve_key.assert_called_once_with()
 
             # Verify message was saved with session key
             mock_msg_save.assert_called_once_with(
@@ -116,9 +112,9 @@ class TestOnNewMessage:
 
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
 
-        # Create mock user with encryption key
-        mock_user_obj = MagicMock()
-        mock_user_obj.retrieve_key = MagicMock(return_value="test_encryption_key")
+        # Create mock chat with encryption key
+        mock_chat_obj = MagicMock()
+        mock_chat_obj.retrieve_key = MagicMock(return_value="test_encryption_key")
 
         # Create mock new session
         mock_new_session = MagicMock()
@@ -128,8 +124,8 @@ class TestOnNewMessage:
 
         with (
             patch(
-                "areyouok_telegram.handlers.messages.Users.get_by_id", new=AsyncMock(return_value=mock_user_obj)
-            ) as mock_get_user,
+                "areyouok_telegram.handlers.messages.Chats.get_by_id", new=AsyncMock(return_value=mock_chat_obj)
+            ) as mock_get_chat,
             patch("areyouok_telegram.handlers.messages.Messages.new_or_update", new=AsyncMock()) as mock_msg_save,
             patch(
                 "areyouok_telegram.handlers.messages.extract_media_from_telegram_message", new=AsyncMock()
@@ -144,11 +140,11 @@ class TestOnNewMessage:
         ):
             await on_new_message(mock_update, mock_context)
 
-            # Verify user lookup was called
-            mock_get_user.assert_called_once_with(mock_db_session, str(mock_telegram_user.id))
+            # Verify chat lookup was called
+            mock_get_chat.assert_called_once_with(mock_db_session, str(mock_update.effective_chat.id))
 
-            # Verify user key retrieval was called
-            mock_user_obj.retrieve_key.assert_called_once_with()
+            # Verify chat key retrieval was called
+            mock_chat_obj.retrieve_key.assert_called_once_with()
 
             # Verify session lookup
             mock_get_session.assert_called_once_with(mock_db_session, "789")
@@ -216,9 +212,9 @@ class TestOnEditMessage:
 
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
 
-        # Create mock user with encryption key
-        mock_user_obj = MagicMock()
-        mock_user_obj.retrieve_key = MagicMock(return_value="test_encryption_key")
+        # Create mock chat with encryption key
+        mock_chat_obj = MagicMock()
+        mock_chat_obj.retrieve_key = MagicMock(return_value="test_encryption_key")
 
         # Create mock active session
         mock_active_session = MagicMock()
@@ -229,8 +225,8 @@ class TestOnEditMessage:
 
         with (
             patch(
-                "areyouok_telegram.handlers.messages.Users.get_by_id", new=AsyncMock(return_value=mock_user_obj)
-            ) as mock_get_user,
+                "areyouok_telegram.handlers.messages.Chats.get_by_id", new=AsyncMock(return_value=mock_chat_obj)
+            ) as mock_get_chat,
             patch("areyouok_telegram.handlers.messages.Messages.new_or_update", new=AsyncMock()) as mock_msg_save,
             patch(
                 "areyouok_telegram.handlers.messages.extract_media_from_telegram_message", new=AsyncMock()
@@ -242,11 +238,11 @@ class TestOnEditMessage:
         ):
             await on_edit_message(mock_update, mock_context)
 
-            # Verify user lookup was called
-            mock_get_user.assert_called_once_with(mock_db_session, str(mock_telegram_user.id))
+            # Verify chat lookup was called
+            mock_get_chat.assert_called_once_with(mock_db_session, str(mock_update.effective_chat.id))
 
-            # Verify user key retrieval was called
-            mock_user_obj.retrieve_key.assert_called_once_with()
+            # Verify chat key retrieval was called
+            mock_chat_obj.retrieve_key.assert_called_once_with()
 
             # Verify message was saved with session key
             mock_msg_save.assert_called_once_with(
@@ -289,9 +285,9 @@ class TestOnEditMessage:
 
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
 
-        # Create mock user with encryption key
-        mock_user_obj = MagicMock()
-        mock_user_obj.retrieve_key = MagicMock(return_value="test_encryption_key")
+        # Create mock chat with encryption key
+        mock_chat_obj = MagicMock()
+        mock_chat_obj.retrieve_key = MagicMock(return_value="test_encryption_key")
 
         # Create mock active session
         mock_active_session = MagicMock()
@@ -302,8 +298,8 @@ class TestOnEditMessage:
 
         with (
             patch(
-                "areyouok_telegram.handlers.messages.Users.get_by_id", new=AsyncMock(return_value=mock_user_obj)
-            ) as mock_get_user,
+                "areyouok_telegram.handlers.messages.Chats.get_by_id", new=AsyncMock(return_value=mock_chat_obj)
+            ) as mock_get_chat,
             patch("areyouok_telegram.handlers.messages.Messages.new_or_update", new=AsyncMock()) as mock_msg_save,
             patch(
                 "areyouok_telegram.handlers.messages.extract_media_from_telegram_message", new=AsyncMock()
@@ -315,11 +311,11 @@ class TestOnEditMessage:
         ):
             await on_edit_message(mock_update, mock_context)
 
-            # Verify user lookup was called
-            mock_get_user.assert_called_once_with(mock_db_session, str(mock_telegram_user.id))
+            # Verify chat lookup was called
+            mock_get_chat.assert_called_once_with(mock_db_session, str(mock_update.effective_chat.id))
 
-            # Verify user key retrieval was called
-            mock_user_obj.retrieve_key.assert_called_once_with()
+            # Verify chat key retrieval was called
+            mock_chat_obj.retrieve_key.assert_called_once_with()
 
             # Verify message was saved without session key (not part of session)
             mock_msg_save.assert_called_once_with(
@@ -353,14 +349,14 @@ class TestOnEditMessage:
 
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
 
-        # Create mock user with encryption key
-        mock_user_obj = MagicMock()
-        mock_user_obj.retrieve_key = MagicMock(return_value="test_encryption_key")
+        # Create mock chat with encryption key
+        mock_chat_obj = MagicMock()
+        mock_chat_obj.retrieve_key = MagicMock(return_value="test_encryption_key")
 
         with (
             patch(
-                "areyouok_telegram.handlers.messages.Users.get_by_id", new=AsyncMock(return_value=mock_user_obj)
-            ) as mock_get_user,
+                "areyouok_telegram.handlers.messages.Chats.get_by_id", new=AsyncMock(return_value=mock_chat_obj)
+            ) as mock_get_chat,
             patch("areyouok_telegram.handlers.messages.Messages.new_or_update", new=AsyncMock()) as mock_msg_save,
             patch(
                 "areyouok_telegram.handlers.messages.extract_media_from_telegram_message", new=AsyncMock()
@@ -369,11 +365,11 @@ class TestOnEditMessage:
         ):
             await on_edit_message(mock_update, mock_context)
 
-            # Verify user lookup was called
-            mock_get_user.assert_called_once_with(mock_db_session, str(mock_telegram_user.id))
+            # Verify chat lookup was called
+            mock_get_chat.assert_called_once_with(mock_db_session, str(mock_update.effective_chat.id))
 
-            # Verify user key retrieval was called
-            mock_user_obj.retrieve_key.assert_called_once_with()
+            # Verify chat key retrieval was called
+            mock_chat_obj.retrieve_key.assert_called_once_with()
 
             # Verify message was saved without session key
             mock_msg_save.assert_called_once_with(
@@ -426,9 +422,9 @@ class TestOnMessageReact:
 
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
 
-        # Create mock user with encryption key
-        mock_user_obj = MagicMock()
-        mock_user_obj.retrieve_key = MagicMock(return_value="test_encryption_key")
+        # Create mock chat with encryption key
+        mock_chat_obj = MagicMock()
+        mock_chat_obj.retrieve_key = MagicMock(return_value="test_encryption_key")
 
         # Create mock active session
         mock_active_session = MagicMock()
@@ -438,8 +434,8 @@ class TestOnMessageReact:
 
         with (
             patch(
-                "areyouok_telegram.handlers.messages.Users.get_by_id", new=AsyncMock(return_value=mock_user_obj)
-            ) as mock_get_user,
+                "areyouok_telegram.handlers.messages.Chats.get_by_id", new=AsyncMock(return_value=mock_chat_obj)
+            ) as mock_get_chat,
             patch("areyouok_telegram.handlers.messages.Messages.new_or_update", new=AsyncMock()) as mock_msg_save,
             patch(
                 "areyouok_telegram.handlers.messages.Sessions.get_active_session",
@@ -448,11 +444,11 @@ class TestOnMessageReact:
         ):
             await on_message_react(mock_update, mock_context)
 
-            # Verify user lookup was called
-            mock_get_user.assert_called_once_with(mock_db_session, str(mock_telegram_user.id))
+            # Verify chat lookup was called
+            mock_get_chat.assert_called_once_with(mock_db_session, str(mock_update.effective_chat.id))
 
-            # Verify user key retrieval was called
-            mock_user_obj.retrieve_key.assert_called_once_with()
+            # Verify chat key retrieval was called
+            mock_chat_obj.retrieve_key.assert_called_once_with()
 
             # Verify message/reaction was saved with session key
             mock_msg_save.assert_called_once_with(
@@ -486,9 +482,9 @@ class TestOnMessageReact:
 
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
 
-        # Create mock user with encryption key
-        mock_user_obj = MagicMock()
-        mock_user_obj.retrieve_key = MagicMock(return_value="test_encryption_key")
+        # Create mock chat with encryption key
+        mock_chat_obj = MagicMock()
+        mock_chat_obj.retrieve_key = MagicMock(return_value="test_encryption_key")
 
         # Create mock active session
         mock_active_session = MagicMock()
@@ -498,8 +494,8 @@ class TestOnMessageReact:
 
         with (
             patch(
-                "areyouok_telegram.handlers.messages.Users.get_by_id", new=AsyncMock(return_value=mock_user_obj)
-            ) as mock_get_user,
+                "areyouok_telegram.handlers.messages.Chats.get_by_id", new=AsyncMock(return_value=mock_chat_obj)
+            ) as mock_get_chat,
             patch("areyouok_telegram.handlers.messages.Messages.new_or_update", new=AsyncMock()) as mock_msg_save,
             patch(
                 "areyouok_telegram.handlers.messages.Sessions.get_active_session",
@@ -508,11 +504,11 @@ class TestOnMessageReact:
         ):
             await on_message_react(mock_update, mock_context)
 
-            # Verify user lookup was called
-            mock_get_user.assert_called_once_with(mock_db_session, str(mock_telegram_user.id))
+            # Verify chat lookup was called
+            mock_get_chat.assert_called_once_with(mock_db_session, str(mock_update.effective_chat.id))
 
-            # Verify user key retrieval was called
-            mock_user_obj.retrieve_key.assert_called_once_with()
+            # Verify chat key retrieval was called
+            mock_chat_obj.retrieve_key.assert_called_once_with()
 
             # Verify message was saved without session key (not part of session)
             mock_msg_save.assert_called_once_with(
@@ -541,24 +537,24 @@ class TestOnMessageReact:
 
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
 
-        # Create mock user with encryption key
-        mock_user_obj = MagicMock()
-        mock_user_obj.retrieve_key = MagicMock(return_value="test_encryption_key")
+        # Create mock chat with encryption key
+        mock_chat_obj = MagicMock()
+        mock_chat_obj.retrieve_key = MagicMock(return_value="test_encryption_key")
 
         with (
             patch(
-                "areyouok_telegram.handlers.messages.Users.get_by_id", new=AsyncMock(return_value=mock_user_obj)
-            ) as mock_get_user,
+                "areyouok_telegram.handlers.messages.Chats.get_by_id", new=AsyncMock(return_value=mock_chat_obj)
+            ) as mock_get_chat,
             patch("areyouok_telegram.handlers.messages.Messages.new_or_update", new=AsyncMock()) as mock_msg_save,
             patch("areyouok_telegram.handlers.messages.Sessions.get_active_session", new=AsyncMock(return_value=None)),
         ):
             await on_message_react(mock_update, mock_context)
 
-            # Verify user lookup was called
-            mock_get_user.assert_called_once_with(mock_db_session, str(mock_telegram_user.id))
+            # Verify chat lookup was called
+            mock_get_chat.assert_called_once_with(mock_db_session, str(mock_update.effective_chat.id))
 
-            # Verify user key retrieval was called
-            mock_user_obj.retrieve_key.assert_called_once_with()
+            # Verify chat key retrieval was called
+            mock_chat_obj.retrieve_key.assert_called_once_with()
 
             # Verify message was saved without session key
             mock_msg_save.assert_called_once_with(

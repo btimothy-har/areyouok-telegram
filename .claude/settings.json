@@ -1,11 +1,25 @@
 {
   "permissions": {
     "allow": [
-      "Bash(make:*)"
+      "Bash(make:*)",
+      "Read(./**)"
     ],
-    "deny": []
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)"
+    ]
   },
   "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "git status"
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Write|Edit|MultiEdit",

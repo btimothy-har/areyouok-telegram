@@ -6,9 +6,9 @@ import telegram
 from telegram.ext import ContextTypes
 
 from areyouok_telegram.config import CHAT_SESSION_TIMEOUT_MINS
+from areyouok_telegram.data import Chats
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data import Sessions
-from areyouok_telegram.data import Users
 from areyouok_telegram.data import async_database
 from areyouok_telegram.handlers.exceptions import NoMessageError
 from areyouok_telegram.handlers.media_utils import extract_media_from_telegram_message
@@ -97,9 +97,9 @@ async def on_new_message_research(update: telegram.Update, context: ContextTypes
         raise NoMessageError(update.update_id)
 
     async with async_database() as db_conn:
-        # Get user and their encryption key
-        user_obj = await Users.get_by_id(db_conn, str(update.effective_user.id))
-        user_encryption_key = user_obj.retrieve_key()
+        # Get chat and its encryption key
+        chat_obj = await Chats.get_by_id(db_conn, str(update.effective_chat.id))
+        chat_encryption_key = chat_obj.retrieve_key()
 
         # Handle session management
         chat_id = str(update.effective_chat.id)
@@ -108,7 +108,7 @@ async def on_new_message_research(update: telegram.Update, context: ContextTypes
         extract_media = asyncio.create_task(
             extract_media_from_telegram_message(
                 db_conn,
-                user_encryption_key,
+                chat_encryption_key,
                 message=update.message,
                 session_id=active_session.session_id if active_session else None,
             )
@@ -117,7 +117,7 @@ async def on_new_message_research(update: telegram.Update, context: ContextTypes
         # Save the message
         await Messages.new_or_update(
             db_conn,
-            user_encryption_key,
+            chat_encryption_key,
             user_id=update.effective_user.id,
             chat_id=update.effective_chat.id,
             message=update.message,

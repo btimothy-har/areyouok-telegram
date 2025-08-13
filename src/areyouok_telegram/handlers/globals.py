@@ -31,9 +31,7 @@ async def on_new_update(update: telegram.Update, context: ContextTypes.DEFAULT_T
     ):
         async with async_database() as db_conn:
             if update.effective_user:
-                user_obj = await Users.new_or_update(db_conn=db_conn, user=update.effective_user)
-                # Decrypt user's encryption key
-                user_obj.retrieve_key()
+                await Users.new_or_update(db_conn=db_conn, user=update.effective_user)
 
             if update.effective_chat:
                 await Chats.new_or_update(db_conn=db_conn, chat=update.effective_chat)

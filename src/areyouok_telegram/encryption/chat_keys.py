@@ -6,8 +6,8 @@ from cryptography.fernet import Fernet
 from areyouok_telegram.config import USER_ENCRYPTION_SALT
 
 
-def generate_user_key() -> str:
-    """Generate a new Fernet encryption key for a user.
+def generate_chat_key() -> str:
+    """Generate a new Fernet encryption key for a chat.
 
     Returns:
         str: A new Fernet key as base64-encoded string
@@ -15,8 +15,8 @@ def generate_user_key() -> str:
     return Fernet.generate_key().decode("utf-8")
 
 
-def encrypt_user_key(key: str) -> str:
-    """Encrypt a user's key using the application salt.
+def encrypt_chat_key(key: str) -> str:
+    """Encrypt a chat's key using the application salt.
 
     Args:
         key: The Fernet key to encrypt (base64-encoded string)
@@ -33,15 +33,15 @@ def encrypt_user_key(key: str) -> str:
     # Create Fernet instance with the derived key
     fernet = Fernet(fernet_key)
 
-    # Encrypt the user's key (convert to bytes first)
+    # Encrypt the chat's key (convert to bytes first)
     encrypted_key = fernet.encrypt(key.encode("utf-8"))
 
     # Return as base64-encoded string
     return base64.urlsafe_b64encode(encrypted_key).decode("utf-8")
 
 
-def decrypt_user_key(encrypted_key: str) -> str:
-    """Decrypt a user's key using the application salt.
+def decrypt_chat_key(encrypted_key: str) -> str:
+    """Decrypt a chat's key using the application salt.
 
     Args:
         encrypted_key: The encrypted key as base64-encoded string

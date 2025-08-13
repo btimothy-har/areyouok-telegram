@@ -55,30 +55,30 @@ class MediaFiles(Base):
         return hashlib.sha256(key_string.encode()).hexdigest()
 
     @classmethod
-    def encrypt_content(cls, *, content_bytes: bytes, user_encryption_key: str) -> str:
+    def encrypt_content(cls, *, content_bytes: bytes, chat_encryption_key: str) -> str:
         """Encrypt the byte content using the user's encryption key.
 
         Args:
             content_bytes: The raw byte content to encrypt
-            user_encryption_key: The user's Fernet encryption key
+            chat_encryption_key: The user's Fernet encryption key
 
         Returns:
             str: The encrypted content as base64-encoded string for storage
         """
-        fernet = Fernet(user_encryption_key.encode())
+        fernet = Fernet(chat_encryption_key.encode())
         encrypted_bytes = fernet.encrypt(content_bytes)
         return base64.b64encode(encrypted_bytes).decode("ascii")
 
-    def decrypt_content(self, *, user_encryption_key: str) -> bytes:
+    def decrypt_content(self, *, chat_encryption_key: str) -> bytes:
         """Decrypt the content using the user's encryption key.
 
         Args:
-            user_encryption_key: The user's Fernet encryption key
+            chat_encryption_key: The user's Fernet encryption key
 
         Returns:
             bytes: The decrypted file content as bytes, or None if no encrypted content
         """
-        fernet = Fernet(user_encryption_key.encode())
+        fernet = Fernet(chat_encryption_key.encode())
         encrypted_bytes = base64.b64decode(self.encrypted_content_base64.encode("ascii"))
         decrypted_bytes = fernet.decrypt(encrypted_bytes)
 
@@ -119,7 +119,7 @@ class MediaFiles(Base):
     async def create_file(
         cls,
         db_conn: AsyncSession,
-        user_encryption_key: str,
+        chat_encryption_key: str,
         *,
         file_id: str,
         file_unique_id: str,
@@ -132,7 +132,7 @@ class MediaFiles(Base):
 
         Args:
             db_conn: Database connection
-            user_encryption_key: The user's Fernet encryption key
+            chat_encryption_key: The user's Fernet encryption key
             file_id: Telegram file ID
             file_unique_id: Telegram unique file ID
             chat_id: Chat ID where the file was sent
@@ -146,7 +146,7 @@ class MediaFiles(Base):
         mime_type = magic.from_buffer(content_bytes, mime=True)
         encrypted_content_base64 = cls.encrypt_content(
             content_bytes=content_bytes,
-            user_encryption_key=user_encryption_key,
+            chat_encryption_key=chat_encryption_key,
         )
 
         # Generate file key with encrypted content

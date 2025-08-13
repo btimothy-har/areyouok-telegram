@@ -2,6 +2,7 @@
 
 import hashlib
 from unittest.mock import AsyncMock
+from unittest.mock import patch
 
 import pytest
 
@@ -15,7 +16,7 @@ class TestChats:
         """Test chat key generation."""
         chat_id = "123456789"
         expected = hashlib.sha256(f"{chat_id}".encode()).hexdigest()
-        assert Chats.generate_chat_key(chat_id) == expected
+        assert Chats.generate_chat_key_hash(chat_id) == expected
 
     @pytest.mark.asyncio
     async def test_new_or_update_private_chat(self, mock_db_session, mock_telegram_chat):
@@ -23,7 +24,8 @@ class TestChats:
         mock_result = AsyncMock()
         mock_db_session.execute.return_value = mock_result
 
-        await Chats.new_or_update(mock_db_session, mock_telegram_chat)
+        with patch.object(Chats, "get_by_id", return_value=None):
+            await Chats.new_or_update(mock_db_session, mock_telegram_chat)
 
         # Verify execute was called
         mock_db_session.execute.assert_called_once()
@@ -40,15 +42,19 @@ class TestChats:
         """Test handling chat with null is_forum status."""
         mock_telegram_chat.is_forum = None
 
-        await Chats.new_or_update(mock_db_session, mock_telegram_chat)
+        with patch.object(Chats, "get_by_id", return_value=None):
+            await Chats.new_or_update(mock_db_session, mock_telegram_chat)
 
         mock_db_session.execute.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_new_or_update_updates_existing(self, mock_db_session, mock_telegram_chat):
         """Test updating an existing chat."""
-        # Simulate upsert behavior
-        await Chats.new_or_update(mock_db_session, mock_telegram_chat)
+        # Create mock existing chat
+        mock_existing_chat = AsyncMock()
+
+        with patch.object(Chats, "get_by_id", return_value=mock_existing_chat):
+            await Chats.new_or_update(mock_db_session, mock_telegram_chat)
 
         # Verify execute was called
         mock_db_session.execute.assert_called_once()

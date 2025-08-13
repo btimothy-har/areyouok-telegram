@@ -31,8 +31,8 @@ from areyouok_telegram.utils import traced
 
 from .utils import close_chat_session
 from .utils import generate_chat_agent
+from .utils import get_chat_encryption_key
 from .utils import get_chat_session
-from .utils import get_user_encryption_key
 from .utils import log_bot_activity
 from .utils import post_cleanup_tasks
 from .utils import save_session_context
@@ -69,7 +69,7 @@ class ConversationJob(BaseJob):
 
         # Get user encryption key - this will fail for non-private chats
         try:
-            user_encryption_key = await get_user_encryption_key(self.chat_id)
+            chat_encryption_key = await get_chat_encryption_key(self.chat_id)
         except UserNotFoundForChatError:
             with logfire.span(
                 f"Stopping conversation job for chat {self.chat_id} - no user found.",
@@ -106,7 +106,7 @@ class ConversationJob(BaseJob):
                     _span_name="ConversationJob._run.close_session",
                     chat_id=self.chat_id,
                 ):
-                    await self.close_session(user_encryption_key, chat_session=chat_session)
+                    await self.close_session(chat_encryption_key, chat_session=chat_session)
                     await self.stop(context)
                     await post_cleanup_tasks(context=context, chat_session=chat_session)
 
@@ -117,11 +117,11 @@ class ConversationJob(BaseJob):
                 chat_id=self.chat_id,
             ):
                 message_history, instructions = await self._prepare_conversation_input(
-                    user_encryption_key, chat_session=chat_session, include_context=True
+                    chat_encryption_key, chat_session=chat_session, include_context=True
                 )
                 response = await self.generate_response(
                     context=context,
-                    user_encryption_key=user_encryption_key,
+                    chat_encryption_key=chat_encryption_key,
                     chat_session=chat_session,
                     conversation_history=message_history,
                     instructions=instructions or None,
@@ -129,11 +129,11 @@ class ConversationJob(BaseJob):
 
                 self.last_response = response.response_type
 
-                response_message = await self.execute_response(user_encryption_key, context=context, response=response)
+                response_message = await self.execute_response(chat_encryption_key, context=context, response=response)
 
                 await log_bot_activity(
                     bot_id=context.bot.id,
-                    user_encryption_key=user_encryption_key,
+                    chat_encryption_key=chat_encryption_key,
                     chat_id=self.chat_id,
                     chat_session=chat_session,
                     response_message=response_message,
@@ -145,7 +145,7 @@ class ConversationJob(BaseJob):
         self,
         *,
         context: ContextTypes.DEFAULT_TYPE,
-        user_encryption_key: str,
+        chat_encryption_key: str,
         chat_session: Sessions,
         conversation_history: list[pydantic_ai.messages.ModelMessage],
         instructions: str | None = None,
@@ -172,7 +172,7 @@ class ConversationJob(BaseJob):
                     tg_chat_id=self.chat_id,
                     tg_session_id=chat_session.session_id,
                     last_response_type=self.last_response,
-                    user_encryption_key=user_encryption_key,
+                    chat_encryption_key=chat_encryption_key,
                     instruction=instructions or None,
                 ),
             },
@@ -184,7 +184,7 @@ class ConversationJob(BaseJob):
     @traced(extract_args=["response"], record_return=True)
     async def execute_response(
         self,
-        user_encryption_key: str,
+        chat_encryption_key: str,
         *,
         context: ContextTypes.DEFAULT_TYPE,
         response: AgentResponse,
@@ -213,7 +213,7 @@ class ConversationJob(BaseJob):
                 return
 
             # Decrypt the message to get the telegram object
-            message.decrypt_payload(user_encryption_key)
+            message.decrypt_payload(chat_encryption_key)
             telegram_message = message.telegram_object
 
             response_message = await self._execute_reaction_response(
@@ -227,7 +227,7 @@ class ConversationJob(BaseJob):
     @traced(extract_args=["chat_session"])
     async def close_session(
         self,
-        user_encryption_key: str,
+        chat_encryption_key: str,
         *,
         chat_session: Sessions,
     ) -> None:
@@ -248,7 +248,7 @@ class ConversationJob(BaseJob):
             return
 
         message_history, _ = await self._prepare_conversation_input(
-            user_encryption_key,
+            chat_encryption_key,
             chat_session=chat_session,
             include_context=False,
         )
@@ -258,7 +258,7 @@ class ConversationJob(BaseJob):
                 chat_session=chat_session,
                 message_history=message_history,
             )
-            await save_session_context(user_encryption_key, self.chat_id, chat_session, compressed_context)
+            await save_session_context(chat_encryption_key, self.chat_id, chat_session, compressed_context)
 
         else:
             logfire.warning(f"No messages found in chat session {chat_session.session_id}, nothing to compress.")
@@ -270,7 +270,7 @@ class ConversationJob(BaseJob):
     @db_retry()
     async def _prepare_conversation_input(
         self,
-        user_encryption_key: str,
+        chat_encryption_key: str,
         *,
         chat_session: Sessions,
         include_context: bool = True,
@@ -293,7 +293,7 @@ class ConversationJob(BaseJob):
 
                 if last_context:
                     last_context.sort(key=lambda c: c.created_at)
-                    [c.decrypt_content(user_encryption_key=user_encryption_key) for c in last_context]
+                    [c.decrypt_content(chat_encryption_key=chat_encryption_key) for c in last_context]
 
                     message_history.extend([context_to_model_message(c) for c in last_context])
 
@@ -302,7 +302,7 @@ class ConversationJob(BaseJob):
             unsupported_media_types = []
 
             raw_messages = await chat_session.get_messages(db_conn)
-            [msg.decrypt_payload(user_encryption_key) for msg in raw_messages]
+            [msg.decrypt_payload(chat_encryption_key) for msg in raw_messages]
             raw_messages.sort(key=lambda msg: msg.created_at)  # Sort messages by date
 
             for msg in raw_messages:
@@ -320,7 +320,7 @@ class ConversationJob(BaseJob):
                     continue  # Skip unknown message types
 
                 if media:
-                    [m.decrypt_content(user_encryption_key=user_encryption_key) for m in media]
+                    [m.decrypt_content(chat_encryption_key=chat_encryption_key) for m in media]
 
                 as_model_message = message_to_model_message(
                     message=msg,
