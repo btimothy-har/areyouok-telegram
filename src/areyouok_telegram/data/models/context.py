@@ -193,7 +193,6 @@ class Context(Base):
         *,
         chat_id: str,
         ctype: str | None = None,
-        limit: int = 3,
     ) -> list["Context"] | None:
         """Retrieve contexts by chat_id and optional type, returning a list of Context objects."""
 
@@ -205,7 +204,7 @@ class Context(Base):
         if ctype:
             stmt = stmt.where(cls.type == ctype)
 
-        stmt = stmt.order_by(cls.created_at.desc()).limit(limit)
+        stmt = stmt.order_by(cls.created_at.desc())
 
         result = await db_conn.execute(stmt)
         contexts = result.scalars().all()
