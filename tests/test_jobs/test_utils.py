@@ -155,6 +155,7 @@ class TestLogBotActivity:
                     chat_encryption_key="test_encryption_key",
                     chat_id="chat456",
                     chat_session=mock_session,
+                    timestamp=frozen_time,
                     response_message=mock_message,
                 )
 
@@ -196,6 +197,7 @@ class TestLogBotActivity:
                     chat_encryption_key="test_encryption_key",
                     chat_id="chat456",
                     chat_session=mock_session,
+                    timestamp=frozen_time,
                     response_message=mock_reaction,
                 )
 
@@ -234,6 +236,7 @@ class TestLogBotActivity:
                     chat_encryption_key="test_encryption_key",
                     chat_id="chat456",
                     chat_session=mock_session,
+                    timestamp=frozen_time,
                     response_message=None,
                 )
 
@@ -245,7 +248,7 @@ class TestLogBotActivity:
         mock_session.new_message.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_log_bot_activity_with_reasoning(self):
+    async def test_log_bot_activity_with_reasoning(self, frozen_time):
         """Test logging bot activity with reasoning."""
         mock_session = MagicMock()
         mock_session.session_id = "session_key_123"
@@ -264,6 +267,7 @@ class TestLogBotActivity:
                     chat_encryption_key="test_encryption_key",
                     chat_id="chat456",
                     chat_session=mock_session,
+                    timestamp=frozen_time,
                     response_message=mock_message,
                     reasoning="This is my reasoning",
                 )

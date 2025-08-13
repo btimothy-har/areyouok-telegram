@@ -130,6 +130,30 @@ def telegram_retry():
     )
 
 
+def split_long_message(message: str, max_length: int = 4000) -> list[str]:
+    """Split a long message into chunks that fit within Telegram's limits."""
+    if len(message) <= max_length:
+        return [message]
+
+    # Split by lines to keep traceback readable
+    lines = message.split("\n")
+    chunks = []
+    current_chunk = ""
+
+    for line in lines:
+        test_chunk = current_chunk + "\n" + line if current_chunk else line
+        if len(test_chunk) > max_length and current_chunk:
+            chunks.append(current_chunk)
+            current_chunk = line
+        else:
+            current_chunk = test_chunk
+
+    if current_chunk:
+        chunks.append(current_chunk)
+
+    return chunks
+
+
 @traced(record_return=True)
 async def shorten_url(url: str) -> str:
     """

@@ -6,6 +6,7 @@ from telegram.ext import ContextTypes
 
 from areyouok_telegram.config import ENV
 from areyouok_telegram.jobs import BaseJob
+from areyouok_telegram.utils import telegram_retry
 
 
 class PingJob(BaseJob):
@@ -25,6 +26,7 @@ class PingJob(BaseJob):
     def name(self) -> str:
         return "ping_status"
 
+    @telegram_retry()
     async def _run(self, context: ContextTypes.DEFAULT_TYPE) -> None:
         """
         Log a ping with bot status information.
