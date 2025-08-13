@@ -21,6 +21,7 @@ from areyouok_telegram.setup import database_setup
 def scrub_telegram_data(data: logfire.ScrubMatch) -> Any | None:
     sensitive_paths = [
         ("message", "text"),
+        ("reply_to_message", "text"),
         ("chat", "first_name"),
         ("chat", "last_name"),
         ("chat", "username"),
@@ -82,6 +83,7 @@ if __name__ == "__main__":
             extra_patterns=[
                 "text",
                 "first_name",
+                "last_name",
                 "username",
                 "message_text",
             ],
