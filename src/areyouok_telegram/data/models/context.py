@@ -51,25 +51,25 @@ class Context(Base):
         return hashlib.sha256(f"{chat_id}:{ctype}:{encrypted_content}".encode()).hexdigest()
 
     @classmethod
-    def encrypt_content(cls, *, content: str, user_encryption_key: str) -> str:
+    def encrypt_content(cls, *, content: str, chat_encryption_key: str) -> str:
         """Encrypt the content using the user's encryption key.
 
         Args:
             content: The content string to encrypt
-            user_encryption_key: The user's Fernet encryption key
+            chat_encryption_key: The user's Fernet encryption key
 
         Returns:
             str: The encrypted content as base64-encoded string
         """
-        fernet = Fernet(user_encryption_key.encode())
+        fernet = Fernet(chat_encryption_key.encode())
         encrypted_bytes = fernet.encrypt(content.encode("utf-8"))
         return encrypted_bytes.decode("utf-8")
 
-    def decrypt_content(self, *, user_encryption_key: str) -> str | None:
+    def decrypt_content(self, *, chat_encryption_key: str) -> str | None:
         """Decrypt the content using the user's encryption key.
 
         Args:
-            user_encryption_key: The user's Fernet encryption key
+            chat_encryption_key: The user's Fernet encryption key
 
         Returns:
             str: The decrypted content string, or None if no encrypted content
@@ -77,7 +77,7 @@ class Context(Base):
         if not self.encrypted_content:
             return None
 
-        fernet = Fernet(user_encryption_key.encode())
+        fernet = Fernet(chat_encryption_key.encode())
         encrypted_bytes = self.encrypted_content.encode("utf-8")
         decrypted_bytes = fernet.decrypt(encrypted_bytes)
 
@@ -98,7 +98,7 @@ class Context(Base):
     async def new_or_update(
         cls,
         db_conn: AsyncSession,
-        user_encryption_key: str,
+        chat_encryption_key: str,
         *,
         chat_id: str,
         session_id: str,
@@ -114,7 +114,7 @@ class Context(Base):
         # Encrypt the content
         encrypted_content = cls.encrypt_content(
             content=content,
-            user_encryption_key=user_encryption_key,
+            chat_encryption_key=chat_encryption_key,
         )
 
         stmt = pg_insert(cls).values(

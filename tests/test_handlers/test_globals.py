@@ -36,8 +36,6 @@ class TestOnNewUpdate:
 
         # Create mock user object returned from new_or_update
         mock_user_obj = MagicMock()
-        mock_user_obj.encrypted_key = "encrypted_key"
-        mock_user_obj.retrieve_key = MagicMock(return_value="decrypted_key")
 
         with (
             patch(
@@ -54,9 +52,6 @@ class TestOnNewUpdate:
             # Verify database operations
             mock_user_update.assert_called_once_with(db_conn=mock_db_session, user=mock_update.effective_user)
             mock_chat_update.assert_called_once_with(db_conn=mock_db_session, chat=mock_update.effective_chat)
-
-            # Verify key unlock was called
-            mock_user_obj.retrieve_key.assert_called_once_with()
 
             # Verify job scheduling
             mock_conversation_job.assert_called_once_with(chat_id="456")
@@ -87,8 +82,6 @@ class TestOnNewUpdate:
 
         # Create mock user object returned from new_or_update
         mock_user_obj = MagicMock()
-        mock_user_obj.encrypted_key = "encrypted_key"
-        mock_user_obj.retrieve_key = MagicMock(return_value="decrypted_key")
 
         with (
             patch(
@@ -105,9 +98,6 @@ class TestOnNewUpdate:
             # Verify database operations
             mock_user_update.assert_called_once_with(db_conn=mock_db_session, user=mock_update.effective_user)
             mock_chat_update.assert_called_once_with(db_conn=mock_db_session, chat=mock_update.effective_chat)
-
-            # Verify key unlock was called
-            mock_user_obj.retrieve_key.assert_called_once_with()
 
             # Verify job scheduling DID NOT happen for group chat
             mock_conversation_job.assert_not_called()
@@ -130,8 +120,6 @@ class TestOnNewUpdate:
 
         # Create mock user object returned from new_or_update
         mock_user_obj = MagicMock()
-        mock_user_obj.encrypted_key = "encrypted_key"
-        mock_user_obj.retrieve_key = MagicMock(return_value="decrypted_key")
 
         with (
             patch(
@@ -148,9 +136,6 @@ class TestOnNewUpdate:
             # Verify database operations
             mock_user_update.assert_called_once_with(db_conn=mock_db_session, user=mock_update.effective_user)
             mock_chat_update.assert_called_once_with(db_conn=mock_db_session, chat=mock_update.effective_chat)
-
-            # Verify key unlock was called
-            mock_user_obj.retrieve_key.assert_called_once_with()
 
             # Verify job scheduling DID NOT happen for channel
             mock_conversation_job.assert_not_called()
@@ -196,8 +181,6 @@ class TestOnNewUpdate:
 
         # Create mock user object returned from new_or_update
         mock_user_obj = MagicMock()
-        mock_user_obj.encrypted_key = "encrypted_key"
-        mock_user_obj.retrieve_key = MagicMock(return_value="decrypted_key")
 
         with (
             patch(
@@ -213,8 +196,6 @@ class TestOnNewUpdate:
 
             # User update should be called
             mock_user_update.assert_called_once_with(db_conn=mock_db_session, user=mock_update.effective_user)
-            # Key unlock should be called
-            mock_user_obj.retrieve_key.assert_called_once_with()
             # Chat update should not be called
             mock_chat_update.assert_not_called()
             # Job should not be scheduled since there's no chat

@@ -46,7 +46,7 @@ class TestConversationJob:
 
         with (
             patch(
-                "areyouok_telegram.jobs.conversations.get_user_encryption_key",
+                "areyouok_telegram.jobs.conversations.get_chat_encryption_key",
                 new=AsyncMock(return_value="test_encryption_key"),
             ),
             patch("areyouok_telegram.jobs.conversations.get_chat_session", new=AsyncMock(return_value=mock_session)),
@@ -71,7 +71,7 @@ class TestConversationJob:
 
         with (
             patch(
-                "areyouok_telegram.jobs.conversations.get_user_encryption_key",
+                "areyouok_telegram.jobs.conversations.get_chat_encryption_key",
                 new=AsyncMock(return_value="test_encryption_key"),
             ),
             patch("areyouok_telegram.jobs.conversations.get_chat_session", new=AsyncMock(return_value=mock_session)),
@@ -104,7 +104,7 @@ class TestConversationJob:
 
         with (
             patch(
-                "areyouok_telegram.jobs.conversations.get_user_encryption_key",
+                "areyouok_telegram.jobs.conversations.get_chat_encryption_key",
                 new=AsyncMock(return_value="test_encryption_key"),
             ),
             patch("areyouok_telegram.jobs.conversations.get_chat_session", new=AsyncMock(return_value=mock_session)),
@@ -124,7 +124,7 @@ class TestConversationJob:
         # Verify bot activity was logged with reasoning
         mock_log_activity.assert_called_once_with(
             bot_id="bot123",
-            user_encryption_key="test_encryption_key",
+            chat_encryption_key="test_encryption_key",
             chat_id="123",
             chat_session=mock_session,
             response_message=mock_message,
@@ -149,7 +149,7 @@ class TestConversationJob:
             "areyouok_telegram.jobs.conversations.run_agent_with_tracking", new=AsyncMock(return_value=mock_payload)
         ):
             result = await job.generate_response(
-                user_encryption_key="test_encryption_key",
+                chat_encryption_key="test_encryption_key",
                 context=mock_context,
                 chat_session=mock_session,
                 conversation_history=[],
@@ -176,7 +176,7 @@ class TestConversationJob:
         ):
             with pytest.raises(Exception, match="Test error"):
                 await job.generate_response(
-                    user_encryption_key="test_encryption_key",
+                    chat_encryption_key="test_encryption_key",
                     context=mock_context,
                     chat_session=mock_session,
                     conversation_history=[],

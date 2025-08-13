@@ -31,7 +31,7 @@ class ChatAgentDependencies:
     tg_chat_id: str
     tg_session_id: str
     last_response_type: str
-    user_encryption_key: str
+    chat_encryption_key: str
     instruction: str | None = None
 
 
