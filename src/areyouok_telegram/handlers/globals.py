@@ -22,20 +22,23 @@ from areyouok_telegram.utils import split_long_message
 from areyouok_telegram.utils import telegram_retry
 
 
-@db_retry()
 async def on_new_update(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):
-    # Don't use `traced` decorator here to avoid circular logging issues
-    with logfire.span(
-        "New update received.",
-        _span_name="handlers.globals.on_new_update",
-        update=update,
-    ):
+    @db_retry()
+    async def _handle_update():
         async with async_database() as db_conn:
             if update.effective_user:
                 await Users.new_or_update(db_conn=db_conn, user=update.effective_user)
 
             if update.effective_chat:
                 await Chats.new_or_update(db_conn=db_conn, chat=update.effective_chat)
+
+    # Don't use `traced` decorator here to avoid circular logging issues
+    with logfire.span(
+        "New update received.",
+        _span_name="handlers.globals.on_new_update",
+        update=update,
+    ):
+        await _handle_update()
 
     # Only schedule the job if the update is from a private chat
     # This prevents unnecessary job scheduling for group chats or channel, which we don't support yet.
@@ -48,9 +51,13 @@ async def on_new_update(update: telegram.Update, context: ContextTypes.DEFAULT_T
         )
 
 
-@db_retry()
 async def on_error_event(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Log the error and send a telegram message to notify the developer."""
+
+    @db_retry()
+    async def _save_update():
+        async with async_database() as db_conn:
+            await Updates.new_or_upsert(db_conn, update=update)
 
     @telegram_retry()
     async def send_message_to_developer(message: str):
@@ -80,8 +87,7 @@ async def on_error_event(update: telegram.Update, context: ContextTypes.DEFAULT_
     logfire.exception(str(context.error), _exc_info=context.error)
 
     if update:
-        async with async_database() as db_conn:
-            await Updates.new_or_upsert(db_conn, update=update)
+        await _save_update()
 
     if DEVELOPER_CHAT_ID:
         tb_list = traceback.format_exception(None, context.error, context.error.__traceback__)

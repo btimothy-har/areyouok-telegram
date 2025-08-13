@@ -86,10 +86,10 @@ class TestConversationJob:
         mock_stop.assert_called_once_with(mock_context)
 
     @pytest.mark.asyncio
-    async def test_run_generates_response(self):
+    async def test_run_generates_response(self, frozen_time):
         """Test _run generates and executes response."""
         job = ConversationJob("123")
-        job._run_timestamp = datetime.now(UTC)
+        job._run_timestamp = frozen_time
 
         mock_session = MagicMock()
         mock_session.has_bot_responded = False
@@ -127,6 +127,7 @@ class TestConversationJob:
             chat_encryption_key="test_encryption_key",
             chat_id="123",
             chat_session=mock_session,
+            timestamp=frozen_time,
             response_message=mock_message,
             reasoning="Test reasoning",
         )
