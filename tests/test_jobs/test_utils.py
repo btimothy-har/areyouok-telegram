@@ -9,6 +9,7 @@ from unittest.mock import patch
 import pytest
 import telegram
 
+from areyouok_telegram.data.models.context import ContextType
 from areyouok_telegram.jobs.exceptions import UserNotFoundForChatError
 from areyouok_telegram.jobs.utils import close_chat_session
 from areyouok_telegram.jobs.utils import get_all_inactive_sessions
@@ -302,13 +303,12 @@ class TestSaveSessionContext:
             mock_async_db.return_value.__aenter__.return_value = mock_db_conn
 
             with patch("areyouok_telegram.jobs.utils.Context.new_or_update", new=AsyncMock()) as mock_new_or_update:
-                from areyouok_telegram.data.models.context import ContextType
                 await save_session_context(
                     chat_encryption_key="test_encryption_key",
-                    chat_id="chat456", 
+                    chat_id="chat456",
                     chat_session=mock_session,
                     ctype=ContextType.SESSION,
-                    data=mock_context
+                    data=mock_context,
                 )
 
         # Verify Context.new_or_update was called with correct args

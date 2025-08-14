@@ -92,8 +92,6 @@ class TestPersonalityTypes:
             def __init__(self):
                 self.value = "fake_personality"
 
-        fake_personality = FakePersonalityType()
-
         # This should raise InvalidPersonalityError when passed to prompt_text logic
         with pytest.raises(InvalidPersonalityError, match="fake_personality"):
             PersonalityTypes.get_by_value("fake_personality")

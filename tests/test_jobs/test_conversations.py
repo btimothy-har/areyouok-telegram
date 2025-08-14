@@ -3,6 +3,7 @@
 from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
+from unittest.mock import ANY
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from unittest.mock import patch
@@ -12,7 +13,9 @@ import telegram
 from telegram.constants import ReactionEmoji
 from telegram.ext import ContextTypes
 
+from areyouok_telegram.data.models.context import ContextType
 from areyouok_telegram.jobs.conversations import ConversationJob
+from areyouok_telegram.llms.chat import ChatAgentDependencies
 from areyouok_telegram.llms.chat import ReactionResponse
 from areyouok_telegram.llms.chat import TextResponse
 
@@ -108,7 +111,9 @@ class TestConversationJob:
             ),
             patch("areyouok_telegram.jobs.conversations.get_chat_session", new=AsyncMock(return_value=mock_session)),
             patch.object(job, "_prepare_conversation_input", new=AsyncMock(return_value=([], MagicMock()))),
-            patch.object(job, "generate_response", new=AsyncMock(return_value=(mock_response, mock_message))) as mock_generate,
+            patch.object(
+                job, "generate_response", new=AsyncMock(return_value=(mock_response, mock_message))
+            ) as mock_generate,
             patch("areyouok_telegram.jobs.conversations.log_bot_activity", new=AsyncMock()) as mock_log_activity,
             patch("areyouok_telegram.jobs.conversations.logfire.span"),
         ):
@@ -142,13 +147,14 @@ class TestConversationJob:
 
         mock_payload = MagicMock()
         mock_payload.output = mock_response
-        
-        from areyouok_telegram.llms.chat import ChatAgentDependencies
+
         mock_deps = MagicMock(spec=ChatAgentDependencies)
 
         with (
-            patch("areyouok_telegram.jobs.conversations.run_agent_with_tracking", new=AsyncMock(return_value=mock_payload)),
-            patch.object(job, "_execute_response", new=AsyncMock(return_value=mock_message))
+            patch(
+                "areyouok_telegram.jobs.conversations.run_agent_with_tracking", new=AsyncMock(return_value=mock_payload)
+            ),
+            patch.object(job, "_execute_response", new=AsyncMock(return_value=mock_message)),
         ):
             result = await job.generate_response(
                 context=mock_context,
@@ -169,7 +175,6 @@ class TestConversationJob:
         mock_session = MagicMock()
         mock_session.session_id = "session123"
 
-        from areyouok_telegram.llms.chat import ChatAgentDependencies
         mock_deps = MagicMock(spec=ChatAgentDependencies)
 
         with patch(
@@ -199,7 +204,12 @@ class TestConversationJob:
             patch.object(job, "_execute_text_response", new=AsyncMock(return_value=mock_message)) as mock_execute_text,
             patch("areyouok_telegram.jobs.conversations.logfire.info") as mock_log_info,
         ):
-            result = await job._execute_response(chat_encryption_key="test_encryption_key", context=mock_context, chat_session=MagicMock(), response=mock_response)
+            result = await job._execute_response(
+                chat_encryption_key="test_encryption_key",
+                context=mock_context,
+                chat_session=MagicMock(),
+                response=mock_response,
+            )
 
         assert result == mock_message
         mock_execute_text.assert_called_once_with(context=mock_context, response=mock_response)
@@ -236,7 +246,12 @@ class TestConversationJob:
             mock_db_conn = AsyncMock()
             mock_async_db.return_value.__aenter__.return_value = mock_db_conn
 
-            result = await job._execute_response(chat_encryption_key="test_encryption_key", context=mock_context, chat_session=MagicMock(), response=mock_response)
+            result = await job._execute_response(
+                chat_encryption_key="test_encryption_key",
+                context=mock_context,
+                chat_session=MagicMock(),
+                response=mock_response,
+            )
 
         assert result == mock_reaction
         mock_execute_reaction.assert_called_once_with(
@@ -265,7 +280,12 @@ class TestConversationJob:
             mock_db_conn = AsyncMock()
             mock_async_db.return_value.__aenter__.return_value = mock_db_conn
 
-            result = await job._execute_response(chat_encryption_key="test_encryption_key", context=mock_context, chat_session=MagicMock(), response=mock_response)
+            result = await job._execute_response(
+                chat_encryption_key="test_encryption_key",
+                context=mock_context,
+                chat_session=MagicMock(),
+                response=mock_response,
+            )
 
         assert result is None
         mock_log_warning.assert_called_once_with("Message 456 not found in chat 123, skipping reaction.")
@@ -413,14 +433,13 @@ class TestConversationJob:
         # Verify compression and closing
         # Note: Can't directly assert on job._compress_session_context since it's the original method
         # The mock_save and mock_close assertions below verify the flow worked
-        from unittest.mock import ANY
-        from areyouok_telegram.data.models.context import ContextType
+
         mock_save.assert_called_once_with(
             chat_encryption_key="test_encryption_key",
-            chat_id="123", 
+            chat_id="123",
             chat_session=mock_session,
             ctype=ContextType.SESSION,
-            data=ANY
+            data=ANY,
         )
         mock_close.assert_called_once_with(mock_session)
         mock_log_info.assert_called_once_with("Session session123 closed due to inactivity.")

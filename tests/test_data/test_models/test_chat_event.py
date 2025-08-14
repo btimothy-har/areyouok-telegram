@@ -2,6 +2,7 @@
 
 import os
 import sys
+from unittest.mock import MagicMock
 
 import pydantic_ai
 import pytest
@@ -9,6 +10,7 @@ import telegram
 
 from areyouok_telegram.data.models.chat_event import ChatEvent
 from areyouok_telegram.data.models.context import ContextType
+from areyouok_telegram.data.models.media import MediaFiles
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 from helpers.chat_helpers import assert_json_content_structure
@@ -120,7 +122,7 @@ class TestChatEvent:
 
         # Check content structure
         content = result.parts[0].content
-        content_dict = assert_json_content_structure(content, ["timestamp", "event_type", "text", "message_id"])
+        assert_json_content_structure(content, ["timestamp", "event_type", "text", "message_id"])
 
     def test_to_model_message_with_media(self, mock_chat_event_message, mock_media_files, frozen_time):
         """Test converting ChatEvent with media attachments."""
@@ -154,9 +156,6 @@ class TestChatEvent:
 
     def test_attachments_validation_context_event(self, mock_context_sqlalchemy):
         """Test that attachments are not allowed for context events."""
-        from unittest.mock import MagicMock
-
-        from areyouok_telegram.data.models.media import MediaFiles
 
         mock_file = MagicMock(spec=MediaFiles)
 

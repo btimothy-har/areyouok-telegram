@@ -62,9 +62,13 @@ class ChatEvent(pydantic.BaseModel):
 
             # Handle reactions, assuming only emoji reactions for simplicity
             # TODO: Handle custom and paid reactions
-            reaction_string = ", ".join([
-                r.emoji for r in message.telegram_object.new_reaction if r.type == telegram.constants.ReactionType.EMOJI
-            ])
+            reaction_string = ", ".join(
+                [
+                    r.emoji
+                    for r in message.telegram_object.new_reaction
+                    if r.type == telegram.constants.ReactionType.EMOJI
+                ]
+            )
             event_data = {
                 "emojis": reaction_string,
                 "to_message_id": str(message.message_id),

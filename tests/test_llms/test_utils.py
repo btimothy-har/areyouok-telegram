@@ -1,9 +1,5 @@
 """Test module for LLM utilities."""
 
-import json
-from datetime import UTC
-from datetime import datetime
-from datetime import timedelta
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from unittest.mock import patch
@@ -11,7 +7,6 @@ from unittest.mock import patch
 import logfire
 import pydantic_ai
 import pytest
-import telegram
 
 from areyouok_telegram.llms.utils import run_agent_with_tracking
 
@@ -101,5 +96,3 @@ class TestRunAgentWithTracking:
 
         # Verify result was still returned
         assert result == mock_result
-
-
