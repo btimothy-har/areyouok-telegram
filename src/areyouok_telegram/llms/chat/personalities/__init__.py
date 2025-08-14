@@ -1,11 +1,10 @@
 from enum import Enum
 
+from areyouok_telegram.llms.chat.personalities.anchoring import ANCHORING_PERSONALITY
+from areyouok_telegram.llms.chat.personalities.celebration import CELEBRATION_PERSONALITY
+from areyouok_telegram.llms.chat.personalities.exploration import EXPLORATION_PERSONALITY
+from areyouok_telegram.llms.chat.personalities.witnessing import WITNESSING_PERSONALITY
 from areyouok_telegram.llms.exceptions import InvalidPersonalityError
-
-from .anchoring import ANCHORING_PERSONALITY
-from .celebration import CELEBRATION_PERSONALITY
-from .exploration import EXPLORATION_PERSONALITY
-from .witnessing import WITNESSING_PERSONALITY
 
 
 class PersonalityTypes(Enum):

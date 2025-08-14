@@ -5,6 +5,10 @@ from telegram.ext import ContextTypes
 
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data import async_database
+from areyouok_telegram.llms.chat.constants import AGENT_PROMPT
+from areyouok_telegram.llms.chat.constants import NO_PERSONALITY_SWITCH_INSTRUCTIONS
+from areyouok_telegram.llms.chat.constants import PERSONALITY_SWITCH_INSTRUCTIONS
+from areyouok_telegram.llms.chat.personalities import PersonalityTypes
 from areyouok_telegram.llms.chat.responses import AgentResponse
 from areyouok_telegram.llms.exceptions import InvalidMessageError
 from areyouok_telegram.llms.exceptions import PersonalitySwitchDisabledError
@@ -15,11 +19,6 @@ from areyouok_telegram.llms.utils import run_agent_with_tracking
 from areyouok_telegram.llms.validators.content_check import ContentCheckDependencies
 from areyouok_telegram.llms.validators.content_check import ContentCheckResponse
 from areyouok_telegram.llms.validators.content_check import content_check_agent
-
-from .constants import AGENT_PROMPT
-from .constants import NO_PERSONALITY_SWITCH_INSTRUCTIONS
-from .constants import PERSONALITY_SWITCH_INSTRUCTIONS
-from .personalities import PersonalityTypes
 
 
 @dataclass

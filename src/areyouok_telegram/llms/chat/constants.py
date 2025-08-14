@@ -1,4 +1,4 @@
-from .personalities import PersonalityTypes
+from areyouok_telegram.llms.chat.personalities import PersonalityTypes
 
 AGENT_PROMPT = """
 <identity>

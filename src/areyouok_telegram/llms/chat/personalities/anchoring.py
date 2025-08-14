@@ -1,4 +1,4 @@
-from .base import PersonalityModel
+from areyouok_telegram.llms.chat.personalities.base import PersonalityModel
 
 PERSONALITY = """
 Core Traits: Rock-solid stability, unwavering presence, non-judgmental, calm, professionally caring

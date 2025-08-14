@@ -17,6 +17,12 @@ from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database
 from areyouok_telegram.jobs import BaseJob
 from areyouok_telegram.jobs.exceptions import UserNotFoundForChatError
+from areyouok_telegram.jobs.utils import close_chat_session
+from areyouok_telegram.jobs.utils import get_chat_encryption_key
+from areyouok_telegram.jobs.utils import get_chat_session
+from areyouok_telegram.jobs.utils import log_bot_activity
+from areyouok_telegram.jobs.utils import post_cleanup_tasks
+from areyouok_telegram.jobs.utils import save_session_context
 from areyouok_telegram.llms.chat import AgentResponse
 from areyouok_telegram.llms.chat import ChatAgentDependencies
 from areyouok_telegram.llms.chat import ReactionResponse
@@ -28,13 +34,6 @@ from areyouok_telegram.llms.utils import run_agent_with_tracking
 from areyouok_telegram.utils import db_retry
 from areyouok_telegram.utils import telegram_retry
 from areyouok_telegram.utils import traced
-
-from .utils import close_chat_session
-from .utils import get_chat_encryption_key
-from .utils import get_chat_session
-from .utils import log_bot_activity
-from .utils import post_cleanup_tasks
-from .utils import save_session_context
 
 
 class ConversationJob(BaseJob):

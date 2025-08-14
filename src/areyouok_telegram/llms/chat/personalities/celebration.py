@@ -1,4 +1,4 @@
-from .base import PersonalityModel
+from areyouok_telegram.llms.chat.personalities.base import PersonalityModel
 
 CORE_PERSONALITY = """
 Core Traits: Authentically enthusiastic, strength-focused, curious about success, affirming, energizing
