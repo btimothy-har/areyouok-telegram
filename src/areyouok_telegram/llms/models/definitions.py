@@ -1,6 +1,6 @@
 import pydantic_ai
 
-from .base import BaseModelConfig
+from areyouok_telegram.llms.models.base import BaseModelConfig
 
 CHAT_SONNET_3_5 = BaseModelConfig(
     model_name="anthropic/claude-sonnet-3.5",

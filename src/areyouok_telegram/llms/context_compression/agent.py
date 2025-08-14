@@ -1,15 +1,14 @@
 import pydantic
 import pydantic_ai
 
+from areyouok_telegram.llms.context_compression.constants import CONNECTION_DESC
+from areyouok_telegram.llms.context_compression.constants import CONTEXT_TEMPLATE
+from areyouok_telegram.llms.context_compression.constants import CONVERSATION_DESC
+from areyouok_telegram.llms.context_compression.constants import FEEDBACK_DESC
+from areyouok_telegram.llms.context_compression.constants import LIFE_SITUATION_DESC
+from areyouok_telegram.llms.context_compression.constants import PERSONAL_CONTEXT_DESC
+from areyouok_telegram.llms.context_compression.constants import PRACTICAL_MATTERS_DESC
 from areyouok_telegram.llms.models import CHAT_SONNET_4
-
-from .constants import CONNECTION_DESC
-from .constants import CONTEXT_TEMPLATE
-from .constants import CONVERSATION_DESC
-from .constants import FEEDBACK_DESC
-from .constants import LIFE_SITUATION_DESC
-from .constants import PERSONAL_CONTEXT_DESC
-from .constants import PRACTICAL_MATTERS_DESC
 
 
 class ContextTemplate(pydantic.BaseModel):

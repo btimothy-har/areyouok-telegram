@@ -1,5 +1,6 @@
 from datetime import UTC
 from datetime import datetime
+from typing import Any
 
 import pydantic_ai
 import telegram
@@ -7,13 +8,13 @@ from telegram.ext import ContextTypes
 
 from areyouok_telegram.data import Chats
 from areyouok_telegram.data import Context
+from areyouok_telegram.data import ContextType
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data import MessageTypes
 from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database
 from areyouok_telegram.jobs.exceptions import UserNotFoundForChatError
 from areyouok_telegram.llms.chat import chat_agent
-from areyouok_telegram.llms.context_compression import ContextTemplate
 from areyouok_telegram.research.agents import close_research_session
 from areyouok_telegram.research.agents import generate_agent_for_research_session
 from areyouok_telegram.utils import db_retry
@@ -101,7 +102,12 @@ async def log_bot_activity(
 
 @db_retry()
 async def save_session_context(
-    chat_encryption_key: str, chat_id: str, chat_session: Sessions, context: ContextTemplate
+    *,
+    chat_encryption_key: str,
+    chat_id: str,
+    chat_session: Sessions,
+    ctype: ContextType,
+    data: Any,
 ):
     """
     Create a session context for the given chat ID.
@@ -113,8 +119,8 @@ async def save_session_context(
             chat_encryption_key,
             chat_id=chat_id,
             session_id=chat_session.session_id,
-            ctype="session",
-            content=context.content,
+            ctype=ctype.value,
+            content=data,
         )
 
 
