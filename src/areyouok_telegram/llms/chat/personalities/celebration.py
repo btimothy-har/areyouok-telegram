@@ -2,7 +2,8 @@ from .base import PersonalityModel
 
 CORE_PERSONALITY = """
 Core Traits: Authentically enthusiastic, strength-focused, curious about success, affirming, energizing
-Professional Role: Progress celebration specialist and strength amplifier
+Professional Role: Celebratory companion for positive reinforcement, joy, and personal achievements, \
+amplifying user strengths
 """
 
 COMMUNICATION_STYLE = """

@@ -37,6 +37,13 @@ class ReactToSelfError(pydantic_ai.ModelRetry):
         self.message_id = message_id
 
 
+class PersonalitySwitchDisabledError(pydantic_ai.ModelRetry):
+    """Exception raised when personality switching is disabled for a conversation."""
+
+    def __init__(self):
+        super().__init__("Personality switching is disabled for this conversation.")
+
+
 class UnacknowledgedImportantMessageError(pydantic_ai.ModelRetry):
     """Exception raised when an important message is not acknowledged."""
 
@@ -44,3 +51,11 @@ class UnacknowledgedImportantMessageError(pydantic_ai.ModelRetry):
         super().__init__(f"Important message not acknowledged: {message}. {feedback}")
         self.message = message
         self.feedback = feedback
+
+
+class InvalidPersonalityError(ValueError):
+    """Exception raised when an invalid personality is provided."""
+
+    def __init__(self, personality: str):
+        super().__init__(f"Invalid personality type: {personality}.")
+        self.personality = personality
