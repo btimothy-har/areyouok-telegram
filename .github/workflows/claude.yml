@@ -1,0 +1,75 @@
+name: Claude Code
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  issues:
+    if: ${{ !github.event.issue.pull_request }} && contains(github.event.comment.body, '@claude')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      id-token: write
+      actions: read # Required for Claude to read CI results on PRs
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Code
+        id: claude
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          additional_permissions: |
+            actions: read
+          custom_instructions: |
+            Analyze the given issue in the context of this project. Write a contextualized proposal that:
+              1) Identifies the problem / product gap being addressed
+              2) Expands on the information provided in the issue
+              3) Proposes a solution or next steps
+            
+            Where your proposal is implementing a new feature (i.e. functionality that currently doesn't exist):
+              - Focus on feature details in relation to a user journey
+              - Implementation and technical details are less important
+              - Propose alternative features to consider
+            
+  pull_requests:
+    if: ${{ github.event.issue.pull_request }} && contains(github.event.comment.body, '@claude review')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      id-token: write
+      actions: read # Required for Claude to read CI results on PRs
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Claude Code
+        id: claude
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          additional_permissions: |
+            actions: read
+          custom_instructions: |
+            Review this PR, keeping in mind the context available:
+              (1) project context and broader architecture;
+              (2) the PR content and related issues;
+              (3) related releases (if any)
+
+            Emphasize:
+            - Code quality and maintainability
+            - Security vulnerabilities
+            - Performance issues
+            - Best practices and design patterns
+            - Test coverage gaps
+
+            Be constructive and provide specific suggestions for improvements.
+            Use GitHub's suggestion format when proposing code changes.
