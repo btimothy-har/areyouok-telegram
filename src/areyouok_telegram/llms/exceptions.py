@@ -37,11 +37,14 @@ class ReactToSelfError(pydantic_ai.ModelRetry):
         self.message_id = message_id
 
 
-class PersonalitySwitchDisabledError(pydantic_ai.ModelRetry):
-    """Exception raised when personality switching is disabled for a conversation."""
+class ResponseRestrictedError(pydantic_ai.ModelRetry):
+    """Exception raised when a response is restricted for a conversation."""
 
-    def __init__(self):
-        super().__init__("Personality switching is disabled for this conversation.")
+    def __init__(self, response_type: str):
+        super().__init__(
+            f"Response of type {response_type} is restricted for this conversation. Use a different response type."
+        )
+        self.response_type = response_type
 
 
 class UnacknowledgedImportantMessageError(pydantic_ai.ModelRetry):
