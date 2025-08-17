@@ -99,6 +99,7 @@ class TestConversationJob:
 
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
         mock_context.bot.id = "bot123"
+        mock_context.bot.send_chat_action = AsyncMock()
 
         mock_response = TextResponse(reasoning="Test reasoning", message_text="Hello!", reply_to_message_id=None)
 
@@ -110,11 +111,28 @@ class TestConversationJob:
                 new=AsyncMock(return_value="test_encryption_key"),
             ),
             patch("areyouok_telegram.jobs.conversations.get_chat_session", new=AsyncMock(return_value=mock_session)),
-            patch.object(job, "_prepare_conversation_input", new=AsyncMock(return_value=([], MagicMock()))),
+            patch.object(
+                job,
+                "_prepare_conversation_input",
+                new=AsyncMock(
+                    return_value=(
+                        [],
+                        ChatAgentDependencies(
+                            tg_context=mock_context,
+                            tg_chat_id="123",
+                            tg_session_id="session123",
+                            personality="exploration",
+                            restricted_responses=set(),
+                            instruction=None,
+                        ),
+                    )
+                ),
+            ),
             patch.object(
                 job, "generate_response", new=AsyncMock(return_value=(mock_response, mock_message))
             ) as mock_generate,
             patch("areyouok_telegram.jobs.conversations.log_bot_activity", new=AsyncMock()) as mock_log_activity,
+            patch("areyouok_telegram.jobs.conversations.log_bot_message", new=AsyncMock()),
             patch("areyouok_telegram.jobs.conversations.logfire.span"),
         ):
             await job._run(mock_context)
@@ -122,15 +140,10 @@ class TestConversationJob:
         # Verify response was generated and executed
         mock_generate.assert_called_once()
 
-        # Verify bot activity was logged with reasoning
+        # Verify bot activity was logged
         mock_log_activity.assert_called_once_with(
-            bot_id="bot123",
-            chat_encryption_key="test_encryption_key",
-            chat_id="123",
             chat_session=mock_session,
             timestamp=frozen_time,
-            response_message=mock_message,
-            reasoning="Test reasoning",
         )
 
     @pytest.mark.asyncio
@@ -148,7 +161,14 @@ class TestConversationJob:
         mock_payload = MagicMock()
         mock_payload.output = mock_response
 
-        mock_deps = MagicMock(spec=ChatAgentDependencies)
+        mock_deps = ChatAgentDependencies(
+            tg_context=mock_context,
+            tg_chat_id="123",
+            tg_session_id="session123",
+            personality="exploration",
+            restricted_responses=set(),
+            instruction=None,
+        )
 
         with (
             patch(
@@ -175,7 +195,14 @@ class TestConversationJob:
         mock_session = MagicMock()
         mock_session.session_id = "session123"
 
-        mock_deps = MagicMock(spec=ChatAgentDependencies)
+        mock_deps = ChatAgentDependencies(
+            tg_context=mock_context,
+            tg_chat_id="123",
+            tg_session_id="session123",
+            personality="exploration",
+            restricted_responses=set(),
+            instruction=None,
+        )
 
         with patch(
             "areyouok_telegram.jobs.conversations.run_agent_with_tracking",
@@ -390,10 +417,28 @@ class TestConversationJob:
         mock_session.session_key = "session_key_123"
         mock_session.session_id = "session123"
 
+        mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
+
         with (
             patch("areyouok_telegram.jobs.conversations.async_database") as mock_async_db,
             patch("areyouok_telegram.jobs.conversations.Context.get_by_session_id", new=AsyncMock(return_value=None)),
-            patch.object(job, "_prepare_conversation_input", new=AsyncMock(return_value=([], MagicMock()))),
+            patch.object(
+                job,
+                "_prepare_conversation_input",
+                new=AsyncMock(
+                    return_value=(
+                        [],
+                        ChatAgentDependencies(
+                            tg_context=mock_context,
+                            tg_chat_id="123",
+                            tg_session_id="session123",
+                            personality="exploration",
+                            restricted_responses=set(),
+                            instruction=None,
+                        ),
+                    )
+                ),
+            ),
             patch("areyouok_telegram.jobs.conversations.close_chat_session", new=AsyncMock()),
             patch("areyouok_telegram.jobs.conversations.logfire.warning") as mock_log_warning,
         ):
@@ -413,13 +458,30 @@ class TestConversationJob:
         mock_session.session_key = "session_key_123"
         mock_session.session_id = "session123"
 
+        mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
         mock_messages = [MagicMock()]
         mock_compressed = MagicMock()
 
         with (
             patch("areyouok_telegram.jobs.conversations.async_database") as mock_async_db,
             patch("areyouok_telegram.jobs.conversations.Context.get_by_session_id", new=AsyncMock(return_value=None)),
-            patch.object(job, "_prepare_conversation_input", new=AsyncMock(return_value=(mock_messages, MagicMock()))),
+            patch.object(
+                job,
+                "_prepare_conversation_input",
+                new=AsyncMock(
+                    return_value=(
+                        mock_messages,
+                        ChatAgentDependencies(
+                            tg_context=mock_context,
+                            tg_chat_id="123",
+                            tg_session_id="session123",
+                            personality="exploration",
+                            restricted_responses=set(),
+                            instruction=None,
+                        ),
+                    )
+                ),
+            ),
             patch.object(job, "_compress_session_context", new=AsyncMock(return_value=mock_compressed)),
             patch("areyouok_telegram.jobs.conversations.save_session_context", new=AsyncMock()) as mock_save,
             patch("areyouok_telegram.jobs.conversations.close_chat_session", new=AsyncMock()) as mock_close,
