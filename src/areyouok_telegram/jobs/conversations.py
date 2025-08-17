@@ -18,16 +18,17 @@ from areyouok_telegram.data import async_database
 from areyouok_telegram.jobs import BaseJob
 from areyouok_telegram.jobs.exceptions import UserNotFoundForChatError
 from areyouok_telegram.jobs.utils import close_chat_session
+from areyouok_telegram.jobs.utils import generate_chat_agent
 from areyouok_telegram.jobs.utils import get_chat_encryption_key
 from areyouok_telegram.jobs.utils import get_chat_session
 from areyouok_telegram.jobs.utils import log_bot_activity
+from areyouok_telegram.jobs.utils import log_bot_message
 from areyouok_telegram.jobs.utils import post_cleanup_tasks
 from areyouok_telegram.jobs.utils import save_session_context
 from areyouok_telegram.llms.chat import AgentResponse
 from areyouok_telegram.llms.chat import ChatAgentDependencies
 from areyouok_telegram.llms.chat import ReactionResponse
 from areyouok_telegram.llms.chat import TextResponse
-from areyouok_telegram.llms.chat import chat_agent
 from areyouok_telegram.llms.context_compression import ContextTemplate
 from areyouok_telegram.llms.context_compression import context_compression_agent
 from areyouok_telegram.llms.utils import run_agent_with_tracking
@@ -117,12 +118,18 @@ class ConversationJob(BaseJob):
                 _span_name="ConversationJob._run.respond",
                 chat_id=self.chat_id,
             ):
+                await context.bot.send_chat_action(
+                    chat_id=int(self.chat_id),
+                    action=telegram.constants.ChatAction.TYPING,
+                )
+
                 message_history, dependencies = await self._prepare_conversation_input(
                     chat_encryption_key,
                     context=context,
                     chat_session=chat_session,
                     include_context=True,
                 )
+
                 response, response_message = await self.generate_response(
                     context=context,
                     chat_encryption_key=chat_encryption_key,
@@ -131,14 +138,20 @@ class ConversationJob(BaseJob):
                     dependencies=dependencies,
                 )
 
+                if response_message:
+                    # Log the bot's response message
+                    await log_bot_message(
+                        bot_id=str(self._bot_id),
+                        chat_encryption_key=chat_encryption_key,
+                        chat_id=self.chat_id,
+                        chat_session=chat_session,
+                        message=response_message,
+                        reasoning=response.reasoning,
+                    )
+
                 await log_bot_activity(
-                    bot_id=context.bot.id,
-                    chat_encryption_key=chat_encryption_key,
-                    chat_id=self.chat_id,
                     chat_session=chat_session,
                     timestamp=self._run_timestamp,
-                    response_message=response_message,
-                    reasoning=response.reasoning,
                 )
 
     @traced(extract_args=["chat_session"])
@@ -159,18 +172,29 @@ class ConversationJob(BaseJob):
 
         agent_run_payload = None
         agent_run_time = datetime.now(UTC)
-        conversation_history.sort(key=lambda x: x.timestamp)
 
-        if dependencies.personality_switch_enabled:
+        if "switch_personality" not in dependencies.restricted_responses:
             # Check if there's already a switch_personality event in the most recent 10 messages
             # If so, disable personality switching for this run
             recent_messages = conversation_history[-10:] if len(conversation_history) > 10 else conversation_history
-            dependencies.personality_switch_enabled = not any(
-                event.event_type == "switch_personality" for event in recent_messages
-            )
+            if any(event.event_type == "switch_personality" for event in recent_messages):
+                dependencies.restricted_responses.add("switch_personality")
+
+        # Restrict text responses if the bot has recently replied
+        if (
+            conversation_history
+            and conversation_history[-1].event_type == "message"
+            and conversation_history[-1].user_id == str(self._bot_id)
+        ):
+            dependencies.restricted_responses.add("text")
+
+        if "text" in dependencies.restricted_responses and dependencies.instruction:
+            dependencies.restricted_responses.remove("text")
+
+        agent = await generate_chat_agent(chat_session)
 
         agent_run_payload = await run_agent_with_tracking(
-            chat_agent,
+            agent,
             chat_id=self.chat_id,
             session_id=chat_session.session_id,
             run_kwargs={
@@ -197,7 +221,7 @@ class ConversationJob(BaseJob):
                 chat_session=chat_session,
                 include_context=True,
             )
-            dependencies.personality_switch_enabled = False  # Disable personality switching for this run
+            dependencies.restricted_responses.add("switch_personality")  # Disable personality switching for this run
 
             return await self.generate_response(
                 context=context,
@@ -361,7 +385,6 @@ class ConversationJob(BaseJob):
                         if c.type == ContextType.SESSION.value
                         and c.created_at >= (self._run_timestamp - timedelta(days=1))
                     ]
-
                     # Include all other context items for the session
                     session_context.extend([c for c in chat_context_items if c.session_id == chat_session.session_id])
 
@@ -401,13 +424,13 @@ class ConversationJob(BaseJob):
                 if media:
                     [m.decrypt_content(chat_encryption_key=chat_encryption_key) for m in media]
 
-                message_history.append(ChatEvent.from_message(msg, media))
+                    if msg.created_at >= chat_session.last_bot_activity:
+                        unsupported_media = [m for m in media if not m.is_anthropic_supported]
+                        unsupported_media_types.extend(
+                            [m.mime_type for m in unsupported_media if not m.mime_type.startswith("audio/")]
+                        )
 
-                if media:
-                    unsupported_media = [m for m in media if not m.is_anthropic_supported]
-                    unsupported_media_types.extend(
-                        [m.mime_type for m in unsupported_media if not m.mime_type.startswith("audio/")]
-                    )
+                message_history.append(ChatEvent.from_message(msg, media))
 
             if len(unsupported_media_types) == 1:
                 media_instruction = (
@@ -436,7 +459,7 @@ class ConversationJob(BaseJob):
                 instruction=media_instruction,
             )
 
-            return message_history, chat_deps
+            return sorted(message_history, key=lambda x: x.timestamp), chat_deps
 
     @telegram_retry()
     async def _execute_text_response(
