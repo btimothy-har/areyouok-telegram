@@ -71,5 +71,9 @@ jobs:
             - Best practices and design patterns
             - Test coverage gaps
 
-            Be constructive and provide specific suggestions for improvements.
+            In your review:
+            1) Provide an executive summary of what you determine the PR objectives to be.
+            2) Identify areas where the code changes may not meet the intended PR objectives.
+            3) Be Be constructive and provide specific suggestions for improvements.
+            
             Use GitHub's suggestion format when proposing code changes.
