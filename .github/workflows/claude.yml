@@ -5,6 +5,15 @@ on:
     types: [created]
 
 jobs:
+  debug_workflow:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        run: |
+          echo "PR ${{ github.event.issue.pull_request }}"
+          echo "Event comment body: ${{ github.event.comment.body }}"
+
+          
   issues:
     if: |
       (${{ !github.event.issue.pull_request }} && contains(github.event.comment.body, '@claude propose'))
