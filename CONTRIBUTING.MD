@@ -3,7 +3,8 @@
 Thanks for your interest in contributing to **areyouok-telegram**!
 
 We aim to keep all on-going work documented in our GitHub Issues.
-- Issues tagged with a milestone are targeted for the assigned release version. Branches targeting these issues should be merged into the release branch.
+
+Issues tagged with a milestone are targeted for the assigned release version. Branches targeting these issues should be merged into the release branch.
 
 All PRs into protected branches (`main` and `release-**`) must:
 1) be approved by a repository collaborator with write permissions.
@@ -35,9 +36,9 @@ This project uses a simplified mono-project src-layout structure:
 
 2. **Postgres**<br />
    You will need a working Postgres instance. There are a few alternatives that you can pick from:
-   a) Run a local instance using the Postgres installers: [Mac](https://postgresapp.com) or [Windows](https://www.postgresql.org/download/windows/)
-   b) Run a local instance using Docker/Podman.
-   c) A cloud hosted Postgres instance. We use [Supabase](https://supabase.com/) as our backend, so Supabase would be the best cloud pick.
+   <br />a) Run a local instance using the Postgres installers: [Mac](https://postgresapp.com) or [Windows](https://www.postgresql.org/download/windows/)
+   <br />b) Run a local instance using Docker/Podman.
+   <br />c) A cloud hosted Postgres instance. We use [Supabase](https://supabase.com/) as our backend, so Supabase would be the best cloud pick.
 
 3. **Telegram Bot**<br />
    Create your own Telegram bot token by talking to [@BotFather](https://t.me/botfather) on Telegram. Use the `/newbot` command.
