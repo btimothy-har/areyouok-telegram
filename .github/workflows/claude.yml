@@ -4,22 +4,9 @@ on:
   issue_comment:
     types: [created]
 
-jobs:
-  debug_workflow:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        run: |
-          echo "PR ${{ !github.event.issue.pull_request }}"
-          echo "Event comment body: ${{ github.event.comment.body }}"
-          echo "Event comment check: ${{ github.event.comment.body == '@claude propose' }}"
-          echo "Final check: ${{ github.event.issue.pull_request && github.event.comment.body == 'test review' }}"
-          echo "Final check: ${{ !github.event.issue.pull_request && github.event.comment.body == 'test propose' }}"
-
-          
+jobs:     
   issues:
-    if: |
-      (${{ !github.event.issue.pull_request }} && contains(github.event.comment.body, '@claude propose'))
+    if: ${{ !github.event.issue.pull_request && github.event.comment.body == '@claude propose' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -52,8 +39,7 @@ jobs:
               - Propose alternative features to consider
             
   pull_requests:
-    if: |
-      (${{ github.event.issue.pull_request }} && contains(github.event.comment.body, '@claude review'))
+    if: ${{ github.event.issue.pull_request && github.event.comment.body == '@claude review' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
