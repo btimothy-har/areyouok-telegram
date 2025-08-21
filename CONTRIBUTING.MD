@@ -94,3 +94,8 @@ We configure some utility functions in the Makefile that are useful for developi
 This project primarily uses [Claude Code](https://www.anthropic.com/claude-code) as our AI development tool.
 
 We **don't** require you to use Claude Code, but we actively maintain project tooling for Claude, so you will benefit from it.
+
+### Claude Code in GitHub
+You may use Claude Code via the following commands in our repository issues/PRs:
+- `@claude propose` on issues, to develop a proposal to address the issue.
+- `@claude review` on PRs, to get a PR review from Claude.
