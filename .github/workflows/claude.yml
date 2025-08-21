@@ -13,6 +13,8 @@ jobs:
           echo "PR ${{ !github.event.issue.pull_request }}"
           echo "Event comment body: ${{ github.event.comment.body }}"
           echo "Event comment check: ${{ github.event.comment.body == '@claude propose' }}"
+          echo "Final check: ${{ github.event.issue.pull_request && github.event.comment.body == 'test review' }}"
+          echo "Final check: ${{ !github.event.issue.pull_request && github.event.comment.body == 'test propose' }}"
 
           
   issues:
