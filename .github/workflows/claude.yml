@@ -26,6 +26,7 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           additional_permissions: |
             actions: read
+          trigger_phrase: "@claude propose"
           custom_instructions: |
             Analyze the given issue in the context of this project. Write a contextualized proposal that:
               1) Identifies the problem / product gap being addressed
@@ -58,6 +59,7 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           additional_permissions: |
             actions: read
+          trigger_phrase: "@claude review"
           custom_instructions: |
             Review this PR, keeping in mind the context available:
               (1) project context and broader architecture;
