@@ -6,7 +6,8 @@ on:
 
 jobs:
   issues:
-    if: ${{ !github.event.issue.pull_request }} && contains(github.event.comment.body, '@claude propose')
+    if: |
+      (${{ !github.event.issue.pull_request }} && contains(github.event.comment.body, '@claude propose'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -39,7 +40,8 @@ jobs:
               - Propose alternative features to consider
             
   pull_requests:
-    if: ${{ github.event.issue.pull_request }} && contains(github.event.comment.body, '@claude review')
+    if: |
+      (${{ github.event.issue.pull_request }} && contains(github.event.comment.body, '@claude review'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
