@@ -46,6 +46,8 @@ This project uses a simplified mono-project src-layout structure:
 4. **LLM API Keys**<br />
    For simplicity, we recommend simply using a single OpenRouter API Key for LLM functionality. Alternatively, you may manually specify an `OPEN_API_KEY` and `ANTHROPIC_API_KEY`.
 
+   Note: You will need an `OPEN_API_KEY` for voice transcription and moderation capabilities, as these call OpenAI directly.
+
 ### Getting Started
 
 1. **Clone the Repository**  
