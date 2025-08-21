@@ -10,8 +10,9 @@ jobs:
     steps:
       - name: Checkout repository
         run: |
-          echo "PR ${{ github.event.issue.pull_request }}"
+          echo "PR ${{ !github.event.issue.pull_request }}"
           echo "Event comment body: ${{ github.event.comment.body }}"
+          echo "Event comment check: ${{ github.event.comment.body == '@claude propose' }}"
 
           
   issues:
