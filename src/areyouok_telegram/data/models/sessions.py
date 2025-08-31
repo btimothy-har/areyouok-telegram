@@ -1,5 +1,6 @@
 import hashlib
 from datetime import datetime
+from typing import Optional
 
 from sqlalchemy import Column
 from sqlalchemy import ForeignKey
@@ -152,12 +153,27 @@ class Sessions(Base):
         return result.scalar_one()  # Always returns the active session object
 
     @classmethod
-    async def get_active_session(cls, db_conn: AsyncSession, *, chat_id: str) -> "Sessions" | None:
+    async def get_active_session(cls, db_conn: AsyncSession, *, chat_id: str) -> Optional["Sessions"]:
         """Get the active (non-closed) session for a chat."""
         stmt = select(cls).where(cls.chat_id == chat_id).where(cls.session_end.is_(None))
 
         result = await db_conn.execute(stmt)
         return result.scalar_one_or_none()
+
+    @classmethod
+    async def get_by_onboarding_key(cls, db_conn: AsyncSession, *, onboarding_key: str) -> list["Sessions"]:
+        """Get all sessions related to an onboarding session.
+
+        Args:
+            db_conn: Database connection
+            onboarding_key: The onboarding session key to search for
+
+        Returns:
+            List of Sessions objects linked to this onboarding
+        """
+        stmt = select(cls).where(cls.onboarding_key == onboarding_key)
+        result = await db_conn.execute(stmt)
+        return list(result.scalars().all())
 
     @classmethod
     @traced(extract_args=False)
