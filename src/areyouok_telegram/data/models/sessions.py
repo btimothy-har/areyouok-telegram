@@ -1,8 +1,8 @@
 import hashlib
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import Column
+from sqlalchemy import ForeignKey
 from sqlalchemy import Integer
 from sqlalchemy import String
 from sqlalchemy import select
@@ -22,6 +22,13 @@ class Sessions(Base):
 
     session_key = Column(String, nullable=False, unique=True)
     chat_id = Column(String, nullable=False)
+
+    # Onboarding relationship
+    onboarding_key = Column(
+        String,
+        ForeignKey(f"{ENV}.user_onboarding_state.session_key"),
+        nullable=True,
+    )
 
     session_start = Column(TIMESTAMP(timezone=True), nullable=False)
     session_end = Column(TIMESTAMP(timezone=True), nullable=True)
@@ -45,6 +52,11 @@ class Sessions(Base):
     def session_id(self) -> str:
         """Return the unique session ID, which is the session key."""
         return self.session_key
+
+    @property
+    def is_onboarding(self) -> bool:
+        """Check if this session is for onboarding."""
+        return self.onboarding_key is not None
 
     @property
     def has_bot_responded(self) -> bool:
@@ -100,8 +112,15 @@ class Sessions(Base):
         return await Messages.retrieve_by_session(db_conn, session_id=self.session_id)
 
     @classmethod
-    @traced(extract_args=["chat_id", "timestamp"], record_return=True)
-    async def create_session(cls, db_conn: AsyncSession, chat_id: str, timestamp: datetime) -> "Sessions":
+    @traced(extract_args=["chat_id", "timestamp", "is_onboarding"], record_return=True)
+    async def create_session(
+        cls,
+        db_conn: AsyncSession,
+        *,
+        chat_id: str,
+        timestamp: datetime,
+        onboarding_key: str | None = None,
+    ) -> "Sessions":
         """Create a new session for a chat.
         If a session already exists, it will return the currently active session.
 
@@ -109,6 +128,7 @@ class Sessions(Base):
             db_conn: The database connection to use for the query.
             chat_id: The unique identifier for the chat.
             timestamp: The start time of the session.
+            onboarding_key: Link to the UserOnboardingState session key.
         Returns:
             The active session object, either newly created or existing.
         """
@@ -118,6 +138,7 @@ class Sessions(Base):
             session_key=session_key,
             chat_id=chat_id,
             session_start=timestamp,
+            onboarding_key=onboarding_key,
         )
 
         # On conflict, update the session_start to ensure we always return something
@@ -131,7 +152,7 @@ class Sessions(Base):
         return result.scalar_one()  # Always returns the active session object
 
     @classmethod
-    async def get_active_session(cls, db_conn: AsyncSession, chat_id: str) -> Optional["Sessions"]:
+    async def get_active_session(cls, db_conn: AsyncSession, *, chat_id: str) -> "Sessions" | None:
         """Get the active (non-closed) session for a chat."""
         stmt = select(cls).where(cls.chat_id == chat_id).where(cls.session_end.is_(None))
 

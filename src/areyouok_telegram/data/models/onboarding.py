@@ -3,7 +3,6 @@ from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
 from enum import Enum
-from typing import Optional
 
 from sqlalchemy import Column
 from sqlalchemy import Integer
@@ -15,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from areyouok_telegram.config import ENV
 from areyouok_telegram.data import Base
+from areyouok_telegram.data.models.sessions import Sessions
 from areyouok_telegram.utils import traced
 
 
@@ -146,8 +146,37 @@ class UserOnboardingState(Base):
         cls,
         db_conn: AsyncSession,
         user_id: str,
-    ) -> Optional["UserOnboardingState"]:
+    ) -> "UserOnboardingState" | None:
         """Retrieve user onboarding state by user ID, ordered by most recent."""
         stmt = select(cls).where(cls.user_id == user_id).order_by(cls.created_at.desc())
         result = await db_conn.execute(stmt)
         return result.scalars().first()
+
+    @traced(extract_args=[])
+    async def get_related_sessions(self, db_conn: AsyncSession) -> list[Sessions]:
+        """Get all chat sessions related to this onboarding.
+
+        Args:
+            db_conn: Database connection
+
+        Returns:
+            List of Sessions objects linked to this onboarding
+        """
+
+        stmt = select(Sessions).where(Sessions.onboarding_key == self.session_key)
+        result = await db_conn.execute(stmt)
+        return list(result.scalars().all())
+
+    @traced(extract_args=[])
+    async def close_related_sessions(self, db_conn: AsyncSession) -> None:
+        """Close all chat sessions related to this onboarding.
+
+        Args:
+            db_conn: Database connection
+        """
+        sessions = await self.get_related_sessions(db_conn)
+        now = datetime.now(UTC)
+
+        for session in sessions:
+            if session.session_end is None:  # Only close open sessions
+                await session.close_session(db_conn, now)
