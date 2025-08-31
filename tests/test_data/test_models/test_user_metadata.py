@@ -100,18 +100,6 @@ class TestUserMetadata:
         assert result == "John Doe"
         mock_decrypt.assert_called_once_with("encrypted_name")
 
-    @patch("areyouok_telegram.data.models.user_metadata.decrypt_content")
-    def test_country_property(self, mock_decrypt):
-        """Test country property calls _decrypt_field correctly."""
-        mock_decrypt.return_value = "United States"
-        metadata = UserMetadata()
-        metadata.user_key = "test_key"
-        metadata._country = "encrypted_country"
-
-        result = metadata.country
-
-        assert result == "United States"
-        mock_decrypt.assert_called_once_with("encrypted_country")
 
     @patch("areyouok_telegram.data.models.user_metadata.decrypt_content")
     def test_timezone_property(self, mock_decrypt):
@@ -157,7 +145,7 @@ class TestUserMetadata:
 
         assert exc_info.value.field == "invalid_field"
         assert "preferred_name" in exc_info.value.valid_fields
-        assert "daily_checkin" in exc_info.value.valid_fields
+        assert "country" in exc_info.value.valid_fields
 
     @pytest.mark.asyncio
     async def test_update_metadata_invalid_type_for_encrypted_field(self, mock_db_session):
@@ -168,14 +156,6 @@ class TestUserMetadata:
         assert exc_info.value.field == "preferred_name"
         assert exc_info.value.expected_type == "a string or None"
 
-    @pytest.mark.asyncio
-    async def test_update_metadata_invalid_type_for_boolean_field(self, mock_db_session):
-        """Test update_metadata raises InvalidFieldTypeError for non-boolean daily_checkin."""
-        with pytest.raises(InvalidFieldTypeError) as exc_info:
-            await UserMetadata.update_metadata(mock_db_session, user_id="user123", field="daily_checkin", value="true")
-
-        assert exc_info.value.field == "daily_checkin"
-        assert exc_info.value.expected_type == "a boolean"
 
     @pytest.mark.asyncio
     @patch("areyouok_telegram.data.models.user_metadata.encrypt_content")
@@ -216,12 +196,12 @@ class TestUserMetadata:
 
     @pytest.mark.asyncio
     async def test_update_metadata_unencrypted_field(self, mock_db_session):
-        """Test update_metadata with unencrypted boolean field."""
+        """Test update_metadata with unencrypted field."""
         mock_updated_user = MagicMock(spec=UserMetadata)
 
         with patch.object(UserMetadata, "get_by_user_id", return_value=mock_updated_user):
             result = await UserMetadata.update_metadata(
-                mock_db_session, user_id="user123", field="daily_checkin", value=True
+                mock_db_session, user_id="user123", field="country", value="United States"
             )
 
         # Verify database execute was called
@@ -237,7 +217,7 @@ class TestUserMetadata:
         mock_updated_user = MagicMock(spec=UserMetadata)
 
         with patch.object(UserMetadata, "get_by_user_id", return_value=mock_updated_user):
-            await UserMetadata.update_metadata(mock_db_session, user_id=user_id, field="daily_checkin", value=True)
+            await UserMetadata.update_metadata(mock_db_session, user_id=user_id, field="country", value="United States")
 
         # Get the statement that was executed
         call_args = mock_db_session.execute.call_args[0][0]
@@ -289,18 +269,19 @@ class TestUserMetadata:
 
         # Verify expected encrypted fields
         assert "preferred_name" in encrypted_fields
-        assert "country" in encrypted_fields
         assert "timezone" in encrypted_fields
         assert "communication_style" in encrypted_fields
 
         # Verify expected unencrypted fields
-        assert "daily_checkin" in unencrypted_fields
+        assert "country" in unencrypted_fields
 
         # Verify encrypted field mappings point to private fields
         assert encrypted_fields["preferred_name"] == "_preferred_name"
-        assert encrypted_fields["country"] == "_country"
         assert encrypted_fields["timezone"] == "_timezone"
         assert encrypted_fields["communication_style"] == "_communication_style"
+        
+        # Verify unencrypted field mappings point to public fields
+        assert unencrypted_fields["country"] == "country"
 
     def test_cache_isolation_between_users(self):
         """Test that cache is properly isolated between different users."""
@@ -378,15 +359,15 @@ class TestUserMetadata:
             assert result == mock_updated_user
 
     @pytest.mark.asyncio
-    async def test_update_metadata_boolean_values(self, mock_db_session):
-        """Test update_metadata with different boolean values."""
+    async def test_update_metadata_unencrypted_string_values(self, mock_db_session):
+        """Test update_metadata with different string values for unencrypted fields."""
         mock_updated_user = MagicMock(spec=UserMetadata)
-        boolean_values = [True, False]
+        country_values = ["United States", "Canada", "United Kingdom"]
 
-        for boolean_value in boolean_values:
+        for country_value in country_values:
             with patch.object(UserMetadata, "get_by_user_id", return_value=mock_updated_user):
                 result = await UserMetadata.update_metadata(
-                    mock_db_session, user_id="user123", field="daily_checkin", value=boolean_value
+                    mock_db_session, user_id="user123", field="country", value=country_value
                 )
 
             assert result == mock_updated_user
@@ -399,7 +380,7 @@ class TestUserMetadata:
         mock_updated_user = MagicMock(spec=UserMetadata)
 
         with patch.object(UserMetadata, "get_by_user_id", return_value=mock_updated_user):
-            await UserMetadata.update_metadata(mock_db_session, user_id="user123", field="daily_checkin", value=True)
+            await UserMetadata.update_metadata(mock_db_session, user_id="user123", field="country", value="United States")
 
         # Verify datetime.now was called with UTC
         mock_datetime.now.assert_called_once_with(UTC)

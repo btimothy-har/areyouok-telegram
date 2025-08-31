@@ -3,9 +3,11 @@ from datetime import UTC
 from datetime import datetime
 from typing import Any
 from typing import Optional
+from zoneinfo import ZoneInfo
+from zoneinfo import available_timezones
 
+import pycountry
 from cachetools import TTLCache
-from sqlalchemy import BOOLEAN
 from sqlalchemy import Column
 from sqlalchemy import Integer
 from sqlalchemy import String
@@ -33,10 +35,30 @@ class InvalidFieldError(Exception):
 class InvalidFieldTypeError(Exception):
     """Raised when an invalid type is provided for a field."""
 
-    def __init__(self, field: str, expected_type: str):
-        super().__init__(f"Field '{field}' must be {expected_type}")
+    def __init__(self, field: str, expected_type: str, value: Any = None):
+        if value is not None:
+            super().__init__(f"Field '{field}' must be {expected_type}, got: {value}")
+        else:
+            super().__init__(f"Field '{field}' must be {expected_type}")
         self.field = field
         self.expected_type = expected_type
+        self.value = value
+
+
+class InvalidCountryCodeError(ValueError):
+    """Raised when an invalid country code is provided."""
+
+    def __init__(self, value: str):
+        super().__init__(f"Invalid country code: {value}. Must be ISO3 country code or 'rather_not_say'")
+        self.value = value
+
+
+class InvalidTimezoneError(ValueError):
+    """Raised when an invalid timezone is provided."""
+
+    def __init__(self, value: str):
+        super().__init__(f"Invalid timezone: {value}. Must be a valid IANA timezone identifier")
+        self.value = value
 
 
 class UserMetadata(Base):
@@ -48,14 +70,11 @@ class UserMetadata(Base):
     # Field mappings for validation
     _ENCRYPTED_FIELDS = {
         "preferred_name": "_preferred_name",
-        "country": "_country",
-        "timezone": "_timezone",
         "communication_style": "_communication_style",
+        "timezone": "_timezone",
     }
 
-    _UNENCRYPTED_FIELDS = {
-        "daily_checkin": "daily_checkin",
-    }
+    _UNENCRYPTED_FIELDS = {"country": "country"}
 
     # TTL cache for decrypted fields (1 hour TTL, max 1000 entries)
     _field_cache: TTLCache[str, str] = TTLCache(maxsize=1000, ttl=1 * 60 * 60)
@@ -65,12 +84,11 @@ class UserMetadata(Base):
 
     # Encrypted Fields (stored as _field_name in database)
     _preferred_name = Column(String, nullable=True)
-    _country = Column(String, nullable=True)
-    _timezone = Column(String, nullable=True)
     _communication_style = Column(String, nullable=True)
 
-    # Unencrypted Feature Flags
-    daily_checkin = Column(BOOLEAN, nullable=False, default=False)
+    # Unencrypted Fields
+    country = Column(String, nullable=True)
+    _timezone = Column(String, nullable=True)
 
     # Metadata
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -116,11 +134,6 @@ class UserMetadata(Base):
         return self._decrypt_field("preferred_name", self._preferred_name)
 
     @property
-    def country(self) -> str | None:
-        """Get user's country."""
-        return self._decrypt_field("country", self._country)
-
-    @property
     def timezone(self) -> str | None:
         """Get user's timezone."""
         return self._decrypt_field("timezone", self._timezone)
@@ -153,13 +166,12 @@ class UserMetadata(Base):
             valid_fields = list(cls._ENCRYPTED_FIELDS.keys()) + list(cls._UNENCRYPTED_FIELDS.keys())
             raise InvalidFieldError(field, valid_fields)
 
-        # Type checking
-        if field in cls._ENCRYPTED_FIELDS:
-            if value is not None and not isinstance(value, str):
-                raise InvalidFieldTypeError(field, "a string or None")
-        elif field == "daily_checkin":
-            if not isinstance(value, bool):
-                raise InvalidFieldTypeError(field, "a boolean")
+        # Validate and normalize field values
+        if value is not None:  # Allow None for clearing fields
+            if field == "country":
+                value = cls._validate_country(value)
+            elif field == "timezone":
+                value = cls._validate_timezone(value)
 
         now = datetime.now(UTC)
         user_key = cls.generate_user_key(user_id)
@@ -215,3 +227,54 @@ class UserMetadata(Base):
         stmt = select(cls).where(cls.user_id == user_id)
         result = await db_conn.execute(stmt)
         return result.scalars().first()
+
+    @staticmethod
+    def _validate_country(value: str) -> str:
+        """Validate country field.
+
+        Args:
+            value: Country code or special value
+
+        Returns:
+            The validated country value
+
+        Raises:
+            InvalidCountryCodeError: If the country code is invalid
+        """
+        # Allow special value for privacy
+        if value.lower() == "rather_not_say":
+            return "rather_not_say"
+
+        # Check for valid ISO3 country code
+        try:
+            country = pycountry.countries.get(alpha_3=value.upper())
+            if country:
+                return value.upper()
+        except Exception as e:
+            raise InvalidCountryCodeError(value) from e
+
+    @staticmethod
+    def _validate_timezone(value: str) -> str:
+        """Validate timezone field.
+
+        Args:
+            value: Timezone identifier
+
+        Returns:
+            The validated timezone value
+
+        Raises:
+            InvalidTimezoneError: If the timezone is invalid
+        """
+        all_timezones = available_timezones()
+
+        for tz in all_timezones:
+            if tz.lower() == value.lower():
+                try:
+                    ZoneInfo(tz)
+                except Exception:
+                    pass
+                else:
+                    return tz
+
+        raise InvalidTimezoneError(value)
