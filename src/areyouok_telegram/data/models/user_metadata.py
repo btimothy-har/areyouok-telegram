@@ -132,7 +132,7 @@ class UserMetadata(Base):
 
     @classmethod
     @traced(extract_args=["user_id", "field"])
-    async def update_metadata(cls, db_conn: AsyncSession, user_id: str, field: str, value: Any) -> "UserMetadata":
+    async def update_metadata(cls, db_conn: AsyncSession, *, user_id: str, field: str, value: Any) -> "UserMetadata":
         """Update a single metadata field for a user.
 
         Args:
@@ -205,15 +205,13 @@ class UserMetadata(Base):
         return await cls.get_by_user_id(db_conn, user_id)
 
     @classmethod
-    async def get_by_user_id(cls, db_conn: AsyncSession, user_id: str) -> Optional["UserMetadata"]:
+    async def get_by_user_id(
+        cls,
+        db_conn: AsyncSession,
+        *,
+        user_id: str,
+    ) -> Optional["UserMetadata"]:
         """Retrieve user metadata by user ID."""
         stmt = select(cls).where(cls.user_id == user_id)
-        result = await db_conn.execute(stmt)
-        return result.scalars().first()
-
-    @classmethod
-    async def get_by_user_key(cls, db_conn: AsyncSession, user_key: str) -> Optional["UserMetadata"]:
-        """Retrieve user metadata by user key."""
-        stmt = select(cls).where(cls.user_key == user_key)
         result = await db_conn.execute(stmt)
         return result.scalars().first()
