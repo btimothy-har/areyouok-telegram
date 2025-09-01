@@ -1,6 +1,7 @@
 """Tests for Context model."""
 
 import hashlib
+import json
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 
@@ -9,6 +10,7 @@ from cryptography.fernet import Fernet
 
 from areyouok_telegram.data.models.context import Context
 from areyouok_telegram.data.models.context import InvalidContextTypeError
+from areyouok_telegram.encryption.exceptions import ContentNotDecryptedError
 
 
 class TestContext:
@@ -207,3 +209,93 @@ class TestContext:
         result = await Context.retrieve_context_by_chat(mock_db_session, chat_id="123")
 
         assert result is None
+
+    def test_content_property_cache_miss(self):
+        """Test content property raises error when not in cache (lines 98-102)."""
+        ctx = Context()
+        ctx.context_key = "test_key_not_in_cache"
+
+        # Clear cache to ensure cache miss
+        Context._data_cache.clear()
+
+        with pytest.raises(ContentNotDecryptedError) as exc_info:
+            _ = ctx.content
+
+        # Check that the exception contains the correct field name
+        expected_message = (
+            "Content for field 'test_key_not_in_cache' has not been decrypted yet. Call decrypt_content() first."
+        )
+        assert str(exc_info.value) == expected_message
+        assert exc_info.value.field_name == "test_key_not_in_cache"
+
+    def test_content_property_cache_hit(self):
+        """Test content property returns decrypted data from cache."""
+        ctx = Context()
+        ctx.context_key = "test_key_in_cache"
+
+        # Populate cache with test data
+        test_data = {"message": "test content"}
+        test_bytes = json.dumps(test_data).encode("utf-8")
+        Context._data_cache[ctx.context_key] = test_bytes
+
+        result = ctx.content
+        assert result == test_data
+
+    @pytest.mark.asyncio
+    async def test_get_by_chat_id_invalid_type(self, mock_db_session):
+        """Test get_by_chat_id with invalid type raises error (line 184)."""
+        with pytest.raises(InvalidContextTypeError) as exc_info:
+            await Context.get_by_chat_id(mock_db_session, chat_id="123", ctype="invalid_type")
+
+        assert exc_info.value.context_type == "invalid_type"
+        mock_db_session.execute.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_get_by_chat_id_with_type_filter(self, mock_db_session):
+        """Test get_by_chat_id with type filter applies WHERE clause (line 189)."""
+        mock_context = MagicMock(spec=Context)
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = [mock_context]
+        mock_result = MagicMock()
+        mock_result.scalars.return_value = mock_scalars
+        mock_db_session.execute.return_value = mock_result
+
+        result = await Context.get_by_chat_id(mock_db_session, chat_id="123", ctype="session")
+
+        assert result == [mock_context]
+        mock_db_session.execute.assert_called_once()
+
+        # Verify the SQL query includes the type filter
+        call_args = mock_db_session.execute.call_args[0][0]
+        # The statement should be a select with where clauses for both chat_id and type
+        assert hasattr(call_args, "whereclause")
+
+    @pytest.mark.asyncio
+    async def test_retrieve_context_by_chat_invalid_type(self, mock_db_session):
+        """Test retrieve_context_by_chat with invalid type raises error (line 208)."""
+        with pytest.raises(InvalidContextTypeError) as exc_info:
+            await Context.retrieve_context_by_chat(mock_db_session, chat_id="123", ctype="invalid_type")
+
+        assert exc_info.value.context_type == "invalid_type"
+        mock_db_session.execute.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_retrieve_context_by_chat_with_type_filter(self, mock_db_session):
+        """Test retrieve_context_by_chat with type filter applies WHERE clause (line 213)."""
+        mock_context1 = MagicMock(spec=Context)
+        mock_context2 = MagicMock(spec=Context)
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = [mock_context1, mock_context2]
+        mock_result = MagicMock()
+        mock_result.scalars.return_value = mock_scalars
+        mock_db_session.execute.return_value = mock_result
+
+        result = await Context.retrieve_context_by_chat(mock_db_session, chat_id="123", ctype="response")
+
+        assert result == [mock_context1, mock_context2]
+        mock_db_session.execute.assert_called_once()
+
+        # Verify the SQL query includes the type filter
+        call_args = mock_db_session.execute.call_args[0][0]
+        # The statement should be a select with where clauses for both chat_id and type
+        assert hasattr(call_args, "whereclause")

@@ -248,7 +248,6 @@ class TestSessions:
         assert result == [mock_session]
         mock_db_session.execute.assert_called_once()
 
-
     @pytest.mark.asyncio
     async def test_create_session_with_onboarding_key(self, mock_db_session):
         """Test creating a session with onboarding_key parameter."""
@@ -272,4 +271,3 @@ class TestSessions:
         assert session.session_start == timestamp
         assert session.session_key == Sessions.generate_session_key(chat_id, timestamp)
         mock_db_session.execute.assert_called_once()
-

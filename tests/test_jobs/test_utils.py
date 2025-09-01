@@ -287,9 +287,15 @@ class TestCloseChatSession:
         mock_session.close_session = AsyncMock()
         mock_session.onboarding_key = None  # No onboarding to clean up
 
-        with patch("areyouok_telegram.jobs.utils.async_database") as mock_async_db:
+        with (
+            patch("areyouok_telegram.jobs.utils.async_database") as mock_async_db,
+            patch(
+                "areyouok_telegram.jobs.utils.GuidedSessions.get_by_chat_session", new_callable=AsyncMock
+            ) as mock_get_sessions,
+        ):
             mock_db_conn = AsyncMock()
             mock_async_db.return_value.__aenter__.return_value = mock_db_conn
+            mock_get_sessions.return_value = []  # No guided sessions to clean up
 
             await close_chat_session(mock_session)
 

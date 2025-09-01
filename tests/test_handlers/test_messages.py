@@ -42,6 +42,7 @@ class TestOnNewMessage:
         # Create mock active session
         mock_active_session = MagicMock()
         mock_active_session.new_activity = AsyncMock()
+        mock_active_session.new_message = AsyncMock()
         mock_active_session.session_key = "session_key_123"
         mock_active_session.session_id = "session_id_123"
 
@@ -91,7 +92,7 @@ class TestOnNewMessage:
             mock_get_session.assert_called_once_with(mock_db_session, chat_id="789")
 
             # Verify existing session was used
-            mock_active_session.new_activity.assert_called_once_with(
+            mock_active_session.new_message.assert_called_once_with(
                 mock_db_session, timestamp=frozen_time, is_user=True
             )
 
@@ -119,6 +120,7 @@ class TestOnNewMessage:
         # Create mock new session
         mock_new_session = MagicMock()
         mock_new_session.new_activity = AsyncMock()
+        mock_new_session.new_message = AsyncMock()
         mock_new_session.session_key = "new_session_key"
         mock_new_session.session_id = "new_session_id"
 
@@ -171,7 +173,7 @@ class TestOnNewMessage:
             )
 
             # Verify message was recorded in new session
-            mock_new_session.new_activity.assert_called_once_with(mock_db_session, timestamp=frozen_time, is_user=True)
+            mock_new_session.new_message.assert_called_once_with(mock_db_session, timestamp=frozen_time, is_user=True)
 
     @pytest.mark.asyncio
     async def test_on_new_message_without_message_raises_error(self):
