@@ -182,7 +182,7 @@ requires-dist = [
     { name = "cachetools", specifier = "~=5.5.0" },
     { name = "cryptography", specifier = "~=44.0.0" },
     { name = "greenlet" },
-    { name = "logfire", specifier = "~=4.1.0" },
+    { name = "logfire", specifier = "~=4.3.6" },
     { name = "logfire", extras = ["sqlalchemy"] },
     { name = "openai", specifier = "~=1.92.0" },
     { name = "psycopg2", specifier = "~=2.9.10" },
@@ -960,7 +960,7 @@ wheels = [
 
 [[package]]
 name = "logfire"
-version = "4.1.0"
+version = "4.3.6"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "executing" },
@@ -971,9 +971,9 @@ dependencies = [
     { name = "rich" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/41/92/9b34af3414f31d335751b7e634d5163d1ad97296136ef81db666c4616194/logfire-4.1.0.tar.gz", hash = "sha256:c0a30ed05740193a465b3cd3e0c162a72c9baa53b297dd6757c3f833c7feaa7b", size = 513660, upload-time = "2025-08-04T11:51:19.714Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/57/66/fa75d419bcbc9e4575fe3b906e578aaf167d7ee4e678a30634beaa70ca4a/logfire-4.3.6.tar.gz", hash = "sha256:419b6d14f797fedc31c8b516a44c377e4e7d344f79e19addcee40d57c3bf8a61", size = 519708, upload-time = "2025-08-26T07:59:26.825Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/5a/63/4c61a3327ce7242cc4e7b08191f9e75a7a5d73744b1451d7cabb88986062/logfire-4.1.0-py3-none-any.whl", hash = "sha256:474032a2f941a0cf854a78d6c09fde1c9903f9069dacc22f8baff72bf7733a8f", size = 212236, upload-time = "2025-08-04T11:51:16.31Z" },
+    { url = "https://files.pythonhosted.org/packages/46/3b/168cf54ecb4e13e3f8c55f6c38c48e503d8ed4c856ce18ada8b160533ee5/logfire-4.3.6-py3-none-any.whl", hash = "sha256:86002ea7193ee710fddf7481fc497ab2896d13d8266f38a6cf921de4b00219c7", size = 214660, upload-time = "2025-08-26T07:59:23.08Z" },
 ]
 
 [package.optional-dependencies]
