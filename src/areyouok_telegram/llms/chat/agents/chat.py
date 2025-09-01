@@ -23,6 +23,7 @@ from areyouok_telegram.llms.chat.responses import SwitchPersonalityResponse
 from areyouok_telegram.llms.chat.responses import TextResponse
 from areyouok_telegram.llms.chat.utils import check_restricted_responses
 from areyouok_telegram.llms.chat.utils import check_special_instructions
+from areyouok_telegram.llms.chat.utils import log_metadata_update_context
 from areyouok_telegram.llms.chat.utils import validate_response_data
 from areyouok_telegram.llms.exceptions import MetadataFieldUpdateError
 from areyouok_telegram.llms.models import CHAT_SONNET_4
@@ -151,5 +152,13 @@ async def update_communication_style(
 
         except Exception as e:
             raise MetadataFieldUpdateError("communication_style", str(e)) from e
+
+    # Log the metadata update to context
+    await log_metadata_update_context(
+        chat_id=ctx.deps.tg_chat_id,
+        session_id=ctx.deps.tg_session_id,
+        field="communication_style",
+        new_value=str(anon_text.output),
+    )
 
     return f"User's new communication_style updated to: {anon_text.output}."

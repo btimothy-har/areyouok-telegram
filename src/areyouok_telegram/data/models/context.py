@@ -25,6 +25,7 @@ class ContextType(Enum):
     SESSION = "session"
     RESPONSE = "response"
     PERSONALITY = "personality"
+    METADATA = "metadata"
 
 
 VALID_CONTEXT_TYPES = [context_type.value for context_type in ContextType]

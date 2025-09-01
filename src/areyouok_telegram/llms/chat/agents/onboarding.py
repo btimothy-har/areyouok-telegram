@@ -25,6 +25,7 @@ from areyouok_telegram.llms.chat.responses import ReactionResponse
 from areyouok_telegram.llms.chat.responses import TextResponse
 from areyouok_telegram.llms.chat.utils import check_restricted_responses
 from areyouok_telegram.llms.chat.utils import check_special_instructions
+from areyouok_telegram.llms.chat.utils import log_metadata_update_context
 from areyouok_telegram.llms.chat.utils import validate_response_data
 from areyouok_telegram.llms.exceptions import CompleteOnboardingError
 from areyouok_telegram.llms.exceptions import MetadataFieldUpdateError
@@ -124,6 +125,14 @@ async def save_user_response(
         except Exception as e:
             raise MetadataFieldUpdateError("timezone", str(e)) from e
 
+    # Log the initial metadata update to context
+    await log_metadata_update_context(
+        chat_id=ctx.deps.tg_chat_id,
+        session_id=ctx.deps.tg_session_id,
+        field=field,
+        new_value=str(value_to_save),
+    )
+
     if field == "country":
         if value_to_save == "rather_not_say":
             tz_value = "rather_not_say"
@@ -159,6 +168,14 @@ multiple timezones available. Confirm with the user what their timezone should b
 
                 except Exception as e:
                     raise MetadataFieldUpdateError("timezone", str(e)) from e
+
+                # Log timezone update to context as well
+                await log_metadata_update_context(
+                    chat_id=ctx.deps.tg_chat_id,
+                    session_id=ctx.deps.tg_session_id,
+                    field="timezone",
+                    new_value=str(tz_value),
+                )
 
     return f"{field} updated successfully."
 

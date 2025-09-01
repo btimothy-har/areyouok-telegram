@@ -106,7 +106,9 @@ class TestResponseRestrictedError:
         response_type = "text"
         error = ResponseRestrictedError(response_type)
         assert error.response_type == response_type
-        expected_message = f"Response of type {response_type} is restricted for this conversation. Use a different response type."
+        expected_message = (
+            f"Response of type {response_type} is restricted for this conversation. Use a different response type."
+        )
         assert expected_message in str(error)
 
 

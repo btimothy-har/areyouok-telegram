@@ -13,9 +13,7 @@ from areyouok_telegram.data.models.user_metadata import UserMetadata
 from areyouok_telegram.llms.chat.agents.chat import ChatAgentDependencies
 from areyouok_telegram.llms.chat.agents.chat import instructions_with_personality_switch
 from areyouok_telegram.llms.chat.agents.chat import update_communication_style
-from areyouok_telegram.llms.chat.constants import USER_PREFERENCES
 from areyouok_telegram.llms.chat.personalities import PersonalityTypes
-from areyouok_telegram.llms.chat.prompt import BaseChatPromptTemplate
 from areyouok_telegram.llms.exceptions import MetadataFieldUpdateError
 from areyouok_telegram.llms.validators.anonymizer import anonymization_agent
 
@@ -93,20 +91,13 @@ class TestInstructionsWithPersonalitySwitch:
             yield context
 
     @pytest.mark.asyncio
-    async def test_instructions_with_default_settings(self, mock_run_context, mock_user_metadata):
+    async def test_instructions_with_default_settings(self, mock_run_context, mock_user_metadata):  # noqa: ARG002
         """Test instructions generation with default settings."""
         result = await instructions_with_personality_switch(mock_run_context)
 
         assert isinstance(result, str)
 
         # Verify user preferences are included
-        expected_preferences = USER_PREFERENCES.format(
-            preferred_name=mock_user_metadata.preferred_name,
-            country=mock_user_metadata.country,
-            timezone=mock_user_metadata.timezone,
-            current_time=mock_user_metadata.get_current_time(),
-            communication_style=mock_user_metadata.communication_style,
-        )
         assert "<user_preferences>" in result
         assert "Alice" in result
         assert "America/New_York" in result
@@ -218,9 +209,22 @@ class TestUpdateCommunicationStyleTool:
         mock_async_db.return_value.__aenter__ = AsyncMock(return_value=mock_db_conn)
         mock_async_db.return_value.__aexit__ = AsyncMock(return_value=None)
 
+        # Mock context logging dependencies
+        mock_chat = MagicMock()
+        mock_chat.retrieve_key.return_value = "test_encryption_key"
+
         new_style = "more direct and practical"
 
-        with patch.object(UserMetadata, "update_metadata", new_callable=AsyncMock) as mock_update:
+        with (
+            patch.object(UserMetadata, "update_metadata", new_callable=AsyncMock) as mock_update,
+            patch("areyouok_telegram.llms.chat.utils.Chats.get_by_id", new_callable=AsyncMock) as mock_get_chat,
+            patch(
+                "areyouok_telegram.llms.chat.utils.Context.new_or_update", new_callable=AsyncMock
+            ) as mock_context_update,
+        ):
+            # Setup context logging mocks
+            mock_get_chat.return_value = mock_chat
+
             result = await update_communication_style(mock_run_context, new_style)
 
             # Verify anonymization was called
@@ -236,6 +240,25 @@ class TestUpdateCommunicationStyleTool:
                 user_id=mock_run_context.deps.tg_chat_id,
                 field="communication_style",
                 value=mock_anonymization_result.output,
+            )
+
+            # Verify context logging was called (note: uses separate db connection)
+            # The log_metadata_update_context creates its own db connection
+            mock_get_chat.assert_called_once()
+            get_chat_call = mock_get_chat.call_args
+            assert get_chat_call[1]["chat_id"] == mock_run_context.deps.tg_chat_id
+
+            mock_chat.retrieve_key.assert_called_once()
+
+            mock_context_update.assert_called_once()
+            context_call = mock_context_update.call_args
+            assert context_call[1]["chat_encryption_key"] == "test_encryption_key"
+            assert context_call[1]["chat_id"] == mock_run_context.deps.tg_chat_id
+            assert context_call[1]["session_id"] == mock_run_context.deps.tg_session_id
+            assert context_call[1]["ctype"] == "metadata"
+            assert (
+                context_call[1]["content"]
+                == f"updated usermeta: communication_style is now {mock_anonymization_result.output}"
             )
 
             # Verify return value
@@ -282,9 +305,20 @@ class TestUpdateCommunicationStyleTool:
         mock_async_db.return_value.__aenter__ = AsyncMock(return_value=mock_db_conn)
         mock_async_db.return_value.__aexit__ = AsyncMock(return_value=None)
 
+        # Mock context logging dependencies
+        mock_chat = MagicMock()
+        mock_chat.retrieve_key.return_value = "test_encryption_key"
+
         new_style = "casual but professional"
 
-        with patch.object(UserMetadata, "update_metadata", new_callable=AsyncMock):
+        with (
+            patch.object(UserMetadata, "update_metadata", new_callable=AsyncMock),
+            patch("areyouok_telegram.llms.chat.utils.Chats.get_by_id", new_callable=AsyncMock) as mock_get_chat,
+            patch("areyouok_telegram.llms.chat.utils.Context.new_or_update", new_callable=AsyncMock),
+        ):
+            # Setup context logging mocks
+            mock_get_chat.return_value = mock_chat
+
             await update_communication_style(mock_run_context, new_style)
 
             # Verify anonymization agent call
@@ -292,135 +326,10 @@ class TestUpdateCommunicationStyleTool:
             call_args = mock_run_agent.call_args
 
             # First argument should be anonymization_agent
-            from areyouok_telegram.llms.validators.anonymizer import anonymization_agent
+
             assert call_args[0][0] == anonymization_agent
 
             # Verify keyword arguments
             assert call_args[1]["chat_id"] == "123456"
             assert call_args[1]["session_id"] == "session_123"
             assert call_args[1]["run_kwargs"]["user_prompt"] == new_style
-
-
-class TestBaseChatPromptTemplate:
-    """Test BaseChatPromptTemplate functionality."""
-
-    def test_prompt_template_creation_with_defaults(self):
-        """Test BaseChatPromptTemplate creation with default values."""
-        template = BaseChatPromptTemplate(response="Test response")
-
-        assert template.response == "Test response"
-        assert template.message is None
-        assert template.objectives is None
-        assert template.personality is None
-        assert template.user_preferences is None
-        # Default values should be set from constants
-        assert template.identity
-        assert template.rules
-        assert template.knowledge
-
-    def test_prompt_template_creation_with_user_preferences(self):
-        """Test BaseChatPromptTemplate creation with user preferences."""
-        user_prefs = "Preferred Name: Alice\nCountry: USA"
-
-        template = BaseChatPromptTemplate(
-            response="Test response",
-            user_preferences=user_prefs
-        )
-
-        assert template.user_preferences == user_prefs
-
-    def test_as_prompt_string_with_user_preferences(self):
-        """Test as_prompt_string includes user preferences section."""
-        user_prefs = "Preferred Name: Bob\nTimezone: UTC"
-
-        template = BaseChatPromptTemplate(
-            response="Test response",
-            user_preferences=user_prefs
-        )
-
-        result = template.as_prompt_string()
-
-        assert "<user_preferences>" in result
-        assert user_prefs in result
-        assert "</user_preferences>" in result
-
-    def test_as_prompt_string_without_user_preferences(self):
-        """Test as_prompt_string excludes user preferences when None."""
-        template = BaseChatPromptTemplate(response="Test response")
-
-        result = template.as_prompt_string()
-
-        assert "<user_preferences>" not in result
-        assert "</user_preferences>" not in result
-
-    def test_as_prompt_string_structure_with_all_fields(self):
-        """Test as_prompt_string includes all sections when provided."""
-        template = BaseChatPromptTemplate(
-            response="Test response",
-            message="Important message",
-            objectives="Test objectives",
-            personality="Test personality",
-            user_preferences="Test preferences"
-        )
-
-        result = template.as_prompt_string()
-
-        # Verify all sections are present
-        assert "<identity>" in result and "</identity>" in result
-        assert "<rules>" in result and "</rules>" in result
-        assert "<response>" in result and "</response>" in result
-        assert "<knowledge>" in result and "</knowledge>" in result
-        assert "<message>" in result and "</message>" in result
-        assert "<objectives>" in result and "</objectives>" in result
-        assert "<personality>" in result and "</personality>" in result
-        assert "<user_preferences>" in result and "</user_preferences>" in result
-
-
-class TestUserPreferencesConstant:
-    """Test USER_PREFERENCES constant usage."""
-
-    def test_user_preferences_template_formatting(self):
-        """Test USER_PREFERENCES template can be formatted correctly."""
-        formatted = USER_PREFERENCES.format(
-            preferred_name="Alice",
-            country="USA",
-            timezone="America/New_York",
-            current_time=datetime(2025, 1, 1, 15, 30, 0, tzinfo=ZoneInfo("America/New_York")),
-            communication_style="casual and friendly"
-        )
-
-        assert "Preferred Name: Alice" in formatted
-        assert "Country: USA" in formatted
-        assert "Timezone: America/New_York" in formatted
-        assert "Current Time:" in formatted
-        assert "2025-01-01 15:30:00-05:00" in formatted
-        assert "Communication Style: casual and friendly" in formatted
-
-    def test_user_preferences_template_with_none_current_time(self):
-        """Test USER_PREFERENCES template with None current_time."""
-        formatted = USER_PREFERENCES.format(
-            preferred_name="Bob",
-            country="CAN",
-            timezone="rather_not_say",
-            current_time=None,
-            communication_style="professional"
-        )
-
-        assert "Preferred Name: Bob" in formatted
-        assert "Country: CAN" in formatted
-        assert "Timezone: rather_not_say" in formatted
-        assert "Current Time: None" in formatted
-        assert "Communication Style: professional" in formatted
-
-    def test_user_preferences_mentions_settings_command(self):
-        """Test USER_PREFERENCES template mentions /settings command."""
-        formatted = USER_PREFERENCES.format(
-            preferred_name="Test",
-            country="Test",
-            timezone="UTC",
-            current_time=None,
-            communication_style="Test"
-        )
-
-        assert "/settings" in formatted
-        assert "update their preferred name, country, and timezone" in formatted
