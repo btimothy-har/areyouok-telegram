@@ -5,11 +5,14 @@ from typing import Literal
 import pydantic_ai
 from telegram.ext import ContextTypes
 
-from areyouok_telegram.llms.chat.constants import CHAT_AGENT_PROMPT
+from areyouok_telegram.llms.chat.constants import MESSAGE_FOR_USER_PROMPT
+from areyouok_telegram.llms.chat.constants import PERSONALITY_PROMPT
 from areyouok_telegram.llms.chat.constants import PERSONALITY_SWITCH_INSTRUCTIONS
+from areyouok_telegram.llms.chat.constants import RESPONSE_PROMPT
 from areyouok_telegram.llms.chat.constants import RESTRICT_PERSONALITY_SWITCH
 from areyouok_telegram.llms.chat.constants import RESTRICT_TEXT_RESPONSE
 from areyouok_telegram.llms.chat.personalities import PersonalityTypes
+from areyouok_telegram.llms.chat.prompt import BaseChatPromptTemplate
 from areyouok_telegram.llms.chat.responses import DoNothingResponse
 from areyouok_telegram.llms.chat.responses import ReactionResponse
 from areyouok_telegram.llms.chat.responses import SwitchPersonalityResponse
@@ -60,14 +63,19 @@ async def instructions_with_personality_switch(ctx: pydantic_ai.RunContext[ChatA
         restrict_response_text += RESTRICT_PERSONALITY_SWITCH
         restrict_response_text += "\n"
 
-    return CHAT_AGENT_PROMPT.format(
-        important_message_for_user=ctx.deps.instruction if ctx.deps.instruction else "None",
-        personality_text=personality_text,
-        personality_switch_instructions=PERSONALITY_SWITCH_INSTRUCTIONS
-        if "switch_personality" not in ctx.deps.restricted_responses
-        else "",
-        response_restrictions=restrict_response_text or "",
+    prompt = BaseChatPromptTemplate(
+        response=RESPONSE_PROMPT.format(response_restrictions=restrict_response_text),
+        message=MESSAGE_FOR_USER_PROMPT.format(important_message_for_user=ctx.deps.instruction)
+        if ctx.deps.instruction
+        else None,
+        personality=PERSONALITY_PROMPT.format(
+            personality_text=personality_text,
+            personality_switch_instructions=PERSONALITY_SWITCH_INSTRUCTIONS
+            if "switch_personality" not in ctx.deps.restricted_responses
+            else None,
+        ),
     )
+    return prompt.as_prompt_string()
 
 
 @chat_agent.output_validator

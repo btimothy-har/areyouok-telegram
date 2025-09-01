@@ -25,10 +25,10 @@ CHAT_SONNET_4 = BaseModelConfig(
 )
 
 ONBOARDING_SONNET_4 = BaseModelConfig(
-    model_name="anthropic/claude-sonnet-4-onboarding",
+    model_name="anthropic/claude-sonnet-4",
     provider="anthropic",
-    model_id="claude-sonnet-4-onboarding-20250514",
-    openrouter_id="anthropic/claude-sonnet-4-onboarding",
+    model_id="claude-sonnet-4-20250514",
+    openrouter_id="anthropic/claude-sonnet-4",
     model_settings=pydantic_ai.settings.ModelSettings(
         temperature=0.2,
         parallel_tool_calls=False,

@@ -14,9 +14,12 @@ from telegram.ext import ContextTypes
 from areyouok_telegram.data import GuidedSessions
 from areyouok_telegram.data import UserMetadata
 from areyouok_telegram.data import async_database
-from areyouok_telegram.llms.chat.constants import ONBOARDING_AGENT_PROMPT
+from areyouok_telegram.llms.chat.constants import MESSAGE_FOR_USER_PROMPT
 from areyouok_telegram.llms.chat.constants import ONBOARDING_FIELDS
+from areyouok_telegram.llms.chat.constants import ONBOARDING_OBJECTIVES
+from areyouok_telegram.llms.chat.constants import RESPONSE_PROMPT
 from areyouok_telegram.llms.chat.constants import RESTRICT_TEXT_RESPONSE
+from areyouok_telegram.llms.chat.prompt import BaseChatPromptTemplate
 from areyouok_telegram.llms.chat.responses import DoNothingResponse
 from areyouok_telegram.llms.chat.responses import ReactionResponse
 from areyouok_telegram.llms.chat.responses import TextResponse
@@ -81,11 +84,15 @@ async def onboarding_instructions(ctx: RunContext[OnboardingAgentDependencies]) 
         if user_metadata.communication_style:
             onboarding_fields.remove("communication_style")
 
-    return ONBOARDING_AGENT_PROMPT.format(
-        important_message_for_user=ctx.deps.instruction if ctx.deps.instruction else "None",
-        response_restrictions=restrict_response_text or "",
-        onboarding_fields=", ".join(onboarding_fields),
+    prompt = BaseChatPromptTemplate(
+        response=RESPONSE_PROMPT.format(response_restrictions=restrict_response_text),
+        message=MESSAGE_FOR_USER_PROMPT.format(important_message_for_user=ctx.deps.instruction)
+        if ctx.deps.instruction
+        else None,
+        objectives=ONBOARDING_OBJECTIVES.format(onboarding_fields=", ".join(onboarding_fields)),
     )
+
+    return prompt.as_prompt_string()
 
 
 @onboarding_agent.tool
