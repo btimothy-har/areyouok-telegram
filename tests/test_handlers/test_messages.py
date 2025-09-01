@@ -171,9 +171,7 @@ class TestOnNewMessage:
             )
 
             # Verify message was recorded in new session
-            mock_new_session.new_activity.assert_called_once_with(
-                mock_db_session, timestamp=frozen_time, is_user=True
-            )
+            mock_new_session.new_activity.assert_called_once_with(mock_db_session, timestamp=frozen_time, is_user=True)
 
     @pytest.mark.asyncio
     async def test_on_new_message_without_message_raises_error(self):

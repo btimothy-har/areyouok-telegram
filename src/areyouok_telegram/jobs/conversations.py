@@ -439,9 +439,9 @@ class ConversationJob(BaseJob):
 
                     if msg.created_at >= chat_session.last_bot_activity:
                         unsupported_media = [m for m in media if not m.is_anthropic_supported]
-                        unsupported_media_types.extend([
-                            m.mime_type for m in unsupported_media if not m.mime_type.startswith("audio/")
-                        ])
+                        unsupported_media_types.extend(
+                            [m.mime_type for m in unsupported_media if not m.mime_type.startswith("audio/")]
+                        )
 
                 message_history.append(ChatEvent.from_message(msg, media))
 

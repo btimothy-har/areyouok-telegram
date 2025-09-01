@@ -12,8 +12,8 @@ from freezegun import freeze_time
 
 from areyouok_telegram.data.models.onboarding import VALID_ONBOARDING_STATES
 from areyouok_telegram.data.models.onboarding import InvalidOnboardingStateError
-from areyouok_telegram.data.models.onboarding import OnboardingState
 from areyouok_telegram.data.models.onboarding import OnboardingSession
+from areyouok_telegram.data.models.onboarding import OnboardingState
 
 
 class TestOnboardingState:

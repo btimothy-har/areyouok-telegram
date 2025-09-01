@@ -278,9 +278,7 @@ class TestSessions:
         mock_result.scalar_one.return_value = mock_session
         mock_db_session.execute = AsyncMock(return_value=mock_result)
 
-        session = await Sessions.create_session(
-            mock_db_session, chat_id=chat_id, timestamp=timestamp
-        )
+        session = await Sessions.create_session(mock_db_session, chat_id=chat_id, timestamp=timestamp)
 
         assert session == mock_session
         assert session.chat_id == chat_id

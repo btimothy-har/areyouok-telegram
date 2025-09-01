@@ -59,9 +59,11 @@ async def on_start_command(update: telegram.Update, context: ContextTypes.DEFAUL
 
 
 @traced(extract_args=["update"])
-@environment_override({
-    "research": on_end_command_research,
-})
+@environment_override(
+    {
+        "research": on_end_command_research,
+    }
+)
 @db_retry()
 async def on_end_command(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):  # noqa: ARG001
     return

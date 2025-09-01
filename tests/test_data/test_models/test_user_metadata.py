@@ -100,7 +100,6 @@ class TestUserMetadata:
         assert result == "John Doe"
         mock_decrypt.assert_called_once_with("encrypted_name")
 
-
     @patch("areyouok_telegram.data.models.user_metadata.decrypt_content")
     def test_timezone_property(self, mock_decrypt):
         """Test timezone property calls _decrypt_field correctly."""
@@ -155,7 +154,6 @@ class TestUserMetadata:
 
         assert exc_info.value.field == "preferred_name"
         assert exc_info.value.expected == "a string or None"
-
 
     @pytest.mark.asyncio
     @patch("areyouok_telegram.data.models.user_metadata.encrypt_content")
@@ -279,7 +277,7 @@ class TestUserMetadata:
         assert encrypted_fields["preferred_name"] == "_preferred_name"
         assert encrypted_fields["timezone"] == "_timezone"
         assert encrypted_fields["communication_style"] == "_communication_style"
-        
+
         # Verify unencrypted field mappings point to public fields
         assert unencrypted_fields["country"] == "country"
 
@@ -380,7 +378,9 @@ class TestUserMetadata:
         mock_updated_user = MagicMock(spec=UserMetadata)
 
         with patch.object(UserMetadata, "get_by_user_id", return_value=mock_updated_user):
-            await UserMetadata.update_metadata(mock_db_session, user_id="user123", field="country", value="United States")
+            await UserMetadata.update_metadata(
+                mock_db_session, user_id="user123", field="country", value="United States"
+            )
 
         # Verify datetime.now was called with UTC
         mock_datetime.now.assert_called_once_with(UTC)
