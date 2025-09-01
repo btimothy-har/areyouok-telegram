@@ -1,7 +1,6 @@
 import hashlib
 from datetime import UTC
 from datetime import datetime
-from typing import Optional
 
 import telegram
 from cachetools import TTLCache
@@ -68,7 +67,7 @@ class Chats(Base):
         return decrypted_key
 
     @classmethod
-    async def get_by_id(cls, db_conn: AsyncSession, *, chat_id: str) -> Optional["Chats"]:
+    async def get_by_id(cls, db_conn: AsyncSession, *, chat_id: str) -> "Chats | None":
         """Retrieve a chat by its ID."""
         stmt = select(cls).where(cls.chat_id == chat_id)
         result = await db_conn.execute(stmt)

@@ -223,7 +223,7 @@ class GuidedSessions(Base):
         db_conn: AsyncSession,
         *,
         guided_session_key: str,
-    ) -> "GuidedSessions" | None:
+    ) -> "GuidedSessions | None":
         """Retrieve guided session by its unique guided_session_key."""
         stmt = select(cls).where(cls.guided_session_key == guided_session_key)
         result = await db_conn.execute(stmt)

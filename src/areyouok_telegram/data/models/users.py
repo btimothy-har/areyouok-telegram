@@ -1,7 +1,6 @@
 import hashlib
 from datetime import UTC
 from datetime import datetime
-from typing import Optional
 
 import telegram
 from sqlalchemy import BOOLEAN
@@ -70,7 +69,7 @@ class Users(Base):
         return await cls.get_by_id(db_conn, user_id=str(user.id))
 
     @classmethod
-    async def get_by_id(cls, db_conn: AsyncSession, *, user_id: str) -> Optional["Users"]:
+    async def get_by_id(cls, db_conn: AsyncSession, *, user_id: str) -> "Users | None":
         """Retrieve a user by their ID."""
         stmt = select(cls).where(cls.user_id == user_id)
         result = await db_conn.execute(stmt)

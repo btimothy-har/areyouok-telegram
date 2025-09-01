@@ -1,6 +1,5 @@
 import hashlib
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import Column
 from sqlalchemy import Integer
@@ -137,7 +136,7 @@ class Sessions(Base):
         return result.scalar_one()  # Always returns the active session object
 
     @classmethod
-    async def get_active_session(cls, db_conn: AsyncSession, *, chat_id: str) -> Optional["Sessions"]:
+    async def get_active_session(cls, db_conn: AsyncSession, *, chat_id: str) -> "Sessions | None":
         """Get the active (non-closed) session for a chat."""
         stmt = select(cls).where(cls.chat_id == chat_id).where(cls.session_end.is_(None))
 

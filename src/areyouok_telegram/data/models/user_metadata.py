@@ -2,7 +2,6 @@ import hashlib
 from datetime import UTC
 from datetime import datetime
 from typing import Any
-from typing import Optional
 from zoneinfo import ZoneInfo
 from zoneinfo import available_timezones
 
@@ -188,7 +187,7 @@ class UserMetadata(Base):
         db_conn: AsyncSession,
         *,
         user_id: str,
-    ) -> Optional["UserMetadata"]:
+    ) -> "UserMetadata | None":
         """Retrieve user metadata by user ID."""
         stmt = select(cls).where(cls.user_id == user_id)
         result = await db_conn.execute(stmt)
