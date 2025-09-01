@@ -25,9 +25,10 @@ from areyouok_telegram.llms.chat.responses import ReactionResponse
 from areyouok_telegram.llms.chat.responses import TextResponse
 from areyouok_telegram.llms.chat.utils import check_restricted_responses
 from areyouok_telegram.llms.chat.utils import check_special_instructions
+from areyouok_telegram.llms.chat.utils import log_metadata_update_context
 from areyouok_telegram.llms.chat.utils import validate_response_data
 from areyouok_telegram.llms.exceptions import CompleteOnboardingError
-from areyouok_telegram.llms.exceptions import OnboardingFieldUpdateError
+from areyouok_telegram.llms.exceptions import MetadataFieldUpdateError
 from areyouok_telegram.llms.models import ONBOARDING_SONNET_4
 from areyouok_telegram.llms.utils import run_agent_with_tracking
 from areyouok_telegram.llms.validators.country_timezone import CountryTimezone
@@ -77,9 +78,8 @@ async def onboarding_instructions(ctx: RunContext[OnboardingAgentDependencies]) 
         if user_metadata.preferred_name:
             onboarding_fields.remove("preferred_name")
 
-        if user_metadata.country and not user_metadata.timezone:
+        if user_metadata.country:
             onboarding_fields.remove("country")
-            onboarding_fields.insert(0, "timezone")
 
         if user_metadata.communication_style:
             onboarding_fields.remove("communication_style")
@@ -122,7 +122,14 @@ async def save_user_response(
             )
 
         except Exception as e:
-            raise OnboardingFieldUpdateError("timezone", str(e)) from e
+            raise MetadataFieldUpdateError("timezone", str(e)) from e
+
+    # Log the initial metadata update to context
+    await log_metadata_update_context(
+        chat_id=ctx.deps.tg_chat_id,
+        session_id=ctx.deps.tg_session_id,
+        content=f"Updated usermeta: {field} is now {str(value_to_save)}",
+    )
 
     if field == "country":
         if value_to_save == "rather_not_say":
@@ -141,24 +148,32 @@ async def save_user_response(
             tz_value = tz_data.timezone
             has_multiple = tz_data.has_multiple
 
+        async with async_database() as db_conn:
+            try:
+                await UserMetadata.update_metadata(
+                    db_conn,
+                    user_id=ctx.deps.tg_chat_id,
+                    field="timezone",
+                    value=tz_value,
+                )
+
+            except Exception as e:
+                raise MetadataFieldUpdateError("timezone", str(e)) from e
+
+        tz_update_status = f"Saved the user's timezone as {tz_value}."
+
         if has_multiple:
-            return f"""
-{field} updated successfully. The timezone {tz_data.timezone} seems to be the best fit option, but there are \
-multiple timezones available. Confirm with the user what their timezone should be.
-"""
+            tz_update_status += (
+                " There are multiple timezones for this country. "
+                "Inform the user of this and that they may change their timezone via the `/settings` command."
+            )
 
-        else:
-            async with async_database() as db_conn:
-                try:
-                    await UserMetadata.update_metadata(
-                        db_conn,
-                        user_id=ctx.deps.tg_chat_id,
-                        field="timezone",
-                        value=tz_value,
-                    )
-
-                except Exception as e:
-                    raise OnboardingFieldUpdateError("timezone", str(e)) from e
+        # Log timezone update to context as well
+        await log_metadata_update_context(
+            chat_id=ctx.deps.tg_chat_id,
+            session_id=ctx.deps.tg_session_id,
+            content=f"Updated usermeta: {tz_update_status}",
+        )
 
     return f"{field} updated successfully."
 
@@ -178,6 +193,12 @@ async def complete_onboarding(ctx: RunContext[OnboardingAgentDependencies]) -> s
             raise CompleteOnboardingError(f"Onboarding session is currently {onboarding.state}.")  # noqa: TRY003
 
         await onboarding.complete(db_conn, timestamp=datetime.now(UTC))
+
+    await log_metadata_update_context(
+        chat_id=ctx.deps.tg_chat_id,
+        session_id=ctx.deps.tg_session_id,
+        content="Marked the user's onboarding as complete.",
+    )
 
     return "Onboarding completed successfully."
 

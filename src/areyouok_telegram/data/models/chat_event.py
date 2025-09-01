@@ -16,6 +16,7 @@ CONTEXT_TYPE_MAP = {
     ContextType.SESSION.value: "prior_conversation_summary",
     ContextType.RESPONSE.value: "silent_response",
     ContextType.PERSONALITY.value: "switch_personality",
+    ContextType.METADATA.value: "user_metadata_update",
 }
 
 

@@ -3,7 +3,7 @@ import pydantic_ai
 
 from areyouok_telegram.data import UserMetadata
 from areyouok_telegram.data.models.user_metadata import InvalidTimezoneError
-from areyouok_telegram.llms.exceptions import OnboardingFieldUpdateError
+from areyouok_telegram.llms.exceptions import MetadataFieldUpdateError
 from areyouok_telegram.llms.models import VALIDATOR_GPT_5_NANO
 
 
@@ -39,6 +39,6 @@ async def validate_country_timezone_output(ctx: pydantic_ai.RunContext, data: Co
     try:
         UserMetadata._validate_timezone(data.timezone)
     except InvalidTimezoneError as e:
-        raise OnboardingFieldUpdateError("timezone") from e
+        raise MetadataFieldUpdateError("timezone") from e
 
     return data

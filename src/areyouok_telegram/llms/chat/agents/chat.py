@@ -3,14 +3,18 @@ from dataclasses import field
 from typing import Literal
 
 import pydantic_ai
+from pydantic_ai import RunContext
 from telegram.ext import ContextTypes
 
+from areyouok_telegram.data import UserMetadata
+from areyouok_telegram.data import async_database
 from areyouok_telegram.llms.chat.constants import MESSAGE_FOR_USER_PROMPT
 from areyouok_telegram.llms.chat.constants import PERSONALITY_PROMPT
 from areyouok_telegram.llms.chat.constants import PERSONALITY_SWITCH_INSTRUCTIONS
 from areyouok_telegram.llms.chat.constants import RESPONSE_PROMPT
 from areyouok_telegram.llms.chat.constants import RESTRICT_PERSONALITY_SWITCH
 from areyouok_telegram.llms.chat.constants import RESTRICT_TEXT_RESPONSE
+from areyouok_telegram.llms.chat.constants import USER_PREFERENCES
 from areyouok_telegram.llms.chat.personalities import PersonalityTypes
 from areyouok_telegram.llms.chat.prompt import BaseChatPromptTemplate
 from areyouok_telegram.llms.chat.responses import DoNothingResponse
@@ -19,8 +23,12 @@ from areyouok_telegram.llms.chat.responses import SwitchPersonalityResponse
 from areyouok_telegram.llms.chat.responses import TextResponse
 from areyouok_telegram.llms.chat.utils import check_restricted_responses
 from areyouok_telegram.llms.chat.utils import check_special_instructions
+from areyouok_telegram.llms.chat.utils import log_metadata_update_context
 from areyouok_telegram.llms.chat.utils import validate_response_data
+from areyouok_telegram.llms.exceptions import MetadataFieldUpdateError
 from areyouok_telegram.llms.models import CHAT_SONNET_4
+from areyouok_telegram.llms.utils import run_agent_with_tracking
+from areyouok_telegram.llms.validators.anonymizer import anonymization_agent
 
 AgentResponse = TextResponse | ReactionResponse | SwitchPersonalityResponse | DoNothingResponse
 
@@ -29,7 +37,6 @@ AgentResponse = TextResponse | ReactionResponse | SwitchPersonalityResponse | Do
 class ChatAgentDependencies:
     """Context data passed to the LLM agent for making decisions."""
 
-    # TODO: Add user preferences so we have context
     tg_context: ContextTypes.DEFAULT_TYPE
     tg_chat_id: str
     tg_session_id: str
@@ -50,6 +57,8 @@ chat_agent = pydantic_ai.Agent(
 
 @chat_agent.instructions
 async def instructions_with_personality_switch(ctx: pydantic_ai.RunContext[ChatAgentDependencies]) -> str:
+    user_metadata = await UserMetadata.get_by_user_id(ctx.deps.tg_chat_id)
+
     personality = PersonalityTypes.get_by_value(ctx.deps.personality)
     personality_text = personality.prompt_text()
 
@@ -73,6 +82,13 @@ async def instructions_with_personality_switch(ctx: pydantic_ai.RunContext[ChatA
             personality_switch_instructions=PERSONALITY_SWITCH_INSTRUCTIONS
             if "switch_personality" not in ctx.deps.restricted_responses
             else None,
+        ),
+        user_preferences=USER_PREFERENCES.format(
+            preferred_name=user_metadata.preferred_name,
+            country=user_metadata.country,
+            timezone=user_metadata.timezone,
+            current_time=user_metadata.get_current_time(),
+            communication_style=user_metadata.communication_style,
         ),
     )
     return prompt.as_prompt_string()
@@ -102,3 +118,46 @@ async def validate_agent_response(
         )
 
     return data
+
+
+@chat_agent.tool
+async def update_communication_style(
+    ctx: RunContext[ChatAgentDependencies],
+    new_communication_style: str,
+) -> str:
+    """
+    Update the user's preferred communication style as you learn more about the user.
+    This should only be used for long-lasting preferences over in-the-moment changes in needs/demands.
+
+    Text will be anonymized before being updated in the database.
+    """
+
+    anon_text = await run_agent_with_tracking(
+        anonymization_agent,
+        chat_id=ctx.deps.tg_chat_id,
+        session_id=ctx.deps.tg_session_id,
+        run_kwargs={
+            "user_prompt": new_communication_style,
+        },
+    )
+
+    async with async_database() as db_conn:
+        try:
+            await UserMetadata.update_metadata(
+                db_conn,
+                user_id=ctx.deps.tg_chat_id,
+                field="communication_style",
+                value=anon_text.output,
+            )
+
+        except Exception as e:
+            raise MetadataFieldUpdateError("communication_style", str(e)) from e
+
+    # Log the metadata update to context
+    await log_metadata_update_context(
+        chat_id=ctx.deps.tg_chat_id,
+        session_id=ctx.deps.tg_session_id,
+        content=f"Updated usermeta: communication_style is now {str(anon_text.output)}",
+    )
+
+    return f"User's new communication_style updated to: {anon_text.output}."

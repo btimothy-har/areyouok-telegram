@@ -252,6 +252,22 @@ class UserMetadata(Base):
             "timezone": self.timezone,
         }
 
+    def get_current_time(self) -> datetime | None:
+        """Get the current time in the user's timezone.
+
+        Returns:
+            datetime: Current time in user's timezone, or None if timezone is not set or is 'rather_not_say'
+        """
+        if self.timezone is None or self.timezone == "rather_not_say":
+            return None
+
+        try:
+            user_tz = ZoneInfo(self.timezone)
+            return datetime.now(user_tz)
+        except Exception:
+            # If timezone is invalid, return None
+            return None
+
     def _decrypt_field(self, field_name: str, encrypted_value: str) -> str | None:
         """Decrypt a field value with caching.
 

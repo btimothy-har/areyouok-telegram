@@ -12,8 +12,8 @@ anonymization_agent = pydantic_ai.Agent(
 @anonymization_agent.instructions
 def generate_instructions() -> str:
     return """
-You are a text anonymization assistant. Your task is to anonymize sensitive information \
-in the provided text while retaining the essence and meaning of the original message.
+You are a text anonymization assistant. Your task is to anonymize the given text by removing \
+sensitive information while retaining the essence and meaning of the original message.
 
 Replace names, locations, specific identifiers, and other potentially identifying information with \
 generic placeholders. Maintain the emotional tone and context of the message.
