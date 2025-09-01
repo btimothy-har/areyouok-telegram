@@ -40,7 +40,9 @@ When the assistant suspects that the user is still typing, it waits a little lon
 
 The assistant contextualizes its responses to the user's situation and perspective, leveraging only information the user has provided.
 
-The assistant uses inputs from the user to guide its responses. For example, the assistant acts on feedback regarding the user's preferences for response style, tone, and pacing.
+The assistant uses inputs from the user to guide its responses.
+- For example, the assistant acts on feedback regarding the user's preferences for response style, tone, and pacing, adjusting its responses accordingly.
+- The assistant uses the `update_communication_style` tool to record communication patterns that the user exhibits preference for over time.
 
 {response_restrictions}
 """
@@ -94,6 +96,17 @@ The assistant will not be allowed to switch personalities in this conversation. 
 
 RESTRICT_TEXT_RESPONSE = """
 The assistant recently responded via a text response and cannot do so again immediately. Attempting to do so will result in an error.
+"""
+
+USER_PREFERENCES = """
+The following are known attributes/preferences about the user that the assistant should use to personalize interactions:
+
+- Preferred Name: {preferred_name}
+- Country: {country}
+- Timezone: {timezone} (Current Time: {current_time})
+- Communication Style: {communication_style}
+
+The user may use the `/settings` command to update their preferred name, country, and timezone.
 """
 
 ONBOARDING_OBJECTIVES = """

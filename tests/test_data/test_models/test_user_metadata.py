@@ -2,10 +2,13 @@
 
 import hashlib
 from datetime import UTC
+from datetime import datetime
 from unittest.mock import MagicMock
 from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 import pytest
+from freezegun import freeze_time
 
 from areyouok_telegram.data.models.user_metadata import InvalidCountryCodeError
 from areyouok_telegram.data.models.user_metadata import InvalidFieldError
@@ -499,6 +502,116 @@ class TestUserMetadata:
         }
 
         assert result == expected
+
+    def test_get_current_time_with_none_timezone(self):
+        """Test get_current_time returns None when timezone is None."""
+        metadata = UserMetadata()
+        metadata.timezone = None
+
+        result = metadata.get_current_time()
+
+        assert result is None
+
+    def test_get_current_time_with_rather_not_say_timezone(self):
+        """Test get_current_time returns None when timezone is 'rather_not_say'."""
+        metadata = UserMetadata()
+        metadata.timezone = "rather_not_say"
+
+        result = metadata.get_current_time()
+
+        assert result is None
+
+    @patch("areyouok_telegram.data.models.user_metadata.datetime")
+    def test_get_current_time_with_valid_timezone(self, mock_datetime):
+        """Test get_current_time returns current time in user's timezone."""
+        # Setup
+        test_time = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
+        ny_timezone = ZoneInfo("America/New_York")
+        ny_time = test_time.astimezone(ny_timezone)
+
+        mock_datetime.now.return_value = ny_time
+
+        metadata = UserMetadata()
+        metadata.timezone = "America/New_York"
+
+        result = metadata.get_current_time()
+
+        assert result == ny_time
+        mock_datetime.now.assert_called_once_with(ny_timezone)
+
+    @patch("areyouok_telegram.data.models.user_metadata.datetime")
+    def test_get_current_time_with_different_timezone(self, mock_datetime):
+        """Test get_current_time works with different timezone."""
+        # Setup
+        test_time = datetime(2025, 1, 1, 20, 0, 0, tzinfo=UTC)
+        tokyo_timezone = ZoneInfo("Asia/Tokyo")
+        tokyo_time = test_time.astimezone(tokyo_timezone)
+
+        mock_datetime.now.return_value = tokyo_time
+
+        metadata = UserMetadata()
+        metadata.timezone = "Asia/Tokyo"
+
+        result = metadata.get_current_time()
+
+        assert result == tokyo_time
+        mock_datetime.now.assert_called_once_with(tokyo_timezone)
+
+    @patch("areyouok_telegram.data.models.user_metadata.ZoneInfo")
+    def test_get_current_time_with_invalid_timezone(self, mock_zone_info):
+        """Test get_current_time returns None when timezone is invalid."""
+        # Setup ZoneInfo to raise an exception for invalid timezone
+        mock_zone_info.side_effect = Exception("Invalid timezone")
+
+        metadata = UserMetadata()
+        metadata.timezone = "Invalid/Timezone"
+
+        result = metadata.get_current_time()
+
+        assert result is None
+        mock_zone_info.assert_called_once_with("Invalid/Timezone")
+
+    @patch("areyouok_telegram.data.models.user_metadata.ZoneInfo")
+    def test_get_current_time_handles_zoneinfo_key_error(self, mock_zone_info):
+        """Test get_current_time handles ZoneInfo KeyError gracefully."""
+        # Setup ZoneInfo to raise KeyError (typical for invalid timezone)
+        mock_zone_info.side_effect = KeyError("'Unknown/Timezone'")
+
+        metadata = UserMetadata()
+        metadata.timezone = "Unknown/Timezone"
+
+        result = metadata.get_current_time()
+
+        assert result is None
+        mock_zone_info.assert_called_once_with("Unknown/Timezone")
+
+    def test_get_current_time_with_utc_timezone(self):
+        """Test get_current_time works with UTC timezone."""
+        with freeze_time("2025-01-01 12:00:00"):
+            metadata = UserMetadata()
+            metadata.timezone = "UTC"
+
+            result = metadata.get_current_time()
+
+            assert result is not None
+            assert result.tzinfo == ZoneInfo("UTC")
+            assert result.year == 2025
+            assert result.month == 1
+            assert result.day == 1
+            assert result.hour == 12
+
+    def test_get_current_time_with_case_sensitive_timezone(self):
+        """Test get_current_time with case-sensitive timezone identifiers."""
+        with freeze_time("2025-06-15 15:30:00"):
+            metadata = UserMetadata()
+            metadata.timezone = "Europe/London"
+
+            result = metadata.get_current_time()
+
+            assert result is not None
+            assert result.tzinfo == ZoneInfo("Europe/London")
+            # In June, London is in BST (UTC+1)
+            assert result.hour == 16  # 15:30 UTC + 1 hour = 16:30 BST
 
 
 class TestInvalidFieldError:

@@ -27,7 +27,7 @@ from areyouok_telegram.llms.chat.utils import check_restricted_responses
 from areyouok_telegram.llms.chat.utils import check_special_instructions
 from areyouok_telegram.llms.chat.utils import validate_response_data
 from areyouok_telegram.llms.exceptions import CompleteOnboardingError
-from areyouok_telegram.llms.exceptions import OnboardingFieldUpdateError
+from areyouok_telegram.llms.exceptions import MetadataFieldUpdateError
 from areyouok_telegram.llms.models import ONBOARDING_SONNET_4
 from areyouok_telegram.llms.utils import run_agent_with_tracking
 from areyouok_telegram.llms.validators.country_timezone import CountryTimezone
@@ -122,7 +122,7 @@ async def save_user_response(
             )
 
         except Exception as e:
-            raise OnboardingFieldUpdateError("timezone", str(e)) from e
+            raise MetadataFieldUpdateError("timezone", str(e)) from e
 
     if field == "country":
         if value_to_save == "rather_not_say":
@@ -158,7 +158,7 @@ multiple timezones available. Confirm with the user what their timezone should b
                     )
 
                 except Exception as e:
-                    raise OnboardingFieldUpdateError("timezone", str(e)) from e
+                    raise MetadataFieldUpdateError("timezone", str(e)) from e
 
     return f"{field} updated successfully."
 
