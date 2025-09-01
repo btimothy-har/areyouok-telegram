@@ -32,33 +32,28 @@ class InvalidFieldError(Exception):
         self.valid_fields = valid_fields
 
 
-class InvalidFieldTypeError(Exception):
+class InvalidFieldValueError(Exception):
     """Raised when an invalid type is provided for a field."""
 
-    def __init__(self, field: str, expected_type: str, value: Any = None):
-        if value is not None:
-            super().__init__(f"Field '{field}' must be {expected_type}, got: {value}")
-        else:
-            super().__init__(f"Field '{field}' must be {expected_type}")
+    def __init__(self, field: str, value: Any, expected: str):
+        super().__init__(f"{value} is invalid for field '{field}'. Expected: {expected}.")
         self.field = field
-        self.expected_type = expected_type
         self.value = value
+        self.expected = expected
 
 
-class InvalidCountryCodeError(ValueError):
+class InvalidCountryCodeError(InvalidFieldValueError):
     """Raised when an invalid country code is provided."""
 
     def __init__(self, value: str):
-        super().__init__(f"Invalid country code: {value}. Must be ISO3 country code or 'rather_not_say'")
-        self.value = value
+        super().__init__(field="country", value=value, expected="ISO3 country code or 'rather_not_say'")
 
 
-class InvalidTimezoneError(ValueError):
+class InvalidTimezoneError(InvalidFieldValueError):
     """Raised when an invalid timezone is provided."""
 
     def __init__(self, value: str):
-        super().__init__(f"Invalid timezone: {value}. Must be a valid IANA timezone identifier")
-        self.value = value
+        super().__init__(field="timezone", value=value, expected="valid IANA timezone identifier or 'rather_not_say'")
 
 
 class UserMetadata(Base):
@@ -100,33 +95,6 @@ class UserMetadata(Base):
         """Generate a unique key for user metadata based on their user ID."""
         return hashlib.sha256(f"metadata:{user_id}".encode()).hexdigest()
 
-    def _decrypt_field(self, field_name: str, encrypted_value: str) -> str | None:
-        """Decrypt a field value with caching.
-
-        Args:
-            field_name: Name of the field (for caching)
-            encrypted_value: Encrypted value to decrypt
-
-        Returns:
-            str: The decrypted value, or None if encrypted_value is None
-        """
-        if encrypted_value is None:
-            return None
-
-        cache_key = f"{self.user_key}:{field_name}"
-
-        # Check cache first
-        cached_value = self._field_cache.get(cache_key)
-        if cached_value is not None:
-            return cached_value
-
-        # Decrypt and cache
-        decrypted_value = decrypt_content(encrypted_value)
-        if decrypted_value is not None:
-            self._field_cache[cache_key] = decrypted_value
-
-        return decrypted_value
-
     # Read-only properties for encrypted fields
     @property
     def preferred_name(self) -> str | None:
@@ -145,7 +113,14 @@ class UserMetadata(Base):
 
     @classmethod
     @traced(extract_args=["user_id", "field"])
-    async def update_metadata(cls, db_conn: AsyncSession, *, user_id: str, field: str, value: Any) -> "UserMetadata":
+    async def update_metadata(
+        cls,
+        db_conn: AsyncSession,
+        *,
+        user_id: str,
+        field: str,
+        value: Any,
+    ) -> "UserMetadata":
         """Update a single metadata field for a user.
 
         Args:
@@ -159,7 +134,7 @@ class UserMetadata(Base):
 
         Raises:
             InvalidFieldError: If field name is invalid
-            InvalidFieldTypeError: If value type is incorrect for the field
+            InvalidFieldValueError: If value provided is incorrect for the field
         """
         # Validate field name
         if field not in cls._ENCRYPTED_FIELDS and field not in cls._UNENCRYPTED_FIELDS:
@@ -266,6 +241,9 @@ class UserMetadata(Base):
         Raises:
             InvalidTimezoneError: If the timezone is invalid
         """
+        if value.lower() == "rather_not_say":
+            return "rather_not_say"
+
         all_timezones = available_timezones()
 
         for tz in all_timezones:
@@ -278,3 +256,40 @@ class UserMetadata(Base):
                     return tz
 
         raise InvalidTimezoneError(value)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a dictionary representation of the user metadata."""
+        return {
+            "user_id": self.user_id,
+            "preferred_name": self.preferred_name,
+            "communication_style": self.communication_style,
+            "country": self.country,
+            "timezone": self.timezone,
+        }
+
+    def _decrypt_field(self, field_name: str, encrypted_value: str) -> str | None:
+        """Decrypt a field value with caching.
+
+        Args:
+            field_name: Name of the field (for caching)
+            encrypted_value: Encrypted value to decrypt
+
+        Returns:
+            str: The decrypted value, or None if encrypted_value is None
+        """
+        if encrypted_value is None:
+            return None
+
+        cache_key = f"{self.user_key}:{field_name}"
+
+        # Check cache first
+        cached_value = self._field_cache.get(cache_key)
+        if cached_value is not None:
+            return cached_value
+
+        # Decrypt and cache
+        decrypted_value = decrypt_content(encrypted_value)
+        if decrypted_value is not None:
+            self._field_cache[cache_key] = decrypted_value
+
+        return decrypted_value
