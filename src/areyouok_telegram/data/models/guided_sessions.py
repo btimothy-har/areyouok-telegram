@@ -125,7 +125,7 @@ class GuidedSessions(Base):
 
         Args:
             db_conn: Database connection
-            user_id: User ID to start guided session for
+            chat_id: Chat ID to start guided session for
             chat_session: Session key from Sessions table to link to
             session_type: Type of guided session (from GuidedSessionType enum)
 

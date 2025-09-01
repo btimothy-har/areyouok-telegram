@@ -48,7 +48,7 @@ async def on_start_command(update: telegram.Update, context: ContextTypes.DEFAUL
         elif not onboarding_session or onboarding_session.is_incomplete:
             await GuidedSessions.start_new_session(
                 db_conn,
-                user_id=str(update.effective_user.id),
+                chat_id=str(update.effective_chat.id),
                 chat_session=active_session.session_key,
                 session_type=GuidedSessionType.ONBOARDING.value,
             )
