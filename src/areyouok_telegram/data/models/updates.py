@@ -36,7 +36,7 @@ class Updates(Base):
 
     @classmethod
     @traced(extract_args=["update"])
-    async def new_or_upsert(cls, db_conn: AsyncSession, update: telegram.Update):
+    async def new_or_upsert(cls, db_conn: AsyncSession, *, update: telegram.Update):
         """Insert or update a message in the database."""
         now = datetime.now(UTC)
 

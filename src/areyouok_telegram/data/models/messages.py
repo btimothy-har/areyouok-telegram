@@ -127,8 +127,8 @@ class Messages(Base):
     async def new_or_update(
         cls,
         db_conn: AsyncSession,
-        user_encryption_key: str,
         *,
+        user_encryption_key: str,
         user_id: str,
         chat_id: str,
         message: MessageTypes,

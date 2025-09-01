@@ -27,7 +27,7 @@ class Sessions(Base):
     # Onboarding relationship
     onboarding_key = Column(
         String,
-        ForeignKey(f"{ENV}.user_onboarding_state.session_key"),
+        ForeignKey(f"{ENV}.onboarding.session_key"),
         nullable=True,
     )
 
@@ -71,10 +71,10 @@ class Sessions(Base):
         return self.last_bot_activity > self.last_user_activity
 
     @traced(extract_args=["timestamp", "is_user"])
-    async def new_message(self, db_conn: AsyncSession, timestamp: datetime, *, is_user: bool) -> None:
+    async def new_message(self, db_conn: AsyncSession, *, timestamp: datetime, is_user: bool) -> None:
         """Record a new message in the session, updating appropriate timestamps."""
         # Always update new activity timestamp
-        await self.new_activity(db_conn, timestamp, is_user=is_user)
+        await self.new_activity(db_conn, timestamp=timestamp, is_user=is_user)
 
         if is_user:
             self.last_user_message = max(self.last_user_message, timestamp) if self.last_user_message else timestamp
@@ -87,7 +87,7 @@ class Sessions(Base):
         db_conn.add(self)
 
     @traced(extract_args=["timestamp", "is_user"])
-    async def new_activity(self, db_conn: AsyncSession, timestamp: datetime, *, is_user: bool) -> None:
+    async def new_activity(self, db_conn: AsyncSession, *, timestamp: datetime, is_user: bool) -> None:
         """Record user activity (like edits) without incrementing message count."""
         if is_user:
             self.last_user_activity = max(self.last_user_activity, timestamp) if self.last_user_activity else timestamp
@@ -98,12 +98,18 @@ class Sessions(Base):
         db_conn.add(self)
 
     @traced(extract_args=["timestamp"])
-    async def close_session(self, db_conn: AsyncSession, timestamp: datetime) -> None:
+    async def close_session(self, db_conn: AsyncSession, *, timestamp: datetime) -> None:
         """Close a session by setting session_end and message_count."""
         messages = await self.get_messages(db_conn)
         self.session_end = timestamp
         self.message_count = len(messages)
 
+        db_conn.add(self)
+
+    @traced(extract_args=["onboarding_key"])
+    async def attach_onboarding(self, db_conn: AsyncSession, *, onboarding_key: str) -> None:
+        """Attach an onboarding session to this chat session."""
+        self.onboarding_key = onboarding_key
         db_conn.add(self)
 
     @traced(extract_args=False)
@@ -120,7 +126,6 @@ class Sessions(Base):
         *,
         chat_id: str,
         timestamp: datetime,
-        onboarding_key: str | None = None,
     ) -> "Sessions":
         """Create a new session for a chat.
         If a session already exists, it will return the currently active session.
@@ -129,7 +134,7 @@ class Sessions(Base):
             db_conn: The database connection to use for the query.
             chat_id: The unique identifier for the chat.
             timestamp: The start time of the session.
-            onboarding_key: Link to the UserOnboardingState session key.
+            onboarding_key: Link to the OnboardingSession session key.
         Returns:
             The active session object, either newly created or existing.
         """
@@ -139,7 +144,6 @@ class Sessions(Base):
             session_key=session_key,
             chat_id=chat_id,
             session_start=timestamp,
-            onboarding_key=onboarding_key,
         )
 
         # On conflict, update the session_start to ensure we always return something

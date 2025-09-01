@@ -40,7 +40,7 @@ class Users(Base):
 
     @classmethod
     @traced(extract_args=["user"])
-    async def new_or_update(cls, db_conn: AsyncSession, user: telegram.User) -> "Users":
+    async def new_or_update(cls, db_conn: AsyncSession, *, user: telegram.User) -> "Users":
         """Insert or update a user in the database and return the User object."""
         now = datetime.now(UTC)
 
@@ -67,10 +67,10 @@ class Users(Base):
         await db_conn.execute(stmt)
 
         # Return the user object after upsert
-        return await cls.get_by_id(db_conn, str(user.id))
+        return await cls.get_by_id(db_conn, user_id=str(user.id))
 
     @classmethod
-    async def get_by_id(cls, db_conn: AsyncSession, user_id: str) -> Optional["Users"]:
+    async def get_by_id(cls, db_conn: AsyncSession, *, user_id: str) -> Optional["Users"]:
         """Retrieve a user by their ID."""
         stmt = select(cls).where(cls.user_id == user_id)
         result = await db_conn.execute(stmt)

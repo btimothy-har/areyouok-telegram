@@ -43,6 +43,7 @@ class LLMUsage(Base):
     async def track_pydantic_usage(
         cls,
         db_conn: AsyncSession,
+        *,
         chat_id: str,
         session_id: str,
         agent: pydantic_ai.Agent,
