@@ -8,7 +8,7 @@ from unittest.mock import patch
 import pytest
 
 from areyouok_telegram.data.models.user_metadata import InvalidFieldError
-from areyouok_telegram.data.models.user_metadata import InvalidFieldTypeError
+from areyouok_telegram.data.models.user_metadata import InvalidFieldValueError
 from areyouok_telegram.data.models.user_metadata import UserMetadata
 
 
@@ -149,8 +149,8 @@ class TestUserMetadata:
 
     @pytest.mark.asyncio
     async def test_update_metadata_invalid_type_for_encrypted_field(self, mock_db_session):
-        """Test update_metadata raises InvalidFieldTypeError for non-string encrypted field."""
-        with pytest.raises(InvalidFieldTypeError) as exc_info:
+        """Test update_metadata raises InvalidFieldValueError for non-string encrypted field."""
+        with pytest.raises(InvalidFieldValueError) as exc_info:
             await UserMetadata.update_metadata(mock_db_session, user_id="user123", field="preferred_name", value=123)
 
         assert exc_info.value.field == "preferred_name"
@@ -437,18 +437,18 @@ class TestInvalidFieldError:
         assert isinstance(error, Exception)
 
 
-class TestInvalidFieldTypeError:
-    """Test InvalidFieldTypeError exception."""
+class TestInvalidFieldValueError:
+    """Test InvalidFieldValueError exception."""
 
     def test_invalid_field_type_error_creation(self):
-        """Test InvalidFieldTypeError is created with correct attributes."""
-        error = InvalidFieldTypeError("test_field", "a string")
+        """Test InvalidFieldValueError is created with correct attributes."""
+        error = InvalidFieldValueError("test_field", "a string")
 
         assert error.field == "test_field"
         assert error.expected_type == "a string"
         assert "Field 'test_field' must be a string" in str(error)
 
     def test_invalid_field_type_error_inheritance(self):
-        """Test InvalidFieldTypeError inherits from Exception."""
-        error = InvalidFieldTypeError("test", "test")
+        """Test InvalidFieldValueError inherits from Exception."""
+        error = InvalidFieldValueError("test", "test")
         assert isinstance(error, Exception)

@@ -50,8 +50,8 @@ class TestOnNewUpdate:
             await on_new_update(mock_update, mock_context)
 
             # Verify database operations
-            mock_user_update.assert_called_once_with(db_conn=mock_db_session, user=mock_update.effective_user)
-            mock_chat_update.assert_called_once_with(db_conn=mock_db_session, chat=mock_update.effective_chat)
+            mock_user_update.assert_called_once_with(mock_db_session, user=mock_update.effective_user)
+            mock_chat_update.assert_called_once_with(mock_db_session, chat=mock_update.effective_chat)
 
             # Verify job scheduling
             mock_conversation_job.assert_called_once_with(chat_id="456")
@@ -96,8 +96,8 @@ class TestOnNewUpdate:
             await on_new_update(mock_update, mock_context)
 
             # Verify database operations
-            mock_user_update.assert_called_once_with(db_conn=mock_db_session, user=mock_update.effective_user)
-            mock_chat_update.assert_called_once_with(db_conn=mock_db_session, chat=mock_update.effective_chat)
+            mock_user_update.assert_called_once_with(mock_db_session, user=mock_update.effective_user)
+            mock_chat_update.assert_called_once_with(mock_db_session, chat=mock_update.effective_chat)
 
             # Verify job scheduling DID NOT happen for group chat
             mock_conversation_job.assert_not_called()
@@ -134,8 +134,8 @@ class TestOnNewUpdate:
             await on_new_update(mock_update, mock_context)
 
             # Verify database operations
-            mock_user_update.assert_called_once_with(db_conn=mock_db_session, user=mock_update.effective_user)
-            mock_chat_update.assert_called_once_with(db_conn=mock_db_session, chat=mock_update.effective_chat)
+            mock_user_update.assert_called_once_with(mock_db_session, user=mock_update.effective_user)
+            mock_chat_update.assert_called_once_with(mock_db_session, chat=mock_update.effective_chat)
 
             # Verify job scheduling DID NOT happen for channel
             mock_conversation_job.assert_not_called()
@@ -165,7 +165,7 @@ class TestOnNewUpdate:
             # User update should not be called
             mock_user_update.assert_not_called()
             # Chat update should still be called
-            mock_chat_update.assert_called_once_with(db_conn=mock_db_session, chat=mock_update.effective_chat)
+            mock_chat_update.assert_called_once_with(mock_db_session, chat=mock_update.effective_chat)
 
     @pytest.mark.asyncio
     async def test_on_new_update_without_chat(self, mock_db_session):
@@ -195,7 +195,7 @@ class TestOnNewUpdate:
             await on_new_update(mock_update, mock_context)
 
             # User update should be called
-            mock_user_update.assert_called_once_with(db_conn=mock_db_session, user=mock_update.effective_user)
+            mock_user_update.assert_called_once_with(mock_db_session, user=mock_update.effective_user)
             # Chat update should not be called
             mock_chat_update.assert_not_called()
             # Job should not be scheduled since there's no chat

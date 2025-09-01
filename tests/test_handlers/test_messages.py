@@ -64,7 +64,7 @@ class TestOnNewMessage:
             await on_new_message(mock_update, mock_context)
 
             # Verify chat lookup was called
-            mock_get_chat.assert_called_once_with(mock_db_session, str(mock_update.effective_chat.id))
+            mock_get_chat.assert_called_once_with(mock_db_session, chat_id=str(mock_update.effective_chat.id))
 
             # Verify chat key retrieval was called
             mock_chat_obj.retrieve_key.assert_called_once_with()
@@ -72,7 +72,7 @@ class TestOnNewMessage:
             # Verify message was saved with session key
             mock_msg_save.assert_called_once_with(
                 mock_db_session,
-                "test_encryption_key",
+                user_encryption_key="test_encryption_key",
                 user_id=mock_telegram_user.id,
                 chat_id=789,
                 message=mock_update.message,
@@ -88,10 +88,10 @@ class TestOnNewMessage:
             )
 
             # Verify session lookup
-            mock_get_session.assert_called_once_with(mock_db_session, "789")
+            mock_get_session.assert_called_once_with(mock_db_session, chat_id="789")
 
             # Verify existing session was used
-            mock_active_session.new_message.assert_called_once_with(
+            mock_active_session.new_activity.assert_called_once_with(
                 db_conn=mock_db_session, timestamp=frozen_time, is_user=True
             )
 
@@ -141,21 +141,21 @@ class TestOnNewMessage:
             await on_new_message(mock_update, mock_context)
 
             # Verify chat lookup was called
-            mock_get_chat.assert_called_once_with(mock_db_session, str(mock_update.effective_chat.id))
+            mock_get_chat.assert_called_once_with(mock_db_session, chat_id=str(mock_update.effective_chat.id))
 
             # Verify chat key retrieval was called
             mock_chat_obj.retrieve_key.assert_called_once_with()
 
             # Verify session lookup
-            mock_get_session.assert_called_once_with(mock_db_session, "789")
+            mock_get_session.assert_called_once_with(mock_db_session, chat_id="789")
 
             # Verify new session was created
-            mock_create_session.assert_called_once_with(mock_db_session, "789", frozen_time)
+            mock_create_session.assert_called_once_with(mock_db_session, chat_id="789", timestamp=frozen_time)
 
             # Verify message was saved with new session key
             mock_msg_save.assert_called_once_with(
                 mock_db_session,
-                "test_encryption_key",
+                user_encryption_key="test_encryption_key",
                 user_id=mock_telegram_user.id,
                 chat_id=789,
                 message=mock_update.message,
@@ -171,7 +171,7 @@ class TestOnNewMessage:
             )
 
             # Verify message was recorded in new session
-            mock_new_session.new_message.assert_called_once_with(
+            mock_new_session.new_activity.assert_called_once_with(
                 db_conn=mock_db_session, timestamp=frozen_time, is_user=True
             )
 
@@ -239,7 +239,7 @@ class TestOnEditMessage:
             await on_edit_message(mock_update, mock_context)
 
             # Verify chat lookup was called
-            mock_get_chat.assert_called_once_with(mock_db_session, str(mock_update.effective_chat.id))
+            mock_get_chat.assert_called_once_with(mock_db_session, chat_id=str(mock_update.effective_chat.id))
 
             # Verify chat key retrieval was called
             mock_chat_obj.retrieve_key.assert_called_once_with()
@@ -247,7 +247,7 @@ class TestOnEditMessage:
             # Verify message was saved with session key
             mock_msg_save.assert_called_once_with(
                 mock_db_session,
-                "test_encryption_key",
+                user_encryption_key="test_encryption_key",
                 user_id=mock_telegram_user.id,
                 chat_id=789,
                 message=mock_update.edited_message,
@@ -312,7 +312,7 @@ class TestOnEditMessage:
             await on_edit_message(mock_update, mock_context)
 
             # Verify chat lookup was called
-            mock_get_chat.assert_called_once_with(mock_db_session, str(mock_update.effective_chat.id))
+            mock_get_chat.assert_called_once_with(mock_db_session, chat_id=str(mock_update.effective_chat.id))
 
             # Verify chat key retrieval was called
             mock_chat_obj.retrieve_key.assert_called_once_with()
@@ -320,7 +320,7 @@ class TestOnEditMessage:
             # Verify message was saved without session key (not part of session)
             mock_msg_save.assert_called_once_with(
                 mock_db_session,
-                "test_encryption_key",
+                user_encryption_key="test_encryption_key",
                 user_id=mock_telegram_user.id,
                 chat_id=789,
                 message=mock_update.edited_message,
@@ -366,7 +366,7 @@ class TestOnEditMessage:
             await on_edit_message(mock_update, mock_context)
 
             # Verify chat lookup was called
-            mock_get_chat.assert_called_once_with(mock_db_session, str(mock_update.effective_chat.id))
+            mock_get_chat.assert_called_once_with(mock_db_session, chat_id=str(mock_update.effective_chat.id))
 
             # Verify chat key retrieval was called
             mock_chat_obj.retrieve_key.assert_called_once_with()
@@ -374,7 +374,7 @@ class TestOnEditMessage:
             # Verify message was saved without session key
             mock_msg_save.assert_called_once_with(
                 mock_db_session,
-                "test_encryption_key",
+                user_encryption_key="test_encryption_key",
                 user_id=mock_telegram_user.id,
                 chat_id=789,
                 message=mock_update.edited_message,
@@ -445,7 +445,7 @@ class TestOnMessageReact:
             await on_message_react(mock_update, mock_context)
 
             # Verify chat lookup was called
-            mock_get_chat.assert_called_once_with(mock_db_session, str(mock_update.effective_chat.id))
+            mock_get_chat.assert_called_once_with(mock_db_session, chat_id=str(mock_update.effective_chat.id))
 
             # Verify chat key retrieval was called
             mock_chat_obj.retrieve_key.assert_called_once_with()
@@ -453,7 +453,7 @@ class TestOnMessageReact:
             # Verify message/reaction was saved with session key
             mock_msg_save.assert_called_once_with(
                 mock_db_session,
-                "test_encryption_key",
+                user_encryption_key="test_encryption_key",
                 user_id=mock_telegram_user.id,
                 chat_id=789,
                 message=mock_update.message_reaction,
@@ -505,7 +505,7 @@ class TestOnMessageReact:
             await on_message_react(mock_update, mock_context)
 
             # Verify chat lookup was called
-            mock_get_chat.assert_called_once_with(mock_db_session, str(mock_update.effective_chat.id))
+            mock_get_chat.assert_called_once_with(mock_db_session, chat_id=str(mock_update.effective_chat.id))
 
             # Verify chat key retrieval was called
             mock_chat_obj.retrieve_key.assert_called_once_with()
@@ -513,7 +513,7 @@ class TestOnMessageReact:
             # Verify message was saved without session key (not part of session)
             mock_msg_save.assert_called_once_with(
                 mock_db_session,
-                "test_encryption_key",
+                user_encryption_key="test_encryption_key",
                 user_id=mock_telegram_user.id,
                 chat_id=789,
                 message=mock_update.message_reaction,
@@ -551,7 +551,7 @@ class TestOnMessageReact:
             await on_message_react(mock_update, mock_context)
 
             # Verify chat lookup was called
-            mock_get_chat.assert_called_once_with(mock_db_session, str(mock_update.effective_chat.id))
+            mock_get_chat.assert_called_once_with(mock_db_session, chat_id=str(mock_update.effective_chat.id))
 
             # Verify chat key retrieval was called
             mock_chat_obj.retrieve_key.assert_called_once_with()
@@ -559,7 +559,7 @@ class TestOnMessageReact:
             # Verify message was saved without session key
             mock_msg_save.assert_called_once_with(
                 mock_db_session,
-                "test_encryption_key",
+                user_encryption_key="test_encryption_key",
                 user_id=mock_telegram_user.id,
                 chat_id=789,
                 message=mock_update.message_reaction,
