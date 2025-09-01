@@ -86,7 +86,7 @@ async def log_bot_message(
         )
 
         if isinstance(message, telegram.Message):
-            await chat_session.new_activity(
+            await chat_session.new_message(
                 db_conn,
                 timestamp=message.date,
                 is_user=False,  # This is a bot response
@@ -142,9 +142,7 @@ async def close_chat_session(chat_session: Sessions):
     async with async_database() as db_conn:
         # Check for any active guided sessions (onboarding, etc.) linked to this session
         onboarding_sessions = await GuidedSessions.get_by_chat_session(
-            db_conn,
-            chat_session=chat_session.session_key,
-            session_type=GuidedSessionType.ONBOARDING.value
+            db_conn, chat_session=chat_session.session_key, session_type=GuidedSessionType.ONBOARDING.value
         )
 
         # Inactivate any active onboarding sessions
@@ -158,11 +156,9 @@ async def close_chat_session(chat_session: Sessions):
         )
 
 
-@environment_override(
-    {
-        "research": generate_agent_for_research_session,
-    }
-)
+@environment_override({
+    "research": generate_agent_for_research_session,
+})
 async def generate_chat_agent(chat_session: Sessions) -> pydantic_ai.Agent:  # noqa: ARG001
     """
     Generate the chat agent for a conversation job.
@@ -178,11 +174,9 @@ async def generate_chat_agent(chat_session: Sessions) -> pydantic_ai.Agent:  # n
     return chat_agent
 
 
-@environment_override(
-    {
-        "research": close_research_session,
-    }
-)
+@environment_override({
+    "research": close_research_session,
+})
 async def post_cleanup_tasks(
     *,
     context: ContextTypes.DEFAULT_TYPE,  # noqa: ARG001

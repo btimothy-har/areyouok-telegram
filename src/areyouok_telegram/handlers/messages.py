@@ -18,11 +18,9 @@ from areyouok_telegram.utils import traced
 
 
 @traced(extract_args=["update"])
-@environment_override(
-    {
-        "research": on_new_message_research,
-    }
-)
+@environment_override({
+    "research": on_new_message_research,
+})
 @db_retry()
 async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):  # noqa: ARG001
     if not update.message:
@@ -62,7 +60,7 @@ async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_
             message=update.message,
             session_key=active_session.session_key,
         )
-        await active_session.new_activity(
+        await active_session.new_message(
             db_conn,
             timestamp=update.message.date,
             is_user=True,
