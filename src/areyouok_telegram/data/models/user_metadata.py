@@ -65,11 +65,13 @@ class UserMetadata(Base):
     # Field mappings for validation
     _ENCRYPTED_FIELDS = {
         "preferred_name": "_preferred_name",
-        "communication_style": "_communication_style",
-        "timezone": "_timezone",
     }
 
-    _UNENCRYPTED_FIELDS = {"country": "country"}
+    _UNENCRYPTED_FIELDS = {
+        "country": "country",
+        "timezone": "timezone",
+        "communication_style": "communication_style",
+    }
 
     # TTL cache for decrypted fields (1 hour TTL, max 1000 entries)
     _field_cache: TTLCache[str, str] = TTLCache(maxsize=1000, ttl=1 * 60 * 60)
@@ -77,13 +79,12 @@ class UserMetadata(Base):
     user_key = Column(String, nullable=False, unique=True)
     user_id = Column(String, nullable=False, unique=True)
 
-    # Encrypted Fields (stored as _field_name in database)
     _preferred_name = Column(String, nullable=True)
-    _communication_style = Column(String, nullable=True)
 
-    # Unencrypted Fields
     country = Column(String, nullable=True)
-    _timezone = Column(String, nullable=True)
+    timezone = Column(String, nullable=True)
+
+    communication_style = Column(String, nullable=True)
 
     # Metadata
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -100,16 +101,6 @@ class UserMetadata(Base):
     def preferred_name(self) -> str | None:
         """Get user's preferred name."""
         return self._decrypt_field("preferred_name", self._preferred_name)
-
-    @property
-    def timezone(self) -> str | None:
-        """Get user's timezone."""
-        return self._decrypt_field("timezone", self._timezone)
-
-    @property
-    def communication_style(self) -> str | None:
-        """Get user's communication style."""
-        return self._decrypt_field("communication_style", self._communication_style)
 
     @classmethod
     @traced(extract_args=["user_id", "field"])
@@ -191,9 +182,6 @@ class UserMetadata(Base):
 
         await db_conn.execute(stmt)
 
-        # Return the updated user metadata
-        return await cls.get_by_user_id(db_conn, user_id)
-
     @classmethod
     async def get_by_user_id(
         cls,
@@ -224,12 +212,11 @@ class UserMetadata(Base):
             return "rather_not_say"
 
         # Check for valid ISO3 country code
-        try:
-            country = pycountry.countries.get(alpha_3=value.upper())
-            if country:
-                return value.upper()
-        except Exception as e:
-            raise InvalidCountryCodeError(value) from e
+        country = pycountry.countries.get(alpha_3=value.upper())
+        if country:
+            return value.upper()
+
+        raise InvalidCountryCodeError(value)
 
     @staticmethod
     def _validate_timezone(value: str) -> str:
@@ -251,12 +238,8 @@ class UserMetadata(Base):
 
         for tz in all_timezones:
             if tz.lower() == value.lower():
-                try:
-                    ZoneInfo(tz)
-                except Exception:
-                    pass
-                else:
-                    return tz
+                ZoneInfo(tz)
+                return tz
 
         raise InvalidTimezoneError(value)
 
