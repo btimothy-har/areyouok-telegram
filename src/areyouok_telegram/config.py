@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-CONTROLLED_ENV = ["staging", "production", "staging", "research"]
+CONTROLLED_ENV = ["staging", "production"]
 ENV = os.getenv("ENV", "development")
 
 GITHUB_REPOSITORY = os.getenv("GITHUB_REPOSITORY")

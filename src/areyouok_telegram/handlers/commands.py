@@ -8,9 +8,7 @@ from areyouok_telegram.data import Messages
 from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database
 from areyouok_telegram.handlers.constants import ONBOARDING_COMPLETE_MESSAGE
-from areyouok_telegram.research.handlers import on_end_command_research
 from areyouok_telegram.utils import db_retry
-from areyouok_telegram.utils import environment_override
 from areyouok_telegram.utils import traced
 
 
@@ -65,11 +63,6 @@ async def on_start_command(update: telegram.Update, context: ContextTypes.DEFAUL
 
 
 @traced(extract_args=["update"])
-@environment_override(
-    {
-        "research": on_end_command_research,
-    }
-)
 @db_retry()
 async def on_end_command(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):  # noqa: ARG001
     return
