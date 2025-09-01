@@ -6,6 +6,7 @@ from areyouok_telegram.data import Messages
 from areyouok_telegram.data import OnboardingSession
 from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database
+from areyouok_telegram.handlers.constants import ONBOARDING_COMPLETE_MESSAGE
 from areyouok_telegram.research.handlers import on_end_command_research
 from areyouok_telegram.utils import db_retry
 from areyouok_telegram.utils import environment_override
@@ -33,8 +34,10 @@ async def on_start_command(update: telegram.Update, context: ContextTypes.DEFAUL
         )
 
         if onboarding_session and onboarding_session.is_completed:
-            # TODO: reply to user
-            return
+            return await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=ONBOARDING_COMPLETE_MESSAGE,
+            )
 
         elif not onboarding_session or onboarding_session.is_incomplete:
             onboarding_session = await OnboardingSession.start_onboarding(
