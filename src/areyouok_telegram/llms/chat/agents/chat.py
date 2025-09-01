@@ -7,12 +7,15 @@ from telegram.ext import ContextTypes
 
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data import async_database
-from areyouok_telegram.llms.chat.constants import AGENT_PROMPT
+from areyouok_telegram.llms.chat.constants import CHAT_AGENT_PROMPT
 from areyouok_telegram.llms.chat.constants import PERSONALITY_SWITCH_INSTRUCTIONS
 from areyouok_telegram.llms.chat.constants import RESTRICT_PERSONALITY_SWITCH
 from areyouok_telegram.llms.chat.constants import RESTRICT_TEXT_RESPONSE
 from areyouok_telegram.llms.chat.personalities import PersonalityTypes
-from areyouok_telegram.llms.chat.responses import AgentResponse
+from areyouok_telegram.llms.chat.responses import DoNothingResponse
+from areyouok_telegram.llms.chat.responses import ReactionResponse
+from areyouok_telegram.llms.chat.responses import SwitchPersonalityResponse
+from areyouok_telegram.llms.chat.responses import TextResponse
 from areyouok_telegram.llms.exceptions import InvalidMessageError
 from areyouok_telegram.llms.exceptions import ReactToSelfError
 from areyouok_telegram.llms.exceptions import ResponseRestrictedError
@@ -22,6 +25,8 @@ from areyouok_telegram.llms.utils import run_agent_with_tracking
 from areyouok_telegram.llms.validators.content_check import ContentCheckDependencies
 from areyouok_telegram.llms.validators.content_check import ContentCheckResponse
 from areyouok_telegram.llms.validators.content_check import content_check_agent
+
+AgentResponse = TextResponse | ReactionResponse | SwitchPersonalityResponse | DoNothingResponse
 
 
 @dataclass
@@ -41,7 +46,7 @@ chat_agent = pydantic_ai.Agent(
     model=CHAT_SONNET_4.model,
     output_type=AgentResponse,
     deps_type=ChatAgentDependencies,
-    name="areyouok_telegram_agent",
+    name="areyouok_chat_agent",
     end_strategy="exhaustive",
     retries=3,
 )
@@ -62,7 +67,7 @@ async def instructions_with_personality_switch(ctx: pydantic_ai.RunContext[ChatA
         restrict_response_text += RESTRICT_PERSONALITY_SWITCH
         restrict_response_text += "\n"
 
-    return AGENT_PROMPT.format(
+    return CHAT_AGENT_PROMPT.format(
         important_message_for_user=ctx.deps.instruction if ctx.deps.instruction else "None",
         personality_text=personality_text,
         personality_switch_instructions=PERSONALITY_SWITCH_INSTRUCTIONS
