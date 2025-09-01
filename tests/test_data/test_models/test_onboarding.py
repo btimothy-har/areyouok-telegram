@@ -10,10 +10,10 @@ from unittest.mock import patch
 import pytest
 from freezegun import freeze_time
 
-from areyouok_telegram.data.models.onboarding import VALID_ONBOARDING_STATES
-from areyouok_telegram.data.models.onboarding import InvalidOnboardingStateError
-from areyouok_telegram.data.models.onboarding import OnboardingSession
-from areyouok_telegram.data.models.onboarding import OnboardingState
+from areyouok_telegram.data.models.guided_sessions import VALID_ONBOARDING_STATES
+from areyouok_telegram.data.models.guided_sessions import InvalidOnboardingStateError
+from areyouok_telegram.data.models.guided_sessions import OnboardingSession
+from areyouok_telegram.data.models.guided_sessions import OnboardingState
 
 
 class TestOnboardingState:
@@ -54,37 +54,37 @@ class TestInvalidOnboardingStateError:
 class TestOnboardingSession:
     """Test OnboardingSession model."""
 
-    def test_generate_session_key(self, frozen_time):
-        """Test session key generation with user ID and timestamp."""
+    def test_generate_onboarding_key(self, frozen_time):
+        """Test onboarding key generation with user ID and timestamp."""
         user_id = "user123"
         started_at = frozen_time
 
         timestamp_str = started_at.isoformat()
         expected = hashlib.sha256(f"onboarding:{user_id}:{timestamp_str}".encode()).hexdigest()
 
-        result = OnboardingSession.generate_session_key(user_id, started_at)
+        result = OnboardingSession.generate_onboarding_key(user_id, started_at)
 
         assert result == expected
 
-    def test_generate_session_key_different_users(self, frozen_time):
-        """Test session key generation produces different keys for different users."""
+    def test_generate_onboarding_key_different_users(self, frozen_time):
+        """Test onboarding key generation produces different keys for different users."""
         user_id1 = "user123"
         user_id2 = "user456"
         started_at = frozen_time
 
-        key1 = OnboardingSession.generate_session_key(user_id1, started_at)
-        key2 = OnboardingSession.generate_session_key(user_id2, started_at)
+        key1 = OnboardingSession.generate_onboarding_key(user_id1, started_at)
+        key2 = OnboardingSession.generate_onboarding_key(user_id2, started_at)
 
         assert key1 != key2
 
-    def test_generate_session_key_different_timestamps(self):
-        """Test session key generation produces different keys for different timestamps."""
+    def test_generate_onboarding_key_different_timestamps(self):
+        """Test onboarding key generation produces different keys for different timestamps."""
         user_id = "user123"
         time1 = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
         time2 = datetime(2025, 1, 1, 13, 0, 0, tzinfo=UTC)
 
-        key1 = OnboardingSession.generate_session_key(user_id, time1)
-        key2 = OnboardingSession.generate_session_key(user_id, time2)
+        key1 = OnboardingSession.generate_onboarding_key(user_id, time1)
+        key2 = OnboardingSession.generate_onboarding_key(user_id, time2)
 
         assert key1 != key2
 
@@ -198,10 +198,13 @@ class TestOnboardingSession:
     async def test_start_onboarding(self, mock_db_session):
         """Test start_onboarding creates new active onboarding record."""
         user_id = "user123"
+        session_key = "session123"
         mock_new_onboarding = MagicMock(spec=OnboardingSession)
 
-        with patch.object(OnboardingSession, "get_by_user_id", return_value=mock_new_onboarding):
-            result = await OnboardingSession.start_onboarding(mock_db_session, user_id=user_id)
+        with patch.object(OnboardingSession, "get_by_user_id_and_type", return_value=mock_new_onboarding):
+            result = await OnboardingSession.start_onboarding(
+                mock_db_session, user_id=user_id, session_key=session_key
+            )
 
         # Verify database execute was called
         mock_db_session.execute.assert_called_once()
@@ -209,21 +212,24 @@ class TestOnboardingSession:
         # Get the statement that was executed
         call_args = mock_db_session.execute.call_args[0][0]
 
-        # Verify it's an insert statement for onboarding table
+        # Verify it's an insert statement for guided_sessions table
         assert hasattr(call_args, "table")
-        assert call_args.table.name == "onboarding"
+        assert call_args.table.name == "guided_sessions"
 
-        # Verify get_by_user_id was called to return the new onboarding
+        # Verify get_by_user_id_and_type was called to return the new onboarding
         assert result == mock_new_onboarding
 
     @pytest.mark.asyncio
     async def test_start_onboarding_database_values(self, mock_db_session):
         """Test start_onboarding inserts correct values."""
         user_id = "user123"
+        session_key = "session123"
         mock_new_onboarding = MagicMock(spec=OnboardingSession)
 
-        with patch.object(OnboardingSession, "get_by_user_id", return_value=mock_new_onboarding):
-            await OnboardingSession.start_onboarding(mock_db_session, user_id=user_id)
+        with patch.object(OnboardingSession, "get_by_user_id_and_type", return_value=mock_new_onboarding):
+            await OnboardingSession.start_onboarding(
+                mock_db_session, user_id=user_id, session_key=session_key
+            )
 
         # Verify database execute was called
         call_args = mock_db_session.execute.call_args[0][0]
@@ -321,6 +327,86 @@ class TestOnboardingSession:
         # Verify database execute was called (the important part is that the query was executed)
         mock_db_session.execute.assert_called_once()
 
+    @pytest.mark.asyncio
+    async def test_get_by_onboarding_key_found(self, mock_db_session):
+        """Test get_by_onboarding_key returns onboarding when found."""
+        onboarding_key = "onboarding123"
+        mock_onboarding = MagicMock(spec=OnboardingSession)
+        mock_onboarding.onboarding_key = onboarding_key
+
+        # Setup mock chain for execute().scalars().one_or_none()
+        mock_scalars = MagicMock()
+        mock_scalars.one_or_none.return_value = mock_onboarding
+        mock_result = MagicMock()
+        mock_result.scalars.return_value = mock_scalars
+        mock_db_session.execute.return_value = mock_result
+
+        result = await OnboardingSession.get_by_onboarding_key(
+            mock_db_session, onboarding_key=onboarding_key
+        )
+
+        assert result == mock_onboarding
+        mock_db_session.execute.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_by_onboarding_key_not_found(self, mock_db_session):
+        """Test get_by_onboarding_key returns None when not found."""
+        onboarding_key = "nonexistent"
+
+        # Setup mock chain for execute().scalars().one_or_none() returning None
+        mock_scalars = MagicMock()
+        mock_scalars.one_or_none.return_value = None
+        mock_result = MagicMock()
+        mock_result.scalars.return_value = mock_scalars
+        mock_db_session.execute.return_value = mock_result
+
+        result = await OnboardingSession.get_by_onboarding_key(
+            mock_db_session, onboarding_key=onboarding_key
+        )
+
+        assert result is None
+        mock_db_session.execute.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_by_session_key_found(self, mock_db_session):
+        """Test get_by_session_key returns onboarding when session FK found."""
+        session_key = "session123"
+        mock_onboarding = MagicMock(spec=OnboardingSession)
+        mock_onboarding.session_key = session_key
+
+        # Setup mock chain for execute().scalars().one_or_none()
+        mock_scalars = MagicMock()
+        mock_scalars.one_or_none.return_value = mock_onboarding
+        mock_result = MagicMock()
+        mock_result.scalars.return_value = mock_scalars
+        mock_db_session.execute.return_value = mock_result
+
+        result = await OnboardingSession.get_by_session_key(
+            mock_db_session, session_key=session_key
+        )
+
+        assert result == mock_onboarding
+        mock_db_session.execute.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_by_session_key_not_found(self, mock_db_session):
+        """Test get_by_session_key returns None when session FK not found."""
+        session_key = "nonexistent"
+
+        # Setup mock chain for execute().scalars().one_or_none() returning None
+        mock_scalars = MagicMock()
+        mock_scalars.one_or_none.return_value = None
+        mock_result = MagicMock()
+        mock_result.scalars.return_value = mock_scalars
+        mock_db_session.execute.return_value = mock_result
+
+        result = await OnboardingSession.get_by_session_key(
+            mock_db_session, session_key=session_key
+        )
+
+        assert result is None
+        mock_db_session.execute.assert_called_once()
+
     def test_state_property_transitions(self):
         """Test all state property combinations."""
         onboarding = OnboardingSession()
@@ -343,13 +429,13 @@ class TestOnboardingSession:
         assert onboarding.is_completed is False
         assert onboarding.is_incomplete is True
 
-    def test_session_key_consistency(self):
-        """Test that session key generation is consistent for same inputs."""
+    def test_onboarding_key_consistency(self):
+        """Test that onboarding key generation is consistent for same inputs."""
         user_id = "user123"
         timestamp = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
 
-        key1 = OnboardingSession.generate_session_key(user_id, timestamp)
-        key2 = OnboardingSession.generate_session_key(user_id, timestamp)
+        key1 = OnboardingSession.generate_onboarding_key(user_id, timestamp)
+        key2 = OnboardingSession.generate_onboarding_key(user_id, timestamp)
 
         assert key1 == key2
 

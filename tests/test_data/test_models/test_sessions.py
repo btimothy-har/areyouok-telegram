@@ -248,19 +248,6 @@ class TestSessions:
         assert result == [mock_session]
         mock_db_session.execute.assert_called_once()
 
-    def test_is_onboarding_true(self):
-        """Test is_onboarding property returns True when onboarding_key is set."""
-        session = Sessions()
-        session.onboarding_key = "test_onboarding_key_123"
-
-        assert session.is_onboarding is True
-
-    def test_is_onboarding_false(self):
-        """Test is_onboarding property returns False when onboarding_key is None."""
-        session = Sessions()
-        session.onboarding_key = None
-
-        assert session.is_onboarding is False
 
     @pytest.mark.asyncio
     async def test_create_session_with_onboarding_key(self, mock_db_session):
@@ -286,38 +273,3 @@ class TestSessions:
         assert session.session_key == Sessions.generate_session_key(chat_id, timestamp)
         mock_db_session.execute.assert_called_once()
 
-    @pytest.mark.asyncio
-    async def test_get_by_onboarding_key_found(self, mock_db_session):
-        """Test retrieving sessions by onboarding_key when sessions exist."""
-        onboarding_key = "test_onboarding_key_789"
-        mock_session1 = MagicMock(spec=Sessions)
-        mock_session2 = MagicMock(spec=Sessions)
-        mock_session1.onboarding_key = onboarding_key
-        mock_session2.onboarding_key = onboarding_key
-
-        mock_scalars = MagicMock()
-        mock_scalars.all.return_value = [mock_session1, mock_session2]
-        mock_result = MagicMock()
-        mock_result.scalars.return_value = mock_scalars
-        mock_db_session.execute.return_value = mock_result
-
-        result = await Sessions.get_by_onboarding_key(mock_db_session, onboarding_key=onboarding_key)
-
-        assert result == [mock_session1, mock_session2]
-        mock_db_session.execute.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_get_by_onboarding_key_not_found(self, mock_db_session):
-        """Test retrieving sessions by onboarding_key when no sessions exist."""
-        onboarding_key = "nonexistent_onboarding_key"
-
-        mock_scalars = MagicMock()
-        mock_scalars.all.return_value = []
-        mock_result = MagicMock()
-        mock_result.scalars.return_value = mock_scalars
-        mock_db_session.execute.return_value = mock_result
-
-        result = await Sessions.get_by_onboarding_key(mock_db_session, onboarding_key=onboarding_key)
-
-        assert result == []
-        mock_db_session.execute.assert_called_once()
