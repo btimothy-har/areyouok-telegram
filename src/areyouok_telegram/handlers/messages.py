@@ -11,18 +11,11 @@ from areyouok_telegram.handlers.exceptions import NoEditedMessageError
 from areyouok_telegram.handlers.exceptions import NoMessageError
 from areyouok_telegram.handlers.exceptions import NoMessageReactionError
 from areyouok_telegram.handlers.media_utils import extract_media_from_telegram_message
-from areyouok_telegram.research.handlers import on_new_message_research
 from areyouok_telegram.utils import db_retry
-from areyouok_telegram.utils import environment_override
 from areyouok_telegram.utils import traced
 
 
 @traced(extract_args=["update"])
-@environment_override(
-    {
-        "research": on_new_message_research,
-    }
-)
 @db_retry()
 async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):  # noqa: ARG001
     if not update.message:

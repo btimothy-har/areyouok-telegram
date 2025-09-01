@@ -17,10 +17,7 @@ from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database
 from areyouok_telegram.jobs.exceptions import UserNotFoundForChatError
 from areyouok_telegram.llms.chat import chat_agent
-from areyouok_telegram.research.agents import close_research_session
-from areyouok_telegram.research.agents import generate_agent_for_research_session
 from areyouok_telegram.utils import db_retry
-from areyouok_telegram.utils import environment_override
 
 
 @db_retry()
@@ -156,11 +153,6 @@ async def close_chat_session(chat_session: Sessions):
         )
 
 
-@environment_override(
-    {
-        "research": generate_agent_for_research_session,
-    }
-)
 async def generate_chat_agent(chat_session: Sessions) -> pydantic_ai.Agent:  # noqa: ARG001
     """
     Generate the chat agent for a conversation job.
@@ -176,11 +168,6 @@ async def generate_chat_agent(chat_session: Sessions) -> pydantic_ai.Agent:  # n
     return chat_agent
 
 
-@environment_override(
-    {
-        "research": close_research_session,
-    }
-)
 async def post_cleanup_tasks(
     *,
     context: ContextTypes.DEFAULT_TYPE,  # noqa: ARG001

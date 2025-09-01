@@ -9,10 +9,8 @@ from telegram.ext import Application
 from telegram.ext import ContextTypes
 
 from areyouok_telegram.config import ENV
-from areyouok_telegram.research.setup import setup_bot_commands_research
 from areyouok_telegram.setup.exceptions import BotDescriptionSetupError
 from areyouok_telegram.setup.exceptions import BotNameSetupError
-from areyouok_telegram.utils import environment_override
 from areyouok_telegram.utils import traced
 
 
@@ -118,10 +116,5 @@ async def setup_bot_description(ctx: Application | ContextTypes.DEFAULT_TYPE):
 
 
 @traced(extract_args=False)
-@environment_override(
-    {
-        "research": setup_bot_commands_research,
-    }
-)
 async def setup_bot_commands(ctx: Application | ContextTypes.DEFAULT_TYPE):
     await ctx.bot.set_my_commands(commands=[])
