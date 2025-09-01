@@ -10,11 +10,11 @@ from areyouok_telegram.config import CHAT_SESSION_TIMEOUT_MINS
 from areyouok_telegram.data import ChatEvent
 from areyouok_telegram.data import Context
 from areyouok_telegram.data import ContextType
+from areyouok_telegram.data import GuidedSessions
+from areyouok_telegram.data import GuidedSessionType
 from areyouok_telegram.data import MediaFiles
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data import MessageTypes
-from areyouok_telegram.data import GuidedSessions
-from areyouok_telegram.data import GuidedSessionType
 from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database
 from areyouok_telegram.jobs import BaseJob
@@ -379,7 +379,7 @@ class ConversationJob(BaseJob):
                 chat_session=chat_session.session_key,
                 session_type=GuidedSessionType.ONBOARDING.value,
             )
-            
+
             # Get the most recent onboarding session (already ordered by created_at desc)
             onboarding_session = onboarding_sessions[0] if onboarding_sessions else None
             onboarding_state = onboarding_session is not None and onboarding_session.is_active

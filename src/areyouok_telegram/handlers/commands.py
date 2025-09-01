@@ -2,9 +2,9 @@ import telegram
 from telegram.ext import ContextTypes
 
 from areyouok_telegram.data import Chats
-from areyouok_telegram.data import Messages
 from areyouok_telegram.data import GuidedSessions
 from areyouok_telegram.data import GuidedSessionType
+from areyouok_telegram.data import Messages
 from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database
 from areyouok_telegram.handlers.constants import ONBOARDING_COMPLETE_MESSAGE
@@ -35,7 +35,7 @@ async def on_start_command(update: telegram.Update, context: ContextTypes.DEFAUL
             chat_id=str(update.effective_chat.id),
             session_type=GuidedSessionType.ONBOARDING.value,
         )
-        
+
         # Get the most recent onboarding session (first in desc order)
         onboarding_session = onboarding_sessions[0] if onboarding_sessions else None
 
