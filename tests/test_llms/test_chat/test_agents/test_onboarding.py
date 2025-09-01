@@ -57,8 +57,7 @@ class TestSaveUserResponse:
             mock_log_context.assert_called_once_with(
                 chat_id=mock_run_context.deps.tg_chat_id,
                 session_id=mock_run_context.deps.tg_session_id,
-                field=field,
-                new_value=str(value),
+                content=f"Updated usermeta: {field} is now {str(value)}",
             )
 
             # Verify return value
@@ -117,13 +116,12 @@ class TestSaveUserResponse:
 
             # First log call: country
             first_log_call = mock_log_context.call_args_list[0]
-            assert first_log_call[1]["field"] == "country"
-            assert first_log_call[1]["new_value"] == str(value)
+            assert first_log_call[1]["content"] == f"Updated usermeta: {field} is now {str(value)}"
 
             # Second log call: timezone
             second_log_call = mock_log_context.call_args_list[1]
-            assert second_log_call[1]["field"] == "timezone"
-            assert second_log_call[1]["new_value"] == "America/New_York"
+            expected_tz_content = "Updated usermeta: Saved the user's timezone as America/New_York."
+            assert second_log_call[1]["content"] == expected_tz_content
 
             # Verify return value
             assert result == f"{field} updated successfully."
@@ -153,31 +151,42 @@ class TestSaveUserResponse:
         with patch.object(UserMetadata, "update_metadata", new_callable=AsyncMock) as mock_update:
             result = await save_user_response(mock_run_context, field, value)
 
-            # Verify only country update was called (not timezone due to multiple options)
-            mock_update.assert_called_once_with(
-                mock_db_conn,
-                user_id=mock_run_context.deps.tg_chat_id,
-                field="country",
-                value=value,
-            )
+            # Verify both country and timezone updates were called
+            assert mock_update.call_count == 2
+
+            # First call: country update
+            first_call = mock_update.call_args_list[0]
+            assert first_call[1]["user_id"] == mock_run_context.deps.tg_chat_id
+            assert first_call[1]["field"] == "country"
+            assert first_call[1]["value"] == value
+
+            # Second call: timezone update
+            second_call = mock_update.call_args_list[1]
+            assert second_call[1]["user_id"] == mock_run_context.deps.tg_chat_id
+            assert second_call[1]["field"] == "timezone"
+            assert second_call[1]["value"] == "Europe/London"
 
             # Verify timezone agent was called
             mock_run_agent.assert_called_once()
 
-            # Verify only country context logging was called (not timezone)
-            mock_log_context.assert_called_once_with(
-                chat_id=mock_run_context.deps.tg_chat_id,
-                session_id=mock_run_context.deps.tg_session_id,
-                field="country",
-                new_value=str(value),
-            )
+            # Verify context logging was called twice (country + timezone with multiple timezone message)
+            assert mock_log_context.call_count == 2
 
-            # Verify return value indicates multiple timezone issue
-            expected_message = (
-                f"\n{field} updated successfully. The timezone Europe/London seems to be the best fit option, "
-                f"but there are multiple timezones available. Confirm with the user what their timezone should be.\n"
+            # First log call: country
+            first_log_call = mock_log_context.call_args_list[0]
+            assert first_log_call[1]["content"] == f"Updated usermeta: {field} is now {str(value)}"
+
+            # Second log call: timezone with multiple timezone warning
+            second_log_call = mock_log_context.call_args_list[1]
+            expected_tz_content = (
+                "Updated usermeta: Saved the user's timezone as Europe/London. "
+                "There are multiple timezones for this country. "
+                "Inform the user of this and that they may change their timezone via the `/settings` command."
             )
-            assert result == expected_message
+            assert second_log_call[1]["content"] == expected_tz_content
+
+            # Verify return value
+            assert result == f"{field} updated successfully."
 
     @pytest.mark.asyncio
     @patch("areyouok_telegram.llms.chat.agents.onboarding.async_database")
@@ -211,6 +220,15 @@ class TestSaveUserResponse:
 
             # Verify context logging was called twice
             assert mock_log_context.call_count == 2
+
+            # First log call: country
+            first_log_call = mock_log_context.call_args_list[0]
+            assert first_log_call[1]["content"] == f"Updated usermeta: {field} is now {str(value)}"
+
+            # Second log call: timezone (also set to rather_not_say)
+            second_log_call = mock_log_context.call_args_list[1]
+            expected_tz_content = "Updated usermeta: Saved the user's timezone as rather_not_say."
+            assert second_log_call[1]["content"] == expected_tz_content
 
             # Verify return value
             assert result == f"{field} updated successfully."
@@ -311,16 +329,15 @@ class TestSaveUserResponse:
                 first_call = mock_log_context.call_args_list[0]
                 assert first_call[1]["chat_id"] == mock_run_context.deps.tg_chat_id
                 assert first_call[1]["session_id"] == mock_run_context.deps.tg_session_id
-                assert first_call[1]["field"] == field
-                assert first_call[1]["new_value"] == str(value)
+                assert first_call[1]["content"] == f"Updated usermeta: {field} is now {str(value)}"
 
                 # If country="rather_not_say", verify second call for timezone
                 if field == "country":
                     second_call = mock_log_context.call_args_list[1]
                     assert second_call[1]["chat_id"] == mock_run_context.deps.tg_chat_id
                     assert second_call[1]["session_id"] == mock_run_context.deps.tg_session_id
-                    assert second_call[1]["field"] == "timezone"
-                    assert second_call[1]["new_value"] == "rather_not_say"
+                    expected_tz_content = "Updated usermeta: Saved the user's timezone as rather_not_say."
+                    assert second_call[1]["content"] == expected_tz_content
 
     @pytest.mark.asyncio
     @patch("areyouok_telegram.llms.chat.agents.onboarding.async_database")

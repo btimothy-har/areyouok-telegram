@@ -39,11 +39,11 @@ class TestLogMetadataUpdateContext:
         new_value = "casual and friendly"
 
         # Call function
+        content = f"Updated usermeta: {field} is now {new_value}"
         await log_metadata_update_context(
             chat_id=chat_id,
             session_id=session_id,
-            field=field,
-            new_value=new_value,
+            content=content,
         )
 
         # Verify database connection was created
@@ -62,7 +62,7 @@ class TestLogMetadataUpdateContext:
             chat_id=chat_id,
             session_id=session_id,
             ctype=ContextType.METADATA.value,
-            content=f"updated usermeta: {field} is now {new_value}",
+            content=content,
         )
 
     @pytest.mark.asyncio
@@ -80,16 +80,14 @@ class TestLogMetadataUpdateContext:
 
         chat_id = "nonexistent_chat"
         session_id = "session_123"
-        field = "preferred_name"
-        new_value = "Alice"
+        content = "Updated usermeta: preferred_name is now Alice"
 
         # Should raise AttributeError when trying to call retrieve_key on None
         with pytest.raises(AttributeError):
             await log_metadata_update_context(
                 chat_id=chat_id,
                 session_id=session_id,
-                field=field,
-                new_value=new_value,
+                content=content,
             )
 
         # Verify chat lookup was attempted
@@ -118,16 +116,14 @@ class TestLogMetadataUpdateContext:
 
         chat_id = "123456"
         session_id = "session_123"
-        field = "timezone"
-        new_value = "UTC"
+        content = "Updated usermeta: timezone is now UTC"
 
         # Should propagate the database error
         with pytest.raises(Exception) as exc_info:
             await log_metadata_update_context(
                 chat_id=chat_id,
                 session_id=session_id,
-                field=field,
-                new_value=new_value,
+                content=content,
             )
 
         assert exc_info.value == database_error
@@ -141,10 +137,10 @@ class TestLogMetadataUpdateContext:
     @patch("areyouok_telegram.llms.chat.utils.async_database")
     @patch("areyouok_telegram.llms.chat.utils.Chats.get_by_id")
     @patch("areyouok_telegram.llms.chat.utils.Context.new_or_update")
-    async def test_log_metadata_update_context_different_field_types(
+    async def test_log_metadata_update_context_different_content_formats(
         self, mock_context_update, mock_chats_get_by_id, mock_async_database
     ):
-        """Test logging different types of metadata fields."""
+        """Test logging different content message formats."""
         # Setup mocks
         mock_db_conn = AsyncMock()
         mock_async_database.return_value.__aenter__ = AsyncMock(return_value=mock_db_conn)
@@ -154,30 +150,28 @@ class TestLogMetadataUpdateContext:
         mock_chat.retrieve_key.return_value = "test_key"
         mock_chats_get_by_id.return_value = mock_chat
 
-        # Test different field and value combinations
+        # Test different content message formats
         test_cases = [
-            ("preferred_name", "John Doe"),
-            ("country", "USA"),
-            ("timezone", "America/New_York"),
-            ("communication_style", "formal and professional"),
+            "Updated usermeta: preferred_name is now John Doe",
+            "Updated usermeta: country is now USA",
+            "Updated usermeta: timezone is now America/New_York",
+            "Updated usermeta: communication_style is now formal and professional",
         ]
 
         chat_id = "123456"
         session_id = "session_123"
 
-        for field, new_value in test_cases:
+        for expected_content in test_cases:
             # Reset mocks
             mock_context_update.reset_mock()
 
             await log_metadata_update_context(
                 chat_id=chat_id,
                 session_id=session_id,
-                field=field,
-                new_value=new_value,
+                content=expected_content,
             )
 
-            # Verify context was created with correct field-specific content
-            expected_content = f"updated usermeta: {field} is now {new_value}"
+            # Verify context was created with correct content
             mock_context_update.assert_called_once()
             call_args = mock_context_update.call_args
             assert call_args[1]["content"] == expected_content
@@ -203,14 +197,12 @@ class TestLogMetadataUpdateContext:
         # Test parameters
         chat_id = "chat_789"
         session_id = "session_456"
-        field = "preferred_name"
-        new_value = "Alice Smith"
+        content = "Updated usermeta: preferred_name is now Alice Smith"
 
         await log_metadata_update_context(
             chat_id=chat_id,
             session_id=session_id,
-            field=field,
-            new_value=new_value,
+            content=content,
         )
 
         # Verify all parameters are correctly passed
@@ -221,7 +213,7 @@ class TestLogMetadataUpdateContext:
         assert call_kwargs["chat_id"] == chat_id
         assert call_kwargs["session_id"] == session_id
         assert call_kwargs["ctype"] == ContextType.METADATA.value
-        assert call_kwargs["content"] == f"updated usermeta: {field} is now {new_value}"
+        assert call_kwargs["content"] == content
 
     @pytest.mark.asyncio
     @patch("areyouok_telegram.llms.chat.utils.async_database")
@@ -239,16 +231,14 @@ class TestLogMetadataUpdateContext:
 
         chat_id = "123456"
         session_id = "session_123"
-        field = "communication_style"
-        new_value = "updated style"
+        content = "Updated usermeta: communication_style is now updated style"
 
         # Should propagate the chat retrieval error
         with pytest.raises(Exception) as exc_info:
             await log_metadata_update_context(
                 chat_id=chat_id,
                 session_id=session_id,
-                field=field,
-                new_value=new_value,
+                content=content,
             )
 
         assert exc_info.value == chat_retrieval_error

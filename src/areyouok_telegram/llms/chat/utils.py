@@ -72,8 +72,7 @@ async def log_metadata_update_context(
     *,
     chat_id: str,
     session_id: str,
-    field: str,
-    new_value: str,
+    content: str,
 ) -> None:
     """Log a metadata update to the context table.
 
@@ -93,5 +92,5 @@ async def log_metadata_update_context(
             chat_id=chat_id,
             session_id=session_id,
             ctype=ContextType.METADATA.value,
-            content=f"updated usermeta: {field} is now {new_value}",
+            content=content,
         )

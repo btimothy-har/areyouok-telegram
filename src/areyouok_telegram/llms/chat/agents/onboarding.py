@@ -78,9 +78,8 @@ async def onboarding_instructions(ctx: RunContext[OnboardingAgentDependencies]) 
         if user_metadata.preferred_name:
             onboarding_fields.remove("preferred_name")
 
-        if user_metadata.country and not user_metadata.timezone:
+        if user_metadata.country:
             onboarding_fields.remove("country")
-            onboarding_fields.insert(0, "timezone")
 
         if user_metadata.communication_style:
             onboarding_fields.remove("communication_style")
@@ -129,8 +128,7 @@ async def save_user_response(
     await log_metadata_update_context(
         chat_id=ctx.deps.tg_chat_id,
         session_id=ctx.deps.tg_session_id,
-        field=field,
-        new_value=str(value_to_save),
+        content=f"Updated usermeta: {field} is now {str(value_to_save)}",
     )
 
     if field == "country":
@@ -150,32 +148,32 @@ async def save_user_response(
             tz_value = tz_data.timezone
             has_multiple = tz_data.has_multiple
 
-        if has_multiple:
-            return f"""
-{field} updated successfully. The timezone {tz_data.timezone} seems to be the best fit option, but there are \
-multiple timezones available. Confirm with the user what their timezone should be.
-"""
-
-        else:
-            async with async_database() as db_conn:
-                try:
-                    await UserMetadata.update_metadata(
-                        db_conn,
-                        user_id=ctx.deps.tg_chat_id,
-                        field="timezone",
-                        value=tz_value,
-                    )
-
-                except Exception as e:
-                    raise MetadataFieldUpdateError("timezone", str(e)) from e
-
-                # Log timezone update to context as well
-                await log_metadata_update_context(
-                    chat_id=ctx.deps.tg_chat_id,
-                    session_id=ctx.deps.tg_session_id,
+        async with async_database() as db_conn:
+            try:
+                await UserMetadata.update_metadata(
+                    db_conn,
+                    user_id=ctx.deps.tg_chat_id,
                     field="timezone",
-                    new_value=str(tz_value),
+                    value=tz_value,
                 )
+
+            except Exception as e:
+                raise MetadataFieldUpdateError("timezone", str(e)) from e
+
+        tz_update_status = f"Saved the user's timezone as {tz_value}."
+
+        if has_multiple:
+            tz_update_status += (
+                " There are multiple timezones for this country. "
+                "Inform the user of this and that they may change their timezone via the `/settings` command."
+            )
+
+        # Log timezone update to context as well
+        await log_metadata_update_context(
+            chat_id=ctx.deps.tg_chat_id,
+            session_id=ctx.deps.tg_session_id,
+            content=f"Updated usermeta: {tz_update_status}",
+        )
 
     return f"{field} updated successfully."
 
@@ -195,6 +193,12 @@ async def complete_onboarding(ctx: RunContext[OnboardingAgentDependencies]) -> s
             raise CompleteOnboardingError(f"Onboarding session is currently {onboarding.state}.")  # noqa: TRY003
 
         await onboarding.complete(db_conn, timestamp=datetime.now(UTC))
+
+    await log_metadata_update_context(
+        chat_id=ctx.deps.tg_chat_id,
+        session_id=ctx.deps.tg_session_id,
+        content="Marked the user's onboarding as complete.",
+    )
 
     return "Onboarding completed successfully."
 

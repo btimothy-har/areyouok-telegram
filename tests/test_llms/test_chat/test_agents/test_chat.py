@@ -258,7 +258,7 @@ class TestUpdateCommunicationStyleTool:
             assert context_call[1]["ctype"] == "metadata"
             assert (
                 context_call[1]["content"]
-                == f"updated usermeta: communication_style is now {mock_anonymization_result.output}"
+                == f"Updated usermeta: communication_style is now {mock_anonymization_result.output}"
             )
 
             # Verify return value

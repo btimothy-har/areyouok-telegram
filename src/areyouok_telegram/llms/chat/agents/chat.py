@@ -157,8 +157,7 @@ async def update_communication_style(
     await log_metadata_update_context(
         chat_id=ctx.deps.tg_chat_id,
         session_id=ctx.deps.tg_session_id,
-        field="communication_style",
-        new_value=str(anon_text.output),
+        content=f"Updated usermeta: communication_style is now {str(anon_text.output)}",
     )
 
     return f"User's new communication_style updated to: {anon_text.output}."
