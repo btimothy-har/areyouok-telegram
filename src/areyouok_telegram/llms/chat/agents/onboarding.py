@@ -25,7 +25,7 @@ from areyouok_telegram.llms.chat.utils import check_special_instructions
 from areyouok_telegram.llms.chat.utils import validate_response_data
 from areyouok_telegram.llms.exceptions import CompleteOnboardingError
 from areyouok_telegram.llms.exceptions import OnboardingFieldUpdateError
-from areyouok_telegram.llms.models import CHAT_SONNET_4
+from areyouok_telegram.llms.models import ONBOARDING_SONNET_4
 from areyouok_telegram.llms.utils import run_agent_with_tracking
 from areyouok_telegram.llms.validators.country_timezone import CountryTimezone
 from areyouok_telegram.llms.validators.country_timezone import country_timezone_agent
@@ -46,7 +46,7 @@ class OnboardingAgentDependencies:
 
 
 onboarding_agent = pydantic_ai.Agent(
-    model=CHAT_SONNET_4.model,
+    model=ONBOARDING_SONNET_4.model,
     output_type=AgentResponse,
     deps_type=OnboardingAgentDependencies,
     name="areyouok_onboarding_agent",
@@ -127,7 +127,7 @@ async def save_user_response(
                 chat_id=ctx.deps.tg_chat_id,
                 session_id=ctx.deps.tg_session_id,
                 run_kwargs={
-                    "user_prompt": f"Identify the timezone for {value_to_save}",
+                    "user_prompt": f"Identify the timezone for the ISO-3 Country: {value_to_save}.",
                 },
             )
             tz_data: CountryTimezone = tz.output
