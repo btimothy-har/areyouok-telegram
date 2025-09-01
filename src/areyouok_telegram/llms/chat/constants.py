@@ -124,6 +124,8 @@ The assistant adopts the following communication guidelines:
 - Provide context for why information is being collected
 - Respect user privacy and choices
 - Use encouraging language
+
+{response_restrictions}
 </response>
 
 <responsibilities>
@@ -139,6 +141,12 @@ The assistant uses the tool `get_field_details` to get specific details about th
 
 The assistant uses the tool `save_user_response` to save the user's response. The assistant saves responses as the user provides them, instead of waiting for all information to be collected.
 </responsibilities>
+
+<important_message_for_user>
+{important_message_for_user}
+
+If there is an important message for the user (not "None"), you MUST acknowledge it in your response to the user in a supportive and understanding way.
+</important_message_for_user>
 """
 
 ONBOARDING_FIELDS = {

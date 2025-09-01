@@ -70,3 +70,10 @@ class OnboardingFieldUpdateError(pydantic_ai.ModelRetry):
     def __init__(self, field: str, message: str):
         super().__init__(f"Error updating onboarding field: {field}. {message}")
         self.field = field
+
+
+class CompleteOnboardingError(pydantic_ai.ModelRetry):
+    """Exception raised when an error occurs while completing onboarding."""
+
+    def __init__(self, message: str):
+        super().__init__(f"Error completing onboarding: {message}")

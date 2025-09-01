@@ -34,10 +34,10 @@ class InvalidOnboardingStateError(Exception):
         self.state = state
 
 
-class UserOnboardingState(Base):
+class OnboardingSession(Base):
     """User onboarding progress tracking."""
 
-    __tablename__ = "user_onboarding_state"
+    __tablename__ = "onboarding"
     __table_args__ = {"schema": ENV}
 
     session_key = Column(String, nullable=False, unique=True)
@@ -76,7 +76,7 @@ class UserOnboardingState(Base):
 
     @classmethod
     @traced(extract_args=["user_id"])
-    async def start_onboarding(cls, db_conn: AsyncSession, *, user_id: str) -> "UserOnboardingState":
+    async def start_onboarding(cls, db_conn: AsyncSession, *, user_id: str) -> "OnboardingSession":
         """Start onboarding for a user.
 
         Creates a new onboarding record, preserving audit trail of previous attempts.
@@ -86,7 +86,7 @@ class UserOnboardingState(Base):
             user_id: User ID to start onboarding for
 
         Returns:
-            UserOnboardingState: Active onboarding state object
+            OnboardingSession: Active onboarding state object
         """
         now = datetime.now(UTC)
         session_key = cls.generate_session_key(user_id, now)
@@ -104,40 +104,53 @@ class UserOnboardingState(Base):
         await db_conn.execute(stmt)
 
         # Return the most recent onboarding state for this user
-        return await cls.get_by_user_id(db_conn, user_id)
+        return await cls.get_by_user_id(db_conn, user_id=user_id)
 
     @traced(extract_args=[])
-    async def end_onboarding(self, db_conn: AsyncSession) -> None:
+    async def end_onboarding(self, db_conn: AsyncSession, *, timestamp: datetime) -> None:
         """Complete this onboarding session.
 
         Args:
             db_conn: Database connection
+            timestamp: Completion timestamp
         """
-        now = datetime.now(UTC)
         self.state = OnboardingState.COMPLETE.value
-        self.completed_at = now
-        self.updated_at = now
+        self.completed_at = timestamp
+        self.updated_at = timestamp
         db_conn.add(self)
 
     @traced(extract_args=[])
-    async def inactivate_onboarding(self, db_conn: AsyncSession) -> None:
+    async def inactivate_onboarding(self, db_conn: AsyncSession, *, timestamp: datetime) -> None:
         """Mark this onboarding session as inactive due to timeout.
 
         Args:
             db_conn: Database connection
+            timestamp: Inactivation timestamp
         """
-        now = datetime.now(UTC)
         self.state = OnboardingState.INCOMPLETE.value
-        self.updated_at = now
+        self.updated_at = timestamp
         db_conn.add(self)
 
     @classmethod
     async def get_by_user_id(
         cls,
         db_conn: AsyncSession,
+        *,
         user_id: str,
-    ) -> Optional["UserOnboardingState"]:
+    ) -> Optional["OnboardingSession"]:
         """Retrieve user onboarding state by user ID, ordered by most recent."""
         stmt = select(cls).where(cls.user_id == user_id).order_by(cls.created_at.desc())
         result = await db_conn.execute(stmt)
         return result.scalars().first()
+
+    @classmethod
+    async def get_by_session_key(
+        cls,
+        db_conn: AsyncSession,
+        *,
+        session_key: str,
+    ) -> Optional["OnboardingSession"]:
+        """Retrieve user onboarding state by session key."""
+        stmt = select(cls).where(cls.session_key == session_key)
+        result = await db_conn.execute(stmt)
+        return result.scalars().one_or_none()

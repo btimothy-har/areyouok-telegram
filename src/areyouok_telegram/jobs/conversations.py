@@ -13,12 +13,12 @@ from areyouok_telegram.data import ContextType
 from areyouok_telegram.data import MediaFiles
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data import MessageTypes
+from areyouok_telegram.data import OnboardingSession
 from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database
 from areyouok_telegram.jobs import BaseJob
 from areyouok_telegram.jobs.exceptions import UserNotFoundForChatError
 from areyouok_telegram.jobs.utils import close_chat_session
-from areyouok_telegram.jobs.utils import generate_chat_agent
 from areyouok_telegram.jobs.utils import get_chat_encryption_key
 from areyouok_telegram.jobs.utils import get_chat_session
 from areyouok_telegram.jobs.utils import log_bot_activity
@@ -27,8 +27,11 @@ from areyouok_telegram.jobs.utils import post_cleanup_tasks
 from areyouok_telegram.jobs.utils import save_session_context
 from areyouok_telegram.llms.chat import AgentResponse
 from areyouok_telegram.llms.chat import ChatAgentDependencies
+from areyouok_telegram.llms.chat import OnboardingAgentDependencies
 from areyouok_telegram.llms.chat import ReactionResponse
 from areyouok_telegram.llms.chat import TextResponse
+from areyouok_telegram.llms.chat import chat_agent
+from areyouok_telegram.llms.chat import onboarding_agent
 from areyouok_telegram.llms.context_compression import ContextTemplate
 from areyouok_telegram.llms.context_compression import context_compression_agent
 from areyouok_telegram.llms.utils import run_agent_with_tracking
@@ -162,7 +165,7 @@ class ConversationJob(BaseJob):
         chat_encryption_key: str,
         chat_session: Sessions,
         conversation_history: list[ChatEvent],
-        dependencies: ChatAgentDependencies,
+        dependencies: ChatAgentDependencies | OnboardingAgentDependencies,
     ) -> tuple[AgentResponse | None, MessageTypes | None]:
         """Process messages for this chat and send appropriate replies.
 
@@ -173,12 +176,13 @@ class ConversationJob(BaseJob):
         agent_run_payload = None
         agent_run_time = datetime.now(UTC)
 
-        if "switch_personality" not in dependencies.restricted_responses:
-            # Check if there's already a switch_personality event in the most recent 10 messages
-            # If so, disable personality switching for this run
-            recent_messages = conversation_history[-10:] if len(conversation_history) > 10 else conversation_history
-            if any(event.event_type == "switch_personality" for event in recent_messages):
-                dependencies.restricted_responses.add("switch_personality")
+        if isinstance(dependencies, ChatAgentDependencies):
+            if "switch_personality" not in dependencies.restricted_responses:
+                # Check if there's already a switch_personality event in the most recent 10 messages
+                # If so, disable personality switching for this run
+                recent_messages = conversation_history[-10:] if len(conversation_history) > 10 else conversation_history
+                if any(event.event_type == "switch_personality" for event in recent_messages):
+                    dependencies.restricted_responses.add("switch_personality")
 
         # Restrict text responses if the bot has recently replied
         if (
@@ -191,7 +195,7 @@ class ConversationJob(BaseJob):
         if "text" in dependencies.restricted_responses and dependencies.instruction:
             dependencies.restricted_responses.remove("text")
 
-        agent = await generate_chat_agent(chat_session)
+        agent = onboarding_agent if isinstance(dependencies, OnboardingAgentDependencies) else chat_agent
 
         agent_run_payload = await run_agent_with_tracking(
             agent,
@@ -358,7 +362,7 @@ class ConversationJob(BaseJob):
         context: ContextTypes.DEFAULT_TYPE,
         chat_session: Sessions,
         include_context: bool = True,
-    ) -> tuple[list[ChatEvent], ChatAgentDependencies]:
+    ) -> tuple[list[ChatEvent], ChatAgentDependencies | OnboardingAgentDependencies]:
         """Prepare the conversation input for the chat session.
         This method gathers the message history and checks for unsupported media types.
         Returns:
@@ -367,6 +371,15 @@ class ConversationJob(BaseJob):
         async with async_database() as db_conn:
             message_history = []
             latest_personality_context = None
+
+            if chat_session.onboarding_key:
+                onboarding_session = await OnboardingSession.get_by_session_key(
+                    db_conn,
+                    session_key=chat_session.onboarding_key,
+                )
+                onboarding_state = onboarding_session.is_active
+            else:
+                onboarding_state = False
 
             if include_context:
                 # Gather chat context
@@ -426,9 +439,9 @@ class ConversationJob(BaseJob):
 
                     if msg.created_at >= chat_session.last_bot_activity:
                         unsupported_media = [m for m in media if not m.is_anthropic_supported]
-                        unsupported_media_types.extend(
-                            [m.mime_type for m in unsupported_media if not m.mime_type.startswith("audio/")]
-                        )
+                        unsupported_media_types.extend([
+                            m.mime_type for m in unsupported_media if not m.mime_type.startswith("audio/")
+                        ])
 
                 message_history.append(ChatEvent.from_message(msg, media))
 
@@ -441,25 +454,32 @@ class ConversationJob(BaseJob):
                     f"The user sent {', '.join(unsupported_media_types)} files, but you can only view images and PDFs."
                 )
 
-            if latest_personality_context:
-                latest_personality_context.decrypt_content(chat_encryption_key=chat_encryption_key)
-                chat_personality = (
-                    latest_personality_context.content.get("personality", "exploration")
-                    if isinstance(latest_personality_context.content, dict)
-                    else "exploration"
-                )
+            deps_data = {
+                "tg_context": context,
+                "tg_chat_id": self.chat_id,
+                "tg_session_id": chat_session.session_id,
+                "instruction": media_instruction,
+            }
+
+            if onboarding_state:
+                deps_data["onboarding_session_key"] = chat_session.onboarding_key
+                deps = OnboardingAgentDependencies(**deps_data)
+
             else:
-                chat_personality = "exploration"
+                if latest_personality_context:
+                    latest_personality_context.decrypt_content(chat_encryption_key=chat_encryption_key)
+                    chat_personality = (
+                        latest_personality_context.content.get("personality", "exploration")
+                        if isinstance(latest_personality_context.content, dict)
+                        else "exploration"
+                    )
+                else:
+                    chat_personality = "exploration"
 
-            chat_deps = ChatAgentDependencies(
-                tg_context=context,
-                tg_chat_id=self.chat_id,
-                tg_session_id=chat_session.session_id,
-                personality=chat_personality,
-                instruction=media_instruction,
-            )
+                deps_data["personality"] = chat_personality
+                deps = ChatAgentDependencies(**deps_data)
 
-            return sorted(message_history, key=lambda x: x.timestamp), chat_deps
+            return sorted(message_history, key=lambda x: x.timestamp), deps
 
     @telegram_retry()
     async def _execute_text_response(
