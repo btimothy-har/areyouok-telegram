@@ -43,6 +43,3 @@ class SwitchPersonalityResponse(BaseAgentResponse):
 
 class DoNothingResponse(BaseAgentResponse):
     """Do nothing response, used when no action is needed."""
-
-
-AgentResponse = TextResponse | ReactionResponse | SwitchPersonalityResponse | DoNothingResponse

@@ -33,7 +33,7 @@ class TestUsers:
 
         # Mock get_by_id to return the user object after upsert
         with patch.object(Users, "get_by_id", return_value=mock_user):
-            result = await Users.new_or_update(mock_db_session, mock_telegram_user)
+            result = await Users.new_or_update(mock_db_session, user=mock_telegram_user)
 
         # Verify execute was called
         mock_db_session.execute.assert_called_once()
@@ -62,7 +62,7 @@ class TestUsers:
         mock_existing_user = MagicMock(spec=Users)
         mock_existing_user.user_id = str(mock_telegram_user.id)
         with patch.object(Users, "get_by_id", return_value=mock_existing_user):
-            result = await Users.new_or_update(mock_db_session, mock_telegram_user)
+            result = await Users.new_or_update(mock_db_session, user=mock_telegram_user)
 
         # Verify execute was called with upsert
         mock_db_session.execute.assert_called_once()
@@ -86,7 +86,7 @@ class TestUsers:
 
         # Mock get_by_id to return the user object after upsert
         with patch.object(Users, "get_by_id", return_value=mock_user):
-            result = await Users.new_or_update(mock_db_session, user)
+            result = await Users.new_or_update(mock_db_session, user=user)
 
         # Verify execute was called
         mock_db_session.execute.assert_called_once()
@@ -108,7 +108,7 @@ class TestUsers:
         mock_result.scalars.return_value = mock_scalars
         mock_db_session.execute.return_value = mock_result
 
-        result = await Users.get_by_id(mock_db_session, "123456789")
+        result = await Users.get_by_id(mock_db_session, user_id="123456789")
 
         assert result == mock_user
         mock_db_session.execute.assert_called_once()
@@ -123,7 +123,7 @@ class TestUsers:
         mock_result.scalars.return_value = mock_scalars
         mock_db_session.execute.return_value = mock_result
 
-        result = await Users.get_by_id(mock_db_session, "nonexistent")
+        result = await Users.get_by_id(mock_db_session, user_id="nonexistent")
 
         assert result is None
         mock_db_session.execute.assert_called_once()

@@ -29,7 +29,7 @@ from .utils import generate_feedback_url
 async def on_start_command_research(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):  # noqa: ARG001
     async with async_database() as db_conn:
         active_session = await Sessions.get_active_session(
-            db_conn=db_conn,
+            db_conn,
             chat_id=str(update.effective_chat.id),
         )
 
@@ -55,12 +55,12 @@ async def on_start_command_research(update: telegram.Update, context: ContextTyp
 async def on_end_command_research(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):  # noqa: ARG001
     async with async_database() as db_conn:
         active_session = await Sessions.get_active_session(
-            db_conn=db_conn,
+            db_conn,
             chat_id=str(update.effective_chat.id),
         )
 
         if active_session:
-            await active_session.close_session(db_conn, datetime.now(UTC))
+            await active_session.close_session(db_conn, timestamp=datetime.now(UTC))
 
             raw_messages = await active_session.get_messages(db_conn)
             if len(raw_messages) <= 5:
@@ -70,7 +70,7 @@ async def on_end_command_research(update: telegram.Update, context: ContextTypes
                 )
             else:
                 scenario = await ResearchScenario.get_for_session_id(
-                    db_conn=db_conn,
+                    db_conn,
                     session_id=active_session.session_id,
                 )
 
@@ -98,7 +98,7 @@ async def on_new_message_research(update: telegram.Update, context: ContextTypes
 
     async with async_database() as db_conn:
         # Get chat and its encryption key
-        chat_obj = await Chats.get_by_id(db_conn, str(update.effective_chat.id))
+        chat_obj = await Chats.get_by_id(db_conn, chat_id=str(update.effective_chat.id))
         chat_encryption_key = chat_obj.retrieve_key()
 
         # Handle session management
@@ -117,7 +117,7 @@ async def on_new_message_research(update: telegram.Update, context: ContextTypes
         # Save the message
         await Messages.new_or_update(
             db_conn,
-            chat_encryption_key,
+            user_encryption_key=chat_encryption_key,
             user_id=update.effective_user.id,
             chat_id=update.effective_chat.id,
             message=update.message,
@@ -126,6 +126,6 @@ async def on_new_message_research(update: telegram.Update, context: ContextTypes
 
         if active_session:
             # Record new user message if there is an active session - distinct from the main handler
-            await active_session.new_message(db_conn=db_conn, timestamp=update.message.date, is_user=True)
+            await active_session.new_activity(db_conn, timestamp=update.message.date, is_user=True)
 
         await extract_media

@@ -1,6 +1,5 @@
 import hashlib
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import Column
 from sqlalchemy import Integer
@@ -58,10 +57,10 @@ class Sessions(Base):
         return self.last_bot_activity > self.last_user_activity
 
     @traced(extract_args=["timestamp", "is_user"])
-    async def new_message(self, db_conn: AsyncSession, timestamp: datetime, *, is_user: bool) -> None:
+    async def new_message(self, db_conn: AsyncSession, *, timestamp: datetime, is_user: bool) -> None:
         """Record a new message in the session, updating appropriate timestamps."""
         # Always update new activity timestamp
-        await self.new_activity(db_conn, timestamp, is_user=is_user)
+        await self.new_activity(db_conn, timestamp=timestamp, is_user=is_user)
 
         if is_user:
             self.last_user_message = max(self.last_user_message, timestamp) if self.last_user_message else timestamp
@@ -74,7 +73,7 @@ class Sessions(Base):
         db_conn.add(self)
 
     @traced(extract_args=["timestamp", "is_user"])
-    async def new_activity(self, db_conn: AsyncSession, timestamp: datetime, *, is_user: bool) -> None:
+    async def new_activity(self, db_conn: AsyncSession, *, timestamp: datetime, is_user: bool) -> None:
         """Record user activity (like edits) without incrementing message count."""
         if is_user:
             self.last_user_activity = max(self.last_user_activity, timestamp) if self.last_user_activity else timestamp
@@ -85,7 +84,7 @@ class Sessions(Base):
         db_conn.add(self)
 
     @traced(extract_args=["timestamp"])
-    async def close_session(self, db_conn: AsyncSession, timestamp: datetime) -> None:
+    async def close_session(self, db_conn: AsyncSession, *, timestamp: datetime) -> None:
         """Close a session by setting session_end and message_count."""
         messages = await self.get_messages(db_conn)
         self.session_end = timestamp
@@ -101,7 +100,13 @@ class Sessions(Base):
 
     @classmethod
     @traced(extract_args=["chat_id", "timestamp"], record_return=True)
-    async def create_session(cls, db_conn: AsyncSession, chat_id: str, timestamp: datetime) -> "Sessions":
+    async def create_session(
+        cls,
+        db_conn: AsyncSession,
+        *,
+        chat_id: str,
+        timestamp: datetime,
+    ) -> "Sessions":
         """Create a new session for a chat.
         If a session already exists, it will return the currently active session.
 
@@ -131,7 +136,7 @@ class Sessions(Base):
         return result.scalar_one()  # Always returns the active session object
 
     @classmethod
-    async def get_active_session(cls, db_conn: AsyncSession, chat_id: str) -> Optional["Sessions"]:
+    async def get_active_session(cls, db_conn: AsyncSession, *, chat_id: str) -> "Sessions | None":
         """Get the active (non-closed) session for a chat."""
         stmt = select(cls).where(cls.chat_id == chat_id).where(cls.session_end.is_(None))
 

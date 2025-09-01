@@ -1,5 +1,6 @@
 """Tests for ChatEvent model."""
 
+import json
 import os
 import sys
 from unittest.mock import MagicMock
@@ -197,3 +198,137 @@ class TestChatEvent:
 
         with pytest.raises(TypeError, match="Unsupported message type"):
             ChatEvent.from_message(mock_messages_sqlalchemy, [])
+
+    def test_to_model_message_with_text_media(self, mock_chat_event_message, mock_media_files, frozen_time):
+        """Test converting ChatEvent with text file attachments."""
+        # Create a text file attachment
+        text_media = mock_media_files(count=1, mime_type="text/plain")
+        text_media.bytes_data = b"This is a test text file content"
+
+        chat_event = mock_chat_event_message(text="Message with text file", user_id="user123", attachments=[text_media])
+
+        result = chat_event.to_model_message("bot456", frozen_time)
+
+        assert len(result.parts[0].content) == 2  # JSON + decoded text content
+        assert result.parts[0].content[1] == "This is a test text file content"
+
+    def test_to_model_message_with_multiple_text_media(self, mock_chat_event_message, mock_media_files, frozen_time):
+        """Test converting ChatEvent with multiple text file attachments."""
+        # Create multiple text file attachments with different MIME types
+        text_media1 = mock_media_files(count=1, mime_type="text/plain")
+        text_media1.bytes_data = b"First text file"
+
+        text_media2 = mock_media_files(count=1, mime_type="text/csv")
+        text_media2.bytes_data = b"name,age\nJohn,30"
+
+        chat_event = mock_chat_event_message(
+            text="Message with multiple text files", user_id="user123", attachments=[text_media1, text_media2]
+        )
+
+        result = chat_event.to_model_message("bot456", frozen_time)
+
+        assert len(result.parts[0].content) == 3  # JSON + 2 decoded text contents
+        assert result.parts[0].content[1] == "First text file"
+        assert result.parts[0].content[2] == "name,age\nJohn,30"
+
+    def test_to_model_message_with_mixed_media_types(self, mock_chat_event_message, mock_media_files, frozen_time):
+        """Test converting ChatEvent with mixed media types (image, text, PDF)."""
+        # Create different types of media
+        image_media = mock_media_files(count=1, mime_type="image/png")
+
+        text_media = mock_media_files(count=1, mime_type="text/html")
+        text_media.bytes_data = b"<html><body>Test HTML content</body></html>"
+
+        pdf_media = mock_media_files(count=1, mime_type="application/pdf")
+
+        chat_event = mock_chat_event_message(
+            text="Message with mixed media types", user_id="user123", attachments=[image_media, text_media, pdf_media]
+        )
+
+        result = chat_event.to_model_message("bot456", frozen_time)
+
+        # Should have JSON + image binary + decoded text + PDF binary
+        assert len(result.parts[0].content) == 4
+        # First is JSON string
+        assert isinstance(result.parts[0].content[0], str)
+        # Second is binary content (image)
+        assert isinstance(result.parts[0].content[1], pydantic_ai.BinaryContent)
+        assert result.parts[0].content[1].media_type == "image/png"
+        # Third is decoded text
+        assert result.parts[0].content[2] == "<html><body>Test HTML content</body></html>"
+        # Fourth is binary content (PDF)
+        assert isinstance(result.parts[0].content[3], pydantic_ai.BinaryContent)
+        assert result.parts[0].content[3].media_type == "application/pdf"
+
+    def test_to_model_message_with_text_media_utf8_decoding(
+        self, mock_chat_event_message, mock_media_files, frozen_time
+    ):
+        """Test text media with UTF-8 characters is properly decoded."""
+        text_media = mock_media_files(count=1, mime_type="text/plain")
+        text_media.bytes_data = "Hello 世界! 🌍".encode()
+
+        chat_event = mock_chat_event_message(
+            text="Message with UTF-8 text", user_id="user123", attachments=[text_media]
+        )
+
+        result = chat_event.to_model_message("bot456", frozen_time)
+
+        assert len(result.parts[0].content) == 2
+        assert result.parts[0].content[1] == "Hello 世界! 🌍"
+
+    def test_to_model_message_with_empty_text_media(self, mock_chat_event_message, mock_media_files, frozen_time):
+        """Test text media with empty content."""
+        text_media = mock_media_files(count=1, mime_type="text/plain")
+        text_media.bytes_data = b""
+
+        chat_event = mock_chat_event_message(
+            text="Message with empty text file", user_id="user123", attachments=[text_media]
+        )
+
+        result = chat_event.to_model_message("bot456", frozen_time)
+
+        assert len(result.parts[0].content) == 2
+        assert result.parts[0].content[1] == ""
+
+    def test_to_model_message_with_non_anthropic_supported_text_media(
+        self, mock_chat_event_message, mock_media_files, frozen_time
+    ):
+        """Test that non-Anthropic supported text media is filtered out."""
+        # Create a text file that is not Anthropic supported
+        text_media = mock_media_files(count=1, mime_type="text/plain", is_anthropic_supported=False)
+        text_media.bytes_data = b"This should not appear"
+
+        chat_event = mock_chat_event_message(
+            text="Message with unsupported text file", user_id="user123", attachments=[text_media]
+        )
+
+        result = chat_event.to_model_message("bot456", frozen_time)
+
+        # Should only have the JSON content, no text content
+        # When there's only one content item, it's returned as a string, not a list
+        assert isinstance(result.parts[0].content, str)
+        # Verify it's just the JSON and doesn't contain the text file content
+        json.loads(result.parts[0].content)
+        assert "This should not appear" not in result.parts[0].content
+
+    def test_to_model_message_with_unsupported_mime_types(self, mock_chat_event_message, mock_media_files, frozen_time):
+        """Test media files with unsupported MIME types are skipped."""
+        # Create media files with various MIME types, including some unsupported ones
+        text_media = mock_media_files(count=1, mime_type="text/plain")
+        text_media.bytes_data = b"Text content"
+
+        video_media = mock_media_files(count=1, mime_type="video/mp4")  # Unsupported type
+        audio_media = mock_media_files(count=1, mime_type="audio/wav")  # Unsupported type
+
+        chat_event = mock_chat_event_message(
+            text="Message with mixed supported/unsupported media",
+            user_id="user123",
+            attachments=[text_media, video_media, audio_media],
+        )
+
+        result = chat_event.to_model_message("bot456", frozen_time)
+
+        # Should have JSON + only the supported text content
+        # Video and audio files should be skipped since they don't match any condition
+        assert len(result.parts[0].content) == 2
+        assert result.parts[0].content[1] == "Text content"

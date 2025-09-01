@@ -27,10 +27,10 @@ async def on_new_update(update: telegram.Update, context: ContextTypes.DEFAULT_T
     async def _handle_update():
         async with async_database() as db_conn:
             if update.effective_user:
-                await Users.new_or_update(db_conn=db_conn, user=update.effective_user)
+                await Users.new_or_update(db_conn, user=update.effective_user)
 
             if update.effective_chat:
-                await Chats.new_or_update(db_conn=db_conn, chat=update.effective_chat)
+                await Chats.new_or_update(db_conn, chat=update.effective_chat)
 
     # Don't use `traced` decorator here to avoid circular logging issues
     with logfire.span(
@@ -47,7 +47,7 @@ async def on_new_update(update: telegram.Update, context: ContextTypes.DEFAULT_T
             context=context,
             job=ConversationJob(chat_id=str(update.effective_chat.id)),
             interval=timedelta(seconds=5),
-            first=datetime.now(UTC) + timedelta(seconds=10),
+            first=datetime.now(UTC) + timedelta(seconds=5),
         )
 
 

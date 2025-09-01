@@ -1,7 +1,6 @@
 import hashlib
 from datetime import UTC
 from datetime import datetime
-from typing import Optional
 
 import telegram
 from cachetools import TTLCache
@@ -68,7 +67,7 @@ class Chats(Base):
         return decrypted_key
 
     @classmethod
-    async def get_by_id(cls, db_conn: AsyncSession, chat_id: str) -> Optional["Chats"]:
+    async def get_by_id(cls, db_conn: AsyncSession, *, chat_id: str) -> "Chats | None":
         """Retrieve a chat by its ID."""
         stmt = select(cls).where(cls.chat_id == chat_id)
         result = await db_conn.execute(stmt)
@@ -76,12 +75,12 @@ class Chats(Base):
 
     @classmethod
     @traced(extract_args=["chat"])
-    async def new_or_update(cls, db_conn: AsyncSession, chat: telegram.Chat) -> "Chats":
+    async def new_or_update(cls, db_conn: AsyncSession, *, chat: telegram.Chat) -> "Chats":
         """Insert or update a chat in the database and return the Chat object."""
         now = datetime.now(UTC)
 
         # Check if chat already exists
-        existing_chat = await cls.get_by_id(db_conn, str(chat.id))
+        existing_chat = await cls.get_by_id(db_conn, chat_id=str(chat.id))
 
         encrypted_key = None
         if not existing_chat:
@@ -115,4 +114,4 @@ class Chats(Base):
         await db_conn.execute(stmt)
 
         # Return the chat object after upsert
-        return await cls.get_by_id(db_conn, str(chat.id))
+        return await cls.get_by_id(db_conn, chat_id=str(chat.id))

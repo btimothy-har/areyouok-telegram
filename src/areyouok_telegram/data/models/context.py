@@ -106,8 +106,8 @@ class Context(Base):
     async def new_or_update(
         cls,
         db_conn: AsyncSession,
-        chat_encryption_key: str,
         *,
+        chat_encryption_key: str,
         chat_id: str,
         session_id: str,
         ctype: str,

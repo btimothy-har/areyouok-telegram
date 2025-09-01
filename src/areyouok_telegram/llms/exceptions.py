@@ -62,3 +62,18 @@ class InvalidPersonalityError(ValueError):
     def __init__(self, personality: str):
         super().__init__(f"Invalid personality type: {personality}.")
         self.personality = personality
+
+
+class OnboardingFieldUpdateError(pydantic_ai.ModelRetry):
+    """Exception raised when an error occurs while updating an onboarding field."""
+
+    def __init__(self, field: str, message: str | None = None):
+        super().__init__(f"Error updating onboarding field: {field}. {message if message else ''}")
+        self.field = field
+
+
+class CompleteOnboardingError(pydantic_ai.ModelRetry):
+    """Exception raised when an error occurs while completing onboarding."""
+
+    def __init__(self, message: str):
+        super().__init__(f"Error completing onboarding: {message}")
