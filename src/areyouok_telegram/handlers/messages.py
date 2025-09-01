@@ -18,11 +18,9 @@ from areyouok_telegram.utils import traced
 
 
 @traced(extract_args=["update"])
-@environment_override(
-    {
-        "research": on_new_message_research,
-    }
-)
+@environment_override({
+    "research": on_new_message_research,
+})
 @db_retry()
 async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):  # noqa: ARG001
     if not update.message:
@@ -30,15 +28,19 @@ async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_
 
     async with async_database() as db_conn:
         # Get chat and its encryption key
-        chat_obj = await Chats.get_by_id(db_conn, str(update.effective_chat.id))
+        chat_obj = await Chats.get_by_id(db_conn, chat_id=str(update.effective_chat.id))
         chat_encryption_key = chat_obj.retrieve_key()
 
         # Handle session management
         chat_id = str(update.effective_chat.id)
-        active_session = await Sessions.get_active_session(db_conn, chat_id)
+        active_session = await Sessions.get_active_session(db_conn, chat_id=chat_id)
 
         if not active_session:
-            active_session = await Sessions.create_session(db_conn, chat_id, update.message.date)
+            active_session = await Sessions.create_session(
+                db_conn,
+                chat_id=chat_id,
+                timestamp=update.message.date,
+            )
 
         extract_media = asyncio.create_task(
             extract_media_from_telegram_message(
@@ -52,13 +54,17 @@ async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_
         # Save the message
         await Messages.new_or_update(
             db_conn,
-            chat_encryption_key,
+            user_encryption_key=chat_encryption_key,
             user_id=update.effective_user.id,
             chat_id=update.effective_chat.id,
             message=update.message,
             session_key=active_session.session_key,
         )
-        await active_session.new_message(db_conn=db_conn, timestamp=update.message.date, is_user=True)
+        await active_session.new_activity(
+            db_conn,
+            timestamp=update.message.date,
+            is_user=True,
+        )
         await extract_media
 
 
@@ -70,7 +76,7 @@ async def on_edit_message(update: telegram.Update, context: ContextTypes.DEFAULT
 
     async with async_database() as db_conn:
         # Get chat and its encryption key
-        chat_obj = await Chats.get_by_id(db_conn, str(update.effective_chat.id))
+        chat_obj = await Chats.get_by_id(db_conn, chat_id=str(update.effective_chat.id))
         chat_encryption_key = chat_obj.retrieve_key()
 
         # Handle session management for edits
@@ -90,7 +96,7 @@ async def on_edit_message(update: telegram.Update, context: ContextTypes.DEFAULT
 
         await Messages.new_or_update(
             db_conn,
-            chat_encryption_key,
+            user_encryption_key=chat_encryption_key,
             user_id=update.effective_user.id,
             chat_id=update.effective_chat.id,
             message=update.edited_message,
@@ -117,7 +123,7 @@ async def on_message_react(update: telegram.Update, context: ContextTypes.DEFAUL
 
     async with async_database() as db_conn:
         # Get chat and its encryption key
-        chat_obj = await Chats.get_by_id(db_conn, str(update.effective_chat.id))
+        chat_obj = await Chats.get_by_id(db_conn, chat_id=str(update.effective_chat.id))
         chat_encryption_key = chat_obj.retrieve_key()
 
         # Handle session management for reactions
@@ -129,7 +135,7 @@ async def on_message_react(update: telegram.Update, context: ContextTypes.DEFAUL
         # Save the reaction
         await Messages.new_or_update(
             db_conn,
-            chat_encryption_key,
+            user_encryption_key=chat_encryption_key,
             user_id=update.effective_user.id,
             chat_id=update.effective_chat.id,
             message=update.message_reaction,

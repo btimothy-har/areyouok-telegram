@@ -11,6 +11,7 @@ from areyouok_telegram.data import Context
 from areyouok_telegram.data import ContextType
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data import MessageTypes
+from areyouok_telegram.data import OnboardingSession
 from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database
 from areyouok_telegram.jobs.exceptions import UserNotFoundForChatError
@@ -22,12 +23,12 @@ from areyouok_telegram.utils import environment_override
 
 
 @db_retry()
-async def get_chat_session(chat_id: str) -> "Sessions":
+async def get_chat_session(chat_id: str) -> Sessions:
     """
     Retrieve the active session for a given chat ID.
     """
     async with async_database() as db_conn:
-        return await Sessions.get_active_session(db_conn, chat_id)
+        return await Sessions.get_active_session(db_conn, chat_id=chat_id)
 
 
 @db_retry()
@@ -45,7 +46,7 @@ async def get_chat_encryption_key(chat_id: str) -> str:
         UserNotFoundForChatError: If no chat is found (will be renamed to ChatNotFoundError later)
     """
     async with async_database() as db_conn:
-        chat_obj = await Chats.get_by_id(db_conn, chat_id)
+        chat_obj = await Chats.get_by_id(db_conn, chat_id=chat_id)
 
         if not chat_obj:
             raise UserNotFoundForChatError(chat_id)
@@ -75,7 +76,7 @@ async def log_bot_message(
     async with async_database() as db_conn:
         await Messages.new_or_update(
             db_conn,
-            chat_encryption_key,
+            user_encryption_key=chat_encryption_key,
             user_id=bot_id,  # Bot's user ID as the sender
             chat_id=chat_id,
             message=message,
@@ -84,8 +85,8 @@ async def log_bot_message(
         )
 
         if isinstance(message, telegram.Message):
-            await chat_session.new_message(
-                db_conn=db_conn,
+            await chat_session.new_activity(
+                db_conn,
                 timestamp=message.date,
                 is_user=False,  # This is a bot response
             )
@@ -100,7 +101,7 @@ async def log_bot_activity(
     async with async_database() as db_conn:
         # Always create a new activity for the bot, even if no response message is provided
         await chat_session.new_activity(
-            db_conn=db_conn,
+            db_conn,
             timestamp=timestamp,
             is_user=False,  # This is a bot response
         )
@@ -122,7 +123,7 @@ async def save_session_context(
     async with async_database() as db_conn:
         await Context.new_or_update(
             db_conn,
-            chat_encryption_key,
+            chat_encryption_key=chat_encryption_key,
             chat_id=chat_id,
             session_id=chat_session.session_id,
             ctype=ctype.value,
@@ -135,18 +136,24 @@ async def close_chat_session(chat_session: Sessions):
     """
     Close the chat session and clean up any resources.
     """
+    close_ts = datetime.now(UTC)
+
     async with async_database() as db_conn:
+        if chat_session.onboarding_key:
+            onboarding = await OnboardingSession.get_by_session_key(db_conn, session_key=chat_session.onboarding_key)
+
+            if onboarding.is_active:
+                await onboarding.inactivate_onboarding(db_conn, timestamp=close_ts)
+
         await chat_session.close_session(
-            db_conn=db_conn,
-            timestamp=datetime.now(UTC),
+            db_conn,
+            timestamp=close_ts,
         )
 
 
-@environment_override(
-    {
-        "research": generate_agent_for_research_session,
-    }
-)
+@environment_override({
+    "research": generate_agent_for_research_session,
+})
 async def generate_chat_agent(chat_session: Sessions) -> pydantic_ai.Agent:  # noqa: ARG001
     """
     Generate the chat agent for a conversation job.
@@ -162,11 +169,9 @@ async def generate_chat_agent(chat_session: Sessions) -> pydantic_ai.Agent:  # n
     return chat_agent
 
 
-@environment_override(
-    {
-        "research": close_research_session,
-    }
-)
+@environment_override({
+    "research": close_research_session,
+})
 async def post_cleanup_tasks(
     *,
     context: ContextTypes.DEFAULT_TYPE,  # noqa: ARG001

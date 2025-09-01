@@ -1,30 +1,64 @@
 import telegram
 from telegram.ext import ContextTypes
 
+from areyouok_telegram.data import Chats
+from areyouok_telegram.data import Messages
+from areyouok_telegram.data import OnboardingSession
+from areyouok_telegram.data import Sessions
+from areyouok_telegram.data import async_database
 from areyouok_telegram.research.handlers import on_end_command_research
-from areyouok_telegram.research.handlers import on_start_command_research
 from areyouok_telegram.utils import db_retry
 from areyouok_telegram.utils import environment_override
 from areyouok_telegram.utils import traced
 
 
 @traced(extract_args=["update"])
-@environment_override(
-    {
-        "research": on_start_command_research,
-    }
-)
 @db_retry()
 async def on_start_command(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):  # noqa: ARG001
-    return
+    async with async_database() as db_conn:
+        # Get chat and its encryption key
+        chat_obj = await Chats.get_by_id(db_conn, chat_id=str(update.effective_chat.id))
+        chat_encryption_key = chat_obj.retrieve_key()
+
+        # Handle session management
+        chat_id = str(update.effective_chat.id)
+        active_session = await Sessions.get_active_session(db_conn, chat_id=chat_id)
+
+        if not active_session:
+            active_session = await Sessions.create_session(db_conn, chat_id=chat_id, timestamp=update.message.date)
+
+        onboarding_session = await OnboardingSession.get_by_user_id(
+            db_conn,
+            user_id=str(update.effective_user.id),
+        )
+
+        if onboarding_session and onboarding_session.is_completed:
+            # TODO: reply to user
+            return
+
+        elif not onboarding_session or onboarding_session.is_incomplete:
+            onboarding_session = await OnboardingSession.start_onboarding(
+                db_conn,
+                user_id=str(update.effective_user.id),
+            )
+
+        await active_session.attach_onboarding(db_conn, onboarding_key=onboarding_session.session_key)
+
+        await Messages.new_or_update(
+            db_conn,
+            user_encryption_key=chat_encryption_key,
+            user_id=update.effective_user.id,
+            chat_id=update.effective_chat.id,
+            message=update.message,
+            session_key=active_session.session_key,
+        )
+        await active_session.new_activity(db_conn, timestamp=update.message.date, is_user=True)
 
 
 @traced(extract_args=["update"])
-@environment_override(
-    {
-        "research": on_end_command_research,
-    }
-)
+@environment_override({
+    "research": on_end_command_research,
+})
 @db_retry()
 async def on_end_command(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):  # noqa: ARG001
     return
