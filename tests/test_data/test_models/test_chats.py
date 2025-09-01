@@ -25,7 +25,7 @@ class TestChats:
         mock_db_session.execute.return_value = mock_result
 
         with patch.object(Chats, "get_by_id", return_value=None):
-            await Chats.new_or_update(mock_db_session, mock_telegram_chat)
+            await Chats.new_or_update(mock_db_session, chat=mock_telegram_chat)
 
         # Verify execute was called
         mock_db_session.execute.assert_called_once()
@@ -43,7 +43,7 @@ class TestChats:
         mock_telegram_chat.is_forum = None
 
         with patch.object(Chats, "get_by_id", return_value=None):
-            await Chats.new_or_update(mock_db_session, mock_telegram_chat)
+            await Chats.new_or_update(mock_db_session, chat=mock_telegram_chat)
 
         mock_db_session.execute.assert_called_once()
 
@@ -54,7 +54,7 @@ class TestChats:
         mock_existing_chat = AsyncMock()
 
         with patch.object(Chats, "get_by_id", return_value=mock_existing_chat):
-            await Chats.new_or_update(mock_db_session, mock_telegram_chat)
+            await Chats.new_or_update(mock_db_session, chat=mock_telegram_chat)
 
         # Verify execute was called
         mock_db_session.execute.assert_called_once()

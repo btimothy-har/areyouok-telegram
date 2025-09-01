@@ -149,7 +149,7 @@ class TestMessages:
 
         await Messages.new_or_update(
             mock_db_session,
-            user_key,
+            user_encryption_key=user_key,
             user_id=str(mock_telegram_message.from_user.id),
             chat_id=str(mock_telegram_message.chat.id),
             message=mock_telegram_message,
@@ -175,7 +175,7 @@ class TestMessages:
 
         await Messages.new_or_update(
             mock_db_session,
-            user_key,
+            user_encryption_key=user_key,
             user_id=str(mock_telegram_message.from_user.id),
             chat_id=str(mock_telegram_message.chat.id),
             message=mock_telegram_message,

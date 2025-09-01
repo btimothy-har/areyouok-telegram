@@ -31,7 +31,7 @@ class TestContext:
         user_key = Fernet.generate_key().decode("utf-8")
 
         await Context.new_or_update(
-            mock_db_session, user_key, chat_id="123", session_id="session_456", ctype="session", content="test content"
+            mock_db_session, chat_encryption_key=user_key, chat_id="123", session_id="session_456", ctype="session", content="test content"
         )
 
         # Verify execute was called
@@ -50,7 +50,7 @@ class TestContext:
         with pytest.raises(InvalidContextTypeError) as exc_info:
             await Context.new_or_update(
                 mock_db_session,
-                user_key,
+                chat_encryption_key=user_key,
                 chat_id="123",
                 session_id="session_456",
                 ctype="invalid_type",
