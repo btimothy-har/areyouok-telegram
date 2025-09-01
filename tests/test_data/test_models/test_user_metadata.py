@@ -154,7 +154,7 @@ class TestUserMetadata:
             await UserMetadata.update_metadata(mock_db_session, user_id="user123", field="preferred_name", value=123)
 
         assert exc_info.value.field == "preferred_name"
-        assert exc_info.value.expected_type == "a string or None"
+        assert exc_info.value.expected == "a string or None"
 
 
     @pytest.mark.asyncio
@@ -442,13 +442,13 @@ class TestInvalidFieldValueError:
 
     def test_invalid_field_type_error_creation(self):
         """Test InvalidFieldValueError is created with correct attributes."""
-        error = InvalidFieldValueError("test_field", "a string")
+        error = InvalidFieldValueError("test_field", "a string", "expected_type")
 
         assert error.field == "test_field"
-        assert error.expected_type == "a string"
-        assert "Field 'test_field' must be a string" in str(error)
+        assert error.expected == "expected_type"
+        assert "a string is invalid for field 'test_field'. Expected: expected_type." == str(error)
 
     def test_invalid_field_type_error_inheritance(self):
         """Test InvalidFieldValueError inherits from Exception."""
-        error = InvalidFieldValueError("test", "test")
+        error = InvalidFieldValueError("test", "test", "expected_type")
         assert isinstance(error, Exception)

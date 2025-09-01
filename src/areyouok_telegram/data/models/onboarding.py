@@ -1,6 +1,7 @@
 import hashlib
 from datetime import UTC
 from datetime import datetime
+from datetime import timedelta
 from enum import Enum
 from typing import Optional
 
@@ -73,6 +74,22 @@ class OnboardingSession(Base):
     def is_incomplete(self) -> bool:
         """Check if onboarding is incomplete (timed out or abandoned)."""
         return self.state == OnboardingState.INCOMPLETE.value
+
+    @property
+    def is_expired(self) -> bool:
+        """Check if active onboarding has expired (older than 1 hour).
+
+        Returns:
+            True if onboarding is ACTIVE and started more than 1 hour ago, False otherwise.
+        """
+        if not self.is_active:
+            return False
+
+        if not self.started_at:
+            return False
+
+        now = datetime.now(UTC)
+        return now - self.started_at > timedelta(hours=1)
 
     @classmethod
     @traced(extract_args=["user_id"])

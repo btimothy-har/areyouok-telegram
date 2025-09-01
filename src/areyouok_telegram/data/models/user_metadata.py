@@ -143,6 +143,9 @@ class UserMetadata(Base):
 
         # Validate and normalize field values
         if value is not None:  # Allow None for clearing fields
+            # Validate encrypted field types (must be strings)
+            if field in cls._ENCRYPTED_FIELDS and not isinstance(value, str):
+                raise InvalidFieldValueError(field, value, "a string or None")
             if field == "country":
                 value = cls._validate_country(value)
             elif field == "timezone":

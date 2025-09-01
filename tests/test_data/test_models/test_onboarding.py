@@ -209,9 +209,9 @@ class TestOnboardingSession:
         # Get the statement that was executed
         call_args = mock_db_session.execute.call_args[0][0]
 
-        # Verify it's an insert statement for user_onboarding_state table
+        # Verify it's an insert statement for onboarding table
         assert hasattr(call_args, "table")
-        assert call_args.table.name == "user_onboarding_state"
+        assert call_args.table.name == "onboarding"
 
         # Verify get_by_user_id was called to return the new onboarding
         assert result == mock_new_onboarding
