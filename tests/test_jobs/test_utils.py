@@ -38,7 +38,7 @@ class TestGetChatSession:
 
         assert result == mock_session
         # Verify Sessions.get_active_session was called with correct args
-        mock_get_active.assert_called_once_with(mock_db_conn, "chat123")
+        mock_get_active.assert_called_once_with(mock_db_conn, chat_id="chat123")
 
     @pytest.mark.asyncio
     async def test_get_chat_session_no_active_session(self):
@@ -114,7 +114,7 @@ class TestGetChatEncryptionKey:
                 result = await get_chat_encryption_key("chat123")
 
         assert result == "test_encryption_key"
-        mock_get_chat.assert_called_once_with(mock_db_conn, "chat123")
+        mock_get_chat.assert_called_once_with(mock_db_conn, chat_id="chat123")
         mock_chat.retrieve_key.assert_called_once_with()
 
     @pytest.mark.asyncio
@@ -157,7 +157,7 @@ class TestLogBotActivity:
                 )
 
         # Verify new_activity was called with bot flag
-        mock_session.new_activity.assert_called_once_with(db_conn=mock_db_conn, timestamp=frozen_time, is_user=False)
+        mock_session.new_activity.assert_called_once_with(mock_db_conn, timestamp=frozen_time, is_user=False)
 
         # Message handling is now done separately via log_bot_message
         mock_new_or_update.assert_not_called()
@@ -183,7 +183,7 @@ class TestLogBotActivity:
                 )
 
         # Verify new_activity was called
-        mock_session.new_activity.assert_called_once_with(db_conn=mock_db_conn, timestamp=frozen_time, is_user=False)
+        mock_session.new_activity.assert_called_once_with(mock_db_conn, timestamp=frozen_time, is_user=False)
 
         # Message handling is now done separately via log_bot_message
         mock_new_or_update.assert_not_called()
@@ -207,7 +207,7 @@ class TestLogBotActivity:
                 )
 
         # Verify new_activity was still called
-        mock_session.new_activity.assert_called_once_with(db_conn=mock_db_conn, timestamp=frozen_time, is_user=False)
+        mock_session.new_activity.assert_called_once_with(mock_db_conn, timestamp=frozen_time, is_user=False)
 
         # Verify message operations were not called
         mock_new_or_update.assert_not_called()
@@ -234,7 +234,7 @@ class TestLogBotActivity:
                 )
 
         # Verify new_activity was called
-        mock_session.new_activity.assert_called_once_with(db_conn=mock_db_conn, timestamp=frozen_time, is_user=False)
+        mock_session.new_activity.assert_called_once_with(mock_db_conn, timestamp=frozen_time, is_user=False)
 
         # Message handling is now done separately via log_bot_message
         mock_new_or_update.assert_not_called()
@@ -269,7 +269,7 @@ class TestSaveSessionContext:
         # Verify Context.new_or_update was called with correct args
         mock_new_or_update.assert_called_once_with(
             mock_db_conn,
-            "test_encryption_key",
+            chat_encryption_key="test_encryption_key",
             chat_id="chat456",
             session_id="session123",
             ctype="session",
@@ -285,6 +285,7 @@ class TestCloseChatSession:
         """Test successfully closing a chat session."""
         mock_session = MagicMock()
         mock_session.close_session = AsyncMock()
+        mock_session.onboarding_key = None  # No onboarding to clean up
 
         with patch("areyouok_telegram.jobs.utils.async_database") as mock_async_db:
             mock_db_conn = AsyncMock()
@@ -293,4 +294,4 @@ class TestCloseChatSession:
             await close_chat_session(mock_session)
 
         # Verify close_session was called with current timestamp
-        mock_session.close_session.assert_called_once_with(db_conn=mock_db_conn, timestamp=frozen_time)
+        mock_session.close_session.assert_called_once_with(mock_db_conn, timestamp=frozen_time)
