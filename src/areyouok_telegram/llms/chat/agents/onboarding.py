@@ -26,6 +26,9 @@ from areyouok_telegram.llms.chat.utils import validate_response_data
 from areyouok_telegram.llms.exceptions import CompleteOnboardingError
 from areyouok_telegram.llms.exceptions import OnboardingFieldUpdateError
 from areyouok_telegram.llms.models import CHAT_SONNET_4
+from areyouok_telegram.llms.utils import run_agent_with_tracking
+from areyouok_telegram.llms.validators.country_timezone import CountryTimezone
+from areyouok_telegram.llms.validators.country_timezone import country_timezone_agent
 
 AgentResponse = TextResponse | ReactionResponse | DoNothingResponse
 
@@ -62,7 +65,7 @@ async def onboarding_instructions(ctx: RunContext[OnboardingAgentDependencies]) 
         restrict_response_text += RESTRICT_TEXT_RESPONSE
         restrict_response_text += "\n"
 
-    onboarding_fields = ["preferred_name", "country", "timezone", "communication_style"]
+    onboarding_fields = ["preferred_name", "country", "communication_style"]
 
     async with async_database() as db_conn:
         user_metadata = await UserMetadata.get_by_user_id(db_conn, user_id=ctx.deps.tg_chat_id)
@@ -71,12 +74,12 @@ async def onboarding_instructions(ctx: RunContext[OnboardingAgentDependencies]) 
         if user_metadata.preferred_name:
             onboarding_fields.remove("preferred_name")
 
-        if user_metadata.country and user_metadata.timezone:
+        if user_metadata.country and not user_metadata.timezone:
             onboarding_fields.remove("country")
-            onboarding_fields.remove("timezone")
+            onboarding_fields.insert(0, "timezone")
 
         if user_metadata.communication_style:
-            onboarding_fields.append("communication_style")
+            onboarding_fields.remove("communication_style")
 
     return ONBOARDING_AGENT_PROMPT.format(
         important_message_for_user=ctx.deps.instruction if ctx.deps.instruction else "None",
@@ -98,22 +101,59 @@ def get_question_details(
 async def save_user_response(
     ctx: RunContext[OnboardingAgentDependencies],
     field: str,
-    value: Any,
+    value_to_save: Any,
 ) -> str:
     """Save user response to metadata."""
+
     async with async_database() as db_conn:
         try:
-            metadata = await UserMetadata.update_metadata(
+            await UserMetadata.update_metadata(
                 db_conn,
                 user_id=ctx.deps.tg_chat_id,
                 field=field,
-                value=value,
+                value=value_to_save,
             )
 
         except Exception as e:
-            raise OnboardingFieldUpdateError(field) from e
+            raise OnboardingFieldUpdateError("timezone", str(e)) from e
 
-    return f"{field} updated successfully. Saved value: {metadata.to_dict()}."
+    if field == "country":
+        if value_to_save == "rather_not_say":
+            tz_value = "rather_not_say"
+            has_multiple = False
+        else:
+            tz = await run_agent_with_tracking(
+                country_timezone_agent,
+                chat_id=ctx.deps.tg_chat_id,
+                session_id=ctx.deps.tg_session_id,
+                run_kwargs={
+                    "user_prompt": f"Identify the timezone for {value_to_save}",
+                },
+            )
+            tz_data: CountryTimezone = tz.output
+            tz_value = tz_data.timezone
+            has_multiple = tz_data.has_multiple
+
+        if has_multiple:
+            return f"""
+{field} updated successfully. The timezone {tz_data.timezone} seems to be the best fit option, but there are \
+multiple timezones available. Confirm with the user what their timezone should be.
+"""
+
+        else:
+            async with async_database() as db_conn:
+                try:
+                    await UserMetadata.update_metadata(
+                        db_conn,
+                        user_id=ctx.deps.tg_chat_id,
+                        field="timezone",
+                        value=tz_value,
+                    )
+
+                except Exception as e:
+                    raise OnboardingFieldUpdateError("timezone", str(e)) from e
+
+    return f"{field} updated successfully."
 
 
 @onboarding_agent.tool
