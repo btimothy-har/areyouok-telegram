@@ -11,7 +11,7 @@ import pydantic_ai
 from pydantic_ai import RunContext
 from telegram.ext import ContextTypes
 
-from areyouok_telegram.data import OnboardingSession
+from areyouok_telegram.data import GuidedSessions
 from areyouok_telegram.data import UserMetadata
 from areyouok_telegram.data import async_database
 from areyouok_telegram.llms.chat.constants import ONBOARDING_AGENT_PROMPT
@@ -161,8 +161,8 @@ async def complete_onboarding(ctx: RunContext[OnboardingAgentDependencies]) -> s
     """Mark the user's onboarding as complete."""
     async with async_database() as db_conn:
         try:
-            onboarding = await OnboardingSession.get_by_session_key(
-                db_conn, session_key=ctx.deps.onboarding_session_key
+            onboarding = await GuidedSessions.get_by_guided_session_key(
+                db_conn, guided_session_key=ctx.deps.onboarding_session_key
             )
         except Exception as e:
             raise CompleteOnboardingError(e) from e
@@ -170,7 +170,7 @@ async def complete_onboarding(ctx: RunContext[OnboardingAgentDependencies]) -> s
         if not onboarding.is_active:
             raise CompleteOnboardingError(f"Onboarding session is currently {onboarding.state}.")  # noqa: TRY003
 
-        await onboarding.end_onboarding(db_conn, timestamp=datetime.now(UTC))
+        await onboarding.complete(db_conn, timestamp=datetime.now(UTC))
 
     return "Onboarding completed successfully."
 

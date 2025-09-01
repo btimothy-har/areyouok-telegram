@@ -13,7 +13,8 @@ from areyouok_telegram.data import ContextType
 from areyouok_telegram.data import MediaFiles
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data import MessageTypes
-from areyouok_telegram.data import OnboardingSession
+from areyouok_telegram.data import GuidedSessions
+from areyouok_telegram.data import GuidedSessionType
 from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database
 from areyouok_telegram.jobs import BaseJob
@@ -372,14 +373,16 @@ class ConversationJob(BaseJob):
             message_history = []
             latest_personality_context = None
 
-            if chat_session.onboarding_key:
-                onboarding_session = await OnboardingSession.get_by_session_key(
-                    db_conn,
-                    session_key=chat_session.onboarding_key,
-                )
-                onboarding_state = onboarding_session.is_active
-            else:
-                onboarding_state = False
+            # Check for active onboarding sessions linked to this chat session
+            onboarding_sessions = await GuidedSessions.get_by_chat_session(
+                db_conn,
+                chat_session=chat_session.session_key,
+                session_type=GuidedSessionType.ONBOARDING.value,
+            )
+            
+            # Get the most recent onboarding session (already ordered by created_at desc)
+            onboarding_session = onboarding_sessions[0] if onboarding_sessions else None
+            onboarding_state = onboarding_session is not None and onboarding_session.is_active
 
             if include_context:
                 # Gather chat context
@@ -461,8 +464,8 @@ class ConversationJob(BaseJob):
                 "instruction": media_instruction,
             }
 
-            if onboarding_state:
-                deps_data["onboarding_session_key"] = chat_session.onboarding_key
+            if onboarding_state and onboarding_session:
+                deps_data["onboarding_session_key"] = onboarding_session.guided_session_key
                 deps = OnboardingAgentDependencies(**deps_data)
 
             else:

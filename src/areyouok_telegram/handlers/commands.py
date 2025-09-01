@@ -3,7 +3,8 @@ from telegram.ext import ContextTypes
 
 from areyouok_telegram.data import Chats
 from areyouok_telegram.data import Messages
-from areyouok_telegram.data import OnboardingSession
+from areyouok_telegram.data import GuidedSessions
+from areyouok_telegram.data import GuidedSessionType
 from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database
 from areyouok_telegram.handlers.constants import ONBOARDING_COMPLETE_MESSAGE
@@ -28,10 +29,15 @@ async def on_start_command(update: telegram.Update, context: ContextTypes.DEFAUL
         if not active_session:
             active_session = await Sessions.create_session(db_conn, chat_id=chat_id, timestamp=update.message.date)
 
-        onboarding_session = await OnboardingSession.get_by_user_id(
+        # Check for existing onboarding sessions for this chat
+        onboarding_sessions = await GuidedSessions.get_by_chat_id(
             db_conn,
-            user_id=str(update.effective_user.id),
+            chat_id=str(update.effective_chat.id),
+            session_type=GuidedSessionType.ONBOARDING.value,
         )
+        
+        # Get the most recent onboarding session (first in desc order)
+        onboarding_session = onboarding_sessions[0] if onboarding_sessions else None
 
         if onboarding_session and onboarding_session.is_completed:
             return await context.bot.send_message(
@@ -40,12 +46,12 @@ async def on_start_command(update: telegram.Update, context: ContextTypes.DEFAUL
             )
 
         elif not onboarding_session or onboarding_session.is_incomplete:
-            onboarding_session = await OnboardingSession.start_onboarding(
+            await GuidedSessions.start_new_session(
                 db_conn,
                 user_id=str(update.effective_user.id),
+                chat_session=active_session.session_key,
+                session_type=GuidedSessionType.ONBOARDING.value,
             )
-
-        await active_session.attach_onboarding(db_conn, onboarding_key=onboarding_session.session_key)
 
         await Messages.new_or_update(
             db_conn,

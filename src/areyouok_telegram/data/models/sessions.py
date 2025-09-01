@@ -3,7 +3,6 @@ from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import Column
-from sqlalchemy import ForeignKey
 from sqlalchemy import Integer
 from sqlalchemy import String
 from sqlalchemy import select
@@ -23,13 +22,6 @@ class Sessions(Base):
 
     session_key = Column(String, nullable=False, unique=True)
     chat_id = Column(String, nullable=False)
-
-    # Onboarding relationship
-    onboarding_key = Column(
-        String,
-        ForeignKey(f"{ENV}.onboarding.session_key"),
-        nullable=True,
-    )
 
     session_start = Column(TIMESTAMP(timezone=True), nullable=False)
     session_end = Column(TIMESTAMP(timezone=True), nullable=True)
@@ -53,11 +45,6 @@ class Sessions(Base):
     def session_id(self) -> str:
         """Return the unique session ID, which is the session key."""
         return self.session_key
-
-    @property
-    def is_onboarding(self) -> bool:
-        """Check if this session is for onboarding."""
-        return self.onboarding_key is not None
 
     @property
     def has_bot_responded(self) -> bool:
@@ -106,12 +93,6 @@ class Sessions(Base):
 
         db_conn.add(self)
 
-    @traced(extract_args=["onboarding_key"])
-    async def attach_onboarding(self, db_conn: AsyncSession, *, onboarding_key: str) -> None:
-        """Attach an onboarding session to this chat session."""
-        self.onboarding_key = onboarding_key
-        db_conn.add(self)
-
     @traced(extract_args=False)
     async def get_messages(self, db_conn: AsyncSession) -> list["Messages"]:
         """Retrieve all raw messages from this session."""
@@ -119,7 +100,7 @@ class Sessions(Base):
         return await Messages.retrieve_by_session(db_conn, session_id=self.session_id)
 
     @classmethod
-    @traced(extract_args=["chat_id", "timestamp", "is_onboarding"], record_return=True)
+    @traced(extract_args=["chat_id", "timestamp"], record_return=True)
     async def create_session(
         cls,
         db_conn: AsyncSession,
@@ -134,7 +115,6 @@ class Sessions(Base):
             db_conn: The database connection to use for the query.
             chat_id: The unique identifier for the chat.
             timestamp: The start time of the session.
-            onboarding_key: Link to the OnboardingSession session key.
         Returns:
             The active session object, either newly created or existing.
         """
@@ -163,21 +143,6 @@ class Sessions(Base):
 
         result = await db_conn.execute(stmt)
         return result.scalar_one_or_none()
-
-    @classmethod
-    async def get_by_onboarding_key(cls, db_conn: AsyncSession, *, onboarding_key: str) -> list["Sessions"]:
-        """Get all sessions related to an onboarding session.
-
-        Args:
-            db_conn: Database connection
-            onboarding_key: The onboarding session key to search for
-
-        Returns:
-            List of Sessions objects linked to this onboarding
-        """
-        stmt = select(cls).where(cls.onboarding_key == onboarding_key)
-        result = await db_conn.execute(stmt)
-        return list(result.scalars().all())
 
     @classmethod
     @traced(extract_args=False)

@@ -11,7 +11,8 @@ from areyouok_telegram.data import Context
 from areyouok_telegram.data import ContextType
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data import MessageTypes
-from areyouok_telegram.data import OnboardingSession
+from areyouok_telegram.data import GuidedSessions
+from areyouok_telegram.data import GuidedSessionType
 from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database
 from areyouok_telegram.jobs.exceptions import UserNotFoundForChatError
@@ -139,11 +140,17 @@ async def close_chat_session(chat_session: Sessions):
     close_ts = datetime.now(UTC)
 
     async with async_database() as db_conn:
-        if chat_session.onboarding_key:
-            onboarding = await OnboardingSession.get_by_session_key(db_conn, session_key=chat_session.onboarding_key)
+        # Check for any active guided sessions (onboarding, etc.) linked to this session
+        onboarding_sessions = await GuidedSessions.get_by_chat_session(
+            db_conn,
+            chat_session=chat_session.session_key,
+            session_type=GuidedSessionType.ONBOARDING.value
+        )
 
+        # Inactivate any active onboarding sessions
+        for onboarding in onboarding_sessions:
             if onboarding.is_active:
-                await onboarding.inactivate_onboarding(db_conn, timestamp=close_ts)
+                await onboarding.inactivate(db_conn, timestamp=close_ts)
 
         await chat_session.close_session(
             db_conn,
