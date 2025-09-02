@@ -22,8 +22,10 @@ from areyouok_telegram.jobs.exceptions import UserNotFoundForChatError
 from areyouok_telegram.jobs.utils import close_chat_session
 from areyouok_telegram.jobs.utils import get_chat_encryption_key
 from areyouok_telegram.jobs.utils import get_chat_session
+from areyouok_telegram.jobs.utils import get_next_notification
 from areyouok_telegram.jobs.utils import log_bot_activity
 from areyouok_telegram.jobs.utils import log_bot_message
+from areyouok_telegram.jobs.utils import mark_notification_completed
 from areyouok_telegram.jobs.utils import post_cleanup_tasks
 from areyouok_telegram.jobs.utils import save_session_context
 from areyouok_telegram.llms.chat import AgentResponse
@@ -193,7 +195,7 @@ class ConversationJob(BaseJob):
         ):
             dependencies.restricted_responses.add("text")
 
-        if "text" in dependencies.restricted_responses and dependencies.instruction:
+        if "text" in dependencies.restricted_responses and dependencies.notification:
             dependencies.restricted_responses.remove("text")
 
         agent = onboarding_agent if isinstance(dependencies, OnboardingAgentDependencies) else chat_agent
@@ -218,6 +220,10 @@ class ConversationJob(BaseJob):
             context=context,
             response=agent_response,
         )
+
+        # Mark notification as completed if we have one and response was generated successfully
+        if dependencies.notification and agent_response:
+            await mark_notification_completed(dependencies.notification)
 
         if agent_response.response_type == "SwitchPersonalityResponse":
             message_history, dependencies = await self._prepare_conversation_input(
@@ -416,9 +422,6 @@ class ConversationJob(BaseJob):
                     )
 
             # Get all messages from the session
-            media_instruction = None
-            unsupported_media_types = []
-
             raw_messages = await chat_session.get_messages(db_conn)
 
             # Filter messages to only those created before the run timestamp
@@ -440,28 +443,16 @@ class ConversationJob(BaseJob):
                 if media:
                     [m.decrypt_content(chat_encryption_key=chat_encryption_key) for m in media]
 
-                    if msg.created_at >= chat_session.last_bot_activity:
-                        unsupported_media = [m for m in media if not m.is_anthropic_supported]
-                        unsupported_media_types.extend(
-                            [m.mime_type for m in unsupported_media if not m.mime_type.startswith("audio/")]
-                        )
-
                 message_history.append(ChatEvent.from_message(msg, media))
 
-            if len(unsupported_media_types) == 1:
-                media_instruction = (
-                    f"The user sent a {unsupported_media_types[0]} file, but you can only view images and PDFs."
-                )
-            elif len(unsupported_media_types) > 1:
-                media_instruction = (
-                    f"The user sent {', '.join(unsupported_media_types)} files, but you can only view images and PDFs."
-                )
+            # Get next notification for this chat
+            notification = await get_next_notification(self.chat_id)
 
             deps_data = {
                 "tg_context": context,
                 "tg_chat_id": self.chat_id,
                 "tg_session_id": chat_session.session_id,
-                "instruction": media_instruction,
+                "notification": notification,
             }
 
             if onboarding_state and onboarding_session:
