@@ -11,6 +11,7 @@ from areyouok_telegram.handlers.exceptions import NoEditedMessageError
 from areyouok_telegram.handlers.exceptions import NoMessageError
 from areyouok_telegram.handlers.exceptions import NoMessageReactionError
 from areyouok_telegram.handlers.media_utils import extract_media_from_telegram_message
+from areyouok_telegram.handlers.media_utils import handle_unsupported_media
 from areyouok_telegram.utils import db_retry
 from areyouok_telegram.utils import traced
 
@@ -60,7 +61,15 @@ async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_
             timestamp=update.message.date,
             is_user=True,
         )
-        await extract_media
+        media_count = await extract_media
+
+        # Check for unsupported media and create notifications if media was found
+        if media_count > 0:
+            await handle_unsupported_media(
+                db_conn,
+                chat_id=str(update.effective_chat.id),
+                message_id=str(update.message.message_id),
+            )
 
 
 @traced(extract_args=["update"])
@@ -106,7 +115,15 @@ async def on_edit_message(update: telegram.Update, context: ContextTypes.DEFAULT
                 is_user=True,
             )
 
-        await extract_media
+        media_count = await extract_media
+
+        # Check for unsupported media and create notifications if media was found
+        if media_count > 0:
+            await handle_unsupported_media(
+                db_conn,
+                chat_id=str(update.effective_chat.id),
+                message_id=str(update.edited_message.message_id),
+            )
 
 
 @traced(extract_args=["update"])
