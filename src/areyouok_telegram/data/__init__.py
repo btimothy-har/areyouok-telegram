@@ -11,6 +11,7 @@ from areyouok_telegram.data.models.llm_usage import LLMUsage
 from areyouok_telegram.data.models.media import MediaFiles
 from areyouok_telegram.data.models.messages import Messages
 from areyouok_telegram.data.models.messages import MessageTypes
+from areyouok_telegram.data.models.notifications import Notifications
 from areyouok_telegram.data.models.sessions import Sessions
 from areyouok_telegram.data.models.updates import Updates
 from areyouok_telegram.data.models.user_metadata import UserMetadata
@@ -23,6 +24,7 @@ __all__ = [
     "Messages",
     "MessageTypes",
     "MediaFiles",
+    "Notifications",
     "Sessions",
     "Chats",
     "Updates",
