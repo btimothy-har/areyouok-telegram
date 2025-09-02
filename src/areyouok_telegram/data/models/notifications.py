@@ -121,4 +121,4 @@ class Notifications(Base):
         now = datetime.now(UTC)
         self.processed_at = now
         self.updated_at = now
-        await db_conn.flush()
+        db_conn.add(self)
