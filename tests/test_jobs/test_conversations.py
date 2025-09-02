@@ -15,9 +15,9 @@ from telegram.ext import ContextTypes
 
 from areyouok_telegram.data.models.chat_event import ChatEvent
 from areyouok_telegram.data.models.context import ContextType
+from areyouok_telegram.data.models.notifications import Notifications
 from areyouok_telegram.jobs.conversations import ConversationJob
 from areyouok_telegram.jobs.exceptions import UserNotFoundForChatError
-from areyouok_telegram.data.models.notifications import Notifications
 from areyouok_telegram.llms.chat import ChatAgentDependencies
 from areyouok_telegram.llms.chat import DoNothingResponse
 from areyouok_telegram.llms.chat import OnboardingAgentDependencies
@@ -1229,7 +1229,6 @@ class TestConversationJob:
         assert isinstance(deps, ChatAgentDependencies)
         assert deps.personality == "exploration"
 
-
     @pytest.mark.asyncio
     async def test_prepare_conversation_input_message_reaction_updated(self, frozen_time):
         """Test _prepare_conversation_input with MessageReactionUpdated messages."""
@@ -1329,7 +1328,6 @@ class TestConversationJob:
 
         # Verify unknown message type was skipped
         mock_chat_event.assert_not_called()
-
 
     @pytest.mark.asyncio
     async def test_prepare_conversation_input_inactive_onboarding_session(self, frozen_time):
@@ -1483,7 +1481,7 @@ class TestConversationJob:
 
     @pytest.mark.asyncio
     async def test_generate_response_with_notification_completion(self):
-        """Test generate_response marks notification as completed when notification is present and response is successful."""
+        """Test generate_response marks notification as completed when notification is present and successful."""
         job = ConversationJob("123")
 
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
@@ -1675,7 +1673,7 @@ class TestConversationJob:
 
         # Verify get_next_notification was called with correct chat_id
         mock_get_notification.assert_called_once_with("123")
-        
+
         # Verify dependencies include the notification
         assert isinstance(deps, ChatAgentDependencies)
         assert deps.notification == mock_notification
