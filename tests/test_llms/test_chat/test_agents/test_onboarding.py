@@ -120,7 +120,7 @@ class TestSaveUserResponse:
 
             # Second log call: timezone
             second_log_call = mock_log_context.call_args_list[1]
-            expected_tz_content = "Updated usermeta: Saved the user's timezone as America/New_York."
+            expected_tz_content = "Updated usermeta: timezone is now America/New_York"
             assert second_log_call[1]["content"] == expected_tz_content
 
             # Verify return value
@@ -176,13 +176,9 @@ class TestSaveUserResponse:
             first_log_call = mock_log_context.call_args_list[0]
             assert first_log_call[1]["content"] == f"Updated usermeta: {field} is now {str(value)}"
 
-            # Second log call: timezone with multiple timezone warning
+            # Second log call: timezone with simple format
             second_log_call = mock_log_context.call_args_list[1]
-            expected_tz_content = (
-                "Updated usermeta: Saved the user's timezone as Europe/London. "
-                "There are multiple timezones for this country. "
-                "Inform the user of this and that they may change their timezone via the `/settings` command."
-            )
+            expected_tz_content = "Updated usermeta: timezone is now Europe/London"
             assert second_log_call[1]["content"] == expected_tz_content
 
             # Verify return value
@@ -227,7 +223,7 @@ class TestSaveUserResponse:
 
             # Second log call: timezone (also set to rather_not_say)
             second_log_call = mock_log_context.call_args_list[1]
-            expected_tz_content = "Updated usermeta: Saved the user's timezone as rather_not_say."
+            expected_tz_content = "Updated usermeta: timezone is now rather_not_say"
             assert second_log_call[1]["content"] == expected_tz_content
 
             # Verify return value
@@ -336,7 +332,7 @@ class TestSaveUserResponse:
                     second_call = mock_log_context.call_args_list[1]
                     assert second_call[1]["chat_id"] == mock_run_context.deps.tg_chat_id
                     assert second_call[1]["session_id"] == mock_run_context.deps.tg_session_id
-                    expected_tz_content = "Updated usermeta: Saved the user's timezone as rather_not_say."
+                    expected_tz_content = "Updated usermeta: timezone is now rather_not_say"
                     assert second_call[1]["content"] == expected_tz_content
 
     @pytest.mark.asyncio

@@ -1,6 +1,7 @@
 """Tests for chat agents."""
 
 from datetime import datetime
+from unittest.mock import ANY
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from unittest.mock import patch
@@ -9,6 +10,7 @@ from zoneinfo import ZoneInfo
 import pytest
 from telegram.ext import ContextTypes
 
+from areyouok_telegram.data.models.notifications import Notifications
 from areyouok_telegram.data.models.user_metadata import UserMetadata
 from areyouok_telegram.llms.chat.agents.chat import ChatAgentDependencies
 from areyouok_telegram.llms.chat.agents.chat import instructions_with_personality_switch
@@ -38,7 +40,7 @@ class TestChatAgentDependencies:
         assert deps.tg_session_id == tg_session_id
         assert deps.personality == PersonalityTypes.EXPLORATION.value
         assert deps.restricted_responses == set()
-        assert deps.instruction is None
+        assert deps.notification is None
 
     def test_dependencies_creation_with_custom_values(self):
         """Test ChatAgentDependencies creation with custom values."""
@@ -47,7 +49,8 @@ class TestChatAgentDependencies:
         tg_session_id = "session_123"
         personality = PersonalityTypes.ANCHORING.value
         restricted_responses = {"text", "reaction"}
-        instruction = "Special instruction"
+        mock_notification = MagicMock(spec=Notifications)
+        mock_notification.content = "Special instruction"
 
         deps = ChatAgentDependencies(
             tg_context=tg_context,
@@ -55,12 +58,12 @@ class TestChatAgentDependencies:
             tg_session_id=tg_session_id,
             personality=personality,
             restricted_responses=restricted_responses,
-            instruction=instruction,
+            notification=mock_notification,
         )
 
         assert deps.personality == personality
         assert deps.restricted_responses == restricted_responses
-        assert deps.instruction == instruction
+        assert deps.notification == mock_notification
 
 
 class TestInstructionsWithPersonalitySwitch:
@@ -134,13 +137,15 @@ class TestInstructionsWithPersonalitySwitch:
 
     @pytest.mark.asyncio
     async def test_instructions_with_custom_instruction(self, mock_run_context):
-        """Test instructions generation with custom instruction message."""
-        instruction_message = "Please acknowledge this important message"
-        mock_run_context.deps.instruction = instruction_message
+        """Test instructions generation with custom notification message."""
+        notification_message = "Please acknowledge this important message"
+        mock_notification = MagicMock(spec=Notifications)
+        mock_notification.content = notification_message
+        mock_run_context.deps.notification = mock_notification
 
         result = await instructions_with_personality_switch(mock_run_context)
 
-        assert instruction_message in result
+        assert notification_message in result
         assert "<message>" in result
 
     @pytest.mark.asyncio
@@ -167,7 +172,7 @@ class TestInstructionsWithPersonalitySwitch:
 
             await instructions_with_personality_switch(mock_run_context)
 
-            mock_get_user.assert_called_once_with(mock_run_context.deps.tg_chat_id)
+            mock_get_user.assert_called_once_with(ANY, user_id=mock_run_context.deps.tg_chat_id)
 
     @pytest.mark.asyncio
     async def test_instructions_calls_get_current_time(self, mock_run_context, mock_user_metadata):

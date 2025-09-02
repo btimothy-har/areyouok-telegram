@@ -17,6 +17,7 @@ from areyouok_telegram.data.models.chat_event import ChatEvent
 from areyouok_telegram.data.models.context import ContextType
 from areyouok_telegram.jobs.conversations import ConversationJob
 from areyouok_telegram.jobs.exceptions import UserNotFoundForChatError
+from areyouok_telegram.data.models.notifications import Notifications
 from areyouok_telegram.llms.chat import ChatAgentDependencies
 from areyouok_telegram.llms.chat import DoNothingResponse
 from areyouok_telegram.llms.chat import OnboardingAgentDependencies
@@ -116,6 +117,14 @@ class TestConversationJob:
                 new=AsyncMock(return_value="test_encryption_key"),
             ),
             patch("areyouok_telegram.jobs.conversations.get_chat_session", new=AsyncMock(return_value=mock_session)),
+            patch(
+                "areyouok_telegram.jobs.conversations.get_next_notification",
+                new=AsyncMock(return_value=None),
+            ),
+            patch(
+                "areyouok_telegram.jobs.conversations.mark_notification_completed",
+                new=AsyncMock(),
+            ),
             patch.object(
                 job,
                 "_prepare_conversation_input",
@@ -128,7 +137,7 @@ class TestConversationJob:
                             tg_session_id="session123",
                             personality="exploration",
                             restricted_responses=set(),
-                            instruction=None,
+                            notification=None,
                         ),
                     )
                 ),
@@ -172,7 +181,7 @@ class TestConversationJob:
             tg_session_id="session123",
             personality="exploration",
             restricted_responses=set(),
-            instruction=None,
+            notification=None,
         )
 
         with (
@@ -180,6 +189,10 @@ class TestConversationJob:
                 "areyouok_telegram.jobs.conversations.run_agent_with_tracking", new=AsyncMock(return_value=mock_payload)
             ),
             patch.object(job, "_execute_response", new=AsyncMock(return_value=mock_message)),
+            patch(
+                "areyouok_telegram.jobs.conversations.mark_notification_completed",
+                new=AsyncMock(),
+            ) as mock_mark_notification,
         ):
             result = await job.generate_response(
                 context=mock_context,
@@ -190,6 +203,8 @@ class TestConversationJob:
             )
 
         assert result == (mock_response, mock_message)
+        # Verify notification completion was not called since there was no notification
+        mock_mark_notification.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_generate_response_exception(self):
@@ -206,12 +221,18 @@ class TestConversationJob:
             tg_session_id="session123",
             personality="exploration",
             restricted_responses=set(),
-            instruction=None,
+            notification=None,
         )
 
-        with patch(
-            "areyouok_telegram.jobs.conversations.run_agent_with_tracking",
-            new=AsyncMock(side_effect=Exception("Test error")),
+        with (
+            patch(
+                "areyouok_telegram.jobs.conversations.run_agent_with_tracking",
+                new=AsyncMock(side_effect=Exception("Test error")),
+            ),
+            patch(
+                "areyouok_telegram.jobs.conversations.mark_notification_completed",
+                new=AsyncMock(),
+            ),
         ):
             with pytest.raises(Exception, match="Test error"):
                 await job.generate_response(
@@ -439,7 +460,7 @@ class TestConversationJob:
                             tg_session_id="session123",
                             personality="exploration",
                             restricted_responses=set(),
-                            instruction=None,
+                            notification=None,
                         ),
                     )
                 ),
@@ -482,7 +503,7 @@ class TestConversationJob:
                             tg_session_id="session123",
                             personality="exploration",
                             restricted_responses=set(),
-                            instruction=None,
+                            notification=None,
                         ),
                     )
                 ),
@@ -586,7 +607,7 @@ class TestConversationJob:
                             tg_session_id="session123",
                             personality="exploration",
                             restricted_responses=set(),
-                            instruction=None,
+                            notification=None,
                         ),
                     )
                 ),
@@ -642,7 +663,7 @@ class TestConversationJob:
                             tg_session_id="session123",
                             personality="exploration",
                             restricted_responses=set(),
-                            instruction=None,
+                            notification=None,
                         ),
                     )
                 ),
@@ -684,7 +705,7 @@ class TestConversationJob:
             tg_session_id="session123",
             personality="exploration",
             restricted_responses=set(),
-            instruction=None,
+            notification=None,
         )
 
         with (
@@ -692,6 +713,10 @@ class TestConversationJob:
                 "areyouok_telegram.jobs.conversations.run_agent_with_tracking", new=AsyncMock(return_value=mock_payload)
             ),
             patch.object(job, "_execute_response", new=AsyncMock(return_value=mock_message)),
+            patch(
+                "areyouok_telegram.jobs.conversations.mark_notification_completed",
+                new=AsyncMock(),
+            ),
         ):
             result = await job.generate_response(
                 context=mock_context,
@@ -735,7 +760,7 @@ class TestConversationJob:
             tg_session_id="session123",
             personality="exploration",
             restricted_responses=set(),
-            instruction=None,
+            notification=None,
         )
 
         with (
@@ -743,6 +768,10 @@ class TestConversationJob:
                 "areyouok_telegram.jobs.conversations.run_agent_with_tracking", new=AsyncMock(return_value=mock_payload)
             ),
             patch.object(job, "_execute_response", new=AsyncMock(return_value=mock_message)),
+            patch(
+                "areyouok_telegram.jobs.conversations.mark_notification_completed",
+                new=AsyncMock(),
+            ),
         ):
             result = await job.generate_response(
                 context=mock_context,
@@ -757,8 +786,8 @@ class TestConversationJob:
         assert result == (mock_response, mock_message)
 
     @pytest.mark.asyncio
-    async def test_generate_response_instruction_removes_text_restriction(self):
-        """Test generate_response removes text restriction when instruction is present."""
+    async def test_generate_response_notification_removes_text_restriction(self):
+        """Test generate_response removes text restriction when notification is present."""
         job = ConversationJob("123")
         job._bot_id = "bot123"
 
@@ -772,14 +801,18 @@ class TestConversationJob:
         mock_payload = MagicMock()
         mock_payload.output = mock_response
 
-        # Start with text in restricted responses and an instruction
+        # Create a mock notification object
+        mock_notification = MagicMock(spec=Notifications)
+        mock_notification.content = "Special notification content"
+
+        # Start with text in restricted responses and a notification
         mock_deps = ChatAgentDependencies(
             tg_context=mock_context,
             tg_chat_id="123",
             tg_session_id="session123",
             personality="exploration",
             restricted_responses={"text"},
-            instruction="Special instruction",
+            notification=mock_notification,
         )
 
         with (
@@ -787,6 +820,10 @@ class TestConversationJob:
                 "areyouok_telegram.jobs.conversations.run_agent_with_tracking", new=AsyncMock(return_value=mock_payload)
             ),
             patch.object(job, "_execute_response", new=AsyncMock(return_value=mock_message)),
+            patch(
+                "areyouok_telegram.jobs.conversations.mark_notification_completed",
+                new=AsyncMock(),
+            ) as mock_mark_notification,
         ):
             result = await job.generate_response(
                 context=mock_context,
@@ -798,6 +835,8 @@ class TestConversationJob:
 
         # Verify text was removed from restricted responses
         assert "text" not in mock_deps.restricted_responses
+        # Verify notification was marked as completed
+        mock_mark_notification.assert_called_once_with(mock_notification)
         assert result == (mock_response, mock_message)
 
     @pytest.mark.asyncio
@@ -829,7 +868,7 @@ class TestConversationJob:
             tg_session_id="session123",
             personality="exploration",
             restricted_responses=set(),
-            instruction=None,
+            notification=None,
         )
 
         with (
@@ -838,6 +877,10 @@ class TestConversationJob:
                 new=AsyncMock(side_effect=[mock_payload_switch, mock_payload_final]),
             ) as mock_run_agent,
             patch.object(job, "_execute_response", new=AsyncMock(side_effect=[None, mock_message])),
+            patch(
+                "areyouok_telegram.jobs.conversations.mark_notification_completed",
+                new=AsyncMock(),
+            ),
             patch.object(
                 job,
                 "_prepare_conversation_input",
@@ -850,7 +893,7 @@ class TestConversationJob:
                             tg_session_id="session123",
                             personality="celebration",
                             restricted_responses=set(),
-                            instruction=None,
+                            notification=None,
                         ),
                     )
                 ),
@@ -986,6 +1029,10 @@ class TestConversationJob:
         with (
             patch("areyouok_telegram.jobs.conversations.async_database") as mock_async_db,
             patch(
+                "areyouok_telegram.jobs.conversations.get_next_notification",
+                new=AsyncMock(return_value=None),
+            ),
+            patch(
                 "areyouok_telegram.jobs.conversations.GuidedSessions.get_by_chat_session",
                 new=AsyncMock(return_value=[mock_onboarding_session]),
             ),
@@ -1047,6 +1094,10 @@ class TestConversationJob:
 
         with (
             patch("areyouok_telegram.jobs.conversations.async_database") as mock_async_db,
+            patch(
+                "areyouok_telegram.jobs.conversations.get_next_notification",
+                new=AsyncMock(return_value=None),
+            ),
             patch(
                 "areyouok_telegram.jobs.conversations.GuidedSessions.get_by_chat_session",
                 new=AsyncMock(return_value=[]),
@@ -1178,132 +1229,6 @@ class TestConversationJob:
         assert isinstance(deps, ChatAgentDependencies)
         assert deps.personality == "exploration"
 
-    @pytest.mark.asyncio
-    async def test_prepare_conversation_input_media_instructions(self, frozen_time):
-        """Test _prepare_conversation_input with unsupported media generating instructions."""
-        job = ConversationJob("123")
-        job._run_timestamp = frozen_time
-
-        mock_session = MagicMock()
-        mock_session.session_key = "session_key_123"
-        mock_session.session_id = "session123"
-        mock_session.last_bot_activity = frozen_time - timedelta(hours=1)
-
-        # Create mock message
-        mock_message = MagicMock()
-        mock_message.message_type = "Message"
-        mock_message.message_id = "msg123"
-        mock_message.created_at = frozen_time
-        mock_message.decrypt_payload = MagicMock()
-
-        mock_session.get_messages = AsyncMock(return_value=[mock_message])
-
-        mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
-
-        # Create mock unsupported media
-        mock_media1 = MagicMock()
-        mock_media1.is_anthropic_supported = False
-        mock_media1.mime_type = "video/mp4"
-        mock_media1.decrypt_content = MagicMock()
-
-        mock_media2 = MagicMock()
-        mock_media2.is_anthropic_supported = False
-        mock_media2.mime_type = "application/zip"
-        mock_media2.decrypt_content = MagicMock()
-
-        with (
-            patch("areyouok_telegram.jobs.conversations.async_database") as mock_async_db,
-            patch(
-                "areyouok_telegram.jobs.conversations.GuidedSessions.get_by_chat_session",
-                new=AsyncMock(return_value=[]),
-            ),
-            patch(
-                "areyouok_telegram.jobs.conversations.Context.retrieve_context_by_chat",
-                new=AsyncMock(return_value=[]),
-            ),
-            patch(
-                "areyouok_telegram.jobs.conversations.MediaFiles.get_by_message_id",
-                new=AsyncMock(return_value=[mock_media1, mock_media2]),
-            ),
-            patch(
-                "areyouok_telegram.jobs.conversations.ChatEvent.from_message",
-                return_value=MagicMock(),
-            ),
-        ):
-            mock_db_conn = AsyncMock()
-            mock_async_db.return_value.__aenter__.return_value = mock_db_conn
-
-            message_history, deps = await job._prepare_conversation_input(
-                "test_encryption_key",
-                context=mock_context,
-                chat_session=mock_session,
-                include_context=False,
-            )
-
-        # Verify instruction for multiple unsupported media types
-        expected_instruction = "The user sent video/mp4, application/zip files, but you can only view images and PDFs."
-        assert deps.instruction == expected_instruction
-
-    @pytest.mark.asyncio
-    async def test_prepare_conversation_input_single_media_instruction(self, frozen_time):
-        """Test _prepare_conversation_input with single unsupported media type."""
-        job = ConversationJob("123")
-        job._run_timestamp = frozen_time
-
-        mock_session = MagicMock()
-        mock_session.session_key = "session_key_123"
-        mock_session.session_id = "session123"
-        mock_session.last_bot_activity = frozen_time - timedelta(hours=1)
-
-        # Create mock message
-        mock_message = MagicMock()
-        mock_message.message_type = "Message"
-        mock_message.message_id = "msg123"
-        mock_message.created_at = frozen_time
-        mock_message.decrypt_payload = MagicMock()
-
-        mock_session.get_messages = AsyncMock(return_value=[mock_message])
-
-        mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
-
-        # Create mock unsupported media
-        mock_media = MagicMock()
-        mock_media.is_anthropic_supported = False
-        mock_media.mime_type = "video/mp4"
-        mock_media.decrypt_content = MagicMock()
-
-        with (
-            patch("areyouok_telegram.jobs.conversations.async_database") as mock_async_db,
-            patch(
-                "areyouok_telegram.jobs.conversations.GuidedSessions.get_by_chat_session",
-                new=AsyncMock(return_value=[]),
-            ),
-            patch(
-                "areyouok_telegram.jobs.conversations.Context.retrieve_context_by_chat",
-                new=AsyncMock(return_value=[]),
-            ),
-            patch(
-                "areyouok_telegram.jobs.conversations.MediaFiles.get_by_message_id",
-                new=AsyncMock(return_value=[mock_media]),
-            ),
-            patch(
-                "areyouok_telegram.jobs.conversations.ChatEvent.from_message",
-                return_value=MagicMock(),
-            ),
-        ):
-            mock_db_conn = AsyncMock()
-            mock_async_db.return_value.__aenter__.return_value = mock_db_conn
-
-            message_history, deps = await job._prepare_conversation_input(
-                "test_encryption_key",
-                context=mock_context,
-                chat_session=mock_session,
-                include_context=False,
-            )
-
-        # Verify instruction for single unsupported media type
-        expected_instruction = "The user sent a video/mp4 file, but you can only view images and PDFs."
-        assert deps.instruction == expected_instruction
 
     @pytest.mark.asyncio
     async def test_prepare_conversation_input_message_reaction_updated(self, frozen_time):
@@ -1405,72 +1330,6 @@ class TestConversationJob:
         # Verify unknown message type was skipped
         mock_chat_event.assert_not_called()
 
-    @pytest.mark.asyncio
-    async def test_prepare_conversation_input_audio_media_excluded(self, frozen_time):
-        """Test _prepare_conversation_input excludes audio media from unsupported types."""
-        job = ConversationJob("123")
-        job._run_timestamp = frozen_time
-
-        mock_session = MagicMock()
-        mock_session.session_key = "session_key_123"
-        mock_session.session_id = "session123"
-        mock_session.last_bot_activity = frozen_time - timedelta(hours=1)
-
-        # Create mock message
-        mock_message = MagicMock()
-        mock_message.message_type = "Message"
-        mock_message.message_id = "msg123"
-        mock_message.created_at = frozen_time
-        mock_message.decrypt_payload = MagicMock()
-
-        mock_session.get_messages = AsyncMock(return_value=[mock_message])
-
-        mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
-
-        # Create mock unsupported audio media (should be excluded)
-        mock_audio_media = MagicMock()
-        mock_audio_media.is_anthropic_supported = False
-        mock_audio_media.mime_type = "audio/mpeg"
-        mock_audio_media.decrypt_content = MagicMock()
-
-        # Create mock unsupported non-audio media (should be included)
-        mock_video_media = MagicMock()
-        mock_video_media.is_anthropic_supported = False
-        mock_video_media.mime_type = "video/mp4"
-        mock_video_media.decrypt_content = MagicMock()
-
-        with (
-            patch("areyouok_telegram.jobs.conversations.async_database") as mock_async_db,
-            patch(
-                "areyouok_telegram.jobs.conversations.GuidedSessions.get_by_chat_session",
-                new=AsyncMock(return_value=[]),
-            ),
-            patch(
-                "areyouok_telegram.jobs.conversations.Context.retrieve_context_by_chat",
-                new=AsyncMock(return_value=[]),
-            ),
-            patch(
-                "areyouok_telegram.jobs.conversations.MediaFiles.get_by_message_id",
-                new=AsyncMock(return_value=[mock_audio_media, mock_video_media]),
-            ),
-            patch(
-                "areyouok_telegram.jobs.conversations.ChatEvent.from_message",
-                return_value=MagicMock(),
-            ),
-        ):
-            mock_db_conn = AsyncMock()
-            mock_async_db.return_value.__aenter__.return_value = mock_db_conn
-
-            message_history, deps = await job._prepare_conversation_input(
-                "test_encryption_key",
-                context=mock_context,
-                chat_session=mock_session,
-                include_context=False,
-            )
-
-        # Verify only video media type is included in instruction (audio excluded)
-        expected_instruction = "The user sent a video/mp4 file, but you can only view images and PDFs."
-        assert deps.instruction == expected_instruction
 
     @pytest.mark.asyncio
     async def test_prepare_conversation_input_inactive_onboarding_session(self, frozen_time):
@@ -1621,6 +1480,207 @@ class TestConversationJob:
 
         # Verify result is the context template
         assert result == mock_context_template
+
+    @pytest.mark.asyncio
+    async def test_generate_response_with_notification_completion(self):
+        """Test generate_response marks notification as completed when notification is present and response is successful."""
+        job = ConversationJob("123")
+
+        mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
+        mock_session = MagicMock()
+        mock_session.session_id = "session123"
+
+        mock_response = TextResponse(reasoning="Test reasoning", message_text="Test response", reply_to_message_id=None)
+        mock_message = MagicMock()
+
+        mock_payload = MagicMock()
+        mock_payload.output = mock_response
+
+        # Create a mock notification object
+        mock_notification = MagicMock(spec=Notifications)
+        mock_notification.content = "Test notification content"
+
+        mock_deps = ChatAgentDependencies(
+            tg_context=mock_context,
+            tg_chat_id="123",
+            tg_session_id="session123",
+            personality="exploration",
+            restricted_responses=set(),
+            notification=mock_notification,
+        )
+
+        with (
+            patch(
+                "areyouok_telegram.jobs.conversations.run_agent_with_tracking", new=AsyncMock(return_value=mock_payload)
+            ),
+            patch.object(job, "_execute_response", new=AsyncMock(return_value=mock_message)),
+            patch(
+                "areyouok_telegram.jobs.conversations.mark_notification_completed",
+                new=AsyncMock(),
+            ) as mock_mark_notification,
+        ):
+            result = await job.generate_response(
+                context=mock_context,
+                chat_encryption_key="test_encryption_key",
+                chat_session=mock_session,
+                conversation_history=[],
+                dependencies=mock_deps,
+            )
+
+        assert result == (mock_response, mock_message)
+        # Verify notification was marked as completed
+        mock_mark_notification.assert_called_once_with(mock_notification)
+
+    @pytest.mark.asyncio
+    async def test_generate_response_notification_completion_with_do_nothing_response(self):
+        """Test generate_response marks notification as completed even with DoNothingResponse."""
+        job = ConversationJob("123")
+
+        mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
+        mock_session = MagicMock()
+        mock_session.session_id = "session123"
+
+        # Agent returns DoNothingResponse
+        mock_response = DoNothingResponse(reasoning="Nothing to do")
+        mock_payload = MagicMock()
+        mock_payload.output = mock_response
+
+        # Create a mock notification object
+        mock_notification = MagicMock(spec=Notifications)
+        mock_notification.content = "Test notification content"
+
+        mock_deps = ChatAgentDependencies(
+            tg_context=mock_context,
+            tg_chat_id="123",
+            tg_session_id="session123",
+            personality="exploration",
+            restricted_responses=set(),
+            notification=mock_notification,
+        )
+
+        with (
+            patch(
+                "areyouok_telegram.jobs.conversations.run_agent_with_tracking", new=AsyncMock(return_value=mock_payload)
+            ),
+            patch.object(job, "_execute_response", new=AsyncMock(return_value=None)),
+            patch(
+                "areyouok_telegram.jobs.conversations.mark_notification_completed",
+                new=AsyncMock(),
+            ) as mock_mark_notification,
+        ):
+            result = await job.generate_response(
+                context=mock_context,
+                chat_encryption_key="test_encryption_key",
+                chat_session=mock_session,
+                conversation_history=[],
+                dependencies=mock_deps,
+            )
+
+        assert result == (mock_response, None)
+        # Verify notification was marked as completed since agent_response is valid
+        mock_mark_notification.assert_called_once_with(mock_notification)
+
+    @pytest.mark.asyncio
+    async def test_generate_response_no_notification_completion_when_no_notification(self):
+        """Test generate_response does not call mark_notification_completed when no notification exists."""
+        job = ConversationJob("123")
+
+        mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
+        mock_session = MagicMock()
+        mock_session.session_id = "session123"
+
+        mock_response = TextResponse(reasoning="Test reasoning", message_text="Test response", reply_to_message_id=None)
+        mock_message = MagicMock()
+
+        mock_payload = MagicMock()
+        mock_payload.output = mock_response
+
+        # Dependencies without notification
+        mock_deps = ChatAgentDependencies(
+            tg_context=mock_context,
+            tg_chat_id="123",
+            tg_session_id="session123",
+            personality="exploration",
+            restricted_responses=set(),
+            notification=None,  # No notification
+        )
+
+        with (
+            patch(
+                "areyouok_telegram.jobs.conversations.run_agent_with_tracking", new=AsyncMock(return_value=mock_payload)
+            ),
+            patch.object(job, "_execute_response", new=AsyncMock(return_value=mock_message)),
+            patch(
+                "areyouok_telegram.jobs.conversations.mark_notification_completed",
+                new=AsyncMock(),
+            ) as mock_mark_notification,
+        ):
+            result = await job.generate_response(
+                context=mock_context,
+                chat_encryption_key="test_encryption_key",
+                chat_session=mock_session,
+                conversation_history=[],
+                dependencies=mock_deps,
+            )
+
+        assert result == (mock_response, mock_message)
+        # Verify notification completion was NOT called since there was no notification
+        mock_mark_notification.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_prepare_conversation_input_with_notification(self, frozen_time):
+        """Test _prepare_conversation_input properly fetches and includes notification."""
+        job = ConversationJob("123")
+        job._run_timestamp = frozen_time
+
+        mock_session = MagicMock()
+        mock_session.session_key = "session_key_123"
+        mock_session.session_id = "session123"
+        mock_session.get_messages = AsyncMock(return_value=[])
+
+        mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
+
+        # Create mock notification
+        mock_notification = MagicMock(spec=Notifications)
+        mock_notification.content = "Test notification content"
+
+        with (
+            patch("areyouok_telegram.jobs.conversations.async_database") as mock_async_db,
+            patch(
+                "areyouok_telegram.jobs.conversations.get_next_notification",
+                new=AsyncMock(return_value=mock_notification),
+            ) as mock_get_notification,
+            patch(
+                "areyouok_telegram.jobs.conversations.GuidedSessions.get_by_chat_session",
+                new=AsyncMock(return_value=[]),
+            ),
+            patch(
+                "areyouok_telegram.jobs.conversations.Context.retrieve_context_by_chat",
+                new=AsyncMock(return_value=[]),
+            ),
+            patch(
+                "areyouok_telegram.jobs.conversations.MediaFiles.get_by_message_id",
+                new=AsyncMock(return_value=[]),
+            ),
+        ):
+            mock_db_conn = AsyncMock()
+            mock_async_db.return_value.__aenter__.return_value = mock_db_conn
+
+            message_history, deps = await job._prepare_conversation_input(
+                "test_encryption_key",
+                context=mock_context,
+                chat_session=mock_session,
+                include_context=True,
+            )
+
+        # Verify get_next_notification was called with correct chat_id
+        mock_get_notification.assert_called_once_with("123")
+        
+        # Verify dependencies include the notification
+        assert isinstance(deps, ChatAgentDependencies)
+        assert deps.notification == mock_notification
+        assert deps.tg_chat_id == "123"
+        assert deps.tg_session_id == "session123"
 
     @pytest.mark.asyncio
     async def test_run_inactive_session_uses_session_start_as_reference(self, frozen_time):
