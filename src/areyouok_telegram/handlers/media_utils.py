@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from areyouok_telegram.config import OPENAI_API_KEY
 from areyouok_telegram.data import LLMUsage
 from areyouok_telegram.data import MediaFiles
+from areyouok_telegram.data import Notifications
 from areyouok_telegram.handlers.exceptions import VoiceNotProcessableError
 from areyouok_telegram.utils import telegram_retry
 from areyouok_telegram.utils import traced
@@ -229,3 +230,45 @@ async def extract_media_from_telegram_message(
     )
 
     return len(media_files)
+
+
+@traced(extract_args=["chat_id", "message_id"])
+async def handle_unsupported_media(
+    db_conn: AsyncSession,
+    *,
+    chat_id: str,
+    message_id: str,
+) -> None:
+    """Check for unsupported media types and create notifications.
+
+    Args:
+        db_conn: Database connection
+        chat_id: Chat ID
+        message_id: Message ID
+    """
+    stored_media = await MediaFiles.get_by_message_id(
+        db_conn,
+        chat_id=chat_id,
+        message_id=message_id,
+    )
+
+    if stored_media:
+        # Find unsupported media types (excluding audio files)
+        unsupported_media = [m for m in stored_media if not m.is_anthropic_supported]
+        unsupported_media_types = [m.mime_type for m in unsupported_media if not m.mime_type.startswith("audio/")]
+
+        if unsupported_media_types:
+            # Create notification for unsupported media
+            if len(unsupported_media_types) == 1:
+                content = f"The user sent a {unsupported_media_types[0]} file, but you can only view images and PDFs."
+            else:
+                content = (
+                    f"The user sent {', '.join(unsupported_media_types)} files, but you can only view images and PDFs."
+                )
+
+            await Notifications.add(
+                db_conn,
+                chat_id=chat_id,
+                content=content,
+                priority=2,  # Medium priority
+            )

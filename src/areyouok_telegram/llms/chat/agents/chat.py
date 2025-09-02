@@ -6,6 +6,7 @@ import pydantic_ai
 from pydantic_ai import RunContext
 from telegram.ext import ContextTypes
 
+from areyouok_telegram.data import Notifications
 from areyouok_telegram.data import UserMetadata
 from areyouok_telegram.data import async_database
 from areyouok_telegram.llms.chat.constants import MESSAGE_FOR_USER_PROMPT
@@ -42,7 +43,7 @@ class ChatAgentDependencies:
     tg_session_id: str
     personality: str = PersonalityTypes.EXPLORATION.value
     restricted_responses: set[Literal["text", "reaction", "switch_personality"]] = field(default_factory=set)
-    instruction: str | None = None
+    notification: Notifications | None = None
 
 
 chat_agent = pydantic_ai.Agent(
@@ -57,7 +58,8 @@ chat_agent = pydantic_ai.Agent(
 
 @chat_agent.instructions
 async def instructions_with_personality_switch(ctx: pydantic_ai.RunContext[ChatAgentDependencies]) -> str:
-    user_metadata = await UserMetadata.get_by_user_id(ctx.deps.tg_chat_id)
+    async with async_database() as db_conn:
+        user_metadata = await UserMetadata.get_by_user_id(db_conn, user_id=ctx.deps.tg_chat_id)
 
     personality = PersonalityTypes.get_by_value(ctx.deps.personality)
     personality_text = personality.prompt_text()
@@ -74,8 +76,8 @@ async def instructions_with_personality_switch(ctx: pydantic_ai.RunContext[ChatA
 
     prompt = BaseChatPromptTemplate(
         response=RESPONSE_PROMPT.format(response_restrictions=restrict_response_text),
-        message=MESSAGE_FOR_USER_PROMPT.format(important_message_for_user=ctx.deps.instruction)
-        if ctx.deps.instruction
+        message=MESSAGE_FOR_USER_PROMPT.format(important_message_for_user=ctx.deps.notification.content)
+        if ctx.deps.notification
         else None,
         personality=PERSONALITY_PROMPT.format(
             personality_text=personality_text,
@@ -109,12 +111,12 @@ async def validate_agent_response(
         bot_id=str(ctx.deps.tg_context.bot.id),
     )
 
-    if ctx.deps.instruction:
+    if ctx.deps.notification:
         await check_special_instructions(
             response=data,
             chat_id=ctx.deps.tg_chat_id,
             session_id=ctx.deps.tg_session_id,
-            instruction=ctx.deps.instruction,
+            instruction=ctx.deps.notification.content,
         )
 
     return data

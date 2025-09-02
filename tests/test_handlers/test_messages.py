@@ -52,7 +52,7 @@ class TestOnNewMessage:
             ) as mock_get_chat,
             patch("areyouok_telegram.handlers.messages.Messages.new_or_update", new=AsyncMock()) as mock_msg_save,
             patch(
-                "areyouok_telegram.handlers.messages.extract_media_from_telegram_message", new=AsyncMock()
+                "areyouok_telegram.handlers.messages.extract_media_from_telegram_message", new=AsyncMock(return_value=0)
             ) as mock_extract_media,
             patch(
                 "areyouok_telegram.handlers.messages.Sessions.get_active_session",
@@ -61,6 +61,7 @@ class TestOnNewMessage:
             patch(
                 "areyouok_telegram.handlers.messages.Sessions.create_session", new=AsyncMock()
             ) as mock_create_session,
+            patch("areyouok_telegram.handlers.messages.handle_unsupported_media", new=AsyncMock()) as mock_handle_media,
         ):
             await on_new_message(mock_update, mock_context)
 
@@ -99,6 +100,9 @@ class TestOnNewMessage:
             # Verify new session was not created
             mock_create_session.assert_not_called()
 
+            # Verify handle_unsupported_media was not called since media count is 0
+            mock_handle_media.assert_not_called()
+
     @pytest.mark.asyncio
     async def test_on_new_message_without_existing_session(self, mock_db_session, frozen_time, mock_telegram_user):
         """Test handling new message without existing active session."""
@@ -130,7 +134,7 @@ class TestOnNewMessage:
             ) as mock_get_chat,
             patch("areyouok_telegram.handlers.messages.Messages.new_or_update", new=AsyncMock()) as mock_msg_save,
             patch(
-                "areyouok_telegram.handlers.messages.extract_media_from_telegram_message", new=AsyncMock()
+                "areyouok_telegram.handlers.messages.extract_media_from_telegram_message", new=AsyncMock(return_value=0)
             ) as mock_extract_media,
             patch(
                 "areyouok_telegram.handlers.messages.Sessions.get_active_session", new=AsyncMock(return_value=None)
@@ -139,6 +143,7 @@ class TestOnNewMessage:
                 "areyouok_telegram.handlers.messages.Sessions.create_session",
                 new=AsyncMock(return_value=mock_new_session),
             ) as mock_create_session,
+            patch("areyouok_telegram.handlers.messages.handle_unsupported_media", new=AsyncMock()) as mock_handle_media,
         ):
             await on_new_message(mock_update, mock_context)
 
@@ -174,6 +179,9 @@ class TestOnNewMessage:
 
             # Verify message was recorded in new session
             mock_new_session.new_message.assert_called_once_with(mock_db_session, timestamp=frozen_time, is_user=True)
+
+            # Verify handle_unsupported_media was not called since media count is 0
+            mock_handle_media.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_on_new_message_without_message_raises_error(self):
@@ -229,7 +237,7 @@ class TestOnEditMessage:
             ) as mock_get_chat,
             patch("areyouok_telegram.handlers.messages.Messages.new_or_update", new=AsyncMock()) as mock_msg_save,
             patch(
-                "areyouok_telegram.handlers.messages.extract_media_from_telegram_message", new=AsyncMock()
+                "areyouok_telegram.handlers.messages.extract_media_from_telegram_message", new=AsyncMock(return_value=0)
             ) as mock_extract_media,
             patch(
                 "areyouok_telegram.handlers.messages.Sessions.get_active_session",
@@ -302,7 +310,7 @@ class TestOnEditMessage:
             ) as mock_get_chat,
             patch("areyouok_telegram.handlers.messages.Messages.new_or_update", new=AsyncMock()) as mock_msg_save,
             patch(
-                "areyouok_telegram.handlers.messages.extract_media_from_telegram_message", new=AsyncMock()
+                "areyouok_telegram.handlers.messages.extract_media_from_telegram_message", new=AsyncMock(return_value=0)
             ) as mock_extract_media,
             patch(
                 "areyouok_telegram.handlers.messages.Sessions.get_active_session",
@@ -359,7 +367,7 @@ class TestOnEditMessage:
             ) as mock_get_chat,
             patch("areyouok_telegram.handlers.messages.Messages.new_or_update", new=AsyncMock()) as mock_msg_save,
             patch(
-                "areyouok_telegram.handlers.messages.extract_media_from_telegram_message", new=AsyncMock()
+                "areyouok_telegram.handlers.messages.extract_media_from_telegram_message", new=AsyncMock(return_value=0)
             ) as mock_extract_media,
             patch("areyouok_telegram.handlers.messages.Sessions.get_active_session", new=AsyncMock(return_value=None)),
         ):

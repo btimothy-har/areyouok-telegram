@@ -12,6 +12,7 @@ from pydantic_ai import RunContext
 from telegram.ext import ContextTypes
 
 from areyouok_telegram.data import GuidedSessions
+from areyouok_telegram.data import Notifications
 from areyouok_telegram.data import UserMetadata
 from areyouok_telegram.data import async_database
 from areyouok_telegram.llms.chat.constants import MESSAGE_FOR_USER_PROMPT
@@ -46,7 +47,7 @@ class OnboardingAgentDependencies:
     tg_session_id: str
     onboarding_session_key: str
     restricted_responses: set[Literal["text", "reaction", "switch_personality"]] = field(default_factory=set)
-    instruction: str | None = None
+    notification: Notifications | None = None
 
 
 onboarding_agent = pydantic_ai.Agent(
@@ -86,8 +87,8 @@ async def onboarding_instructions(ctx: RunContext[OnboardingAgentDependencies]) 
 
     prompt = BaseChatPromptTemplate(
         response=RESPONSE_PROMPT.format(response_restrictions=restrict_response_text),
-        message=MESSAGE_FOR_USER_PROMPT.format(important_message_for_user=ctx.deps.instruction)
-        if ctx.deps.instruction
+        message=MESSAGE_FOR_USER_PROMPT.format(important_message_for_user=ctx.deps.notification.content)
+        if ctx.deps.notification
         else None,
         objectives=ONBOARDING_OBJECTIVES.format(onboarding_fields=", ".join(onboarding_fields)),
     )
@@ -160,19 +161,24 @@ async def save_user_response(
             except Exception as e:
                 raise MetadataFieldUpdateError("timezone", str(e)) from e
 
-        tz_update_status = f"Saved the user's timezone as {tz_value}."
-
         if has_multiple:
-            tz_update_status += (
-                " There are multiple timezones for this country. "
-                "Inform the user of this and that they may change their timezone via the `/settings` command."
-            )
+            async with async_database() as db_conn:
+                await Notifications.add(
+                    db_conn,
+                    chat_id=ctx.deps.tg_chat_id,
+                    content=(
+                        f"There are multiple timezones for the user's country {value_to_save}. "
+                        f"The default has been picked as {tz_value}. "
+                        "Inform the user of this and that they may change their timezone via the `/settings` command."
+                    ),
+                    priority=1,
+                )
 
         # Log timezone update to context as well
         await log_metadata_update_context(
             chat_id=ctx.deps.tg_chat_id,
             session_id=ctx.deps.tg_session_id,
-            content=f"Updated usermeta: {tz_update_status}",
+            content=f"Updated usermeta: timezone is now {str(tz_value)}",
         )
 
     return f"{field} updated successfully."
@@ -218,12 +224,12 @@ async def validate_agent_response(
         bot_id=str(ctx.deps.tg_context.bot.id),
     )
 
-    if ctx.deps.instruction:
+    if ctx.deps.notification:
         await check_special_instructions(
             response=data,
             chat_id=ctx.deps.tg_chat_id,
             session_id=ctx.deps.tg_session_id,
-            instruction=ctx.deps.instruction,
+            instruction=ctx.deps.notification.content,
         )
 
     return data
