@@ -17,7 +17,7 @@ from areyouok_telegram.llms.chat.agents.chat import instructions_with_personalit
 from areyouok_telegram.llms.chat.agents.chat import update_communication_style
 from areyouok_telegram.llms.chat.personalities import PersonalityTypes
 from areyouok_telegram.llms.exceptions import MetadataFieldUpdateError
-from areyouok_telegram.llms.validators.anonymizer import anonymization_agent
+from areyouok_telegram.llms.agent_anonymizer import anonymization_agent
 
 
 class TestChatAgentDependencies:

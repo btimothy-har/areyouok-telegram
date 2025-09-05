@@ -10,8 +10,8 @@ from areyouok_telegram.data.models.user_metadata import UserMetadata
 from areyouok_telegram.llms.chat.agents.onboarding import OnboardingAgentDependencies
 from areyouok_telegram.llms.chat.agents.onboarding import save_user_response
 from areyouok_telegram.llms.exceptions import MetadataFieldUpdateError
-from areyouok_telegram.llms.validators.country_timezone import CountryTimezone
-from areyouok_telegram.llms.validators.country_timezone import country_timezone_agent
+from areyouok_telegram.llms.agent_country_timezone import CountryTimezone
+from areyouok_telegram.llms.agent_country_timezone import country_timezone_agent
 
 
 class TestSaveUserResponse:

@@ -15,6 +15,8 @@ from areyouok_telegram.data import GuidedSessions
 from areyouok_telegram.data import Notifications
 from areyouok_telegram.data import UserMetadata
 from areyouok_telegram.data import async_database
+from areyouok_telegram.llms.agent_country_timezone import CountryTimezone
+from areyouok_telegram.llms.agent_country_timezone import country_timezone_agent
 from areyouok_telegram.llms.chat.constants import MESSAGE_FOR_USER_PROMPT
 from areyouok_telegram.llms.chat.constants import ONBOARDING_FIELDS
 from areyouok_telegram.llms.chat.constants import ONBOARDING_OBJECTIVES
@@ -32,8 +34,6 @@ from areyouok_telegram.llms.exceptions import CompleteOnboardingError
 from areyouok_telegram.llms.exceptions import MetadataFieldUpdateError
 from areyouok_telegram.llms.models import ONBOARDING_SONNET_4
 from areyouok_telegram.llms.utils import run_agent_with_tracking
-from areyouok_telegram.llms.validators.country_timezone import CountryTimezone
-from areyouok_telegram.llms.validators.country_timezone import country_timezone_agent
 
 AgentResponse = TextResponse | ReactionResponse | DoNothingResponse
 

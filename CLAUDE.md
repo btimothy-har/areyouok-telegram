@@ -61,7 +61,7 @@ Components:
 - **`chat/`**: Main chat agent with dynamic personalities (anchoring, celebration, exploration, witnessing)
 - **`context_compression/`**: Context compression agent for managing conversation history
 - **`models/`**: LLM model definitions and base classes using pydantic-ai
-- **`validators/`**: Content validation including anonymizer and content checking
+- **Miscellaneous agents**: Content validation and utility agents (agent_anonymizer.py, agent_content_check.py, agent_country_timezone.py)
 
 ## Error Handling
 
