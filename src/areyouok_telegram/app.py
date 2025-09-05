@@ -58,6 +58,7 @@ def create_application() -> Application:
 
     # Command Handlers
     application.add_handler(CommandHandler("start", commands_handlers.on_start_command, block=False), group=1)
+    application.add_handler(CommandHandler("settings", commands_handlers.on_settings_command, block=False), group=1)
     application.add_handler(CommandHandler("end", commands_handlers.on_end_command, block=False), group=1)
 
     # Message Handlers
