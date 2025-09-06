@@ -222,9 +222,9 @@ class TestUpdateCommunicationStyleTool:
 
         with (
             patch.object(UserMetadata, "update_metadata", new_callable=AsyncMock) as mock_update,
-            patch("areyouok_telegram.llms.chat.utils.Chats.get_by_id", new_callable=AsyncMock) as mock_get_chat,
+            patch("areyouok_telegram.llms.utils.Chats.get_by_id", new_callable=AsyncMock) as mock_get_chat,
             patch(
-                "areyouok_telegram.llms.chat.utils.Context.new_or_update", new_callable=AsyncMock
+                "areyouok_telegram.llms.utils.Context.new_or_update", new_callable=AsyncMock
             ) as mock_context_update,
         ):
             # Setup context logging mocks
@@ -318,8 +318,8 @@ class TestUpdateCommunicationStyleTool:
 
         with (
             patch.object(UserMetadata, "update_metadata", new_callable=AsyncMock),
-            patch("areyouok_telegram.llms.chat.utils.Chats.get_by_id", new_callable=AsyncMock) as mock_get_chat,
-            patch("areyouok_telegram.llms.chat.utils.Context.new_or_update", new_callable=AsyncMock),
+            patch("areyouok_telegram.llms.utils.Chats.get_by_id", new_callable=AsyncMock) as mock_get_chat,
+            patch("areyouok_telegram.llms.utils.Context.new_or_update", new_callable=AsyncMock),
         ):
             # Setup context logging mocks
             mock_get_chat.return_value = mock_chat

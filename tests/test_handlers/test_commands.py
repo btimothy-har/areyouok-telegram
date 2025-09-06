@@ -9,6 +9,7 @@ import telegram
 from telegram.ext import ContextTypes
 
 from areyouok_telegram.handlers.commands import on_end_command
+from areyouok_telegram.handlers.commands import on_settings_command
 from areyouok_telegram.handlers.commands import on_start_command
 
 
@@ -237,6 +238,7 @@ class TestOnStartCommand:
             mock_context.bot.send_message.assert_called_once_with(
                 chat_id=mock_telegram_chat.id,
                 text="Onboarding already completed!",
+                parse_mode="MarkdownV2",
             )
 
     @pytest.mark.asyncio
@@ -414,3 +416,315 @@ class TestOnEndCommand:
 
         # Should return None
         assert result is None
+
+
+class TestOnSettingsCommand:
+    """Test the on_settings_command handler."""
+
+    @pytest.mark.asyncio
+    @patch("areyouok_telegram.handlers.commands.construct_user_settings_response")
+    async def test_on_settings_command_display_settings(
+        self, mock_construct_response, mock_telegram_user, mock_telegram_chat, mock_telegram_message
+    ):
+        """Test settings command displays current settings when no arguments provided."""
+        # Setup mocks
+        mock_update = MagicMock(spec=telegram.Update)
+        mock_update.effective_user = mock_telegram_user
+        mock_update.effective_chat = mock_telegram_chat
+        mock_update.message = mock_telegram_message
+        mock_update.message.text = "/settings"
+        
+        mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
+        mock_context.bot = AsyncMock()
+        
+        mock_construct_response.return_value = "**Your Current Settings:**\n• Name: John Doe"
+        
+        # Call handler
+        await on_settings_command(mock_update, mock_context)
+        
+        # Verify settings response was constructed
+        mock_construct_response.assert_called_once_with(user_id=str(mock_telegram_user.id))
+        
+        # Verify message was sent
+        mock_context.bot.send_message.assert_called_once_with(
+            chat_id=mock_telegram_chat.id,
+            text="**Your Current Settings:**\n• Name: John Doe",
+            parse_mode="MarkdownV2",
+        )
+
+    @pytest.mark.asyncio
+    @patch("areyouok_telegram.handlers.commands.update_user_metadata_field")
+    @patch("areyouok_telegram.handlers.commands.Sessions.get_active_session")
+    @patch("areyouok_telegram.handlers.commands.Sessions.create_session")
+    @patch("areyouok_telegram.handlers.commands.async_database")
+    async def test_on_settings_command_update_preferred_name(
+        self, mock_async_database, mock_create_session, mock_get_active_session, mock_update_field,
+        mock_telegram_user, mock_telegram_chat, mock_telegram_message
+    ):
+        """Test settings command updates preferred name field."""
+        # Setup mocks
+        mock_update = MagicMock(spec=telegram.Update)
+        mock_update.effective_user = mock_telegram_user
+        mock_update.effective_chat = mock_telegram_chat
+        mock_update.message = mock_telegram_message
+        mock_update.message.text = "/settings name Alice Smith"
+        mock_update.message.id = 12345
+        
+        mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
+        mock_context.bot = AsyncMock()
+        
+        # Mock database session
+        mock_db_conn = AsyncMock()
+        mock_async_database.return_value.__aenter__ = AsyncMock(return_value=mock_db_conn)
+        mock_async_database.return_value.__aexit__ = AsyncMock(return_value=None)
+        
+        # Mock session
+        mock_session = MagicMock()
+        mock_session.id = 123
+        mock_get_active_session.return_value = mock_session
+        
+        # Mock update response
+        mock_response = MagicMock()
+        mock_response.feedback = "Successfully updated your preferred name to Alice Smith."
+        mock_update_field.return_value = mock_response
+        
+        # Call handler
+        await on_settings_command(mock_update, mock_context)
+        
+        # Verify reaction was set
+        mock_context.bot.set_message_reaction.assert_called_once_with(
+            chat_id=mock_telegram_chat.id,
+            message_id=12345,
+            reaction="👌",
+        )
+        
+        # Verify typing indicator
+        mock_context.bot.send_chat_action.assert_called_once_with(
+            chat_id=mock_telegram_chat.id,
+            action=telegram.constants.ChatAction.TYPING,
+        )
+        
+        # Verify field update was called
+        mock_update_field.assert_called_once_with(
+            chat_id=str(mock_telegram_chat.id),
+            session_id=str(mock_session.id),
+            field_name="preferred_name",
+            new_value="Alice Smith",
+        )
+        
+        # Verify response message
+        mock_context.bot.send_message.assert_called_once_with(
+            chat_id=mock_telegram_chat.id,
+            text="Successfully updated your preferred name to Alice Smith.",
+        )
+
+    @pytest.mark.asyncio
+    @patch("areyouok_telegram.handlers.commands.update_user_metadata_field")
+    @patch("areyouok_telegram.handlers.commands.Sessions.get_active_session")
+    @patch("areyouok_telegram.handlers.commands.async_database")
+    async def test_on_settings_command_update_country(
+        self, mock_async_database, mock_get_active_session, mock_update_field,
+        mock_telegram_user, mock_telegram_chat, mock_telegram_message
+    ):
+        """Test settings command updates country field."""
+        # Setup mocks
+        mock_update = MagicMock(spec=telegram.Update)
+        mock_update.effective_user = mock_telegram_user
+        mock_update.effective_chat = mock_telegram_chat
+        mock_update.message = mock_telegram_message
+        mock_update.message.text = "/settings country USA"
+        mock_update.message.id = 12345
+        
+        mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
+        mock_context.bot = AsyncMock()
+        
+        # Mock database session
+        mock_db_conn = AsyncMock()
+        mock_async_database.return_value.__aenter__ = AsyncMock(return_value=mock_db_conn)
+        mock_async_database.return_value.__aexit__ = AsyncMock(return_value=None)
+        
+        # Mock session
+        mock_session = MagicMock()
+        mock_session.id = 123
+        mock_get_active_session.return_value = mock_session
+        
+        # Mock update response
+        mock_response = MagicMock()
+        mock_response.feedback = "Successfully updated your country to USA."
+        mock_update_field.return_value = mock_response
+        
+        # Call handler
+        await on_settings_command(mock_update, mock_context)
+        
+        # Verify field update was called with correct parameters
+        mock_update_field.assert_called_once_with(
+            chat_id=str(mock_telegram_chat.id),
+            session_id=str(mock_session.id),
+            field_name="country",
+            new_value="USA",
+        )
+
+    @pytest.mark.asyncio
+    @patch("areyouok_telegram.handlers.commands.update_user_metadata_field")
+    @patch("areyouok_telegram.handlers.commands.Sessions.get_active_session")
+    @patch("areyouok_telegram.handlers.commands.async_database")
+    async def test_on_settings_command_update_timezone(
+        self, mock_async_database, mock_get_active_session, mock_update_field,
+        mock_telegram_user, mock_telegram_chat, mock_telegram_message
+    ):
+        """Test settings command updates timezone field."""
+        # Setup mocks
+        mock_update = MagicMock(spec=telegram.Update)
+        mock_update.effective_user = mock_telegram_user
+        mock_update.effective_chat = mock_telegram_chat
+        mock_update.message = mock_telegram_message
+        mock_update.message.text = "/settings timezone America/New_York"
+        mock_update.message.id = 12345
+        
+        mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
+        mock_context.bot = AsyncMock()
+        
+        # Mock database session
+        mock_db_conn = AsyncMock()
+        mock_async_database.return_value.__aenter__ = AsyncMock(return_value=mock_db_conn)
+        mock_async_database.return_value.__aexit__ = AsyncMock(return_value=None)
+        
+        # Mock session
+        mock_session = MagicMock()
+        mock_session.id = 123
+        mock_get_active_session.return_value = mock_session
+        
+        # Mock update response
+        mock_response = MagicMock()
+        mock_response.feedback = "Successfully updated your timezone to America/New_York."
+        mock_update_field.return_value = mock_response
+        
+        # Call handler
+        await on_settings_command(mock_update, mock_context)
+        
+        # Verify field update was called with correct parameters
+        mock_update_field.assert_called_once_with(
+            chat_id=str(mock_telegram_chat.id),
+            session_id=str(mock_session.id),
+            field_name="timezone",
+            new_value="America/New_York",
+        )
+
+    @pytest.mark.asyncio
+    async def test_on_settings_command_invalid_field(
+        self, mock_telegram_user, mock_telegram_chat, mock_telegram_message
+    ):
+        """Test settings command with invalid field name."""
+        # Setup mocks
+        mock_update = MagicMock(spec=telegram.Update)
+        mock_update.effective_user = mock_telegram_user
+        mock_update.effective_chat = mock_telegram_chat
+        mock_update.message = mock_telegram_message
+        mock_update.message.text = "/settings invalid_field some_value"
+        
+        mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
+        mock_context.bot = AsyncMock()
+        
+        # Call handler
+        await on_settings_command(mock_update, mock_context)
+        
+        # Verify error message was sent
+        mock_context.bot.send_message.assert_called_once_with(
+            chat_id=mock_telegram_chat.id,
+            text="Invalid field. Please specify one of: name, country, timezone.",
+        )
+
+    @pytest.mark.asyncio
+    @patch("areyouok_telegram.handlers.commands.Sessions.get_active_session")
+    @patch("areyouok_telegram.handlers.commands.Sessions.create_session")
+    @patch("areyouok_telegram.handlers.commands.async_database")
+    async def test_on_settings_command_creates_session_if_none_exists(
+        self, mock_async_database, mock_create_session, mock_get_active_session,
+        mock_telegram_user, mock_telegram_chat, mock_telegram_message
+    ):
+        """Test settings command creates session if none exists."""
+        # Setup mocks
+        mock_update = MagicMock(spec=telegram.Update)
+        mock_update.effective_user = mock_telegram_user
+        mock_update.effective_chat = mock_telegram_chat
+        mock_update.message = mock_telegram_message
+        mock_update.message.text = "/settings name John"
+        mock_update.message.id = 12345
+        mock_update.message.date = "2024-01-01T10:00:00Z"
+        
+        mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
+        mock_context.bot = AsyncMock()
+        
+        # Mock database session
+        mock_db_conn = AsyncMock()
+        mock_async_database.return_value.__aenter__ = AsyncMock(return_value=mock_db_conn)
+        mock_async_database.return_value.__aexit__ = AsyncMock(return_value=None)
+        
+        # Mock no active session
+        mock_get_active_session.return_value = None
+        
+        # Mock created session
+        mock_new_session = MagicMock()
+        mock_new_session.id = 456
+        mock_create_session.return_value = mock_new_session
+        
+        with patch("areyouok_telegram.handlers.commands.update_user_metadata_field") as mock_update_field:
+            mock_response = MagicMock()
+            mock_response.feedback = "Updated successfully."
+            mock_update_field.return_value = mock_response
+            
+            # Call handler
+            await on_settings_command(mock_update, mock_context)
+            
+            # Verify session creation was called
+            mock_create_session.assert_called_once_with(
+                mock_db_conn, 
+                chat_id=str(mock_telegram_chat.id), 
+                timestamp=mock_update.message.date
+            )
+
+    @pytest.mark.asyncio
+    async def test_on_settings_command_field_normalization(
+        self, mock_telegram_user, mock_telegram_chat, mock_telegram_message
+    ):
+        """Test that 'name' field is normalized to 'preferred_name'."""
+        # Setup mocks
+        mock_update = MagicMock(spec=telegram.Update)
+        mock_update.effective_user = mock_telegram_user
+        mock_update.effective_chat = mock_telegram_chat
+        mock_update.message = mock_telegram_message
+        mock_update.message.text = "/settings preferred_name Alice"  # Use preferred_name to test normalization
+        mock_update.message.id = 12345
+        
+        mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
+        mock_context.bot = AsyncMock()
+        
+        with patch("areyouok_telegram.handlers.commands.async_database") as mock_async_database, \
+             patch("areyouok_telegram.handlers.commands.Sessions.get_active_session") as mock_get_active_session, \
+             patch("areyouok_telegram.handlers.commands.update_user_metadata_field") as mock_update_field:
+            
+            # Mock database session
+            mock_db_conn = AsyncMock()
+            mock_async_database.return_value.__aenter__ = AsyncMock(return_value=mock_db_conn)
+            mock_async_database.return_value.__aexit__ = AsyncMock(return_value=None)
+            
+            # Mock session
+            mock_session = MagicMock()
+            mock_session.id = 123
+            mock_get_active_session.return_value = mock_session
+            
+            # Mock update response
+            mock_response = MagicMock()
+            mock_response.feedback = "Updated."
+            mock_update_field.return_value = mock_response
+            
+            # Call handler
+            await on_settings_command(mock_update, mock_context)
+            
+            # Verify the field name passed is still preferred_name (no normalization needed)
+            mock_update_field.assert_called_once_with(
+                chat_id=str(mock_telegram_chat.id),
+                session_id=str(mock_session.id),
+                field_name="preferred_name",
+                new_value="Alice",
+            )

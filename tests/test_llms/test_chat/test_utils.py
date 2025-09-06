@@ -7,16 +7,16 @@ from unittest.mock import patch
 import pytest
 
 from areyouok_telegram.data.models.context import ContextType
-from areyouok_telegram.llms.chat.utils import log_metadata_update_context
+from areyouok_telegram.llms.utils import log_metadata_update_context
 
 
 class TestLogMetadataUpdateContext:
     """Test log_metadata_update_context function."""
 
     @pytest.mark.asyncio
-    @patch("areyouok_telegram.llms.chat.utils.async_database")
-    @patch("areyouok_telegram.llms.chat.utils.Chats.get_by_id")
-    @patch("areyouok_telegram.llms.chat.utils.Context.new_or_update")
+    @patch("areyouok_telegram.llms.utils.async_database")
+    @patch("areyouok_telegram.llms.utils.Chats.get_by_id")
+    @patch("areyouok_telegram.llms.utils.Context.new_or_update")
     async def test_log_metadata_update_context_success(
         self, mock_context_update, mock_chats_get_by_id, mock_async_database
     ):
@@ -66,8 +66,8 @@ class TestLogMetadataUpdateContext:
         )
 
     @pytest.mark.asyncio
-    @patch("areyouok_telegram.llms.chat.utils.async_database")
-    @patch("areyouok_telegram.llms.chat.utils.Chats.get_by_id")
+    @patch("areyouok_telegram.llms.utils.async_database")
+    @patch("areyouok_telegram.llms.utils.Chats.get_by_id")
     async def test_log_metadata_update_context_chat_not_found(self, mock_chats_get_by_id, mock_async_database):
         """Test handling when chat object is not found."""
         # Setup mocks
@@ -94,9 +94,9 @@ class TestLogMetadataUpdateContext:
         mock_chats_get_by_id.assert_called_once_with(mock_db_conn, chat_id=chat_id)
 
     @pytest.mark.asyncio
-    @patch("areyouok_telegram.llms.chat.utils.async_database")
-    @patch("areyouok_telegram.llms.chat.utils.Chats.get_by_id")
-    @patch("areyouok_telegram.llms.chat.utils.Context.new_or_update")
+    @patch("areyouok_telegram.llms.utils.async_database")
+    @patch("areyouok_telegram.llms.utils.Chats.get_by_id")
+    @patch("areyouok_telegram.llms.utils.Context.new_or_update")
     async def test_log_metadata_update_context_database_error(
         self, mock_context_update, mock_chats_get_by_id, mock_async_database
     ):
@@ -134,9 +134,9 @@ class TestLogMetadataUpdateContext:
         mock_context_update.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch("areyouok_telegram.llms.chat.utils.async_database")
-    @patch("areyouok_telegram.llms.chat.utils.Chats.get_by_id")
-    @patch("areyouok_telegram.llms.chat.utils.Context.new_or_update")
+    @patch("areyouok_telegram.llms.utils.async_database")
+    @patch("areyouok_telegram.llms.utils.Chats.get_by_id")
+    @patch("areyouok_telegram.llms.utils.Context.new_or_update")
     async def test_log_metadata_update_context_different_content_formats(
         self, mock_context_update, mock_chats_get_by_id, mock_async_database
     ):
@@ -177,9 +177,9 @@ class TestLogMetadataUpdateContext:
             assert call_args[1]["content"] == expected_content
 
     @pytest.mark.asyncio
-    @patch("areyouok_telegram.llms.chat.utils.async_database")
-    @patch("areyouok_telegram.llms.chat.utils.Chats.get_by_id")
-    @patch("areyouok_telegram.llms.chat.utils.Context.new_or_update")
+    @patch("areyouok_telegram.llms.utils.async_database")
+    @patch("areyouok_telegram.llms.utils.Chats.get_by_id")
+    @patch("areyouok_telegram.llms.utils.Context.new_or_update")
     async def test_log_metadata_update_context_parameter_validation(
         self, mock_context_update, mock_chats_get_by_id, mock_async_database
     ):
@@ -216,8 +216,8 @@ class TestLogMetadataUpdateContext:
         assert call_kwargs["content"] == content
 
     @pytest.mark.asyncio
-    @patch("areyouok_telegram.llms.chat.utils.async_database")
-    @patch("areyouok_telegram.llms.chat.utils.Chats.get_by_id")
+    @patch("areyouok_telegram.llms.utils.async_database")
+    @patch("areyouok_telegram.llms.utils.Chats.get_by_id")
     async def test_log_metadata_update_context_chat_retrieval_error(self, mock_chats_get_by_id, mock_async_database):
         """Test handling when chat retrieval fails."""
         # Setup mocks
