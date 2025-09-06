@@ -83,7 +83,7 @@ async def _download_file(
         file: Telegram file
     """
     try:
-        content_bytes = await file.download_as_bytearray()
+        content_bytes = await telegram_call(file.download_as_bytearray)
 
         # Pass individual attributes to create_file
         await MediaFiles.create_file(
