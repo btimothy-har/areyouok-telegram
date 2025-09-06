@@ -455,7 +455,6 @@ class TestOnSettingsCommand:
     @pytest.mark.asyncio
     @patch("areyouok_telegram.handlers.commands.update_user_metadata_field")
     @patch("areyouok_telegram.handlers.commands.Sessions.get_active_session")
-    @patch("areyouok_telegram.handlers.commands.Sessions.create_session")
     @patch("areyouok_telegram.handlers.commands.async_database")
     async def test_on_settings_command_update_preferred_name(
         self,
