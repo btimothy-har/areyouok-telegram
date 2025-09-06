@@ -32,7 +32,7 @@ def _generate_short_description():
     """Generate a short description for the bot."""
     description = (
         f"Your empathic companion for everyday life. Here to listen, support & help 24/7."
-        f"\n\n[{ENV} v{version('areyouok-telegram')}]"
+        f"\n\n[{ENV} v{package_version()}]"
     )
     return description
 
@@ -42,7 +42,7 @@ def _generate_full_description():
     # For now, return the same as short description
     description = (
         f"Your empathic companion for everyday life. Here to listen, support & help 24/7."
-        f"\n\n[{ENV} v{version('areyouok-telegram')}]"
+        f"\n\n[{ENV} v{package_version()}]"
     )
     return description
 
