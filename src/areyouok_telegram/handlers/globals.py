@@ -64,7 +64,7 @@ async def on_error_event(update: telegram.Update, context: ContextTypes.DEFAULT_
     if update:
         await _save_update()
 
-    if context.error in (telegram.error.NetworkError, telegram.error.TimedOut):
+    if isinstance(context.error, (telegram.error.NetworkError, telegram.error.TimedOut)):
         return
 
     if DEVELOPER_CHAT_ID:
