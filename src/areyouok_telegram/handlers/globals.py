@@ -64,6 +64,9 @@ async def on_error_event(update: telegram.Update, context: ContextTypes.DEFAULT_
     if update:
         await _save_update()
 
+    if context.error in (telegram.error.NetworkError, telegram.error.TimedOut):
+        return
+
     if DEVELOPER_CHAT_ID:
         tb_list = traceback.format_exception(None, context.error, context.error.__traceback__)
         tb_string = "".join(tb_list)
