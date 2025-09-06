@@ -419,3 +419,78 @@ class TestOnErrorEvent:
 
             # Verify info log with correct part count
             mock_log_info.assert_called_once_with("Error notification sent to developer (2 parts).")
+
+    @pytest.mark.asyncio
+    async def test_on_error_event_both_notifications_fail(self, mock_db_session):
+        """Test error handler when both main and fallback notifications fail."""
+        # Create mock update
+        mock_update = MagicMock(spec=telegram.Update)
+        mock_update.update_id = 789
+
+        # Create mock context with error
+        mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
+        mock_error = Exception("Test error")
+        mock_context.error = mock_error
+
+        # Mock bot to fail on both send_message calls
+        mock_bot = AsyncMock()
+        main_exception = Exception("Main notification failed")
+        fallback_exception = Exception("Fallback notification failed")
+        mock_bot.send_message.side_effect = [main_exception, fallback_exception]
+        mock_context.bot = mock_bot
+
+        with (
+            patch("areyouok_telegram.handlers.globals.Updates.new_or_upsert", new=AsyncMock()) as mock_update_save,
+            patch("areyouok_telegram.handlers.globals.DEVELOPER_CHAT_ID", "dev123"),
+            patch("areyouok_telegram.handlers.globals.DEVELOPER_THREAD_ID", "thread456"),
+            patch("areyouok_telegram.handlers.globals.logfire.exception") as mock_log_exception,
+            patch("areyouok_telegram.handlers.globals.logfire.info") as mock_log_info,
+        ):
+            # The error handler should complete successfully without raising
+            await on_error_event(mock_update, mock_context)
+
+            # Verify error logging for original error
+            assert mock_log_exception.call_count == 3
+            mock_log_exception.assert_any_call("Test error", _exc_info=mock_error)
+
+            # Verify error logging for main notification failure
+            mock_log_exception.assert_any_call(
+                "Failed to send error notification to developer",
+                _exc_info=main_exception,
+                chat_id="dev123",
+                thread_id="thread456",
+            )
+
+            # Verify error logging for fallback notification failure
+            mock_log_exception.assert_any_call(
+                "Fallback error notification to developer failed.",
+                _exc_info=fallback_exception,
+                chat_id="dev123",
+                thread_id="thread456",
+            )
+
+            # Verify update was saved
+            mock_update_save.assert_called_once_with(mock_db_session, update=mock_update)
+
+            # Verify both send_message calls were attempted
+            assert mock_bot.send_message.call_count == 2
+
+            # First call with formatted message (fails)
+            first_call = mock_bot.send_message.call_args_list[0]
+            assert first_call.kwargs["chat_id"] == "dev123"
+            assert first_call.kwargs["message_thread_id"] == "thread456"
+            assert "An exception was raised while handling an update" in first_call.kwargs["text"]
+            assert first_call.kwargs["parse_mode"] == telegram.constants.ParseMode.MARKDOWN_V2
+
+            # Second call with fallback message (also fails)
+            second_call = mock_bot.send_message.call_args_list[1]
+            assert second_call.kwargs["chat_id"] == "dev123"
+            assert second_call.kwargs["message_thread_id"] == "thread456"
+            assert (
+                second_call.kwargs["text"]
+                == "Error: Failed to send error notification to developer. Please check logs."
+            )
+            assert "parse_mode" not in second_call.kwargs
+
+            # Verify info log is still called despite failures
+            mock_log_info.assert_called_once_with("Error notification sent to developer (1 parts).")

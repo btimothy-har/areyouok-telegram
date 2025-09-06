@@ -17,3 +17,10 @@ class BotDescriptionSetupError(BotSetupError):
 
     def __init__(self):
         super().__init__("Failed to set bot description. Please check your bot token and permissions.")
+
+
+class BotCommandsSetupError(BotSetupError):
+    """Raised when bot commands configuration fails."""
+
+    def __init__(self):
+        super().__init__("Failed to set bot commands. Please check your bot token and permissions.")

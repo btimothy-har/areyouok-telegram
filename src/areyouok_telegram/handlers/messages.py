@@ -14,6 +14,7 @@ from areyouok_telegram.handlers.exceptions import NoMessageReactionError
 from areyouok_telegram.handlers.media_utils import extract_media_from_telegram_message
 from areyouok_telegram.handlers.media_utils import handle_unsupported_media
 from areyouok_telegram.utils import db_retry
+from areyouok_telegram.utils import telegram_call
 from areyouok_telegram.utils import traced
 
 
@@ -46,7 +47,8 @@ async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_
             )
 
             if chk_onboarding:
-                await context.bot.send_chat_action(
+                await telegram_call(
+                    context.bot.send_chat_action,
                     chat_id=update.effective_chat.id,
                     action=telegram.constants.ChatAction.TYPING,
                 )

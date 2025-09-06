@@ -13,7 +13,7 @@ from areyouok_telegram.data import LLMUsage
 from areyouok_telegram.data import MediaFiles
 from areyouok_telegram.data import Notifications
 from areyouok_telegram.handlers.exceptions import VoiceNotProcessableError
-from areyouok_telegram.utils import telegram_retry
+from areyouok_telegram.utils import telegram_call
 from areyouok_telegram.utils import traced
 
 
@@ -83,7 +83,7 @@ async def _download_file(
         file: Telegram file
     """
     try:
-        content_bytes = await file.download_as_bytearray()
+        content_bytes = await telegram_call(file.download_as_bytearray)
 
         # Pass individual attributes to create_file
         await MediaFiles.create_file(
@@ -160,7 +160,6 @@ async def _download_file(
 
 
 @traced(extract_args=["message"])
-@telegram_retry()
 async def extract_media_from_telegram_message(
     db_conn: AsyncSession,
     user_encryption_key: str,
@@ -178,35 +177,24 @@ async def extract_media_from_telegram_message(
     Returns:
         int: Number of media files processed
     """
-    media_files = []
+    get_file_coros = []
 
     if message.photo:
-        photo_file = await message.photo[-1].get_file()
-        media_files.append(photo_file)
-
+        get_file_coros.append(telegram_call(message.photo[-1].get_file))
     if message.sticker:
-        sticker_file = await message.sticker.get_file()
-        media_files.append(sticker_file)
-
+        get_file_coros.append(telegram_call(message.sticker.get_file))
     if message.document:
-        document_file = await message.document.get_file()
-        media_files.append(document_file)
-
+        get_file_coros.append(telegram_call(message.document.get_file))
     if message.animation:
-        animation_file = await message.animation.get_file()
-        media_files.append(animation_file)
-
+        get_file_coros.append(telegram_call(message.animation.get_file))
     if message.video:
-        video_file = await message.video.get_file()
-        media_files.append(video_file)
-
+        get_file_coros.append(telegram_call(message.video.get_file))
     if message.video_note:
-        video_note_file = await message.video_note.get_file()
-        media_files.append(video_note_file)
-
+        get_file_coros.append(telegram_call(message.video_note.get_file))
     if message.voice:
-        voice_file = await message.voice.get_file()
-        media_files.append(voice_file)
+        get_file_coros.append(telegram_call(message.voice.get_file))
+
+    media_files = await asyncio.gather(*get_file_coros)
 
     await asyncio.gather(
         *[

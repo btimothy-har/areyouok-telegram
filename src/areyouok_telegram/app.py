@@ -20,17 +20,17 @@ from areyouok_telegram.setup import restore_active_sessions
 from areyouok_telegram.setup import setup_bot_commands
 from areyouok_telegram.setup import setup_bot_description
 from areyouok_telegram.setup import setup_bot_name
+from areyouok_telegram.setup import setup_bot_short_description
 from areyouok_telegram.setup import start_data_warning_job
 from areyouok_telegram.setup import start_ping_job
-from areyouok_telegram.utils import telegram_retry
 from areyouok_telegram.utils import traced
 
 
-@telegram_retry()
 async def application_post_init(application: Application):
     """Configure bot metadata on startup."""
     await setup_bot_name(application)
     await setup_bot_description(application)
+    await setup_bot_short_description(application)
     await restore_active_sessions(application)
     await start_data_warning_job(application)
     await start_ping_job(application)
