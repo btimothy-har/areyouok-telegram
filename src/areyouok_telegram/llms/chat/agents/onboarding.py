@@ -160,7 +160,6 @@ async def save_user_response(
         run_kwargs={
             "user_prompt": update_instruction,
             "deps": SettingsAgentDependencies(
-                tg_context=ctx.deps.tg_context,
                 tg_chat_id=ctx.deps.tg_chat_id,
                 tg_session_id=ctx.deps.tg_session_id,
             ),

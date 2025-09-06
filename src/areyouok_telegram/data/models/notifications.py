@@ -111,7 +111,7 @@ class Notifications(Base):
         result = await db_conn.execute(stmt)
         return result.scalar_one_or_none()
 
-    @traced(extract_args=["notification_key"])
+    @traced()
     async def mark_as_completed(self, db_conn: AsyncSession) -> None:
         """Mark notification as completed by setting processed_at timestamp.
 

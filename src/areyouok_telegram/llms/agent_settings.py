@@ -3,7 +3,6 @@ from dataclasses import dataclass
 import pydantic
 import pydantic_ai
 from pydantic_ai import RunContext
-from telegram.ext import ContextTypes
 
 from areyouok_telegram.data import UserMetadata
 from areyouok_telegram.data import async_database
@@ -24,7 +23,6 @@ class FeedbackMissingError(pydantic_ai.ModelRetry):
 class SettingsAgentDependencies:
     """Dependencies for the onboarding agent."""
 
-    tg_context: ContextTypes.DEFAULT_TYPE
     tg_chat_id: str
     tg_session_id: str
 
@@ -63,7 +61,7 @@ If the user wishes to clear/remove their current setting, pass in the value "rat
 
 As a backend agent, you are unable to interact directly with the user. If you need to seek \
 clarification or input, pass it back as the "feedback" field in your response. The feedback \
-field can be used regardless of the completed status.
+field can be used regardless of the completed status. Feedback should be phrased directly to the user.
 
 If the update failed, feedback must be provided.
 
