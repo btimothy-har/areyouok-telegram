@@ -1,6 +1,7 @@
 import asyncio
 from collections.abc import Callable
 from collections.abc import Iterable
+from datetime import timedelta
 from functools import wraps
 from typing import Any
 from typing import TypeVar
@@ -137,7 +138,7 @@ async def telegram_call(func, *args, **kwargs):
 
     Handles:
     - NetworkError/TimedOut: Retries with exponential backoff (via telegram_retry)
-    - RetryAfter: Waits required time then recursively retries
+    - RetryAfter: Waits required time then retries (bounded attempts)
 
     Args:
         func: The telegram bot method to call
@@ -147,13 +148,28 @@ async def telegram_call(func, *args, **kwargs):
     Returns:
         The result of the Telegram API call
     """
-    try:
-        return await func(*args, **kwargs)
-    except telegram.error.RetryAfter as e:
-        # Wait the required time plus small buffer
-        await asyncio.sleep(e.retry_after + 0.5)
-        # Recursively call telegram_call again - gets full retry protection
-        return await telegram_call(func, *args, **kwargs)
+    # Cap RetryAfter handling to avoid unbounded recursion/reset attempts.
+    attempts = 0
+    while True:
+        try:
+            return await func(*args, **kwargs)
+        except telegram.error.RetryAfter as e:
+            attempts += 1
+            if attempts > 10:
+                raise
+
+            retry_after_delta = (
+                e.retry_after if isinstance(e.retry_after, timedelta) else timedelta(seconds=e.retry_after)
+            )
+            delay_seconds = float(retry_after_delta.total_seconds()) + 0.5
+
+            logfire.info(
+                "Telegram RetryAfter; sleeping before retry",
+                delay_seconds=delay_seconds,
+                attempts=attempts,
+                method=getattr(func, "__name__", repr(func)),
+            )
+            await asyncio.sleep(delay_seconds)
 
 
 def escape_markdown_v2(text: str) -> str:
