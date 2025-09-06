@@ -9,6 +9,7 @@ import pydantic_ai
 import pytest
 import telegram
 
+from areyouok_telegram.data.models.chat_event import SYSTEM_USER_ID
 from areyouok_telegram.data.models.chat_event import ChatEvent
 from areyouok_telegram.data.models.context import ContextType
 from areyouok_telegram.data.models.media import MediaFiles
@@ -288,7 +289,7 @@ class TestChatEvent:
         result = chat_event.to_model_message("bot456", frozen_time)
 
         assert len(result.parts[0].content) == 2
-        assert result.parts[0].content[1] == ""
+        assert not result.parts[0].content[1]
 
     def test_to_model_message_with_non_anthropic_supported_text_media(
         self, mock_chat_event_message, mock_media_files, frozen_time
@@ -332,3 +333,43 @@ class TestChatEvent:
         # Video and audio files should be skipped since they don't match any condition
         assert len(result.parts[0].content) == 2
         assert result.parts[0].content[1] == "Text content"
+
+    def test_to_model_message_system_user_treated_as_bot(self, mock_chat_event_message, frozen_time):
+        """Test that system user messages are treated as bot responses (ModelResponse)."""
+        chat_event = mock_chat_event_message(text="System message", user_id=SYSTEM_USER_ID)
+
+        result = chat_event.to_model_message("bot456", frozen_time)
+
+        # System user should be treated as bot response
+        assert_model_message_format(result, pydantic_ai.messages.ModelResponse)
+
+        # Check content structure
+        content = result.parts[0].content
+        assert_json_content_structure(content, ["timestamp", "event_type", "text", "message_id"])
+
+    def test_to_model_message_bot_and_system_filtering(self, mock_chat_event_message, frozen_time):
+        """Test that both bot_id and 'system' are filtered from user messages."""
+        # Test bot_id filtering (existing behavior)
+        bot_event = mock_chat_event_message(text="Bot message", user_id="bot456")
+        bot_result = bot_event.to_model_message("bot456", frozen_time)
+        assert_model_message_format(bot_result, pydantic_ai.messages.ModelResponse)
+
+        # Test system filtering (new behavior)
+        system_event = mock_chat_event_message(text="System message", user_id=SYSTEM_USER_ID)
+        system_result = system_event.to_model_message("bot456", frozen_time)
+        assert_model_message_format(system_result, pydantic_ai.messages.ModelResponse)
+
+        # Test regular user still becomes ModelRequest
+        user_event = mock_chat_event_message(text="User message", user_id="user123")
+        user_result = user_event.to_model_message("bot456", frozen_time)
+        assert_model_message_format(user_result, pydantic_ai.messages.ModelRequest)
+
+    def test_to_model_message_system_with_different_bot_id(self, mock_chat_event_message, frozen_time):
+        """Test that system user is treated as bot response regardless of bot_id."""
+        chat_event = mock_chat_event_message(text="System message", user_id=SYSTEM_USER_ID)
+
+        # Use a different bot_id than SYSTEM_USER_ID
+        result = chat_event.to_model_message("different_bot_id", frozen_time)
+
+        # System should still be treated as bot response
+        assert_model_message_format(result, pydantic_ai.messages.ModelResponse)

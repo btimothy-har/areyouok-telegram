@@ -141,7 +141,7 @@ class TestConstructUserSettingsResponse:
         user_id = "123456789"
 
         with (
-            patch("areyouok_telegram.handlers.settings_utils.SETTINGS_DISPLAY_TEMPLATE") as mock_template,
+            patch("areyouok_telegram.handlers.settings_utils.MD2_SETTINGS_DISPLAY_TEMPLATE") as mock_template,
             patch("areyouok_telegram.handlers.settings_utils.escape_markdown_v2") as mock_escape,
         ):
             # Mock template formatting
@@ -189,7 +189,7 @@ class TestConstructUserSettingsResponse:
         user_id = "123456789"
 
         with (
-            patch("areyouok_telegram.handlers.settings_utils.SETTINGS_DISPLAY_TEMPLATE") as mock_template,
+            patch("areyouok_telegram.handlers.settings_utils.MD2_SETTINGS_DISPLAY_TEMPLATE") as mock_template,
             patch("areyouok_telegram.handlers.settings_utils.escape_markdown_v2") as mock_escape,
         ):
             # Mock template formatting
@@ -236,7 +236,7 @@ class TestConstructUserSettingsResponse:
         user_id = "123456789"
 
         with (
-            patch("areyouok_telegram.handlers.settings_utils.SETTINGS_DISPLAY_TEMPLATE") as mock_template,
+            patch("areyouok_telegram.handlers.settings_utils.MD2_SETTINGS_DISPLAY_TEMPLATE") as mock_template,
             patch("areyouok_telegram.handlers.settings_utils.escape_markdown_v2") as mock_escape,
         ):
             # Mock template formatting
@@ -278,7 +278,7 @@ class TestConstructUserSettingsResponse:
         user_id = "123456789"
 
         with (
-            patch("areyouok_telegram.handlers.settings_utils.SETTINGS_DISPLAY_TEMPLATE") as mock_template,
+            patch("areyouok_telegram.handlers.settings_utils.MD2_SETTINGS_DISPLAY_TEMPLATE") as mock_template,
             patch("areyouok_telegram.handlers.settings_utils.escape_markdown_v2") as mock_escape,
         ):
             # Mock template formatting
@@ -343,7 +343,7 @@ class TestConstructUserSettingsResponse:
         user_id = "123456789"
 
         with (
-            patch("areyouok_telegram.handlers.settings_utils.SETTINGS_DISPLAY_TEMPLATE") as mock_template,
+            patch("areyouok_telegram.handlers.settings_utils.MD2_SETTINGS_DISPLAY_TEMPLATE") as mock_template,
             patch("areyouok_telegram.handlers.settings_utils.escape_markdown_v2") as mock_escape,
         ):
             # Mock template formatting

@@ -46,8 +46,8 @@ async def on_new_update(update: telegram.Update, context: ContextTypes.DEFAULT_T
         await schedule_job(
             context=context,
             job=ConversationJob(chat_id=str(update.effective_chat.id)),
-            interval=timedelta(seconds=5),
-            first=datetime.now(UTC) + timedelta(seconds=5),
+            interval=timedelta(seconds=3),
+            first=datetime.now(UTC) + timedelta(seconds=2),
         )
 
 

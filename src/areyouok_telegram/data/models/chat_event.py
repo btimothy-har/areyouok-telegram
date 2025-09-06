@@ -19,6 +19,8 @@ CONTEXT_TYPE_MAP = {
     ContextType.METADATA.value: "user_metadata_update",
 }
 
+SYSTEM_USER_ID = "system"
+
 
 class ChatEvent(pydantic.BaseModel):
     """Universal model combining Message and Context data into a single event model."""
@@ -112,7 +114,7 @@ class ChatEvent(pydantic.BaseModel):
             **self.event_data,  # Unpack the event data directly into the payload
         }
 
-        if self.user_id and self.user_id != bot_id:
+        if self.user_id and self.user_id not in (bot_id, SYSTEM_USER_ID):
             user_content = [json.dumps(default_payload)]
 
             compatible_media = [m for m in self.attachments if m.is_anthropic_supported]

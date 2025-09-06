@@ -1,6 +1,6 @@
 from areyouok_telegram.data import UserMetadata
 from areyouok_telegram.data import async_database
-from areyouok_telegram.handlers.constants import SETTINGS_DISPLAY_TEMPLATE
+from areyouok_telegram.handlers.constants import MD2_SETTINGS_DISPLAY_TEMPLATE
 from areyouok_telegram.llms.agent_settings import SettingsAgentDependencies
 from areyouok_telegram.llms.agent_settings import SettingsUpdateResponse
 from areyouok_telegram.llms.agent_settings import settings_agent
@@ -56,7 +56,7 @@ async def construct_user_settings_response(user_id: str):
             country = "Not set"
             timezone = "Not set"
 
-        settings_text = SETTINGS_DISPLAY_TEMPLATE.format(
+        settings_text = MD2_SETTINGS_DISPLAY_TEMPLATE.format(
             name=escape_markdown_v2(name),
             country=escape_markdown_v2(country),
             timezone=escape_markdown_v2(timezone),
