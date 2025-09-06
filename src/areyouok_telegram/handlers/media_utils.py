@@ -177,35 +177,24 @@ async def extract_media_from_telegram_message(
     Returns:
         int: Number of media files processed
     """
-    media_files = []
+    get_file_coros = []
 
     if message.photo:
-        photo_file = await telegram_call(message.photo[-1].get_file)
-        media_files.append(photo_file)
-
+        get_file_coros.append(telegram_call(message.photo[-1].get_file))
     if message.sticker:
-        sticker_file = await telegram_call(message.sticker.get_file)
-        media_files.append(sticker_file)
-
+        get_file_coros.append(telegram_call(message.sticker.get_file))
     if message.document:
-        document_file = await telegram_call(message.document.get_file)
-        media_files.append(document_file)
-
+        get_file_coros.append(telegram_call(message.document.get_file))
     if message.animation:
-        animation_file = await telegram_call(message.animation.get_file)
-        media_files.append(animation_file)
-
+        get_file_coros.append(telegram_call(message.animation.get_file))
     if message.video:
-        video_file = await telegram_call(message.video.get_file)
-        media_files.append(video_file)
-
+        get_file_coros.append(telegram_call(message.video.get_file))
     if message.video_note:
-        video_note_file = await telegram_call(message.video_note.get_file)
-        media_files.append(video_note_file)
-
+        get_file_coros.append(telegram_call(message.video_note.get_file))
     if message.voice:
-        voice_file = await telegram_call(message.voice.get_file)
-        media_files.append(voice_file)
+        get_file_coros.append(telegram_call(message.voice.get_file))
+
+    media_files = await asyncio.gather(*get_file_coros)
 
     await asyncio.gather(
         *[
