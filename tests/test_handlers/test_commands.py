@@ -37,6 +37,7 @@ class TestOnStartCommand:
 
         mock_session = MagicMock()
         mock_session.session_key = "test_session_key"
+        mock_session.last_bot_activity = "2024-01-01T10:00:00Z"  # Has previous activity, no greeting
 
         with (
             patch(
@@ -56,7 +57,7 @@ class TestOnStartCommand:
             ) as mock_start_guided_session,
             patch("areyouok_telegram.handlers.commands.Messages.new_or_update", new=AsyncMock()) as mock_new_message,
         ):
-            mock_session.new_activity = AsyncMock()
+            mock_session.new_message = AsyncMock()
 
             await on_start_command(mock_update, mock_context)
 
@@ -85,11 +86,11 @@ class TestOnStartCommand:
                 message=mock_telegram_message,
                 session_key=mock_session.session_key,
             )
-            mock_session.new_activity.assert_called_once_with(
+            mock_session.new_message.assert_called_once_with(
                 mock_db_session, timestamp=mock_telegram_message.date, is_user=True
             )
 
-            # No message should be sent to user
+            # No message should be sent to user since no onboarding greeting condition is met
             mock_context.bot.send_message.assert_not_called()
 
     @pytest.mark.asyncio
@@ -113,6 +114,7 @@ class TestOnStartCommand:
 
         mock_session = MagicMock()
         mock_session.session_key = "existing_session_key"
+        mock_session.last_bot_activity = "2024-01-01T10:00:00Z"  # Has previous activity, no greeting
 
         with (
             patch(
@@ -133,7 +135,7 @@ class TestOnStartCommand:
             ) as mock_start_guided_session,
             patch("areyouok_telegram.handlers.commands.Messages.new_or_update", new=AsyncMock()) as mock_new_message,
         ):
-            mock_session.new_activity = AsyncMock()
+            mock_session.new_message = AsyncMock()
 
             await on_start_command(mock_update, mock_context)
 
@@ -161,11 +163,11 @@ class TestOnStartCommand:
                 message=mock_telegram_message,
                 session_key=mock_session.session_key,
             )
-            mock_session.new_activity.assert_called_once_with(
+            mock_session.new_message.assert_called_once_with(
                 mock_db_session, timestamp=mock_telegram_message.date, is_user=True
             )
 
-            # No message should be sent to user
+            # No message should be sent to user since no onboarding greeting condition is met
             mock_context.bot.send_message.assert_not_called()
 
     @pytest.mark.asyncio
@@ -214,7 +216,7 @@ class TestOnStartCommand:
             patch("areyouok_telegram.handlers.commands.Messages.new_or_update", new=AsyncMock()) as mock_new_message,
             patch("areyouok_telegram.handlers.commands.ONBOARDING_COMPLETE_MESSAGE", "Onboarding already completed!"),
         ):
-            mock_session.new_activity = AsyncMock()
+            mock_session.new_message = AsyncMock()
 
             await on_start_command(mock_update, mock_context)
 
@@ -232,7 +234,7 @@ class TestOnStartCommand:
             mock_start_guided_session.assert_not_called()
             # Should not save message since early return
             mock_new_message.assert_not_called()
-            mock_session.new_activity.assert_not_called()
+            mock_session.new_message.assert_not_called()
 
             # Should send completion message to user
             mock_context.bot.send_message.assert_called_once_with(
@@ -262,6 +264,7 @@ class TestOnStartCommand:
 
         mock_session = MagicMock()
         mock_session.session_key = "test_session_key"
+        mock_session.last_bot_activity = "2024-01-01T10:00:00Z"  # Has previous activity, no greeting
 
         mock_onboarding_session = MagicMock()
         mock_onboarding_session.is_completed = False
@@ -287,7 +290,7 @@ class TestOnStartCommand:
             ) as mock_start_guided_session,
             patch("areyouok_telegram.handlers.commands.Messages.new_or_update", new=AsyncMock()) as mock_new_message,
         ):
-            mock_session.new_activity = AsyncMock()
+            mock_session.new_message = AsyncMock()
 
             await on_start_command(mock_update, mock_context)
 
@@ -316,11 +319,11 @@ class TestOnStartCommand:
                 message=mock_telegram_message,
                 session_key=mock_session.session_key,
             )
-            mock_session.new_activity.assert_called_once_with(
+            mock_session.new_message.assert_called_once_with(
                 mock_db_session, timestamp=mock_telegram_message.date, is_user=True
             )
 
-            # No message should be sent to user
+            # No message should be sent to user since no onboarding greeting condition is met
             mock_context.bot.send_message.assert_not_called()
 
     @pytest.mark.asyncio
@@ -344,6 +347,7 @@ class TestOnStartCommand:
 
         mock_session = MagicMock()
         mock_session.session_key = "test_session_key"
+        mock_session.last_bot_activity = "2024-01-01T10:00:00Z"  # Has previous activity, no greeting
 
         mock_onboarding_session = MagicMock()
         mock_onboarding_session.is_completed = False
@@ -369,7 +373,7 @@ class TestOnStartCommand:
             ) as mock_start_guided_session,
             patch("areyouok_telegram.handlers.commands.Messages.new_or_update", new=AsyncMock()) as mock_new_message,
         ):
-            mock_session.new_activity = AsyncMock()
+            mock_session.new_message = AsyncMock()
 
             await on_start_command(mock_update, mock_context)
 
@@ -393,12 +397,107 @@ class TestOnStartCommand:
                 message=mock_telegram_message,
                 session_key=mock_session.session_key,
             )
-            mock_session.new_activity.assert_called_once_with(
+            mock_session.new_message.assert_called_once_with(
                 mock_db_session, timestamp=mock_telegram_message.date, is_user=True
             )
 
-            # No message should be sent to user
+            # No message should be sent to user since no onboarding greeting condition is met
             mock_context.bot.send_message.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_on_start_command_sends_greeting_message_for_new_user(
+        self, mock_db_session, mock_telegram_user, mock_telegram_chat, mock_telegram_message
+    ):
+        """Test on_start_command sends greeting message when user has no prior bot activity."""
+        # Create mock update
+        mock_update = MagicMock(spec=telegram.Update)
+        mock_update.effective_chat = mock_telegram_chat
+        mock_update.effective_user = mock_telegram_user
+        mock_update.message = mock_telegram_message
+
+        # Create mock context
+        mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
+        mock_context.bot = AsyncMock()
+        mock_bot_message = MagicMock(spec=telegram.Message)
+        mock_context.bot.send_message.return_value = mock_bot_message
+
+        # Create mock objects
+        mock_chat_obj = MagicMock()
+        mock_chat_obj.retrieve_key.return_value = "test_encryption_key"
+
+        mock_session = MagicMock()
+        mock_session.session_key = "test_session_key"
+        mock_session.last_bot_activity = None  # Key condition for sending greeting
+
+        with (
+            patch(
+                "areyouok_telegram.handlers.commands.Chats.get_by_id", new=AsyncMock(return_value=mock_chat_obj)
+            ) as mock_get_chat,
+            patch(
+                "areyouok_telegram.handlers.commands.Sessions.get_active_session",
+                new=AsyncMock(return_value=mock_session),
+            ) as mock_get_active_session,
+            patch(
+                "areyouok_telegram.handlers.commands.Sessions.create_session", new=AsyncMock()
+            ) as mock_create_session,
+            patch(
+                "areyouok_telegram.handlers.commands.GuidedSessions.get_by_chat_id", new=AsyncMock(return_value=[])
+            ) as mock_get_guided_sessions,
+            patch(
+                "areyouok_telegram.handlers.commands.GuidedSessions.start_new_session", new=AsyncMock()
+            ) as mock_start_guided_session,
+            patch("areyouok_telegram.handlers.commands.Messages.new_or_update", new=AsyncMock()) as mock_new_message,
+            patch("areyouok_telegram.handlers.commands.ONBOARDING_START_MESSAGE", "Hello there! Please wait..."),
+        ):
+            mock_session.new_message = AsyncMock()
+
+            await on_start_command(mock_update, mock_context)
+
+            # Verify database operations
+            mock_get_chat.assert_called_once_with(mock_db_session, chat_id=str(mock_telegram_chat.id))
+            mock_get_active_session.assert_called_once_with(mock_db_session, chat_id=str(mock_telegram_chat.id))
+            mock_create_session.assert_not_called()  # Session already exists
+            mock_get_guided_sessions.assert_called_once_with(
+                mock_db_session,
+                chat_id=str(mock_telegram_chat.id),
+                session_type="onboarding",
+            )
+            mock_start_guided_session.assert_called_once_with(
+                mock_db_session,
+                chat_id=str(mock_telegram_chat.id),
+                chat_session=mock_session.session_key,
+                session_type="onboarding",
+            )
+
+            # Verify user message was saved
+            assert mock_new_message.call_count == 2  # User message + bot greeting message
+
+            # First call: user message
+            user_msg_call = mock_new_message.call_args_list[0]
+            assert user_msg_call[1]["user_encryption_key"] == "test_encryption_key"
+            assert user_msg_call[1]["user_id"] == mock_telegram_user.id
+            assert user_msg_call[1]["chat_id"] == mock_telegram_chat.id
+            assert user_msg_call[1]["message"] == mock_telegram_message
+            assert user_msg_call[1]["session_key"] == mock_session.session_key
+
+            # Second call: bot greeting message
+            bot_msg_call = mock_new_message.call_args_list[1]
+            assert bot_msg_call[1]["user_encryption_key"] == "test_encryption_key"
+            assert bot_msg_call[1]["user_id"] == "system"
+            assert bot_msg_call[1]["chat_id"] == str(mock_telegram_chat.id)
+            assert bot_msg_call[1]["message"] == mock_bot_message
+            assert bot_msg_call[1]["session_key"] == mock_session.session_key
+
+            mock_session.new_message.assert_called_once_with(
+                mock_db_session, timestamp=mock_telegram_message.date, is_user=True
+            )
+
+            # Verify greeting message was sent
+            mock_context.bot.send_message.assert_called_once_with(
+                chat_id=mock_telegram_chat.id,
+                text="Hello there! Please wait...",
+                parse_mode="MarkdownV2",
+            )
 
 
 class TestOnEndCommand:
@@ -484,7 +583,7 @@ class TestOnSettingsCommand:
 
         # Mock session
         mock_session = MagicMock()
-        mock_session.id = 123
+        mock_session.session_id = 123
         mock_get_active_session.return_value = mock_session
 
         # Mock update response
@@ -511,7 +610,7 @@ class TestOnSettingsCommand:
         # Verify field update was called
         mock_update_field.assert_called_once_with(
             chat_id=str(mock_telegram_chat.id),
-            session_id=str(mock_session.id),
+            session_id=str(mock_session.session_id),
             field_name="preferred_name",
             new_value="Alice Smith",
         )
@@ -554,7 +653,7 @@ class TestOnSettingsCommand:
 
         # Mock session
         mock_session = MagicMock()
-        mock_session.id = 123
+        mock_session.session_id = 123
         mock_get_active_session.return_value = mock_session
 
         # Mock update response
@@ -568,7 +667,7 @@ class TestOnSettingsCommand:
         # Verify field update was called with correct parameters
         mock_update_field.assert_called_once_with(
             chat_id=str(mock_telegram_chat.id),
-            session_id=str(mock_session.id),
+            session_id=str(mock_session.session_id),
             field_name="country",
             new_value="USA",
         )
@@ -605,7 +704,7 @@ class TestOnSettingsCommand:
 
         # Mock session
         mock_session = MagicMock()
-        mock_session.id = 123
+        mock_session.session_id = 123
         mock_get_active_session.return_value = mock_session
 
         # Mock update response
@@ -619,7 +718,7 @@ class TestOnSettingsCommand:
         # Verify field update was called with correct parameters
         mock_update_field.assert_called_once_with(
             chat_id=str(mock_telegram_chat.id),
-            session_id=str(mock_session.id),
+            session_id=str(mock_session.session_id),
             field_name="timezone",
             new_value="America/New_York",
         )
@@ -684,7 +783,7 @@ class TestOnSettingsCommand:
 
         # Mock created session
         mock_new_session = MagicMock()
-        mock_new_session.id = 456
+        mock_new_session.session_id = 456
         mock_create_session.return_value = mock_new_session
 
         with patch("areyouok_telegram.handlers.commands.update_user_metadata_field") as mock_update_field:
@@ -742,7 +841,7 @@ class TestOnSettingsCommand:
             # Verify the field name passed is still preferred_name (no normalization needed)
             mock_update_field.assert_called_once_with(
                 chat_id=str(mock_telegram_chat.id),
-                session_id=str(mock_session.id),
+                session_id=str(mock_session.session_id),
                 field_name="preferred_name",
                 new_value="Alice",
             )

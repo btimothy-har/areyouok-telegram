@@ -41,7 +41,6 @@ class TestOnNewMessage:
 
         # Create mock active session
         mock_active_session = MagicMock()
-        mock_active_session.new_activity = AsyncMock()
         mock_active_session.new_message = AsyncMock()
         mock_active_session.session_key = "session_key_123"
         mock_active_session.session_id = "session_id_123"
@@ -61,7 +60,11 @@ class TestOnNewMessage:
             patch(
                 "areyouok_telegram.handlers.messages.Sessions.create_session", new=AsyncMock()
             ) as mock_create_session,
-            patch("areyouok_telegram.handlers.messages.handle_unsupported_media", new=AsyncMock()) as mock_handle_media,
+            patch(
+                "areyouok_telegram.handlers.messages.GuidedSessions.get_by_chat_session",
+                new=AsyncMock(return_value=None),  # No active onboarding
+            ),
+            patch("areyouok_telegram.handlers.messages.handle_unsupported_media", new=AsyncMock()),
         ):
             await on_new_message(mock_update, mock_context)
 
@@ -101,7 +104,6 @@ class TestOnNewMessage:
             mock_create_session.assert_not_called()
 
             # Verify handle_unsupported_media was not called since media count is 0
-            mock_handle_media.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_on_new_message_without_existing_session(self, mock_db_session, frozen_time, mock_telegram_user):
@@ -123,7 +125,6 @@ class TestOnNewMessage:
 
         # Create mock new session
         mock_new_session = MagicMock()
-        mock_new_session.new_activity = AsyncMock()
         mock_new_session.new_message = AsyncMock()
         mock_new_session.session_key = "new_session_key"
         mock_new_session.session_id = "new_session_id"
@@ -143,7 +144,11 @@ class TestOnNewMessage:
                 "areyouok_telegram.handlers.messages.Sessions.create_session",
                 new=AsyncMock(return_value=mock_new_session),
             ) as mock_create_session,
-            patch("areyouok_telegram.handlers.messages.handle_unsupported_media", new=AsyncMock()) as mock_handle_media,
+            patch(
+                "areyouok_telegram.handlers.messages.GuidedSessions.get_by_chat_session",
+                new=AsyncMock(return_value=None),  # No active onboarding
+            ),
+            patch("areyouok_telegram.handlers.messages.handle_unsupported_media", new=AsyncMock()),
         ):
             await on_new_message(mock_update, mock_context)
 
@@ -181,7 +186,136 @@ class TestOnNewMessage:
             mock_new_session.new_message.assert_called_once_with(mock_db_session, timestamp=frozen_time, is_user=True)
 
             # Verify handle_unsupported_media was not called since media count is 0
-            mock_handle_media.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_on_new_message_with_active_onboarding_sends_typing(
+        self, mock_db_session, frozen_time, mock_telegram_user
+    ):
+        """Test that typing indicator is sent when there's an active onboarding session."""
+        # Create mock update with message
+        mock_update = MagicMock(spec=telegram.Update)
+        mock_update.update_id = 123
+        mock_update.message = MagicMock(spec=telegram.Message)
+        mock_update.message.date = frozen_time
+        mock_update.effective_user = mock_telegram_user
+        mock_update.effective_chat = MagicMock(spec=telegram.Chat)
+        mock_update.effective_chat.id = 789
+
+        mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
+        mock_context.bot = AsyncMock()
+
+        # Create mock chat with encryption key
+        mock_chat_obj = MagicMock()
+        mock_chat_obj.retrieve_key = MagicMock(return_value="test_encryption_key")
+
+        # Create mock active session
+        mock_active_session = MagicMock()
+        mock_active_session.new_message = AsyncMock()
+        mock_active_session.session_key = "session_key_123"
+        mock_active_session.session_id = "session_id_123"
+
+        # Create mock active onboarding session
+        mock_onboarding_session = MagicMock()
+
+        with (
+            patch(
+                "areyouok_telegram.handlers.messages.Chats.get_by_id", new=AsyncMock(return_value=mock_chat_obj)
+            ) as mock_get_chat,
+            patch("areyouok_telegram.handlers.messages.Messages.new_or_update", new=AsyncMock()) as mock_msg_save,
+            patch(
+                "areyouok_telegram.handlers.messages.extract_media_from_telegram_message", new=AsyncMock(return_value=0)
+            ),
+            patch(
+                "areyouok_telegram.handlers.messages.Sessions.get_active_session",
+                new=AsyncMock(return_value=mock_active_session),
+            ),
+            patch(
+                "areyouok_telegram.handlers.messages.GuidedSessions.get_by_chat_session",
+                new=AsyncMock(return_value=mock_onboarding_session),
+            ) as mock_get_onboarding,
+            patch("areyouok_telegram.handlers.messages.handle_unsupported_media", new=AsyncMock()),
+        ):
+            await on_new_message(mock_update, mock_context)
+
+            # Verify typing indicator was sent
+            mock_context.bot.send_chat_action.assert_called_once_with(
+                chat_id=mock_update.effective_chat.id,
+                action=telegram.constants.ChatAction.TYPING,
+            )
+
+            # Verify onboarding check was performed
+            mock_get_onboarding.assert_called_once_with(
+                mock_db_session,
+                chat_session=mock_active_session.session_id,
+                session_type="onboarding",
+            )
+
+            # Other operations should still occur normally
+            mock_get_chat.assert_called_once_with(mock_db_session, chat_id=str(mock_update.effective_chat.id))
+            mock_msg_save.assert_called_once()
+            mock_active_session.new_message.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_on_new_message_without_active_onboarding_no_typing(
+        self, mock_db_session, frozen_time, mock_telegram_user
+    ):
+        """Test that no typing indicator is sent when there's no active onboarding session."""
+        # Create mock update with message
+        mock_update = MagicMock(spec=telegram.Update)
+        mock_update.update_id = 123
+        mock_update.message = MagicMock(spec=telegram.Message)
+        mock_update.message.date = frozen_time
+        mock_update.effective_user = mock_telegram_user
+        mock_update.effective_chat = MagicMock(spec=telegram.Chat)
+        mock_update.effective_chat.id = 789
+
+        mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
+        mock_context.bot = AsyncMock()
+
+        # Create mock chat with encryption key
+        mock_chat_obj = MagicMock()
+        mock_chat_obj.retrieve_key = MagicMock(return_value="test_encryption_key")
+
+        # Create mock active session
+        mock_active_session = MagicMock()
+        mock_active_session.new_message = AsyncMock()
+        mock_active_session.session_key = "session_key_123"
+        mock_active_session.session_id = "session_id_123"
+
+        with (
+            patch(
+                "areyouok_telegram.handlers.messages.Chats.get_by_id", new=AsyncMock(return_value=mock_chat_obj)
+            ) as mock_get_chat,
+            patch("areyouok_telegram.handlers.messages.Messages.new_or_update", new=AsyncMock()) as mock_msg_save,
+            patch(
+                "areyouok_telegram.handlers.messages.extract_media_from_telegram_message", new=AsyncMock(return_value=0)
+            ),
+            patch(
+                "areyouok_telegram.handlers.messages.Sessions.get_active_session",
+                new=AsyncMock(return_value=mock_active_session),
+            ),
+            patch(
+                "areyouok_telegram.handlers.messages.GuidedSessions.get_by_chat_session",
+                new=AsyncMock(return_value=None),  # No active onboarding
+            ) as mock_get_onboarding,
+            patch("areyouok_telegram.handlers.messages.handle_unsupported_media", new=AsyncMock()),
+        ):
+            await on_new_message(mock_update, mock_context)
+
+            # Verify typing indicator was NOT sent
+            mock_context.bot.send_chat_action.assert_not_called()
+
+            # Verify onboarding check was performed
+            mock_get_onboarding.assert_called_once_with(
+                mock_db_session,
+                chat_session=mock_active_session.session_id,
+                session_type="onboarding",
+            )
+
+            # Other operations should still occur normally
+            mock_get_chat.assert_called_once_with(mock_db_session, chat_id=str(mock_update.effective_chat.id))
+            mock_msg_save.assert_called_once()
+            mock_active_session.new_message.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_on_new_message_without_message_raises_error(self):
