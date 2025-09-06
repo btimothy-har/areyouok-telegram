@@ -9,8 +9,8 @@ import pydantic_ai
 import pytest
 import telegram
 
-from areyouok_telegram.data.models.chat_event import ChatEvent
 from areyouok_telegram.data.models.chat_event import SYSTEM_USER_ID
+from areyouok_telegram.data.models.chat_event import ChatEvent
 from areyouok_telegram.data.models.context import ContextType
 from areyouok_telegram.data.models.media import MediaFiles
 
@@ -289,7 +289,7 @@ class TestChatEvent:
         result = chat_event.to_model_message("bot456", frozen_time)
 
         assert len(result.parts[0].content) == 2
-        assert result.parts[0].content[1] == ""
+        assert not result.parts[0].content[1]
 
     def test_to_model_message_with_non_anthropic_supported_text_media(
         self, mock_chat_event_message, mock_media_files, frozen_time
