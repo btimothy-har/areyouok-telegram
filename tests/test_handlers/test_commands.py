@@ -215,7 +215,9 @@ class TestOnStartCommand:
                 "areyouok_telegram.handlers.commands.GuidedSessions.start_new_session", new=AsyncMock()
             ) as mock_start_guided_session,
             patch("areyouok_telegram.handlers.commands.Messages.new_or_update", new=AsyncMock()) as mock_new_message,
-            patch("areyouok_telegram.handlers.commands.ONBOARDING_COMPLETE_MESSAGE", "Onboarding already completed!"),
+            patch(
+                "areyouok_telegram.handlers.commands.MD2_ONBOARDING_COMPLETE_MESSAGE", "Onboarding already completed!"
+            ),
         ):
             mock_session.new_message = AsyncMock()
 
@@ -448,7 +450,9 @@ class TestOnStartCommand:
                 "areyouok_telegram.handlers.commands.GuidedSessions.start_new_session", new=AsyncMock()
             ) as mock_start_guided_session,
             patch("areyouok_telegram.handlers.commands.Messages.new_or_update", new=AsyncMock()) as mock_new_message,
-            patch("areyouok_telegram.handlers.commands.ONBOARDING_START_MESSAGE", "Hello there! Please wait..."),
+            patch(
+                "areyouok_telegram.handlers.commands.MD2_ONBOARDING_START_MESSAGE", "Hello there! Please wait..."
+            ),
         ):
             mock_session.new_message = AsyncMock()
 

@@ -8,8 +8,8 @@ from areyouok_telegram.data import GuidedSessionType
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database
-from areyouok_telegram.handlers.constants import ONBOARDING_COMPLETE_MESSAGE
-from areyouok_telegram.handlers.constants import ONBOARDING_START_MESSAGE
+from areyouok_telegram.handlers.constants import MD2_ONBOARDING_COMPLETE_MESSAGE
+from areyouok_telegram.handlers.constants import MD2_ONBOARDING_START_MESSAGE
 from areyouok_telegram.handlers.settings_utils import construct_user_settings_response
 from areyouok_telegram.handlers.settings_utils import update_user_metadata_field
 from areyouok_telegram.utils import db_retry
@@ -44,7 +44,7 @@ async def on_start_command(update: telegram.Update, context: ContextTypes.DEFAUL
         if onboarding_session and onboarding_session.is_completed:
             return await context.bot.send_message(
                 chat_id=update.effective_chat.id,
-                text=ONBOARDING_COMPLETE_MESSAGE,
+                text=MD2_ONBOARDING_COMPLETE_MESSAGE,
                 parse_mode="MarkdownV2",
             )
 
@@ -69,7 +69,7 @@ async def on_start_command(update: telegram.Update, context: ContextTypes.DEFAUL
         if not active_session.last_bot_activity:
             bot_message = await context.bot.send_message(
                 chat_id=update.effective_chat.id,
-                text=ONBOARDING_START_MESSAGE,
+                text=MD2_ONBOARDING_START_MESSAGE,
                 parse_mode="MarkdownV2",
             )
 
