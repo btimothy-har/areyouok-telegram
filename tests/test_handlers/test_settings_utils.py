@@ -134,6 +134,7 @@ class TestConstructUserSettingsResponse:
         mock_user_metadata = MagicMock()
         mock_user_metadata.preferred_name = "Alice Smith"
         mock_user_metadata.country = "USA"
+        mock_user_metadata.country_display_name = "United States"
         mock_user_metadata.timezone = "America/New_York"
         mock_get_by_user_id.return_value = mock_user_metadata
 
@@ -158,7 +159,7 @@ class TestConstructUserSettingsResponse:
             # Verify markdown escaping was called for each field
             expected_escape_calls = [
                 ((mock_user_metadata.preferred_name,),),
-                ((mock_user_metadata.country,),),
+                ((mock_user_metadata.country_display_name,),),
                 ((mock_user_metadata.timezone,),),
             ]
             assert mock_escape.call_args_list == expected_escape_calls
@@ -166,7 +167,7 @@ class TestConstructUserSettingsResponse:
             # Verify template formatting
             mock_template.format.assert_called_once_with(
                 name="escaped_Alice Smith",
-                country="escaped_USA",
+                country="escaped_United States",
                 timezone="escaped_America/New_York",
             )
 
@@ -228,6 +229,7 @@ class TestConstructUserSettingsResponse:
         mock_user_metadata = MagicMock()
         mock_user_metadata.preferred_name = "Alice"
         mock_user_metadata.country = "rather_not_say"
+        mock_user_metadata.country_display_name = "Prefer not to say"
         mock_user_metadata.timezone = "rather_not_say"
         mock_get_by_user_id.return_value = mock_user_metadata
 
@@ -269,6 +271,7 @@ class TestConstructUserSettingsResponse:
         mock_user_metadata = MagicMock()
         mock_user_metadata.preferred_name = "Bob"
         mock_user_metadata.country = None  # Not set
+        mock_user_metadata.country_display_name = None  # None when country is None
         mock_user_metadata.timezone = "UTC"
         mock_get_by_user_id.return_value = mock_user_metadata
 
@@ -333,6 +336,7 @@ class TestConstructUserSettingsResponse:
         mock_user_metadata = MagicMock()
         mock_user_metadata.preferred_name = ""
         mock_user_metadata.country = ""
+        mock_user_metadata.country_display_name = None  # Empty string country results in None from display property
         mock_user_metadata.timezone = ""
         mock_get_by_user_id.return_value = mock_user_metadata
 

@@ -133,6 +133,47 @@ class TestUserMetadata:
 
         assert result is None
 
+    def test_country_display_name_with_iso3_code(self):
+        """Test country_display_name property with ISO3 country codes."""
+        metadata = UserMetadata()
+        
+        # Test valid ISO3 codes
+        metadata.country = "USA"
+        assert metadata.country_display_name == "United States"
+        
+        metadata.country = "GBR"
+        assert metadata.country_display_name == "United Kingdom"
+        
+        metadata.country = "DEU"
+        assert metadata.country_display_name == "Germany"
+        
+    def test_country_display_name_with_rather_not_say(self):
+        """Test country_display_name property with rather_not_say value."""
+        metadata = UserMetadata()
+        metadata.country = "rather_not_say"
+        
+        assert metadata.country_display_name == "Prefer not to say"
+        
+    def test_country_display_name_with_invalid_code(self):
+        """Test country_display_name property with invalid country code."""
+        metadata = UserMetadata()
+        metadata.country = "INVALID_CODE"
+        
+        # Should return the original code when invalid
+        assert metadata.country_display_name == "INVALID_CODE"
+        
+    def test_country_display_name_with_none_or_empty(self):
+        """Test country_display_name property with None or empty values."""
+        metadata = UserMetadata()
+        
+        # Test None
+        metadata.country = None
+        assert metadata.country_display_name is None
+        
+        # Test empty string
+        metadata.country = ""
+        assert metadata.country_display_name is None
+
     @pytest.mark.asyncio
     async def test_update_metadata_invalid_field(self, mock_db_session):
         """Test update_metadata raises InvalidFieldError for invalid field."""

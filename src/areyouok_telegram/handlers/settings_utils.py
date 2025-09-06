@@ -45,12 +45,10 @@ async def construct_user_settings_response(user_id: str):
         # Format settings display
         if user_metadata:
             name = user_metadata.preferred_name or "Not set"
-            country = user_metadata.country or "Not set"
+            country = user_metadata.country_display_name or "Not set"
             timezone = user_metadata.timezone or "Not set"
 
-            # Handle "rather_not_say" values
-            if country == "rather_not_say":
-                country = "Prefer not to say"
+            # Handle "rather_not_say" values for timezone
             if timezone == "rather_not_say":
                 timezone = "Prefer not to say"
         else:

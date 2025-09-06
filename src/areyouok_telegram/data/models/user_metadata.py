@@ -101,6 +101,26 @@ class UserMetadata(Base):
         """Get user's preferred name."""
         return self._decrypt_field("preferred_name", self._preferred_name)
 
+    @property
+    def country_display_name(self) -> str | None:
+        """Get user's country as a full country name instead of ISO3 code.
+
+        Returns:
+            Full country name, "Prefer not to say", or None if not set
+        """
+        if not self.country:
+            return None
+
+        if self.country == "rather_not_say":
+            return "Prefer not to say"
+
+        try:
+            country = pycountry.countries.get(alpha_3=self.country.upper())
+        except (AttributeError, LookupError):
+            return self.country
+        else:
+            return country.name if country else self.country
+
     @classmethod
     @traced(extract_args=["user_id", "field"])
     async def update_metadata(
