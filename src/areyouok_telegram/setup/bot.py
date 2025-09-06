@@ -36,6 +36,16 @@ def _generate_short_description():
     return description
 
 
+def _generate_full_description():
+    """Generate a full description for the bot."""
+    # For now, return the same as short description
+    description = (
+        f"Your empathic companion for everyday life. Here to listen, support & help 24/7."
+        f"\n\n[{ENV} v{version('areyouok-telegram')}]"
+    )
+    return description
+
+
 @traced(extract_args=False)
 @telegram_retry()
 async def setup_bot_name(ctx: Application | ContextTypes.DEFAULT_TYPE):
@@ -77,18 +87,57 @@ async def setup_bot_name(ctx: Application | ContextTypes.DEFAULT_TYPE):
 
 @traced(extract_args=False)
 @telegram_retry()
-async def setup_bot_description(ctx: Application | ContextTypes.DEFAULT_TYPE):
-    """Set the bot description with proper error handling."""
-    new_description = _generate_short_description()
+async def setup_bot_short_description(ctx: Application | ContextTypes.DEFAULT_TYPE):
+    """Set the bot short description with proper error handling."""
+    new_short_description = _generate_short_description()
 
     current_description = await ctx.bot.get_my_short_description()
 
-    if current_description and current_description.short_description == new_description:
+    if current_description and current_description.short_description == new_short_description:
+        logfire.debug("Bot short description is already set, skipping setup.")
+        return
+
+    try:
+        success = await ctx.bot.set_my_short_description(short_description=new_short_description)
+    except telegram.error.RetryAfter as e:
+        # Convert retry_after to timedelta if it's not already
+        retry_after_delta = e.retry_after if isinstance(e.retry_after, timedelta) else timedelta(seconds=e.retry_after)
+
+        logfire.warning(
+            "Rate limit exceeded while setting bot short description; "
+            f"Retry after {retry_after_delta.total_seconds()} seconds."
+        )
+
+        # Retry after the specified time
+        ctx.job_queue.run_once(
+            callback=setup_bot_short_description,
+            when=retry_after_delta + timedelta(seconds=60),
+            name="retry_set_bot_short_description",
+        )
+        return
+
+    if not success:
+        raise BotDescriptionSetupError()
+
+    logfire.info(
+        "Bot short description set.",
+        new_short_description=new_short_description,
+    )
+
+
+@traced(extract_args=False)
+@telegram_retry()
+async def setup_bot_description(ctx: Application | ContextTypes.DEFAULT_TYPE):
+    """Set the bot full description with proper error handling."""
+    new_description = _generate_full_description()
+
+    current_description = await ctx.bot.get_my_description()
+
+    if current_description and current_description.description == new_description:
         logfire.debug("Bot description is already set, skipping setup.")
         return
 
     try:
-        # Attempt to set the bot description
         success = await ctx.bot.set_my_description(description=new_description)
     except telegram.error.RetryAfter as e:
         # Convert retry_after to timedelta if it's not already
@@ -106,8 +155,6 @@ async def setup_bot_description(ctx: Application | ContextTypes.DEFAULT_TYPE):
             name="retry_set_bot_description",
         )
         return
-
-    success = await ctx.bot.set_my_short_description(short_description=new_description)
 
     if not success:
         raise BotDescriptionSetupError()
