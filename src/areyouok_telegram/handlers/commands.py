@@ -98,6 +98,17 @@ async def on_settings_command(update: telegram.Update, context: ContextTypes.DEF
         # Normalize field name: "name" -> "preferred_name"
         normalized_field_name = "preferred_name" if field_arg == "name" else field_arg
 
+        await context.bot.set_message_reaction(
+            chat_id=update.effective_chat.id,
+            message_id=update.message.id,
+            reaction="👌",
+        )
+
+        await context.bot.send_chat_action(
+            chat_id=update.effective_chat.id,
+            action=telegram.constants.ChatAction.TYPING,
+        )
+
         async with async_database() as db_conn:
             chat_id = str(update.effective_chat.id)
             active_session = await Sessions.get_active_session(db_conn, chat_id=chat_id)
