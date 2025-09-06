@@ -73,6 +73,8 @@ async def on_start_command(update: telegram.Update, context: ContextTypes.DEFAUL
                 parse_mode="MarkdownV2",
             )
 
+            # Intentionally do not log a new session message/activity here.
+            # Only LLM-generated messages should count to bot session activities.
             await Messages.new_or_update(
                 db_conn,
                 user_encryption_key=chat_encryption_key,
