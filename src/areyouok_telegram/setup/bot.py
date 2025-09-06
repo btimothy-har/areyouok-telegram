@@ -9,6 +9,7 @@ from telegram.ext import Application
 from telegram.ext import ContextTypes
 
 from areyouok_telegram.config import ENV
+from areyouok_telegram.setup.exceptions import BotCommandsSetupError
 from areyouok_telegram.setup.exceptions import BotDescriptionSetupError
 from areyouok_telegram.setup.exceptions import BotNameSetupError
 from areyouok_telegram.utils import telegram_retry
@@ -168,8 +169,32 @@ async def setup_bot_description(ctx: Application | ContextTypes.DEFAULT_TYPE):
 @traced(extract_args=False)
 @telegram_retry()
 async def setup_bot_commands(ctx: Application | ContextTypes.DEFAULT_TYPE):
+    """Set the bot commands with proper error handling."""
     commands = [
         telegram.BotCommand("start", "Start onboarding"),
         telegram.BotCommand("settings", "View your current preferences"),
     ]
-    await ctx.bot.set_my_commands(commands=commands)
+
+    try:
+        success = await ctx.bot.set_my_commands(commands=commands)
+    except telegram.error.RetryAfter as e:
+        # Convert retry_after to timedelta if it's not already
+        retry_after_delta = e.retry_after if isinstance(e.retry_after, timedelta) else timedelta(seconds=e.retry_after)
+
+        logfire.warning(
+            "Rate limit exceeded while setting bot commands; "
+            f"Retry after {retry_after_delta.total_seconds()} seconds."
+        )
+
+        # Retry after the specified time
+        ctx.job_queue.run_once(
+            callback=setup_bot_commands,
+            when=retry_after_delta + timedelta(seconds=60),
+            name="retry_set_bot_commands",
+        )
+        return
+
+    if not success:
+        raise BotCommandsSetupError()
+
+    logfire.info("Bot commands set successfully.")
