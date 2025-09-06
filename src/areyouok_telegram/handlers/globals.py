@@ -102,12 +102,20 @@ async def on_error_event(update: telegram.Update, context: ContextTypes.DEFAULT_
                     thread_id=DEVELOPER_THREAD_ID,
                 )
 
-                await telegram_call(
-                    context.bot.send_message,
-                    chat_id=DEVELOPER_CHAT_ID,
-                    message_thread_id=DEVELOPER_THREAD_ID,
-                    text="Error: Failed to send error notification to developer. Please check logs.",
-                    disable_notification=True,
-                )
+                try:
+                    await telegram_call(
+                        context.bot.send_message,
+                        chat_id=DEVELOPER_CHAT_ID,
+                        message_thread_id=DEVELOPER_THREAD_ID,
+                        text="Error: Failed to send error notification to developer. Please check logs.",
+                        disable_notification=True,
+                    )
+                except Exception as fallback_error:
+                    logfire.exception(
+                        "Fallback error notification to developer failed.",
+                        _exc_info=fallback_error,
+                        chat_id=DEVELOPER_CHAT_ID,
+                        thread_id=DEVELOPER_THREAD_ID,
+                    )
 
         logfire.info(f"Error notification sent to developer ({len(message_chunks)} parts).")
