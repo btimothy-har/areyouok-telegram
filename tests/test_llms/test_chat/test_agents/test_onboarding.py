@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 from telegram.ext import ContextTypes
 
+from areyouok_telegram.data.models.notifications import Notifications
 from areyouok_telegram.llms.chat.agents.onboarding import OnboardingAgentDependencies
 from areyouok_telegram.llms.chat.agents.onboarding import onboarding_agent
 
@@ -15,14 +16,14 @@ class TestOnboardingAgentDependencies:
     def test_onboarding_agent_dependencies_creation(self):
         """Test OnboardingAgentDependencies can be created with required fields."""
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
-        
+
         deps = OnboardingAgentDependencies(
             tg_context=mock_context,
             tg_chat_id="123456789",
             tg_session_id="session_456",
-            onboarding_session_key="onboarding_123"
+            onboarding_session_key="onboarding_123",
         )
-        
+
         assert deps.tg_context == mock_context
         assert deps.tg_chat_id == "123456789"
         assert deps.tg_session_id == "session_456"
@@ -33,39 +34,37 @@ class TestOnboardingAgentDependencies:
     def test_onboarding_agent_dependencies_with_restrictions(self):
         """Test OnboardingAgentDependencies with restricted responses."""
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
-        
+
         deps = OnboardingAgentDependencies(
             tg_context=mock_context,
             tg_chat_id="123456789",
             tg_session_id="session_456",
             onboarding_session_key="onboarding_123",
-            restricted_responses={"text", "reaction"}
+            restricted_responses={"text", "reaction"},
         )
-        
+
         assert deps.restricted_responses == {"text", "reaction"}
 
     def test_onboarding_agent_dependencies_with_notification(self):
         """Test OnboardingAgentDependencies with notification."""
-        from areyouok_telegram.data.models.notifications import Notifications
-        
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
         mock_notification = MagicMock(spec=Notifications)
         mock_notification.content = "Test notification"
-        
+
         deps = OnboardingAgentDependencies(
             tg_context=mock_context,
             tg_chat_id="123456789",
             tg_session_id="session_456",
             onboarding_session_key="onboarding_123",
-            notification=mock_notification
+            notification=mock_notification,
         )
-        
+
         assert deps.notification == mock_notification
 
     def test_onboarding_agent_dependencies_fields_required(self):
         """Test that required fields raise TypeError when missing."""
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
-        
+
         # Should raise TypeError if required fields are missing
         with pytest.raises(TypeError):
             OnboardingAgentDependencies(tg_context=mock_context)  # Missing required fields
@@ -73,15 +72,15 @@ class TestOnboardingAgentDependencies:
     def test_onboarding_agent_dependencies_validation(self):
         """Test OnboardingAgentDependencies field validation."""
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
-        
+
         # Should work with all required fields
         deps = OnboardingAgentDependencies(
             tg_context=mock_context,
             tg_chat_id="123456789",
             tg_session_id="session_456",
-            onboarding_session_key="onboarding_123"
+            onboarding_session_key="onboarding_123",
         )
-        
+
         assert isinstance(deps.tg_chat_id, str)
         assert isinstance(deps.tg_session_id, str)
         assert isinstance(deps.onboarding_session_key, str)
@@ -96,9 +95,9 @@ class TestOnboardingAgent:
         # Verify agent properties
         assert onboarding_agent.name == "areyouok_onboarding_agent"
         assert onboarding_agent.end_strategy == "exhaustive"
-        
+
         # Verify model is configured
-        assert hasattr(onboarding_agent, 'model')
+        assert hasattr(onboarding_agent, "model")
 
     def test_onboarding_agent_has_instructions(self):
         """Test that onboarding agent has instructions."""
@@ -109,25 +108,25 @@ class TestOnboardingAgent:
     def test_onboarding_agent_has_tools(self):
         """Test that onboarding agent has expected attributes."""
         # The agent should have the basic structure we expect
-        assert hasattr(onboarding_agent, 'name')
-        assert hasattr(onboarding_agent, 'end_strategy')
-        assert hasattr(onboarding_agent, 'output_type')
+        assert hasattr(onboarding_agent, "name")
+        assert hasattr(onboarding_agent, "end_strategy")
+        assert hasattr(onboarding_agent, "output_type")
 
     def test_onboarding_agent_dependencies_types(self):
         """Test that OnboardingAgentDependencies has correct types."""
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
-        
+
         deps = OnboardingAgentDependencies(
             tg_context=mock_context,
             tg_chat_id="test_chat",
             tg_session_id="test_session",
-            onboarding_session_key="test_key"
+            onboarding_session_key="test_key",
         )
-        
+
         # Verify types
-        assert hasattr(deps, 'tg_context')
-        assert hasattr(deps, 'tg_chat_id')
-        assert hasattr(deps, 'tg_session_id')
-        assert hasattr(deps, 'onboarding_session_key')
-        assert hasattr(deps, 'restricted_responses')
-        assert hasattr(deps, 'notification')
+        assert hasattr(deps, "tg_context")
+        assert hasattr(deps, "tg_chat_id")
+        assert hasattr(deps, "tg_session_id")
+        assert hasattr(deps, "onboarding_session_key")
+        assert hasattr(deps, "restricted_responses")
+        assert hasattr(deps, "notification")
