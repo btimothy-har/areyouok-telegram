@@ -39,7 +39,7 @@ from areyouok_telegram.llms.context_compression import ContextTemplate
 from areyouok_telegram.llms.context_compression import context_compression_agent
 from areyouok_telegram.llms.utils import run_agent_with_tracking
 from areyouok_telegram.utils import db_retry
-from areyouok_telegram.utils import telegram_retry
+from areyouok_telegram.utils import telegram_call
 from areyouok_telegram.utils import traced
 
 
@@ -124,7 +124,8 @@ class ConversationJob(BaseJob):
                 _span_name="ConversationJob._run.respond",
                 chat_id=self.chat_id,
             ):
-                await context.bot.send_chat_action(
+                await telegram_call(
+                    context.bot.send_chat_action,
                     chat_id=int(self.chat_id),
                     action=telegram.constants.ChatAction.TYPING,
                 )
@@ -475,7 +476,6 @@ class ConversationJob(BaseJob):
 
             return sorted(message_history, key=lambda x: x.timestamp), deps
 
-    @telegram_retry()
     async def _execute_text_response(
         self, context: ContextTypes.DEFAULT_TYPE, response: TextResponse
     ) -> telegram.Message | None:
@@ -490,7 +490,8 @@ class ConversationJob(BaseJob):
         else:
             reply_parameters = None
 
-        reply_message = await context.bot.send_message(
+        reply_message = await telegram_call(
+            context.bot.send_message,
             chat_id=int(self.chat_id),
             text=response.message_text,
             reply_parameters=reply_parameters,
@@ -498,11 +499,11 @@ class ConversationJob(BaseJob):
 
         return reply_message
 
-    @telegram_retry()
     async def _execute_reaction_response(
         self, context: ContextTypes.DEFAULT_TYPE, response: ReactionResponse, message: telegram.Message
     ):
-        react_sent = await context.bot.set_message_reaction(
+        react_sent = await telegram_call(
+            context.bot.set_message_reaction,
             chat_id=int(self.chat_id),
             message_id=int(response.react_to_message_id),
             reaction=response.emoji,

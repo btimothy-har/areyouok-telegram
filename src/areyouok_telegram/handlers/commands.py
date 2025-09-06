@@ -13,6 +13,7 @@ from areyouok_telegram.handlers.constants import MD2_ONBOARDING_START_MESSAGE
 from areyouok_telegram.handlers.settings_utils import construct_user_settings_response
 from areyouok_telegram.handlers.settings_utils import update_user_metadata_field
 from areyouok_telegram.utils import db_retry
+from areyouok_telegram.utils import telegram_call
 from areyouok_telegram.utils import traced
 
 
@@ -42,7 +43,8 @@ async def on_start_command(update: telegram.Update, context: ContextTypes.DEFAUL
         onboarding_session = onboarding_sessions[0] if onboarding_sessions else None
 
         if onboarding_session and onboarding_session.is_completed:
-            return await context.bot.send_message(
+            return await telegram_call(
+                context.bot.send_message,
                 chat_id=update.effective_chat.id,
                 text=MD2_ONBOARDING_COMPLETE_MESSAGE,
                 parse_mode="MarkdownV2",
@@ -67,7 +69,8 @@ async def on_start_command(update: telegram.Update, context: ContextTypes.DEFAUL
         await active_session.new_message(db_conn, timestamp=update.message.date, is_user=True)
 
         if not active_session.last_bot_activity:
-            bot_message = await context.bot.send_message(
+            bot_message = await telegram_call(
+                context.bot.send_message,
                 chat_id=update.effective_chat.id,
                 text=MD2_ONBOARDING_START_MESSAGE,
                 parse_mode="MarkdownV2",
@@ -110,7 +113,8 @@ async def on_settings_command(update: telegram.Update, context: ContextTypes.DEF
 
     if field_arg and text_input:
         if field_arg not in ["preferred_name", "name", "country", "timezone"]:
-            return await context.bot.send_message(
+            return await telegram_call(
+                context.bot.send_message,
                 chat_id=update.effective_chat.id,
                 text="Invalid field. Please specify one of: name, country, timezone.",
             )
@@ -124,7 +128,8 @@ async def on_settings_command(update: telegram.Update, context: ContextTypes.DEF
             reaction="👌",
         )
 
-        await context.bot.send_chat_action(
+        await telegram_call(
+            context.bot.send_chat_action,
             chat_id=update.effective_chat.id,
             action=telegram.constants.ChatAction.TYPING,
         )
@@ -143,7 +148,8 @@ async def on_settings_command(update: telegram.Update, context: ContextTypes.DEF
             new_value=text_input,
         )
 
-        await context.bot.send_message(
+        await telegram_call(
+            context.bot.send_message,
             chat_id=update.effective_chat.id,
             text=update_outcome.feedback,
         )
@@ -151,7 +157,8 @@ async def on_settings_command(update: telegram.Update, context: ContextTypes.DEF
     else:
         user_settings_text = await construct_user_settings_response(user_id=str(update.effective_user.id))
 
-        await context.bot.send_message(
+        await telegram_call(
+            context.bot.send_message,
             chat_id=update.effective_chat.id,
             text=user_settings_text,
             parse_mode="MarkdownV2",

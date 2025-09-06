@@ -130,6 +130,32 @@ def telegram_retry():
     )
 
 
+@telegram_retry()
+async def telegram_call(func, *args, **kwargs):
+    """
+    Execute a Telegram API call with retry logic.
+
+    Handles:
+    - NetworkError/TimedOut: Retries with exponential backoff (via telegram_retry)
+    - RetryAfter: Waits required time then recursively retries
+
+    Args:
+        func: The telegram bot method to call
+        *args: Positional arguments for the method
+        **kwargs: Keyword arguments for the method
+
+    Returns:
+        The result of the Telegram API call
+    """
+    try:
+        return await func(*args, **kwargs)
+    except telegram.error.RetryAfter as e:
+        # Wait the required time plus small buffer
+        await asyncio.sleep(e.retry_after + 0.5)
+        # Recursively call telegram_call again - gets full retry protection
+        return await telegram_call(func, *args, **kwargs)
+
+
 def escape_markdown_v2(text: str) -> str:
     """Escape special characters for MarkdownV2."""
     # Characters that need to be escaped in MarkdownV2

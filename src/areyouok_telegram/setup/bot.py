@@ -11,6 +11,7 @@ from telegram.ext import ContextTypes
 from areyouok_telegram.config import ENV
 from areyouok_telegram.setup.exceptions import BotDescriptionSetupError
 from areyouok_telegram.setup.exceptions import BotNameSetupError
+from areyouok_telegram.utils import telegram_retry
 from areyouok_telegram.utils import traced
 
 
@@ -36,6 +37,7 @@ def _generate_short_description():
 
 
 @traced(extract_args=False)
+@telegram_retry()
 async def setup_bot_name(ctx: Application | ContextTypes.DEFAULT_TYPE):
     """Set the bot name with proper error handling."""
     new_name = _generate_bot_name()
@@ -74,6 +76,7 @@ async def setup_bot_name(ctx: Application | ContextTypes.DEFAULT_TYPE):
 
 
 @traced(extract_args=False)
+@telegram_retry()
 async def setup_bot_description(ctx: Application | ContextTypes.DEFAULT_TYPE):
     """Set the bot description with proper error handling."""
     new_description = _generate_short_description()
@@ -116,6 +119,7 @@ async def setup_bot_description(ctx: Application | ContextTypes.DEFAULT_TYPE):
 
 
 @traced(extract_args=False)
+@telegram_retry()
 async def setup_bot_commands(ctx: Application | ContextTypes.DEFAULT_TYPE):
     commands = [
         telegram.BotCommand("start", "Start onboarding"),

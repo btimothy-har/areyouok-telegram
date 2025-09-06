@@ -13,7 +13,7 @@ from areyouok_telegram.data import LLMUsage
 from areyouok_telegram.data import MediaFiles
 from areyouok_telegram.data import Notifications
 from areyouok_telegram.handlers.exceptions import VoiceNotProcessableError
-from areyouok_telegram.utils import telegram_retry
+from areyouok_telegram.utils import telegram_call
 from areyouok_telegram.utils import traced
 
 
@@ -160,7 +160,6 @@ async def _download_file(
 
 
 @traced(extract_args=["message"])
-@telegram_retry()
 async def extract_media_from_telegram_message(
     db_conn: AsyncSession,
     user_encryption_key: str,
@@ -181,31 +180,31 @@ async def extract_media_from_telegram_message(
     media_files = []
 
     if message.photo:
-        photo_file = await message.photo[-1].get_file()
+        photo_file = await telegram_call(message.photo[-1].get_file)
         media_files.append(photo_file)
 
     if message.sticker:
-        sticker_file = await message.sticker.get_file()
+        sticker_file = await telegram_call(message.sticker.get_file)
         media_files.append(sticker_file)
 
     if message.document:
-        document_file = await message.document.get_file()
+        document_file = await telegram_call(message.document.get_file)
         media_files.append(document_file)
 
     if message.animation:
-        animation_file = await message.animation.get_file()
+        animation_file = await telegram_call(message.animation.get_file)
         media_files.append(animation_file)
 
     if message.video:
-        video_file = await message.video.get_file()
+        video_file = await telegram_call(message.video.get_file)
         media_files.append(video_file)
 
     if message.video_note:
-        video_note_file = await message.video_note.get_file()
+        video_note_file = await telegram_call(message.video_note.get_file)
         media_files.append(video_note_file)
 
     if message.voice:
-        voice_file = await message.voice.get_file()
+        voice_file = await telegram_call(message.voice.get_file)
         media_files.append(voice_file)
 
     await asyncio.gather(
