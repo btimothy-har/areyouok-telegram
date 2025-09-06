@@ -4,6 +4,7 @@ import telegram
 from telegram.ext import ContextTypes
 
 from areyouok_telegram.data import Chats
+from areyouok_telegram.data import GuidedSessions
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database
@@ -37,6 +38,18 @@ async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_
                 chat_id=chat_id,
                 timestamp=update.message.date,
             )
+        else:
+            chk_onboarding = await GuidedSessions.get_by_chat_session(
+                db_conn,
+                chat_session=active_session.session_id,
+                session_type="onboarding",
+            )
+
+            if chk_onboarding:
+                await context.bot.send_chat_action(
+                    chat_id=update.effective_chat.id,
+                    action=telegram.constants.ChatAction.TYPING,
+                )
 
         extract_media = asyncio.create_task(
             extract_media_from_telegram_message(
