@@ -47,8 +47,8 @@ def _generate_full_description():
     return description
 
 
-@traced(extract_args=False)
 @telegram_retry()
+@traced(extract_args=False)
 async def setup_bot_name(ctx: Application | ContextTypes.DEFAULT_TYPE):
     """Set the bot name with proper error handling."""
     new_name = _generate_bot_name()
@@ -86,8 +86,8 @@ async def setup_bot_name(ctx: Application | ContextTypes.DEFAULT_TYPE):
     )
 
 
-@traced(extract_args=False)
 @telegram_retry()
+@traced(extract_args=False)
 async def setup_bot_short_description(ctx: Application | ContextTypes.DEFAULT_TYPE):
     """Set the bot short description with proper error handling."""
     new_short_description = _generate_short_description()
@@ -126,8 +126,8 @@ async def setup_bot_short_description(ctx: Application | ContextTypes.DEFAULT_TY
     )
 
 
-@traced(extract_args=False)
 @telegram_retry()
+@traced(extract_args=False)
 async def setup_bot_description(ctx: Application | ContextTypes.DEFAULT_TYPE):
     """Set the bot full description with proper error handling."""
     new_description = _generate_full_description()
@@ -166,8 +166,8 @@ async def setup_bot_description(ctx: Application | ContextTypes.DEFAULT_TYPE):
     )
 
 
-@traced(extract_args=False)
 @telegram_retry()
+@traced(extract_args=False)
 async def setup_bot_commands(ctx: Application | ContextTypes.DEFAULT_TYPE):
     """Set the bot commands with proper error handling."""
     commands = [
@@ -182,8 +182,7 @@ async def setup_bot_commands(ctx: Application | ContextTypes.DEFAULT_TYPE):
         retry_after_delta = e.retry_after if isinstance(e.retry_after, timedelta) else timedelta(seconds=e.retry_after)
 
         logfire.warning(
-            "Rate limit exceeded while setting bot commands; "
-            f"Retry after {retry_after_delta.total_seconds()} seconds."
+            f"Rate limit exceeded while setting bot commands; Retry after {retry_after_delta.total_seconds()} seconds."
         )
 
         # Retry after the specified time
