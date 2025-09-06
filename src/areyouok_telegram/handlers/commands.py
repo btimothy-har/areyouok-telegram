@@ -1,6 +1,7 @@
 import telegram
 from telegram.ext import ContextTypes
 
+from areyouok_telegram.data import SYSTEM_USER_ID
 from areyouok_telegram.data import Chats
 from areyouok_telegram.data import GuidedSessions
 from areyouok_telegram.data import GuidedSessionType
@@ -75,7 +76,7 @@ async def on_start_command(update: telegram.Update, context: ContextTypes.DEFAUL
             await Messages.new_or_update(
                 db_conn,
                 user_encryption_key=chat_encryption_key,
-                user_id="system",
+                user_id=SYSTEM_USER_ID,
                 chat_id=str(update.effective_chat.id),
                 message=bot_message,
                 session_key=active_session.session_key,

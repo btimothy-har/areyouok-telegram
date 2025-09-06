@@ -10,6 +10,7 @@ import pytest
 import telegram
 
 from areyouok_telegram.data.models.chat_event import ChatEvent
+from areyouok_telegram.data.models.chat_event import SYSTEM_USER_ID
 from areyouok_telegram.data.models.context import ContextType
 from areyouok_telegram.data.models.media import MediaFiles
 
@@ -335,7 +336,7 @@ class TestChatEvent:
 
     def test_to_model_message_system_user_treated_as_bot(self, mock_chat_event_message, frozen_time):
         """Test that system user messages are treated as bot responses (ModelResponse)."""
-        chat_event = mock_chat_event_message(text="System message", user_id="system")
+        chat_event = mock_chat_event_message(text="System message", user_id=SYSTEM_USER_ID)
 
         result = chat_event.to_model_message("bot456", frozen_time)
 
@@ -354,7 +355,7 @@ class TestChatEvent:
         assert_model_message_format(bot_result, pydantic_ai.messages.ModelResponse)
 
         # Test system filtering (new behavior)
-        system_event = mock_chat_event_message(text="System message", user_id="system")
+        system_event = mock_chat_event_message(text="System message", user_id=SYSTEM_USER_ID)
         system_result = system_event.to_model_message("bot456", frozen_time)
         assert_model_message_format(system_result, pydantic_ai.messages.ModelResponse)
 
@@ -365,9 +366,9 @@ class TestChatEvent:
 
     def test_to_model_message_system_with_different_bot_id(self, mock_chat_event_message, frozen_time):
         """Test that system user is treated as bot response regardless of bot_id."""
-        chat_event = mock_chat_event_message(text="System message", user_id="system")
+        chat_event = mock_chat_event_message(text="System message", user_id=SYSTEM_USER_ID)
 
-        # Use a different bot_id than "system"
+        # Use a different bot_id than SYSTEM_USER_ID
         result = chat_event.to_model_message("different_bot_id", frozen_time)
 
         # System should still be treated as bot response

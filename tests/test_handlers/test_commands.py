@@ -8,6 +8,7 @@ import pytest
 import telegram
 from telegram.ext import ContextTypes
 
+from areyouok_telegram.data import SYSTEM_USER_ID
 from areyouok_telegram.handlers.commands import on_end_command
 from areyouok_telegram.handlers.commands import on_settings_command
 from areyouok_telegram.handlers.commands import on_start_command
@@ -483,7 +484,7 @@ class TestOnStartCommand:
             # Second call: bot greeting message
             bot_msg_call = mock_new_message.call_args_list[1]
             assert bot_msg_call[1]["user_encryption_key"] == "test_encryption_key"
-            assert bot_msg_call[1]["user_id"] == "system"
+            assert bot_msg_call[1]["user_id"] == SYSTEM_USER_ID
             assert bot_msg_call[1]["chat_id"] == str(mock_telegram_chat.id)
             assert bot_msg_call[1]["message"] == mock_bot_message
             assert bot_msg_call[1]["session_key"] == mock_session.session_key
