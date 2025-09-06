@@ -17,6 +17,9 @@ from areyouok_telegram.data import UserMetadata
 from areyouok_telegram.data import async_database
 from areyouok_telegram.llms.agent_country_timezone import CountryTimezone
 from areyouok_telegram.llms.agent_country_timezone import country_timezone_agent
+from areyouok_telegram.llms.agent_settings import SettingsAgentDependencies
+from areyouok_telegram.llms.agent_settings import SettingsUpdateResponse
+from areyouok_telegram.llms.agent_settings import settings_agent
 from areyouok_telegram.llms.chat.constants import MESSAGE_FOR_USER_PROMPT
 from areyouok_telegram.llms.chat.constants import ONBOARDING_FIELDS
 from areyouok_telegram.llms.chat.constants import ONBOARDING_OBJECTIVES
@@ -28,11 +31,11 @@ from areyouok_telegram.llms.chat.responses import ReactionResponse
 from areyouok_telegram.llms.chat.responses import TextResponse
 from areyouok_telegram.llms.chat.utils import check_restricted_responses
 from areyouok_telegram.llms.chat.utils import check_special_instructions
-from areyouok_telegram.llms.chat.utils import log_metadata_update_context
 from areyouok_telegram.llms.chat.utils import validate_response_data
 from areyouok_telegram.llms.exceptions import CompleteOnboardingError
 from areyouok_telegram.llms.exceptions import MetadataFieldUpdateError
 from areyouok_telegram.llms.models import ONBOARDING_SONNET_4
+from areyouok_telegram.llms.utils import log_metadata_update_context
 from areyouok_telegram.llms.utils import run_agent_with_tracking
 
 AgentResponse = TextResponse | ReactionResponse | DoNothingResponse
@@ -113,24 +116,10 @@ async def save_user_response(
 ) -> str:
     """Save user response to metadata."""
 
-    async with async_database() as db_conn:
-        try:
-            await UserMetadata.update_metadata(
-                db_conn,
-                user_id=ctx.deps.tg_chat_id,
-                field=field,
-                value=value_to_save,
-            )
+    if field not in ONBOARDING_FIELDS:
+        raise MetadataFieldUpdateError(field, f"Field {field} is invalid.")
 
-        except Exception as e:
-            raise MetadataFieldUpdateError("timezone", str(e)) from e
-
-    # Log the initial metadata update to context
-    await log_metadata_update_context(
-        chat_id=ctx.deps.tg_chat_id,
-        session_id=ctx.deps.tg_session_id,
-        content=f"Updated usermeta: {field} is now {str(value_to_save)}",
-    )
+    update_instruction = f"Update {field} to value: {value_to_save}."
 
     if field == "country":
         if value_to_save == "rather_not_say":
@@ -149,17 +138,7 @@ async def save_user_response(
             tz_value = tz_data.timezone
             has_multiple = tz_data.has_multiple
 
-        async with async_database() as db_conn:
-            try:
-                await UserMetadata.update_metadata(
-                    db_conn,
-                    user_id=ctx.deps.tg_chat_id,
-                    field="timezone",
-                    value=tz_value,
-                )
-
-            except Exception as e:
-                raise MetadataFieldUpdateError("timezone", str(e)) from e
+        update_instruction += f"\nUpdate timezone to value: {tz_value}."
 
         if has_multiple:
             async with async_database() as db_conn:
@@ -174,12 +153,23 @@ async def save_user_response(
                     priority=1,
                 )
 
-        # Log timezone update to context as well
-        await log_metadata_update_context(
-            chat_id=ctx.deps.tg_chat_id,
-            session_id=ctx.deps.tg_session_id,
-            content=f"Updated usermeta: timezone is now {str(tz_value)}",
-        )
+    update = await run_agent_with_tracking(
+        settings_agent,
+        chat_id=ctx.deps.tg_chat_id,
+        session_id=ctx.deps.tg_session_id,
+        run_kwargs={
+            "user_prompt": update_instruction,
+            "deps": SettingsAgentDependencies(
+                tg_context=ctx.deps.tg_context,
+                tg_chat_id=ctx.deps.tg_chat_id,
+                tg_session_id=ctx.deps.tg_session_id,
+            ),
+        },
+    )
+    update_outcome: SettingsUpdateResponse = update.output
+
+    if not update_outcome.completed:
+        raise MetadataFieldUpdateError(field, f"Error updating {field}: {update_outcome.feedback}.")
 
     return f"{field} updated successfully."
 

@@ -1,6 +1,3 @@
-from areyouok_telegram.data import Chats
-from areyouok_telegram.data import Context
-from areyouok_telegram.data import ContextType
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data import async_database
 from areyouok_telegram.llms.agent_content_check import ContentCheckDependencies
@@ -66,31 +63,3 @@ async def check_special_instructions(
 
         if not content_check.check_pass:
             raise UnacknowledgedImportantMessageError(instruction, content_check.feedback)
-
-
-async def log_metadata_update_context(
-    *,
-    chat_id: str,
-    session_id: str,
-    content: str,
-) -> None:
-    """Log a metadata update to the context table.
-
-    Args:
-        chat_id: The chat ID where the update occurred
-        session_id: The session ID where the update occurred
-        field: The metadata field that was updated
-        new_value: The new value that was set
-    """
-    async with async_database() as db_conn:
-        chat_obj = await Chats.get_by_id(db_conn, chat_id=chat_id)
-        chat_encryption_key = chat_obj.retrieve_key()
-
-        await Context.new_or_update(
-            db_conn,
-            chat_encryption_key=chat_encryption_key,
-            chat_id=chat_id,
-            session_id=session_id,
-            ctype=ContextType.METADATA.value,
-            content=content,
-        )
