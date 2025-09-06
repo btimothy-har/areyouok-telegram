@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import pydantic
 import pydantic_ai
 
-from areyouok_telegram.llms.models import VALIDATOR_GPT_5_NANO
+from areyouok_telegram.llms.models import UTILITY_GPT_5_NANO
 
 
 @dataclass
@@ -25,7 +25,7 @@ class ContentCheckResponse(pydantic.BaseModel):
 
 
 content_check_agent = pydantic_ai.Agent(
-    model=VALIDATOR_GPT_5_NANO.model,
+    model=UTILITY_GPT_5_NANO.model,
     output_type=ContentCheckResponse,
     name="content_check_agent",
     end_strategy="exhaustive",

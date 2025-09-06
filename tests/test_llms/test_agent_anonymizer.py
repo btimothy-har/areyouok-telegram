@@ -9,7 +9,7 @@ from pydantic_ai.models.function import AgentInfo
 from pydantic_ai.models.function import FunctionModel
 from pydantic_ai.models.test import TestModel
 
-from areyouok_telegram.llms.validators.anonymizer import anonymization_agent
+from areyouok_telegram.llms.agent_anonymizer import anonymization_agent
 
 # Block real model requests in tests
 models.ALLOW_MODEL_REQUESTS = False

@@ -9,6 +9,7 @@ from telegram.ext import ContextTypes
 from areyouok_telegram.data import Notifications
 from areyouok_telegram.data import UserMetadata
 from areyouok_telegram.data import async_database
+from areyouok_telegram.llms.agent_anonymizer import anonymization_agent
 from areyouok_telegram.llms.chat.constants import MESSAGE_FOR_USER_PROMPT
 from areyouok_telegram.llms.chat.constants import PERSONALITY_PROMPT
 from areyouok_telegram.llms.chat.constants import PERSONALITY_SWITCH_INSTRUCTIONS
@@ -24,12 +25,11 @@ from areyouok_telegram.llms.chat.responses import SwitchPersonalityResponse
 from areyouok_telegram.llms.chat.responses import TextResponse
 from areyouok_telegram.llms.chat.utils import check_restricted_responses
 from areyouok_telegram.llms.chat.utils import check_special_instructions
-from areyouok_telegram.llms.chat.utils import log_metadata_update_context
 from areyouok_telegram.llms.chat.utils import validate_response_data
 from areyouok_telegram.llms.exceptions import MetadataFieldUpdateError
 from areyouok_telegram.llms.models import CHAT_SONNET_4
+from areyouok_telegram.llms.utils import log_metadata_update_context
 from areyouok_telegram.llms.utils import run_agent_with_tracking
-from areyouok_telegram.llms.validators.anonymizer import anonymization_agent
 
 AgentResponse = TextResponse | ReactionResponse | SwitchPersonalityResponse | DoNothingResponse
 

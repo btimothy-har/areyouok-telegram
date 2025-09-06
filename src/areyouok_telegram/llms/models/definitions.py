@@ -24,7 +24,7 @@ ONBOARDING_SONNET_4 = BaseModelConfig(
     ),
 )
 
-VALIDATOR_GPT_5_NANO = BaseModelConfig(
+UTILITY_GPT_5_NANO = BaseModelConfig(
     model_name="openai/gpt-5-nano",
     provider="openai",
     model_id="gpt-5-nano-2025-08-07",

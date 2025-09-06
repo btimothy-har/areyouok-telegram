@@ -4,9 +4,9 @@ import pytest
 from pydantic_ai import models
 from pydantic_ai.models.test import TestModel
 
-from areyouok_telegram.llms.validators.content_check import ContentCheckDependencies
-from areyouok_telegram.llms.validators.content_check import ContentCheckResponse
-from areyouok_telegram.llms.validators.content_check import content_check_agent
+from areyouok_telegram.llms.agent_content_check import ContentCheckDependencies
+from areyouok_telegram.llms.agent_content_check import ContentCheckResponse
+from areyouok_telegram.llms.agent_content_check import content_check_agent
 
 # Block real model requests in tests
 models.ALLOW_MODEL_REQUESTS = False

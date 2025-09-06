@@ -12,12 +12,12 @@ from telegram.ext import ContextTypes
 
 from areyouok_telegram.data.models.notifications import Notifications
 from areyouok_telegram.data.models.user_metadata import UserMetadata
+from areyouok_telegram.llms.agent_anonymizer import anonymization_agent
 from areyouok_telegram.llms.chat.agents.chat import ChatAgentDependencies
 from areyouok_telegram.llms.chat.agents.chat import instructions_with_personality_switch
 from areyouok_telegram.llms.chat.agents.chat import update_communication_style
 from areyouok_telegram.llms.chat.personalities import PersonalityTypes
 from areyouok_telegram.llms.exceptions import MetadataFieldUpdateError
-from areyouok_telegram.llms.validators.anonymizer import anonymization_agent
 
 
 class TestChatAgentDependencies:
@@ -222,10 +222,8 @@ class TestUpdateCommunicationStyleTool:
 
         with (
             patch.object(UserMetadata, "update_metadata", new_callable=AsyncMock) as mock_update,
-            patch("areyouok_telegram.llms.chat.utils.Chats.get_by_id", new_callable=AsyncMock) as mock_get_chat,
-            patch(
-                "areyouok_telegram.llms.chat.utils.Context.new_or_update", new_callable=AsyncMock
-            ) as mock_context_update,
+            patch("areyouok_telegram.llms.utils.Chats.get_by_id", new_callable=AsyncMock) as mock_get_chat,
+            patch("areyouok_telegram.llms.utils.Context.new_or_update", new_callable=AsyncMock) as mock_context_update,
         ):
             # Setup context logging mocks
             mock_get_chat.return_value = mock_chat
@@ -318,8 +316,8 @@ class TestUpdateCommunicationStyleTool:
 
         with (
             patch.object(UserMetadata, "update_metadata", new_callable=AsyncMock),
-            patch("areyouok_telegram.llms.chat.utils.Chats.get_by_id", new_callable=AsyncMock) as mock_get_chat,
-            patch("areyouok_telegram.llms.chat.utils.Context.new_or_update", new_callable=AsyncMock),
+            patch("areyouok_telegram.llms.utils.Chats.get_by_id", new_callable=AsyncMock) as mock_get_chat,
+            patch("areyouok_telegram.llms.utils.Context.new_or_update", new_callable=AsyncMock),
         ):
             # Setup context logging mocks
             mock_get_chat.return_value = mock_chat

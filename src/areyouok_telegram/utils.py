@@ -130,6 +130,15 @@ def telegram_retry():
     )
 
 
+def escape_markdown_v2(text: str) -> str:
+    """Escape special characters for MarkdownV2."""
+    # Characters that need to be escaped in MarkdownV2
+    special_chars = ["_", "*", "[", "]", "(", ")", "~", "`", ">", "#", "+", "-", "=", "|", "{", "}", ".", "!"]
+    for char in special_chars:
+        text = text.replace(char, rf"\{char}")
+    return text
+
+
 def split_long_message(message: str, max_length: int = 4000) -> list[str]:
     """Split a long message into chunks that fit within Telegram's limits."""
     if len(message) <= max_length:

@@ -117,4 +117,8 @@ async def setup_bot_description(ctx: Application | ContextTypes.DEFAULT_TYPE):
 
 @traced(extract_args=False)
 async def setup_bot_commands(ctx: Application | ContextTypes.DEFAULT_TYPE):
-    await ctx.bot.set_my_commands(commands=[])
+    commands = [
+        telegram.BotCommand("start", "Start onboarding"),
+        telegram.BotCommand("settings", "View your current preferences"),
+    ]
+    await ctx.bot.set_my_commands(commands=commands)
