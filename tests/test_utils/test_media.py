@@ -1,4 +1,4 @@
-"""Tests for handlers/utils.py."""
+"""Tests for utils/media.py."""
 
 # ruff: noqa: PLC2701
 from unittest.mock import AsyncMock
@@ -38,9 +38,9 @@ class TestTranscribeVoiceDataSync:
         mock_client.audio.transcriptions.create.return_value = mock_transcription
 
         with (
-            patch("areyouok_telegram.handlers.media_utils.AudioSegment.from_ogg", return_value=mock_audio_segment),
-            patch("areyouok_telegram.handlers.media_utils.openai.OpenAI", return_value=mock_client),
-            patch("areyouok_telegram.handlers.media_utils.OPENAI_API_KEY", "test-key"),
+            patch("areyouok_telegram.utils.media.AudioSegment.from_ogg", return_value=mock_audio_segment),
+            patch("areyouok_telegram.utils.media.openai.OpenAI", return_value=mock_client),
+            patch("areyouok_telegram.utils.media.OPENAI_API_KEY", "test-key"),
         ):
             result = transcribe_voice_data_sync(mock_voice_data)
 
@@ -83,9 +83,9 @@ class TestTranscribeVoiceDataSync:
         mock_client.audio.transcriptions.create.side_effect = mock_transcriptions
 
         with (
-            patch("areyouok_telegram.handlers.media_utils.AudioSegment.from_ogg", return_value=mock_audio_segment),
-            patch("areyouok_telegram.handlers.media_utils.openai.OpenAI", return_value=mock_client),
-            patch("areyouok_telegram.handlers.media_utils.OPENAI_API_KEY", "test-key"),
+            patch("areyouok_telegram.utils.media.AudioSegment.from_ogg", return_value=mock_audio_segment),
+            patch("areyouok_telegram.utils.media.openai.OpenAI", return_value=mock_client),
+            patch("areyouok_telegram.utils.media.OPENAI_API_KEY", "test-key"),
         ):
             result = transcribe_voice_data_sync(mock_voice_data)
 
@@ -109,7 +109,7 @@ class TestTranscribeVoiceDataSync:
         mock_voice_data = b"fake audio data"
 
         with patch(
-            "areyouok_telegram.handlers.media_utils.AudioSegment.from_ogg",
+            "areyouok_telegram.utils.media.AudioSegment.from_ogg",
             side_effect=Exception("Audio processing error"),
         ):
             with pytest.raises(VoiceNotProcessableError):
@@ -138,9 +138,9 @@ class TestDownloadFile:
         chat_encryption_key = "test_encryption_key"
 
         with (
-            patch("areyouok_telegram.handlers.media_utils.MediaFiles.create_file", new=AsyncMock()) as mock_create_file,
-            patch("areyouok_telegram.handlers.media_utils.logfire.span"),
-            patch("areyouok_telegram.handlers.media_utils.logfire.info"),
+            patch("areyouok_telegram.utils.media.MediaFiles.create_file", new=AsyncMock()) as mock_create_file,
+            patch("areyouok_telegram.utils.media.logfire.span"),
+            patch("areyouok_telegram.utils.media.logfire.info"),
         ):
             await _download_file(mock_db_session, chat_encryption_key, message=mock_message, file=mock_file)
 
@@ -187,16 +187,16 @@ class TestDownloadFile:
         chat_encryption_key = "test_encryption_key"
 
         with (
-            patch("areyouok_telegram.handlers.media_utils.MediaFiles.create_file", new=AsyncMock()) as mock_create_file,
+            patch("areyouok_telegram.utils.media.MediaFiles.create_file", new=AsyncMock()) as mock_create_file,
             patch(
-                "areyouok_telegram.handlers.media_utils.asyncio.to_thread",
+                "areyouok_telegram.utils.media.asyncio.to_thread",
                 new=AsyncMock(return_value=mock_transcriptions),
             ),
             patch(
-                "areyouok_telegram.handlers.media_utils.LLMUsage.track_generic_usage", new=AsyncMock()
+                "areyouok_telegram.utils.media.LLMUsage.track_generic_usage", new=AsyncMock()
             ) as mock_track_usage,
-            patch("areyouok_telegram.handlers.media_utils.logfire.span"),
-            patch("areyouok_telegram.handlers.media_utils.logfire.info") as mock_log_info,
+            patch("areyouok_telegram.utils.media.logfire.span"),
+            patch("areyouok_telegram.utils.media.logfire.info") as mock_log_info,
         ):
             await _download_file(mock_db_session, chat_encryption_key, message=mock_message, file=mock_file)
 
@@ -260,13 +260,13 @@ class TestDownloadFile:
         chat_encryption_key = "test_encryption_key"
 
         with (
-            patch("areyouok_telegram.handlers.media_utils.MediaFiles.create_file", new=AsyncMock()) as mock_create_file,
+            patch("areyouok_telegram.utils.media.MediaFiles.create_file", new=AsyncMock()) as mock_create_file,
             patch(
-                "areyouok_telegram.handlers.media_utils.asyncio.to_thread",
+                "areyouok_telegram.utils.media.asyncio.to_thread",
                 new=AsyncMock(side_effect=VoiceNotProcessableError()),
             ),
-            patch("areyouok_telegram.handlers.media_utils.logfire.span"),
-            patch("areyouok_telegram.handlers.media_utils.logfire.exception") as mock_log_exception,
+            patch("areyouok_telegram.utils.media.logfire.span"),
+            patch("areyouok_telegram.utils.media.logfire.exception") as mock_log_exception,
         ):
             await _download_file(mock_db_session, chat_encryption_key, message=mock_message, file=mock_file)
 
@@ -306,7 +306,7 @@ class TestDownloadFile:
 
         chat_encryption_key = "test_encryption_key"
 
-        with patch("areyouok_telegram.handlers.media_utils.logfire.exception") as mock_log_exception:
+        with patch("areyouok_telegram.utils.media.logfire.exception") as mock_log_exception:
             await _download_file(mock_db_session, chat_encryption_key, message=mock_message, file=mock_file)
 
             # Verify error was logged
@@ -333,7 +333,7 @@ class TestExtractMediaFromTelegramMessage:
 
         with (
             patch("areyouok_telegram.utils.media._download_file", new=AsyncMock()) as mock_download,
-            patch("areyouok_telegram.handlers.media_utils.logfire.info") as mock_log_info,
+            patch("areyouok_telegram.utils.media.logfire.info") as mock_log_info,
         ):
             result = await extract_media_from_telegram_message(
                 mock_db_session, "test_encryption_key", message=mock_message
@@ -367,7 +367,7 @@ class TestExtractMediaFromTelegramMessage:
 
         with (
             patch("areyouok_telegram.utils.media._download_file", new=AsyncMock()) as mock_download,
-            patch("areyouok_telegram.handlers.media_utils.logfire.info") as mock_log_info,
+            patch("areyouok_telegram.utils.media.logfire.info") as mock_log_info,
         ):
             result = await extract_media_from_telegram_message(
                 mock_db_session, "test_encryption_key", message=mock_message
@@ -408,7 +408,7 @@ class TestExtractMediaFromTelegramMessage:
 
         with (
             patch("areyouok_telegram.utils.media._download_file", new=AsyncMock()) as mock_download,
-            patch("areyouok_telegram.handlers.media_utils.logfire.info") as mock_log_info,
+            patch("areyouok_telegram.utils.media.logfire.info") as mock_log_info,
         ):
             result = await extract_media_from_telegram_message(
                 mock_db_session, "test_encryption_key", message=mock_message
@@ -461,7 +461,7 @@ class TestExtractMediaFromTelegramMessage:
 
         with (
             patch("areyouok_telegram.utils.media._download_file", new=AsyncMock()) as mock_download,
-            patch("areyouok_telegram.handlers.media_utils.logfire.info") as mock_log_info,
+            patch("areyouok_telegram.utils.media.logfire.info") as mock_log_info,
         ):
             result = await extract_media_from_telegram_message(
                 mock_db_session, "test_encryption_key", message=mock_message
@@ -501,7 +501,7 @@ class TestExtractMediaFromTelegramMessage:
 
         with (
             patch("areyouok_telegram.utils.media._download_file", mock_download),
-            patch("areyouok_telegram.handlers.media_utils.logfire.info") as mock_log_info,
+            patch("areyouok_telegram.utils.media.logfire.info") as mock_log_info,
         ):
             result = await extract_media_from_telegram_message(
                 mock_db_session, "test_encryption_key", message=mock_message
