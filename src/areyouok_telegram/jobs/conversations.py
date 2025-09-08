@@ -133,7 +133,7 @@ class ConversationJob(BaseJob):
                                 "nothing to compress."
                             )
 
-                    await data_operations.close_chat_session(self.active_session)
+                    await data_operations.close_chat_session(chat_session=self.active_session)
                     logfire.info(f"Session {self.active_session.session_id} closed due to inactivity.")
 
                     await self.stop()
