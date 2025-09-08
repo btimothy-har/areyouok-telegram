@@ -120,13 +120,13 @@ class TestOnEditMessage:
             # Verify session was retrieved/created
             mock_get_session.assert_called_once_with(
                 chat_id=str(mock_update.effective_chat.id),
-                timestamp=mock_update.message.date,
+                timestamp=mock_update.edited_message.date,
             )
 
             # Verify session event was recorded
             mock_new_event.assert_called_once_with(
                 session=mock_active_session,
-                message=mock_update.message,
+                message=mock_update.edited_message,
                 user_id=str(mock_telegram_user.id),
                 is_user=True,
             )
@@ -181,13 +181,13 @@ class TestOnMessageReact:
             # Verify session was retrieved/created
             mock_get_session.assert_called_once_with(
                 chat_id=str(mock_update.effective_chat.id),
-                timestamp=mock_update.message.date,
+                timestamp=mock_update.message_reaction.date,
             )
 
             # Verify session event was recorded
             mock_new_event.assert_called_once_with(
                 session=mock_active_session,
-                message=mock_update.message,
+                message=mock_update.message_reaction,
                 user_id=str(mock_telegram_user.id),
                 is_user=True,
             )
