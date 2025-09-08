@@ -37,7 +37,7 @@ def split_long_message(message: str, max_length: int = 4000) -> list[str]:
     return chunks
 
 
-@traced(record_return=True)
+@traced(extract_args=False, record_return=True)
 async def shorten_url(url: str) -> str:
     """
     Shorten a URL using the TinyURL API.
@@ -48,6 +48,9 @@ async def shorten_url(url: str) -> str:
     Returns:
         str: The shortened URL.
     """
+    if not TINYURL_API_KEY:
+        return url
+
     api_url = "https://api.tinyurl.com/create"
     headers = {
         "Authorization": f"Bearer {TINYURL_API_KEY}",
