@@ -208,7 +208,7 @@ class ConversationJob(BaseJob):
             create_if_not_exists=False,
         )
 
-        onboarding_session = get_onboarding_session if get_onboarding_session.is_active else None
+        onboarding_session = get_onboarding_session if getattr(get_onboarding_session, "is_active", False) else None
 
         if include_context:
             # Gather chat context
@@ -483,9 +483,9 @@ class ConversationJob(BaseJob):
                     if c.type == ContextType.SESSION.value and c.created_at >= (self._run_timestamp - timedelta(days=1))
                 ]
                 # Include all other context items for the session
-                session_context.extend(
-                    [c for c in chat_context_items if c.session_id == self.active_session.session_id]
-                )
+                session_context.extend([
+                    c for c in chat_context_items if c.session_id == self.active_session.session_id
+                ])
 
                 # Decrypt all context items
                 [c.decrypt_content(chat_encryption_key=self.chat_encryption_key) for c in session_context]
