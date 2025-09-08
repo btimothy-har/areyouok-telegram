@@ -463,7 +463,7 @@ class ConversationJob(BaseJob):
                 session_id=self.active_session.session_id,
                 ctype="session",
             )
-        return context | None
+        return context
 
     @db_retry()
     async def _get_chat_context(self) -> list[ChatEvent]:
