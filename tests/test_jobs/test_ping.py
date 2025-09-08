@@ -35,7 +35,7 @@ class TestPingJob:
 
     @pytest.mark.asyncio
     async def test_run_executes_successfully(self, frozen_time):
-        """Test _run method executes successfully and calls bot.get_me."""
+        """Test run_job method executes successfully and calls bot.get_me."""
         job = PingJob()
 
         # Create mock bot info
@@ -50,11 +50,8 @@ class TestPingJob:
         mock_context.bot.id = mock_bot_info.id
         mock_context.job_queue.jobs.return_value = [MagicMock(), MagicMock(), MagicMock()]  # 3 mock jobs
 
-        # First run to set up bot_id
+        # Run the job (this will call run_job internally and set up the context)
         await job.run(mock_context)
-
-        # Run the job's internal _run method
-        await job._run(mock_context)
 
         # Verify bot.get_me was called
         mock_context.bot.get_me.assert_called()
@@ -134,8 +131,8 @@ class TestPingJob:
         mock_context.bot.id = mock_bot_info.id
         mock_context.job_queue.jobs.return_value = []  # Empty queue
 
-        # Run the job
-        await job._run(mock_context)
+        # Run the job (this sets up context and calls run_job internally)
+        await job.run(mock_context)
 
         # Verify job_queue.jobs was called to get queue size
         mock_context.job_queue.jobs.assert_called_once()
@@ -165,8 +162,8 @@ class TestPingJob:
             frozen_time.tick(delta=timedelta(hours=1, minutes=30))
             current_time = datetime.now(UTC)
 
-            # Run the job
-            await job._run(mock_context)
+            # Run the job (this sets up context and calls run_job internally)
+            await job.run(mock_context)
 
             # Verify uptime calculation would be correct
             expected_uptime = current_time - job._startup_time

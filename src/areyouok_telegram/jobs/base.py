@@ -9,9 +9,14 @@ from datetime import datetime
 import logfire
 from telegram.ext import ContextTypes
 
-from areyouok_telegram.utils import traced
+from areyouok_telegram.logging import traced
 
 JOB_LOCK = defaultdict(asyncio.Lock)
+
+
+class RunContextNotInitializedError(RuntimeError):
+    def __init__(self, job_name: str):
+        super().__init__(f"Run context not initialized for job: {job_name}.")
 
 
 class BaseJob(ABC):
@@ -26,8 +31,10 @@ class BaseJob(ABC):
         This constructor can be extended by subclasses to initialize additional attributes.
         """
         self._bot_id = None
-        self._run_timestamp = datetime.now(UTC)
-        self._run_count = 0
+        self._run_timestamp: datetime = datetime.now(UTC)
+
+        self._run_context: ContextTypes.DEFAULT_TYPE | None = None
+        self._run_count: int = 0
 
     @property
     def id(self) -> str:
@@ -39,17 +46,22 @@ class BaseJob(ABC):
         """
         self._run_count += 1
         self._run_timestamp = datetime.now(UTC)
+
+        self._run_context = context
         self._bot_id = context.bot.id
 
-        await self._run(context)
+        await self.run_job()
 
     @traced(extract_args=False)
-    async def stop(self, context: ContextTypes.DEFAULT_TYPE) -> None:
+    async def stop(self) -> None:
         """
         Stops the job gracefully.
         """
+        if self._run_context is None:
+            raise RunContextNotInitializedError(self.name)
+
         async with JOB_LOCK[self.id]:
-            existing_jobs = context.job_queue.get_jobs_by_name(self.name)
+            existing_jobs = self._run_context.job_queue.get_jobs_by_name(self.name)
             if not existing_jobs:
                 logfire.warning(f"No existing job found for {self.name}, nothing to stop.")
                 return
@@ -69,8 +81,8 @@ class BaseJob(ABC):
         raise NotImplementedError("Subclasses must implement the 'name' property.")
 
     @abstractmethod
-    async def _run(self, context: ContextTypes.DEFAULT_TYPE) -> None:
+    async def run_job(self) -> None:
         """
         Internal method to run the job. This should be overridden by subclasses to implement the job's logic.
         """
-        raise NotImplementedError("Subclasses must implement the '_run' method.")
+        raise NotImplementedError("Subclasses must implement the 'run_job' method.")

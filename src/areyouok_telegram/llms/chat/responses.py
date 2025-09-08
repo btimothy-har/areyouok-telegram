@@ -1,3 +1,5 @@
+from typing import Literal
+
 import pydantic
 from telegram.constants import ReactionEmoji
 
@@ -16,7 +18,7 @@ class BaseAgentResponse(pydantic.BaseModel):
 
 
 class TextResponse(BaseAgentResponse):
-    """Response model for text replies."""
+    """Reply with a text message to the user, optionally replying to a specific message."""
 
     message_text: str = pydantic.Field(description="The text message to send as a reply to the user.")
     reply_to_message_id: str | None = pydantic.Field(
@@ -25,14 +27,19 @@ class TextResponse(BaseAgentResponse):
 
 
 class ReactionResponse(BaseAgentResponse):
-    """Response model for emoji reactions."""
+    """React to a message (user's or agent's) with an emoji."""
 
     react_to_message_id: str = pydantic.Field(description="The message ID to react to with an emoji.")
     emoji: ReactionEmoji = pydantic.Field(description="The emoji to use for the reaction.")
 
 
+class SwitchPersonalityResponse(BaseAgentResponse):
+    """Switch to a different personality for this conversation."""
+
+    personality: Literal["anchoring", "celebration", "exploration", "witnessing"] = pydantic.Field(
+        description="The name of the personality to switch to."
+    )
+
+
 class DoNothingResponse(BaseAgentResponse):
-    """Response model for do-nothing actions."""
-
-
-AgentResponse = TextResponse | ReactionResponse | DoNothingResponse
+    """Do nothing response, used when no action is needed."""

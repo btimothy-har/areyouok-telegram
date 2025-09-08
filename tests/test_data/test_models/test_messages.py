@@ -2,6 +2,8 @@
 
 import hashlib
 import json
+from datetime import UTC
+from datetime import datetime
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from unittest.mock import patch
@@ -149,7 +151,7 @@ class TestMessages:
 
         await Messages.new_or_update(
             mock_db_session,
-            user_key,
+            user_encryption_key=user_key,
             user_id=str(mock_telegram_message.from_user.id),
             chat_id=str(mock_telegram_message.chat.id),
             message=mock_telegram_message,
@@ -175,7 +177,7 @@ class TestMessages:
 
         await Messages.new_or_update(
             mock_db_session,
-            user_key,
+            user_encryption_key=user_key,
             user_id=str(mock_telegram_message.from_user.id),
             chat_id=str(mock_telegram_message.chat.id),
             message=mock_telegram_message,
@@ -188,3 +190,192 @@ class TestMessages:
 
         # Check that reasoning is included in the insert values
         assert "reasoning" in str(call_args)
+
+    @pytest.mark.asyncio
+    async def test_new_or_update_invalid_message_type(self, mock_db_session):
+        """Test new_or_update with invalid message type raises error."""
+        user_key = Fernet.generate_key().decode("utf-8")
+
+        # Create a mock object that is NOT a MessageTypes
+        invalid_message = MagicMock()
+        invalid_message.__class__.__name__ = "InvalidMessage"
+
+        with pytest.raises(InvalidMessageTypeError) as exc_info:
+            await Messages.new_or_update(
+                mock_db_session,
+                user_encryption_key=user_key,
+                user_id="123",
+                chat_id="456",
+                message=invalid_message,
+            )
+
+        assert exc_info.value.message_type == "InvalidMessage"
+
+    @pytest.mark.asyncio
+    async def test_retrieve_message_by_id_found_with_reactions(self, mock_db_session):
+        """Test retrieving a message by ID with reactions."""
+        # Mock the message result
+        mock_message = MagicMock(spec=Messages)
+        mock_message.message_id = "123"
+        mock_message.chat_id = "456"
+
+        # Mock the first query result (main message)
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = mock_message
+
+        # Mock the reaction messages
+        mock_reaction1 = MagicMock(spec=Messages)
+        mock_reaction2 = MagicMock(spec=Messages)
+
+        # Mock the second query result (reactions)
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = [mock_reaction1, mock_reaction2]
+        mock_reaction_result = MagicMock()
+        mock_reaction_result.scalars.return_value = mock_scalars
+
+        # Set up the database session to return different results for different queries
+        mock_db_session.execute.side_effect = [mock_result, mock_reaction_result]
+
+        message, reactions = await Messages.retrieve_message_by_id(
+            mock_db_session,
+            message_id="123",
+            chat_id="456",
+            include_reactions=True,
+        )
+
+        assert message == mock_message
+        assert reactions == [mock_reaction1, mock_reaction2]
+        assert mock_db_session.execute.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_retrieve_message_by_id_found_without_reactions(self, mock_db_session):
+        """Test retrieving a message by ID without reactions."""
+        # Mock the message result
+        mock_message = MagicMock(spec=Messages)
+        mock_message.message_id = "123"
+        mock_message.chat_id = "456"
+
+        # Mock the first query result (main message)
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = mock_message
+
+        mock_db_session.execute.return_value = mock_result
+
+        message, reactions = await Messages.retrieve_message_by_id(
+            mock_db_session,
+            message_id="123",
+            chat_id="456",
+            include_reactions=False,
+        )
+
+        assert message == mock_message
+        assert reactions is None
+        # Only one query should be executed (no reaction query)
+        assert mock_db_session.execute.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_retrieve_message_by_id_not_found(self, mock_db_session):
+        """Test retrieving a message by ID when message not found."""
+        # Mock the query result to return None
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+
+        mock_db_session.execute.return_value = mock_result
+
+        message, reactions = await Messages.retrieve_message_by_id(
+            mock_db_session,
+            message_id="999",
+            chat_id="456",
+            include_reactions=True,
+        )
+
+        assert message is None
+        # reactions should be empty list since no message was found
+        assert reactions == []
+        # Only one query should be executed (no reaction query since no message found)
+        assert mock_db_session.execute.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_retrieve_message_by_id_found_no_reactions(self, mock_db_session):
+        """Test retrieving a message by ID when message exists but has no reactions."""
+        # Mock the message result
+        mock_message = MagicMock(spec=Messages)
+        mock_message.message_id = "123"
+        mock_message.chat_id = "456"
+
+        # Mock the first query result (main message)
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = mock_message
+
+        # Mock the second query result (empty reactions)
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = []
+        mock_reaction_result = MagicMock()
+        mock_reaction_result.scalars.return_value = mock_scalars
+
+        mock_db_session.execute.side_effect = [mock_result, mock_reaction_result]
+
+        message, reactions = await Messages.retrieve_message_by_id(
+            mock_db_session,
+            message_id="123",
+            chat_id="456",
+            include_reactions=True,
+        )
+
+        assert message == mock_message
+        assert reactions == []
+        assert mock_db_session.execute.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_retrieve_by_session(self, mock_db_session):
+        """Test retrieving messages by session ID."""
+        # Create mock message objects
+        mock_message1 = MagicMock(spec=Messages)
+        mock_message1.session_key = "session_123"
+        mock_message1.created_at = datetime(2025, 1, 1, 10, 0, 0, tzinfo=UTC)
+
+        mock_message2 = MagicMock(spec=Messages)
+        mock_message2.session_key = "session_123"
+        mock_message2.created_at = datetime(2025, 1, 1, 11, 0, 0, tzinfo=UTC)
+
+        # Mock the query result
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = [mock_message1, mock_message2]
+        mock_result = MagicMock()
+        mock_result.scalars.return_value = mock_scalars
+
+        mock_db_session.execute.return_value = mock_result
+
+        messages = await Messages.retrieve_by_session(
+            mock_db_session,
+            session_id="session_123",
+        )
+
+        assert len(messages) == 2
+        assert messages == [mock_message1, mock_message2]
+        mock_db_session.execute.assert_called_once()
+
+        # Verify the query includes session_key filter and ordering
+        call_args = mock_db_session.execute.call_args[0][0]
+        query_str = str(call_args)
+        assert "session_key" in query_str
+        assert "ORDER BY" in query_str
+
+    @pytest.mark.asyncio
+    async def test_retrieve_by_session_empty_result(self, mock_db_session):
+        """Test retrieving messages by session ID when no messages exist."""
+        # Mock empty query result
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = []
+        mock_result = MagicMock()
+        mock_result.scalars.return_value = mock_scalars
+
+        mock_db_session.execute.return_value = mock_result
+
+        messages = await Messages.retrieve_by_session(
+            mock_db_session,
+            session_id="nonexistent_session",
+        )
+
+        assert messages == []
+        mock_db_session.execute.assert_called_once()

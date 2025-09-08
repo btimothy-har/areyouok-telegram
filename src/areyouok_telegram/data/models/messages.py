@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from areyouok_telegram.config import ENV
 from areyouok_telegram.data import Base
 from areyouok_telegram.encryption.exceptions import ContentNotDecryptedError
-from areyouok_telegram.utils import traced
+from areyouok_telegram.logging import traced
 
 MessageTypes = telegram.Message | telegram.MessageReactionUpdated
 
@@ -127,8 +127,8 @@ class Messages(Base):
     async def new_or_update(
         cls,
         db_conn: AsyncSession,
-        user_encryption_key: str,
         *,
+        user_encryption_key: str,
         user_id: str,
         chat_id: str,
         message: MessageTypes,

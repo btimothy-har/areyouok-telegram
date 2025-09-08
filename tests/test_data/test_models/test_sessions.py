@@ -75,7 +75,7 @@ class TestSessions:
 
         timestamp = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
 
-        await session.new_message(mock_db_session, timestamp, is_user=True)
+        await session.new_message(mock_db_session, timestamp=timestamp, is_user=True)
 
         assert session.last_user_message == timestamp
         assert session.last_user_activity == timestamp
@@ -92,7 +92,7 @@ class TestSessions:
 
         timestamp = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
 
-        await session.new_message(mock_db_session, timestamp, is_user=False)
+        await session.new_message(mock_db_session, timestamp=timestamp, is_user=False)
 
         assert session.last_bot_message == timestamp
         assert session.last_bot_activity == timestamp
@@ -107,7 +107,7 @@ class TestSessions:
 
         timestamp = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
 
-        await session.new_activity(mock_db_session, timestamp, is_user=True)
+        await session.new_activity(mock_db_session, timestamp=timestamp, is_user=True)
 
         assert session.last_user_activity == timestamp
         mock_db_session.add.assert_called_once_with(session)
@@ -121,7 +121,7 @@ class TestSessions:
         session.last_user_activity = new_timestamp
 
         # Try to update with older timestamp
-        await session.new_activity(mock_db_session, old_timestamp, is_user=True)
+        await session.new_activity(mock_db_session, timestamp=old_timestamp, is_user=True)
 
         # Should keep the newer timestamp
         assert session.last_user_activity == new_timestamp
@@ -137,7 +137,7 @@ class TestSessions:
         mock_messages = [MagicMock(spec=telegram.Message) for _ in range(3)]
         with patch.object(session, "get_messages", new=AsyncMock(return_value=mock_messages)):
             timestamp = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
-            await session.close_session(mock_db_session, timestamp)
+            await session.close_session(mock_db_session, timestamp=timestamp)
 
         assert session.session_end == timestamp
         assert session.message_count == 3
@@ -180,7 +180,7 @@ class TestSessions:
         mock_result.scalar_one.return_value = mock_session
         mock_db_session.execute = AsyncMock(return_value=mock_result)
 
-        session = await Sessions.create_session(mock_db_session, chat_id, timestamp)
+        session = await Sessions.create_session(mock_db_session, chat_id=chat_id, timestamp=timestamp)
 
         assert session == mock_session
         assert session.chat_id == chat_id
@@ -197,7 +197,7 @@ class TestSessions:
         mock_result.scalar_one_or_none.return_value = mock_session
         mock_db_session.execute.return_value = mock_result
 
-        result = await Sessions.get_active_session(mock_db_session, "123")
+        result = await Sessions.get_active_session(mock_db_session, chat_id="123")
 
         assert result == mock_session
         mock_db_session.execute.assert_called_once()
@@ -209,7 +209,7 @@ class TestSessions:
         mock_result.scalar_one_or_none.return_value = None
         mock_db_session.execute.return_value = mock_result
 
-        result = await Sessions.get_active_session(mock_db_session, "123")
+        result = await Sessions.get_active_session(mock_db_session, chat_id="123")
 
         assert result is None
 
@@ -246,4 +246,28 @@ class TestSessions:
         result = await Sessions.get_all_inactive_sessions(mock_db_session, from_dt, to_dt)
 
         assert result == [mock_session]
+        mock_db_session.execute.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_create_session_with_onboarding_key(self, mock_db_session):
+        """Test creating a session with onboarding_key parameter."""
+        chat_id = "123"
+        timestamp = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
+        # Create a mock session that will be returned
+        mock_session = MagicMock(spec=Sessions)
+        mock_session.chat_id = chat_id
+        mock_session.session_start = timestamp
+        mock_session.session_key = Sessions.generate_session_key(chat_id, timestamp)
+
+        # Mock the database execute result
+        mock_result = MagicMock()
+        mock_result.scalar_one.return_value = mock_session
+        mock_db_session.execute = AsyncMock(return_value=mock_result)
+
+        session = await Sessions.create_session(mock_db_session, chat_id=chat_id, timestamp=timestamp)
+
+        assert session == mock_session
+        assert session.chat_id == chat_id
+        assert session.session_start == timestamp
+        assert session.session_key == Sessions.generate_session_key(chat_id, timestamp)
         mock_db_session.execute.assert_called_once()

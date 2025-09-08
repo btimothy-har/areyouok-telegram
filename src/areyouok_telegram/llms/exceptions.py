@@ -37,6 +37,16 @@ class ReactToSelfError(pydantic_ai.ModelRetry):
         self.message_id = message_id
 
 
+class ResponseRestrictedError(pydantic_ai.ModelRetry):
+    """Exception raised when a response is restricted for a conversation."""
+
+    def __init__(self, response_type: str):
+        super().__init__(
+            f"Response of type {response_type} is restricted for this conversation. Use a different response type."
+        )
+        self.response_type = response_type
+
+
 class UnacknowledgedImportantMessageError(pydantic_ai.ModelRetry):
     """Exception raised when an important message is not acknowledged."""
 
@@ -44,3 +54,26 @@ class UnacknowledgedImportantMessageError(pydantic_ai.ModelRetry):
         super().__init__(f"Important message not acknowledged: {message}. {feedback}")
         self.message = message
         self.feedback = feedback
+
+
+class InvalidPersonalityError(ValueError):
+    """Exception raised when an invalid personality is provided."""
+
+    def __init__(self, personality: str):
+        super().__init__(f"Invalid personality type: {personality}.")
+        self.personality = personality
+
+
+class MetadataFieldUpdateError(pydantic_ai.ModelRetry):
+    """Exception raised when an error occurs while updating an onboarding field."""
+
+    def __init__(self, field: str, message: str | None = None):
+        super().__init__(f"Error updating field: {field}. {message if message else ''}")
+        self.field = field
+
+
+class CompleteOnboardingError(pydantic_ai.ModelRetry):
+    """Exception raised when an error occurs while completing onboarding."""
+
+    def __init__(self, message: str):
+        super().__init__(f"Error completing onboarding: {message}")

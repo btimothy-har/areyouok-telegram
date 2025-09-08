@@ -6,7 +6,7 @@ from sqlalchemy.schema import CreateSchema
 
 from areyouok_telegram.config import ENV
 from areyouok_telegram.config import PG_CONNECTION_STRING
-from areyouok_telegram.utils import traced
+from areyouok_telegram.logging import traced
 
 
 @traced(extract_args=False)

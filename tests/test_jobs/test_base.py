@@ -22,8 +22,8 @@ class ConcreteJob(BaseJob):
     def name(self) -> str:
         return "test_job"
 
-    async def _run(self, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Test implementation of _run."""
+    async def run_job(self) -> None:
+        """Test implementation of run_job."""
         pass
 
 
@@ -36,6 +36,7 @@ class TestBaseJob:
 
         assert job._bot_id is None
         assert job._run_count == 0
+        assert job._run_context is None
         assert isinstance(job._run_timestamp, datetime)
         assert job._run_timestamp.tzinfo == UTC
 
@@ -71,6 +72,7 @@ class TestBaseJob:
         # Verify state was updated
         assert job._bot_id == "bot123"
         assert job._run_count == 1
+        assert job._run_context == mock_context
         assert job._run_timestamp == frozen_time
 
         # Run again to verify count increments
@@ -79,16 +81,16 @@ class TestBaseJob:
 
     @pytest.mark.asyncio
     async def test_run_calls_internal_run(self):
-        """Test run method calls _run implementation."""
+        """Test run method calls run_job implementation."""
         job = ConcreteJob()
-        job._run = AsyncMock()
+        job.run_job = AsyncMock()
 
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
         mock_context.bot.id = "bot123"
 
         await job.run(mock_context)
 
-        job._run.assert_called_once_with(mock_context)
+        job.run_job.assert_called_once_with()
 
     @pytest.mark.asyncio
     async def test_stop_removes_jobs(self):
@@ -99,12 +101,13 @@ class TestBaseJob:
         mock_job1 = MagicMock()
         mock_job2 = MagicMock()
 
-        # Create mock context
+        # Create mock context and simulate it being set during run
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
         mock_context.job_queue.get_jobs_by_name.return_value = [mock_job1, mock_job2]
+        job._run_context = mock_context  # Simulate context being set
 
         with patch("areyouok_telegram.jobs.base.logfire.info") as mock_log_info:
-            await job.stop(mock_context)
+            await job.stop()
 
         # Verify jobs were retrieved by name
         mock_context.job_queue.get_jobs_by_name.assert_called_once_with("test_job")
@@ -123,9 +126,10 @@ class TestBaseJob:
 
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
         mock_context.job_queue.get_jobs_by_name.return_value = []
+        job._run_context = mock_context  # Simulate context being set
 
         with patch("areyouok_telegram.jobs.base.logfire.warning") as mock_log_warning:
-            await job.stop(mock_context)
+            await job.stop()
 
         # Verify warning was logged
         mock_log_warning.assert_called_once_with("No existing job found for test_job, nothing to stop.")
@@ -138,6 +142,7 @@ class TestBaseJob:
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
         mock_job = MagicMock()
         mock_context.job_queue.get_jobs_by_name.return_value = [mock_job]
+        job._run_context = mock_context  # Simulate context being set
 
         # Get the lock for this job
         job_lock = JOB_LOCK[job.id]
@@ -156,7 +161,7 @@ class TestBaseJob:
         mock_context.job_queue.get_jobs_by_name.side_effect = check_lock
 
         with patch("areyouok_telegram.jobs.base.logfire.info"):
-            await job.stop(mock_context)
+            await job.stop()
 
         # Verify lock was acquired during execution
         assert lock_was_acquired
@@ -182,9 +187,10 @@ class TestBaseJob:
 
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
         mock_context.job_queue.get_jobs_by_name.return_value = []
+        job._run_context = mock_context  # Simulate context being set
 
         with patch("areyouok_telegram.jobs.base.logfire.warning") as mock_warning:
-            await job.stop(mock_context)
+            await job.stop()
 
         # Should log warning about no jobs
         mock_warning.assert_called_once()

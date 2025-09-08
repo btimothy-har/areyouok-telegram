@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from areyouok_telegram.config import ENV
 from areyouok_telegram.data import Base
-from areyouok_telegram.utils import traced
+from areyouok_telegram.logging import traced
 
 
 class LLMUsage(Base):
@@ -43,6 +43,7 @@ class LLMUsage(Base):
     async def track_pydantic_usage(
         cls,
         db_conn: AsyncSession,
+        *,
         chat_id: str,
         session_id: str,
         agent: pydantic_ai.Agent,

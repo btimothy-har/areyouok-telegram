@@ -1,6 +1,9 @@
 import hashlib
+import json
 from datetime import UTC
 from datetime import datetime
+from enum import Enum
+from typing import Any
 
 from cachetools import TTLCache
 from cryptography.fernet import Fernet
@@ -15,11 +18,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from areyouok_telegram.config import ENV
 from areyouok_telegram.data import Base
 from areyouok_telegram.encryption.exceptions import ContentNotDecryptedError
-from areyouok_telegram.utils import traced
+from areyouok_telegram.logging import traced
 
-VALID_CONTEXT_TYPES = [
-    "session",
-]
+
+class ContextType(Enum):
+    SESSION = "session"
+    RESPONSE = "response"
+    PERSONALITY = "personality"
+    METADATA = "metadata"
+
+
+VALID_CONTEXT_TYPES = [context_type.value for context_type in ContextType]
 
 
 class InvalidContextTypeError(Exception):
@@ -85,21 +94,21 @@ class Context(Base):
         return decrypted_bytes.decode("utf-8")
 
     @property
-    def content(self) -> str:
+    def content(self) -> Any:
         """Return the decrypted content from the cache."""
         decrypted_bytes = self._data_cache.get(self.context_key)
         if decrypted_bytes is None:
             raise ContentNotDecryptedError(self.context_key)
 
-        return decrypted_bytes.decode("utf-8")
+        return json.loads(decrypted_bytes.decode("utf-8"))
 
     @classmethod
     @traced(extract_args=["chat_id", "session_id", "ctype"])
     async def new_or_update(
         cls,
         db_conn: AsyncSession,
-        chat_encryption_key: str,
         *,
+        chat_encryption_key: str,
         chat_id: str,
         session_id: str,
         ctype: str,
@@ -113,7 +122,7 @@ class Context(Base):
 
         # Encrypt the content
         encrypted_content = cls.encrypt_content(
-            content=content,
+            content=json.dumps(content),
             chat_encryption_key=chat_encryption_key,
         )
 
