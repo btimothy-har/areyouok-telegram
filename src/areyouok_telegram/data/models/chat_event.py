@@ -43,9 +43,9 @@ class ChatEvent(pydantic.BaseModel):
 
     @pydantic.model_validator(mode="after")
     def user_id_must_be_provided_for_messages(self) -> "ChatEvent":
-        if self.event_type == "message":
+        if self.event_type in ["message", "reaction"]:
             if not self.user_id:
-                raise ValueError("User ID must be provided for message events.")
+                raise ValueError("User ID must be provided for message and reaction events.")
             return self
         if self.user_id:
             raise ValueError("User ID is only allowed for message events.")
@@ -65,13 +65,9 @@ class ChatEvent(pydantic.BaseModel):
 
             # Handle reactions, assuming only emoji reactions for simplicity
             # TODO: Handle custom and paid reactions
-            reaction_string = ", ".join(
-                [
-                    r.emoji
-                    for r in message.telegram_object.new_reaction
-                    if r.type == telegram.constants.ReactionType.EMOJI
-                ]
-            )
+            reaction_string = ", ".join([
+                r.emoji for r in message.telegram_object.new_reaction if r.type == telegram.constants.ReactionType.EMOJI
+            ])
             event_data = {
                 "emojis": reaction_string,
                 "to_message_id": str(message.message_id),
