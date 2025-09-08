@@ -11,18 +11,16 @@ from areyouok_telegram.data import ChatEvent
 from areyouok_telegram.data import Chats
 from areyouok_telegram.data import Context
 from areyouok_telegram.data import ContextType
-from areyouok_telegram.data import GuidedSessions
 from areyouok_telegram.data import GuidedSessionType
 from areyouok_telegram.data import MediaFiles
 from areyouok_telegram.data import Messages
 from areyouok_telegram.data import MessageTypes
+from areyouok_telegram.data import Notifications
 from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database
 from areyouok_telegram.data import operations as data_operations
 from areyouok_telegram.jobs import BaseJob
 from areyouok_telegram.jobs.exceptions import UserNotFoundForChatError
-from areyouok_telegram.jobs.utils import get_next_notification
-from areyouok_telegram.jobs.utils import mark_notification_completed
 from areyouok_telegram.llms.chat import AgentResponse
 from areyouok_telegram.llms.chat import ChatAgentDependencies
 from areyouok_telegram.llms.chat import OnboardingAgentDependencies
@@ -111,7 +109,33 @@ class ConversationJob(BaseJob):
                     _span_name="ConversationJob._run.close_session",
                     chat_id=self.chat_id,
                 ):
-                    await self.close_session()
+                    context = await self._get_session_context()
+                    if context:
+                        logfire.warning(
+                            "Context already exists for session, skipping compression.",
+                            session_id=self.active_session.session_id,
+                        )
+                    else:
+                        message_history = await self._get_chat_history()
+
+                        if len(message_history) > 0:
+                            compressed_context = await self.compress_session_context(
+                                message_history=message_history,
+                            )
+                            await self._save_session_context(
+                                ctype=ContextType.SESSION,
+                                data=compressed_context.content,
+                            )
+
+                        else:
+                            logfire.warning(
+                                f"No messages found in chat session {self.active_session.session_id}, "
+                                "nothing to compress."
+                            )
+
+                    await data_operations.close_chat_session(self.active_session)
+                    logfire.info(f"Session {self.active_session.session_id} closed due to inactivity.")
+
                     await self.stop()
 
         else:
@@ -126,14 +150,28 @@ class ConversationJob(BaseJob):
                     action=telegram.constants.ChatAction.TYPING,
                 )
 
-                message_history, dependencies = await self._prepare_conversation_input(
+                message_history, dependencies = await self.prepare_conversation_input(
                     include_context=True,
                 )
 
-                response, response_message = await self.generate_response(
-                    conversation_history=message_history,
-                    dependencies=dependencies,
-                )
+                while True:
+                    agent_response, response_message = await self.generate_response(
+                        conversation_history=message_history,
+                        dependencies=dependencies,
+                    )
+
+                    if dependencies.notification and agent_response:
+                        await self.mark_notification_completed(dependencies.notification)
+
+                    if agent_response.response_type == "SwitchPersonalityResponse":
+                        message_history, dependencies = await self._prepare_conversation_input(
+                            include_context=True,
+                        )
+                        dependencies.restricted_responses.add(
+                            "switch_personality"
+                        )  # Disable personality switching for this run
+                        continue
+                    break
 
                 if response_message:
                     # Log the bot's response message
@@ -142,79 +180,79 @@ class ConversationJob(BaseJob):
                         message=response_message,
                         user_id=str(self._bot_id),
                         is_user=False,
-                        reasoning=response.reasoning,
+                        reasoning=agent_response.reasoning,
                     )
 
                 # Always log bot activity
                 await self._log_bot_activity()
 
-    @traced(extract_args=["chat_session"])
-    async def generate_response(
+    @traced(extract_args=["include_context"])
+    async def prepare_conversation_input(
         self,
         *,
-        conversation_history: list[ChatEvent],
-        dependencies: ChatAgentDependencies | OnboardingAgentDependencies,
-    ) -> tuple[AgentResponse | None, MessageTypes | None]:
-        """Process messages for this chat and send appropriate replies.
-
+        include_context: bool = True,
+    ) -> tuple[list[ChatEvent], ChatAgentDependencies | OnboardingAgentDependencies]:
+        """Prepare the conversation input for the chat session.
+        This method gathers the message history and checks for unsupported media types.
         Returns:
-            AgentResponse: The response generated by the chat agent, or None if an error occurred.
+            tuple: A tuple containing the message history and any special instructions to the user.
         """
+        message_history = []
+        latest_personality_context = None
 
-        agent_run_payload = None
-        agent_run_time = datetime.now(UTC)
-
-        if isinstance(dependencies, ChatAgentDependencies):
-            if "switch_personality" not in dependencies.restricted_responses:
-                # Check if there's already a switch_personality event in the most recent 10 messages
-                # If so, disable personality switching for this run
-                recent_messages = conversation_history[-10:] if len(conversation_history) > 10 else conversation_history
-                if any(event.event_type == "switch_personality" for event in recent_messages):
-                    dependencies.restricted_responses.add("switch_personality")
-
-        # Restrict text responses if the bot has recently replied
-        if (
-            conversation_history
-            and conversation_history[-1].event_type == "message"
-            and conversation_history[-1].user_id == str(self._bot_id)
-        ):
-            dependencies.restricted_responses.add("text")
-
-        if "text" in dependencies.restricted_responses and dependencies.notification:
-            dependencies.restricted_responses.remove("text")
-
-        agent = onboarding_agent if isinstance(dependencies, OnboardingAgentDependencies) else chat_agent
-
-        agent_run_payload = await run_agent_with_tracking(
-            agent,
+        # Check for active onboarding sessions linked to this chat session
+        get_onboarding_session = await data_operations.get_or_create_guided_session(
             chat_id=self.chat_id,
-            session_id=self.active_session.session_id,
-            run_kwargs={
-                "message_history": [
-                    c.to_model_message(str(self._bot_id), agent_run_time) for c in conversation_history
-                ],
-                "deps": dependencies,
-            },
+            session=self.active_session,
+            stype=GuidedSessionType.ONBOARDING,
+            create_if_not_exists=False,
         )
 
-        agent_response: AgentResponse = agent_run_payload.output
+        onboarding_session = get_onboarding_session if get_onboarding_session.is_active else None
 
-        response_message = await self._execute_response(response=agent_response)
+        if include_context:
+            # Gather chat context
+            chat_context_items = await self._get_chat_context()
+            message_history.extend(chat_context_items)
 
-        # Mark notification as completed if we have one and response was generated successfully
-        if dependencies.notification and agent_response:
-            await mark_notification_completed(dependencies.notification)
-
-        if agent_response.response_type == "SwitchPersonalityResponse":
-            message_history, dependencies = await self._prepare_conversation_input(include_context=True)
-            dependencies.restricted_responses.add("switch_personality")  # Disable personality switching for this run
-
-            return await self.generate_response(
-                conversation_history=message_history,
-                dependencies=dependencies,
+            latest_personality_context = next(
+                (c for c in chat_context_items if c.type == ContextType.PERSONALITY.value), None
             )
 
-        return agent_response, response_message
+        chat_history = await self._get_chat_history()
+        message_history.extend(chat_history)
+
+        # Get next notification for this chat
+        notification = await self._get_next_notification()
+
+        deps_data = {
+            "tg_context": self._run_context,
+            "tg_chat_id": self.chat_id,
+            "tg_session_id": self.active_session.session_id,
+            "notification": notification,
+        }
+
+        if onboarding_session:
+            deps_data["onboarding_session_key"] = onboarding_session.guided_session_key
+            deps = OnboardingAgentDependencies(**deps_data)
+
+        else:
+            if latest_personality_context:
+                latest_personality_context.decrypt_content(chat_encryption_key=self.chat_encryption_key)
+                chat_personality = (
+                    latest_personality_context.content.get("personality", "exploration")
+                    if isinstance(latest_personality_context.content, dict)
+                    else "exploration"
+                )
+            else:
+                chat_personality = "exploration"
+
+            deps_data["personality"] = chat_personality
+            deps = ChatAgentDependencies(**deps_data)
+
+        deps.restricted_responses = self._check_restricted_responses(message_history, deps)
+
+        return sorted(message_history, key=lambda x: x.timestamp), deps
 
     @traced(extract_args=["response"], record_return=True)
     async def _execute_response(
@@ -272,153 +310,61 @@ class ConversationJob(BaseJob):
         return response_message
 
     @traced(extract_args=["chat_session"])
-    async def close_session(self) -> None:
-        """Closes the chat session and compresses the context."""
-
-        async with async_database() as db_conn:
-            context = await Context.get_by_session_id(
-                db_conn,
-                session_id=self.active_session.session_id,
-                ctype="session",
-            )
-
-        if context:
-            logfire.warning(
-                "Context already exists for session, skipping compression.",
-                session_id=self.active_session.session_id,
-            )
-            return
-
-        message_history, _ = await self._prepare_conversation_input(include_context=False)
-
-        if len(message_history) > 0:
-            compressed_context = await self._compress_session_context(
-                message_history=message_history,
-            )
-            await self._save_session_context(
-                ctype=ContextType.SESSION,
-                data=compressed_context.content,
-            )
-
-        else:
-            logfire.warning(f"No messages found in chat session {self.active_session.session_id}, nothing to compress.")
-
-        await data_operations.close_chat_session(self.active_session)
-        logfire.info(f"Session {self.active_session.session_id} closed due to inactivity.")
-
-    @traced(extract_args=["chat_session", "include_context"])
-    @db_retry()
-    async def _prepare_conversation_input(
+    async def generate_response(
         self,
         *,
-        include_context: bool = True,
-    ) -> tuple[list[ChatEvent], ChatAgentDependencies | OnboardingAgentDependencies]:
-        """Prepare the conversation input for the chat session.
-        This method gathers the message history and checks for unsupported media types.
+        conversation_history: list[ChatEvent],
+        dependencies: ChatAgentDependencies | OnboardingAgentDependencies,
+    ) -> tuple[AgentResponse | None, MessageTypes | None]:
+        """Process messages for this chat and send appropriate replies.
+
         Returns:
-            tuple: A tuple containing the message history and any special instructions to the user.
+            AgentResponse: The response generated by the chat agent, or None if an error occurred.
         """
-        async with async_database() as db_conn:
-            message_history = []
-            latest_personality_context = None
 
-            # Check for active onboarding sessions linked to this chat session
-            onboarding_sessions = await GuidedSessions.get_by_chat_session(
-                db_conn,
-                chat_session=self.active_session.session_id,
-                session_type=GuidedSessionType.ONBOARDING.value,
-            )
+        agent_run_payload = None
+        agent_run_time = datetime.now(UTC)
 
-            # Get the most recent onboarding session (already ordered by created_at desc)
-            onboarding_session = onboarding_sessions[0] if onboarding_sessions else None
-            onboarding_state = onboarding_session is not None and onboarding_session.is_active
+        agent = onboarding_agent if isinstance(dependencies, OnboardingAgentDependencies) else chat_agent
 
-            if include_context:
-                # Gather chat context
-                chat_context_items = await Context.retrieve_context_by_chat(
-                    db_conn,
-                    chat_id=self.chat_id,
-                )
+        agent_run_payload = await run_agent_with_tracking(
+            agent,
+            chat_id=self.chat_id,
+            session_id=self.active_session.session_id,
+            run_kwargs={
+                "message_history": [
+                    c.to_model_message(str(self._bot_id), agent_run_time) for c in conversation_history
+                ],
+                "deps": dependencies,
+            },
+        )
 
-                if chat_context_items:
-                    chat_context_items.sort(key=lambda c: c.created_at, reverse=True)
+        agent_response: AgentResponse = agent_run_payload.output
 
-                    # Historical conversation context - only include those created within the last 24 hours
-                    session_context = [
-                        c
-                        for c in chat_context_items
-                        if c.type == ContextType.SESSION.value
-                        and c.created_at >= (self._run_timestamp - timedelta(days=1))
-                    ]
-                    # Include all other context items for the session
-                    session_context.extend([
-                        c for c in chat_context_items if c.session_id == self.active_session.session_id
-                    ])
+        response_message = await self._execute_response(response=agent_response)
 
-                    # Decrypt all context items
-                    [c.decrypt_content(chat_encryption_key=self.chat_encryption_key) for c in session_context]
+        return agent_response, response_message
 
-                    # Convert context items to ChatEvent objects
-                    # and extend the message history
-                    message_history.extend([ChatEvent.from_context(c) for c in session_context])
+    @traced(extract_args=False)
+    async def compress_session_context(self, message_history: list[ChatEvent]) -> ContextTemplate:
+        """
+        Compress the session context for this chat.
+        """
 
-                    latest_personality_context = next(
-                        (c for c in session_context if c.type == ContextType.PERSONALITY.value), None
-                    )
+        message_history.sort(key=lambda x: x.timestamp)
+        agent_run_time = datetime.now(UTC)
 
-            # Get all messages from the session
-            raw_messages = await self.active_session.get_messages(db_conn)
+        context_run_payload = await run_agent_with_tracking(
+            context_compression_agent,
+            chat_id=self.chat_id,
+            session_id=self.active_session.session_id,
+            run_kwargs={
+                "message_history": [c.to_model_message(self._bot_id, agent_run_time) for c in message_history],
+            },
+        )
 
-            # Filter messages to only those created before the run timestamp
-            raw_messages = [msg for msg in raw_messages if msg.created_at <= self._run_timestamp]
-            [msg.decrypt_payload(self.chat_encryption_key) for msg in raw_messages]
-
-            for msg in raw_messages:
-                if msg.message_type == "Message":
-                    media = await MediaFiles.get_by_message_id(
-                        db_conn,
-                        chat_id=self.chat_id,
-                        message_id=msg.message_id,
-                    )
-                elif msg.message_type == "MessageReactionUpdated":
-                    media = []
-                else:
-                    continue  # Skip unknown message types
-
-                if media:
-                    [m.decrypt_content(chat_encryption_key=self.chat_encryption_key) for m in media]
-
-                message_history.append(ChatEvent.from_message(msg, media))
-
-            # Get next notification for this chat
-            notification = await get_next_notification(self.chat_id)
-
-            deps_data = {
-                "tg_context": self._run_context,
-                "tg_chat_id": self.chat_id,
-                "tg_session_id": self.active_session.session_id,
-                "notification": notification,
-            }
-
-            if onboarding_state and onboarding_session:
-                deps_data["onboarding_session_key"] = onboarding_session.guided_session_key
-                deps = OnboardingAgentDependencies(**deps_data)
-
-            else:
-                if latest_personality_context:
-                    latest_personality_context.decrypt_content(chat_encryption_key=self.chat_encryption_key)
-                    chat_personality = (
-                        latest_personality_context.content.get("personality", "exploration")
-                        if isinstance(latest_personality_context.content, dict)
-                        else "exploration"
-                    )
-                else:
-                    chat_personality = "exploration"
-
-                deps_data["personality"] = chat_personality
-                deps = ChatAgentDependencies(**deps_data)
-
-            return sorted(message_history, key=lambda x: x.timestamp), deps
+        context_report: ContextTemplate = context_run_payload.output
+        return context_report
 
     async def _execute_text_response(self, response: TextResponse) -> telegram.Message | None:
         """
@@ -463,26 +409,6 @@ class ConversationJob(BaseJob):
 
         return None
 
-    async def _compress_session_context(self, message_history: list[ChatEvent]) -> ContextTemplate:
-        """
-        Compress the session context for this chat.
-        """
-
-        message_history.sort(key=lambda x: x.timestamp)
-        agent_run_time = datetime.now(UTC)
-
-        context_run_payload = await run_agent_with_tracking(
-            context_compression_agent,
-            chat_id=self.chat_id,
-            session_id=self.active_session.session_id,
-            run_kwargs={
-                "message_history": [c.to_model_message(self._bot_id, agent_run_time) for c in message_history],
-            },
-        )
-
-        context_report: ContextTemplate = context_run_payload.output
-        return context_report
-
     @db_retry()
     async def _get_chat_encryption_key(self) -> str:
         """
@@ -526,3 +452,121 @@ class ConversationJob(BaseJob):
                 ctype=ctype.value,
                 content=data,
             )
+
+    @db_retry()
+    async def _get_session_context(self) -> Context | None:
+        async with async_database() as db_conn:
+            context = await Context.get_by_session_id(
+                db_conn,
+                session_id=self.active_session.session_id,
+                ctype="session",
+            )
+        return context | None
+
+    @db_retry
+    async def _get_chat_context(self) -> list[ChatEvent]:
+        context_items = []
+
+        async with async_database() as db_conn:
+            chat_context_items = await Context.retrieve_context_by_chat(
+                db_conn,
+                chat_id=self.chat_id,
+            )
+
+            if chat_context_items:
+                chat_context_items.sort(key=lambda c: c.created_at, reverse=True)
+
+                # Historical conversation context - only include those created within the last 24 hours
+                session_context = [
+                    c
+                    for c in chat_context_items
+                    if c.type == ContextType.SESSION.value and c.created_at >= (self._run_timestamp - timedelta(days=1))
+                ]
+                # Include all other context items for the session
+                session_context.extend([
+                    c for c in chat_context_items if c.session_id == self.active_session.session_id
+                ])
+
+                # Decrypt all context items
+                [c.decrypt_content(chat_encryption_key=self.chat_encryption_key) for c in session_context]
+
+                context_items.extend([ChatEvent.from_context(c) for c in session_context])
+
+        return context_items
+
+    @db_retry
+    async def _get_chat_history(self) -> list[ChatEvent]:
+        message_history = []
+
+        async with async_database() as db_conn:
+            raw_messages = await self.active_session.get_messages(db_conn)
+
+            # Filter messages to only those created before the run timestamp
+            raw_messages = [msg for msg in raw_messages if msg.created_at <= self._run_timestamp]
+            [msg.decrypt_payload(self.chat_encryption_key) for msg in raw_messages]
+
+            for msg in raw_messages:
+                if msg.message_type == "Message":
+                    media = await MediaFiles.get_by_message_id(
+                        db_conn,
+                        chat_id=self.chat_id,
+                        message_id=msg.message_id,
+                    )
+                elif msg.message_type == "MessageReactionUpdated":
+                    media = []
+                else:
+                    continue  # Skip unknown message types
+
+                if media:
+                    [m.decrypt_content(chat_encryption_key=self.chat_encryption_key) for m in media]
+
+                message_history.append(ChatEvent.from_message(msg, media))
+
+        return message_history
+
+    @db_retry()
+    async def _get_next_notification(self) -> Notifications | None:
+        """
+        Get the next pending notification for a chat.
+
+        Args:
+            chat_id: The chat ID to get the next notification for
+
+        Returns:
+            The next pending notification, or None if no pending notifications exist
+        """
+        async with async_database() as db_conn:
+            return await Notifications.get_next_pending(db_conn, chat_id=self.chat_id)
+
+    @db_retry()
+    async def mark_notification_completed(self, notification: Notifications):
+        async with async_database() as db_conn:
+            await notification.mark_as_completed(db_conn)
+
+    def _check_restricted_responses(
+        self,
+        message_history: list[ChatEvent],
+        dependencies: ChatAgentDependencies | OnboardingAgentDependencies,
+    ) -> set[str]:
+        response_restrictions = dependencies.restricted_responses
+
+        if isinstance(dependencies, ChatAgentDependencies):
+            if "switch_personality" not in dependencies.restricted_responses:
+                # Check if there's already a switch_personality event in the most recent 10 messages
+                # If so, disable personality switching for this run
+                recent_messages = message_history[-10:] if len(message_history) > 10 else message_history
+                if any(event.event_type == "switch_personality" for event in recent_messages):
+                    response_restrictions.add("switch_personality")
+
+        # Restrict text responses if the bot has recently replied
+        if (
+            message_history
+            and message_history[-1].event_type == "message"
+            and message_history[-1].user_id == str(self._bot_id)
+        ):
+            response_restrictions.add("text")
+
+        if "text" in response_restrictions and dependencies.notification:
+            response_restrictions.remove("text")
+
+        return set(response_restrictions)
