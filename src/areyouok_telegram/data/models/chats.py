@@ -18,7 +18,7 @@ from areyouok_telegram.data import Base
 from areyouok_telegram.encryption import decrypt_chat_key
 from areyouok_telegram.encryption import encrypt_chat_key
 from areyouok_telegram.encryption import generate_chat_key
-from areyouok_telegram.utils import traced
+from areyouok_telegram.logging import traced
 
 
 class Chats(Base):

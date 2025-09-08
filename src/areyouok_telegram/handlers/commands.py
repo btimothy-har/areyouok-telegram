@@ -12,9 +12,9 @@ from areyouok_telegram.handlers.constants import MD2_ONBOARDING_COMPLETE_MESSAGE
 from areyouok_telegram.handlers.constants import MD2_ONBOARDING_START_MESSAGE
 from areyouok_telegram.handlers.settings_utils import construct_user_settings_response
 from areyouok_telegram.handlers.settings_utils import update_user_metadata_field
+from areyouok_telegram.logging import traced
 from areyouok_telegram.utils import db_retry
 from areyouok_telegram.utils import telegram_call
-from areyouok_telegram.utils import traced
 
 
 @traced(extract_args=["update"])

@@ -19,7 +19,7 @@ from areyouok_telegram.config import ENV
 from areyouok_telegram.data import Base
 from areyouok_telegram.encryption import decrypt_content
 from areyouok_telegram.encryption import encrypt_content
-from areyouok_telegram.utils import traced
+from areyouok_telegram.logging import traced
 
 
 class InvalidFieldError(Exception):

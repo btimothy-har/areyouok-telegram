@@ -16,6 +16,7 @@ from areyouok_telegram.handlers import on_error_event
 from areyouok_telegram.handlers import on_message_react
 from areyouok_telegram.handlers import on_new_message
 from areyouok_telegram.handlers import on_new_update
+from areyouok_telegram.logging import traced
 from areyouok_telegram.setup import restore_active_sessions
 from areyouok_telegram.setup import setup_bot_commands
 from areyouok_telegram.setup import setup_bot_description
@@ -23,7 +24,6 @@ from areyouok_telegram.setup import setup_bot_name
 from areyouok_telegram.setup import setup_bot_short_description
 from areyouok_telegram.setup import start_data_warning_job
 from areyouok_telegram.setup import start_ping_job
-from areyouok_telegram.utils import traced
 
 
 async def application_post_init(application: Application):

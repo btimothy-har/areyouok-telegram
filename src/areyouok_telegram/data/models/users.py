@@ -14,7 +14,7 @@ from sqlalchemy.sql import select
 
 from areyouok_telegram.config import ENV
 from areyouok_telegram.data import Base
-from areyouok_telegram.utils import traced
+from areyouok_telegram.logging import traced
 
 
 class Users(Base):

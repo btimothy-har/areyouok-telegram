@@ -9,7 +9,7 @@ from datetime import datetime
 import logfire
 from telegram.ext import ContextTypes
 
-from areyouok_telegram.utils import traced
+from areyouok_telegram.logging import traced
 
 JOB_LOCK = defaultdict(asyncio.Lock)
 

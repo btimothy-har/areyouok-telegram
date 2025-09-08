@@ -9,11 +9,11 @@ from telegram.ext import Application
 from telegram.ext import ContextTypes
 
 from areyouok_telegram.config import ENV
+from areyouok_telegram.logging import traced
 from areyouok_telegram.setup.exceptions import BotCommandsSetupError
 from areyouok_telegram.setup.exceptions import BotDescriptionSetupError
 from areyouok_telegram.setup.exceptions import BotNameSetupError
 from areyouok_telegram.utils import telegram_retry
-from areyouok_telegram.utils import traced
 
 
 def package_version():

@@ -13,150 +13,8 @@ from areyouok_telegram.data import LLMUsage
 from areyouok_telegram.data import MediaFiles
 from areyouok_telegram.data import Notifications
 from areyouok_telegram.handlers.exceptions import VoiceNotProcessableError
-from areyouok_telegram.utils import telegram_call
-from areyouok_telegram.utils import traced
-
-
-def transcribe_voice_data_sync(voice_data: bytes) -> list[openai_audio.transcription.Transcription]:
-    """Synchronously transcribe voice data using OpenAI.
-
-    Args:
-        voice_data: Voice file content as bytes
-
-    Returns:
-        Transcribed text
-
-    Raises:
-        VoiceNotProcessableError: If voice cannot be processed
-    """
-    client = openai.OpenAI(api_key=OPENAI_API_KEY)
-    try:
-        audio_segment = AudioSegment.from_ogg(BytesIO(voice_data))
-
-        max_segment_length = 10 * 60 * 1000  # 10 minutes in milliseconds
-        total_duration = len(audio_segment)
-        transcriptions = []
-
-        start = 0
-        while start < total_duration:
-            end = min(start + max_segment_length, total_duration)
-            segment = audio_segment[start:end]
-
-            # Export segment to mp3 format for OpenAI
-            audio_file = BytesIO()
-            segment.export(audio_file, format="mp3")
-            audio_file.seek(0)
-            audio_file.name = "segment.mp3"
-
-            transcription = client.audio.transcriptions.create(
-                file=audio_file,
-                model="gpt-4o-transcribe",
-                chunking_strategy="auto",
-                language="en",
-                prompt=transcriptions[-1] if transcriptions else None,
-                temperature=0.2,
-            )
-            transcriptions.append(transcription)
-            start = end
-
-    except Exception as e:
-        raise VoiceNotProcessableError() from e
-
-    return transcriptions
-
-
-@traced(extract_args=["message", "file"])
-async def _download_file(
-    db_conn: AsyncSession,
-    user_encryption_key: str,
-    *,
-    message: telegram.Message,
-    file: telegram.File,
-    session_id: str | None = None,
-) -> bytes:
-    """Download a Telegram file as bytes.
-
-    Args:
-        db_conn: Database connection
-        user_encryption_key: The user's Fernet encryption key
-        message: Telegram message object
-        file: Telegram file
-    """
-    try:
-        content_bytes = await telegram_call(file.download_as_bytearray)
-
-        # Pass individual attributes to create_file
-        await MediaFiles.create_file(
-            db_conn,
-            user_encryption_key,
-            file_id=file.file_id,
-            file_unique_id=file.file_unique_id,
-            chat_id=str(message.chat.id),
-            message_id=str(message.id),
-            file_size=file.file_size,
-            content_bytes=bytes(content_bytes),
-        )
-
-        # For voice messages, also create a transcription
-        if message.voice and file.file_unique_id == message.voice.file_unique_id:
-            with logfire.span(
-                "Transcribing voice message",
-                _span_name="handlers.utils._download_file.transcribe_voice",
-                chat_id=message.chat.id,
-                message_id=message.id,
-                file_id=file.file_id,
-                file_unique_id=file.file_unique_id,
-            ):
-                try:
-                    # Transcribe the voice message in a separate thread
-                    transcriptions = await asyncio.to_thread(transcribe_voice_data_sync, bytes(content_bytes))
-                    transcription_text = "[Transcribed Audio] " + " ".join([t.text for t in transcriptions if t.text])
-
-                    await LLMUsage.track_generic_usage(
-                        db_conn,
-                        chat_id=str(message.chat.id),
-                        session_id=session_id,
-                        usage_type="openai.voice_transcription",
-                        model="openai/gpt-4o-transcribe",
-                        provider="openai",
-                        input_tokens=sum(t.usage.input_tokens for t in transcriptions),
-                        output_tokens=sum(t.usage.output_tokens for t in transcriptions),
-                    )
-
-                    # Store the transcription as a text file
-                    transcription_bytes = transcription_text.encode("utf-8")
-                    await MediaFiles.create_file(
-                        db_conn,
-                        user_encryption_key,
-                        file_id=f"{file.file_id}_transcription",
-                        file_unique_id=f"{file.file_unique_id}_transcription",
-                        chat_id=str(message.chat.id),
-                        message_id=str(message.id),
-                        file_size=len(transcription_bytes),
-                        content_bytes=transcription_bytes,
-                    )
-                    logfire.info(
-                        f"Transcription is {len(transcription_text)} characters long.", chat_id=message.chat.id
-                    )
-
-                except VoiceNotProcessableError:
-                    logfire.exception(
-                        "Voice message could not be transcribed.",
-                        chat_id=message.chat.id,
-                        message_id=message.id,
-                        file_id=file.file_id,
-                        file_unique_id=file.file_unique_id,
-                    )
-
-    except Exception as e:
-        logfire.exception(
-            "Failed to download file.",
-            exc_info=e,
-            chat_id=message.chat.id,
-            message_id=message.id,
-            file_id=file.file_id,
-            file_unique_id=file.file_unique_id,
-        )
+from areyouok_telegram.logging import traced
+from areyouok_telegram.utils.retry import telegram_call
 
 
 @traced(extract_args=["message"])
@@ -260,3 +118,147 @@ async def handle_unsupported_media(
                 content=content,
                 priority=2,  # Medium priority
             )
+
+
+def transcribe_voice_data_sync(voice_data: bytes) -> list[openai_audio.transcription.Transcription]:
+    """Synchronously transcribe voice data using OpenAI.
+
+    Args:
+        voice_data: Voice file content as bytes
+
+    Returns:
+        Transcribed text
+
+    Raises:
+        VoiceNotProcessableError: If voice cannot be processed
+    """
+    client = openai.OpenAI(api_key=OPENAI_API_KEY)
+    try:
+        audio_segment = AudioSegment.from_ogg(BytesIO(voice_data))
+
+        max_segment_length = 10 * 60 * 1000  # 10 minutes in milliseconds
+        total_duration = len(audio_segment)
+        transcriptions = []
+
+        start = 0
+        while start < total_duration:
+            end = min(start + max_segment_length, total_duration)
+            segment = audio_segment[start:end]
+
+            # Export segment to mp3 format for OpenAI
+            audio_file = BytesIO()
+            segment.export(audio_file, format="mp3")
+            audio_file.seek(0)
+            audio_file.name = "segment.mp3"
+
+            transcription = client.audio.transcriptions.create(
+                file=audio_file,
+                model="gpt-4o-transcribe",
+                chunking_strategy="auto",
+                language="en",
+                prompt=transcriptions[-1].text
+                if transcriptions and getattr(transcriptions[-1], "text", None)
+                else None,
+                temperature=0.2,
+            )
+            transcriptions.append(transcription)
+            start = end
+
+    except Exception as e:
+        raise VoiceNotProcessableError() from e
+
+    return transcriptions
+
+
+@traced(extract_args=["message", "file"])
+async def _download_file(
+    db_conn: AsyncSession,
+    user_encryption_key: str,
+    *,
+    message: telegram.Message,
+    file: telegram.File,
+    session_id: str | None = None,
+) -> bytes:
+    """Download a Telegram file as bytes.
+
+    Args:
+        db_conn: Database connection
+        user_encryption_key: The user's Fernet encryption key
+        message: Telegram message object
+        file: Telegram file
+    """
+    try:
+        content_bytes = await telegram_call(file.download_as_bytearray)
+
+        # Pass individual attributes to create_file
+        await MediaFiles.create_file(
+            db_conn,
+            user_encryption_key,
+            file_id=file.file_id,
+            file_unique_id=file.file_unique_id,
+            chat_id=str(message.chat.id),
+            message_id=str(message.message_id),
+            file_size=file.file_size,
+            content_bytes=bytes(content_bytes),
+        )
+
+        # For voice messages, also create a transcription
+        if message.voice and file.file_unique_id == message.voice.file_unique_id:
+            with logfire.span(
+                "Transcribing voice message",
+                _span_name="handlers.utils._download_file.transcribe_voice",
+                chat_id=message.chat.id,
+                message_id=message.message_id,
+                file_id=file.file_id,
+                file_unique_id=file.file_unique_id,
+            ):
+                try:
+                    # Transcribe the voice message in a separate thread
+                    transcriptions = await asyncio.to_thread(transcribe_voice_data_sync, bytes(content_bytes))
+                    transcription_text = "[Transcribed Audio] " + " ".join([t.text for t in transcriptions if t.text])
+
+                    await LLMUsage.track_generic_usage(
+                        db_conn,
+                        chat_id=str(message.chat.id),
+                        session_id=session_id,
+                        usage_type="openai.voice_transcription",
+                        model="openai/gpt-4o-transcribe",
+                        provider="openai",
+                        input_tokens=sum(t.usage.input_tokens for t in transcriptions),
+                        output_tokens=sum(t.usage.output_tokens for t in transcriptions),
+                    )
+
+                    # Store the transcription as a text file
+                    transcription_bytes = transcription_text.encode("utf-8")
+                    await MediaFiles.create_file(
+                        db_conn,
+                        user_encryption_key,
+                        file_id=f"{file.file_id}_transcription",
+                        file_unique_id=f"{file.file_unique_id}_transcription",
+                        chat_id=str(message.chat.id),
+                        message_id=str(message.message_id),
+                        file_size=len(transcription_bytes),
+                        content_bytes=transcription_bytes,
+                    )
+                    logfire.info(
+                        f"Transcription is {len(transcription_text)} characters long.", chat_id=message.chat.id
+                    )
+
+                except VoiceNotProcessableError:
+                    logfire.exception(
+                        "Voice message could not be transcribed.",
+                        chat_id=message.chat.id,
+                        message_id=message.message_id,
+                        file_id=file.file_id,
+                        file_unique_id=file.file_unique_id,
+                    )
+
+    except Exception as e:
+        logfire.exception(
+            "Failed to download file.",
+            _exc_info=e,
+            chat_id=message.chat.id,
+            message_id=message.message_id,
+            file_id=file.file_id,
+            file_unique_id=file.file_unique_id,
+        )
