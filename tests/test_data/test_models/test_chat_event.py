@@ -70,7 +70,7 @@ class TestChatEvent:
         mock_reaction_update.new_reaction = [mock_emoji_reaction]
 
         mock_messages_sqlalchemy.message_type = "MessageReactionUpdated"
-        mock_messages_sqlalchemy.user_id = None  # Reaction events don't have user_id per validation
+        mock_messages_sqlalchemy.user_id = "12345"  # User ID is required for reaction events
         mock_messages_sqlalchemy.telegram_object = mock_reaction_update
 
         result = ChatEvent.from_message(mock_messages_sqlalchemy, [])
@@ -78,7 +78,7 @@ class TestChatEvent:
         assert result.event_type == "reaction"
         assert result.event_data["emojis"] == "👍"
         assert result.event_data["to_message_id"] == "123"
-        assert result.user_id is None
+        assert result.user_id == "12345"
 
     def test_from_context(self, mock_context_sqlalchemy):
         """Test creating ChatEvent from context."""
@@ -172,7 +172,7 @@ class TestChatEvent:
 
     def test_user_id_validation_message_event(self, mock_context_sqlalchemy):
         """Test that user_id is required for message events."""
-        with pytest.raises(ValueError, match="User ID must be provided for message events"):
+        with pytest.raises(ValueError, match="User ID must be provided for message and reaction events"):
             ChatEvent(
                 timestamp=mock_context_sqlalchemy.created_at,
                 event_type="message",

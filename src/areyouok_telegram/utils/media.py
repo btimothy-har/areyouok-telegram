@@ -12,9 +12,16 @@ from areyouok_telegram.config import OPENAI_API_KEY
 from areyouok_telegram.data import LLMUsage
 from areyouok_telegram.data import MediaFiles
 from areyouok_telegram.data import Notifications
-from areyouok_telegram.handlers.exceptions import VoiceNotProcessableError
 from areyouok_telegram.logging import traced
 from areyouok_telegram.utils.retry import telegram_call
+
+
+class VoiceNotProcessableError(Exception):
+    """Raised when voice cannot be processed."""
+
+    def __init__(self) -> None:
+        message: str = "Voice message could not be processed."
+        super().__init__(message)
 
 
 @traced(extract_args=["message"])
