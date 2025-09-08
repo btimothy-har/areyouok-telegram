@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from areyouok_telegram.config import ENV
 from areyouok_telegram.data import Base
-from areyouok_telegram.utils import traced
+from areyouok_telegram.logging import traced
 
 
 class GuidedSessionType(Enum):

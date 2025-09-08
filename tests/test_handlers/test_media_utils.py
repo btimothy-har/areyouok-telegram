@@ -10,9 +10,9 @@ import telegram
 from pydub import AudioSegment
 
 from areyouok_telegram.handlers.exceptions import VoiceNotProcessableError
-from areyouok_telegram.handlers.media_utils import _download_file
-from areyouok_telegram.handlers.media_utils import extract_media_from_telegram_message
-from areyouok_telegram.handlers.media_utils import transcribe_voice_data_sync
+from areyouok_telegram.utils.media import _download_file
+from areyouok_telegram.utils.media import extract_media_from_telegram_message
+from areyouok_telegram.utils.media import transcribe_voice_data_sync
 
 
 class TestTranscribeVoiceDataSync:
@@ -330,7 +330,7 @@ class TestExtractMediaFromTelegramMessage:
         mock_message.chat.id = 456
 
         with (
-            patch("areyouok_telegram.handlers.media_utils._download_file", new=AsyncMock()) as mock_download,
+            patch("areyouok_telegram.utils.media._download_file", new=AsyncMock()) as mock_download,
             patch("areyouok_telegram.handlers.media_utils.logfire.info") as mock_log_info,
         ):
             result = await extract_media_from_telegram_message(
@@ -364,7 +364,7 @@ class TestExtractMediaFromTelegramMessage:
         mock_message.chat.id = 456
 
         with (
-            patch("areyouok_telegram.handlers.media_utils._download_file", new=AsyncMock()) as mock_download,
+            patch("areyouok_telegram.utils.media._download_file", new=AsyncMock()) as mock_download,
             patch("areyouok_telegram.handlers.media_utils.logfire.info") as mock_log_info,
         ):
             result = await extract_media_from_telegram_message(
@@ -405,7 +405,7 @@ class TestExtractMediaFromTelegramMessage:
         mock_message.chat.id = 456
 
         with (
-            patch("areyouok_telegram.handlers.media_utils._download_file", new=AsyncMock()) as mock_download,
+            patch("areyouok_telegram.utils.media._download_file", new=AsyncMock()) as mock_download,
             patch("areyouok_telegram.handlers.media_utils.logfire.info") as mock_log_info,
         ):
             result = await extract_media_from_telegram_message(
@@ -458,7 +458,7 @@ class TestExtractMediaFromTelegramMessage:
         mock_message.chat.id = 456
 
         with (
-            patch("areyouok_telegram.handlers.media_utils._download_file", new=AsyncMock()) as mock_download,
+            patch("areyouok_telegram.utils.media._download_file", new=AsyncMock()) as mock_download,
             patch("areyouok_telegram.handlers.media_utils.logfire.info") as mock_log_info,
         ):
             result = await extract_media_from_telegram_message(
@@ -498,7 +498,7 @@ class TestExtractMediaFromTelegramMessage:
         mock_download = AsyncMock(side_effect=[Exception("Download failed"), None])
 
         with (
-            patch("areyouok_telegram.handlers.media_utils._download_file", mock_download),
+            patch("areyouok_telegram.utils.media._download_file", mock_download),
             patch("areyouok_telegram.handlers.media_utils.logfire.info") as mock_log_info,
         ):
             result = await extract_media_from_telegram_message(

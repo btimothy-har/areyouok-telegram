@@ -11,11 +11,11 @@ from areyouok_telegram.data import async_database
 from areyouok_telegram.handlers.exceptions import NoEditedMessageError
 from areyouok_telegram.handlers.exceptions import NoMessageError
 from areyouok_telegram.handlers.exceptions import NoMessageReactionError
-from areyouok_telegram.handlers.media_utils import extract_media_from_telegram_message
-from areyouok_telegram.handlers.media_utils import handle_unsupported_media
+from areyouok_telegram.logging import traced
 from areyouok_telegram.utils import db_retry
+from areyouok_telegram.utils import extract_media_from_telegram_message
+from areyouok_telegram.utils import handle_unsupported_media
 from areyouok_telegram.utils import telegram_call
-from areyouok_telegram.utils import traced
 
 
 @traced(extract_args=["update"])
