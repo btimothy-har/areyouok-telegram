@@ -10,7 +10,6 @@ from areyouok_telegram.config import ANTHROPIC_API_KEY
 from areyouok_telegram.config import OPENAI_API_KEY
 from areyouok_telegram.config import OPENROUTER_API_KEY
 from areyouok_telegram.llms.exceptions import ModelConfigurationError
-from areyouok_telegram.llms.exceptions import ModelInputError
 from areyouok_telegram.llms.utils import should_retry_llm_error
 
 
@@ -19,19 +18,14 @@ class BaseModelConfig:
 
     def __init__(
         self,
-        model_name: str,
+        model_id: str,
         provider: Literal["openai", "anthropic"] = "openai",
-        model_id: str | None = None,
         openrouter_id: str | None = None,
         model_settings: pydantic_ai.settings.ModelSettings | None = None,
     ):
-        self.model_name = model_name
+        self.model_id = model_id
         self.provider = provider
 
-        if not model_id and not openrouter_id:
-            raise ModelInputError()
-
-        self.model_id = model_id
         self.openrouter_id = openrouter_id
         self.model_settings = model_settings
 
@@ -75,3 +69,37 @@ class BaseModelConfig:
                 settings=self.model_settings,
             )
         return None
+
+
+class ClaudeSonnet4(BaseModelConfig):
+    """Model configuration for Claude Sonnet 4."""
+
+    DEFAULT_SETTINGS = pydantic_ai.settings.ModelSettings(
+        temperature=0.6,
+        parallel_tool_calls=False,
+    )
+
+    def __init__(self, model_settings: pydantic_ai.settings.ModelSettings | None = None):
+        super().__init__(
+            model_id="claude-sonnet-4-20250514",
+            provider="anthropic",
+            openrouter_id="anthropic/claude-sonnet-4",
+            model_settings=model_settings or self.DEFAULT_SETTINGS,
+        )
+
+
+class GPT5Nano(BaseModelConfig):
+    """Model configuration for GPT-5 Nano."""
+
+    DEFAULT_SETTINGS = pydantic_ai.settings.ModelSettings(
+        temperature=0.0,
+        parallel_tool_calls=False,
+    )
+
+    def __init__(self, model_settings: pydantic_ai.settings.ModelSettings | None = None):
+        super().__init__(
+            model_id="gpt-5-nano-2025-08-07",
+            provider="openai",
+            openrouter_id="openai/gpt-5-nano",
+            model_settings=model_settings or self.DEFAULT_SETTINGS,
+        )

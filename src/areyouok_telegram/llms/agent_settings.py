@@ -7,7 +7,7 @@ from pydantic_ai import RunContext
 from areyouok_telegram.data import UserMetadata
 from areyouok_telegram.data import async_database
 from areyouok_telegram.llms.exceptions import MetadataFieldUpdateError
-from areyouok_telegram.llms.models import UTILITY_GPT_5_NANO
+from areyouok_telegram.llms.models import GPT5Nano
 from areyouok_telegram.llms.utils import log_metadata_update_context
 
 
@@ -37,7 +37,7 @@ class SettingsUpdateResponse(pydantic.BaseModel):
 
 
 settings_agent = pydantic_ai.Agent(
-    model=UTILITY_GPT_5_NANO.model,
+    model=GPT5Nano().model,
     output_type=SettingsUpdateResponse,
     name="settings_agent",
     end_strategy="exhaustive",
