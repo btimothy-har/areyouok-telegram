@@ -42,7 +42,7 @@ class TestConversationJob:
 
     @pytest.mark.asyncio
     async def test_run_bot_already_responded(self):
-        """Test _run when bot has already responded."""
+        """Test run_job when bot has already responded."""
         job = ConversationJob("123")
         job._run_timestamp = datetime.now(UTC)
 
@@ -54,19 +54,19 @@ class TestConversationJob:
 
         with (
             patch(
-                "areyouok_telegram.jobs.conversations.get_chat_encryption_key",
+                "areyouok_telegram.jobs.conversations.ConversationJob._get_chat_encryption_key",
                 new=AsyncMock(return_value="test_encryption_key"),
             ),
-            patch("areyouok_telegram.jobs.conversations.get_chat_session", new=AsyncMock(return_value=mock_session)),
+            patch("areyouok_telegram.data.operations.get_or_create_active_session", new=AsyncMock(return_value=mock_session)),
             patch("areyouok_telegram.jobs.conversations.logfire.debug") as mock_log_debug,
         ):
-            await job._run(mock_context)
+            await job.run_job()
 
         mock_log_debug.assert_called_once_with("No new updates, nothing to do.")
 
     @pytest.mark.asyncio
     async def test_run_inactive_session_closes(self, frozen_time):
-        """Test _run closes inactive session after 1 hour."""
+        """Test run_job closes inactive session after 1 hour."""
         job = ConversationJob("123")
         job._run_timestamp = frozen_time
 
@@ -79,23 +79,23 @@ class TestConversationJob:
 
         with (
             patch(
-                "areyouok_telegram.jobs.conversations.get_chat_encryption_key",
+                "areyouok_telegram.jobs.conversations.ConversationJob._get_chat_encryption_key",
                 new=AsyncMock(return_value="test_encryption_key"),
             ),
-            patch("areyouok_telegram.jobs.conversations.get_chat_session", new=AsyncMock(return_value=mock_session)),
-            patch.object(job, "close_session", new=AsyncMock()) as mock_close,
+            patch("areyouok_telegram.data.operations.get_or_create_active_session", new=AsyncMock(return_value=mock_session)),
+            patch("areyouok_telegram.data.operations.close_chat_session", new=AsyncMock()) as mock_close,
             patch.object(job, "stop", new=AsyncMock()) as mock_stop,
             patch("areyouok_telegram.jobs.conversations.logfire.span"),
         ):
-            await job._run(mock_context)
+            await job.run_job()
 
         # Verify session was closed and job was stopped
-        mock_close.assert_called_once_with("test_encryption_key", context=mock_context, chat_session=mock_session)
-        mock_stop.assert_called_once_with(mock_context)
+        mock_close.assert_called_once_with(chat_session=mock_session)
+        mock_stop.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_run_generates_response(self, frozen_time):
-        """Test _run generates and executes response."""
+        """Test run_job generates and executes response."""
         job = ConversationJob("123")
         job._run_timestamp = frozen_time
 
@@ -113,10 +113,10 @@ class TestConversationJob:
 
         with (
             patch(
-                "areyouok_telegram.jobs.conversations.get_chat_encryption_key",
+                "areyouok_telegram.jobs.conversations.ConversationJob._get_chat_encryption_key",
                 new=AsyncMock(return_value="test_encryption_key"),
             ),
-            patch("areyouok_telegram.jobs.conversations.get_chat_session", new=AsyncMock(return_value=mock_session)),
+            patch("areyouok_telegram.data.operations.get_or_create_active_session", new=AsyncMock(return_value=mock_session)),
             patch(
                 "areyouok_telegram.jobs.conversations.get_next_notification",
                 new=AsyncMock(return_value=None),
@@ -149,7 +149,7 @@ class TestConversationJob:
             patch("areyouok_telegram.jobs.conversations.log_bot_message", new=AsyncMock()),
             patch("areyouok_telegram.jobs.conversations.logfire.span"),
         ):
-            await job._run(mock_context)
+            await job.run_job()
 
         # Verify response was generated and executed
         mock_generate.assert_called_once()
@@ -540,13 +540,13 @@ class TestConversationJob:
 
         with (
             patch(
-                "areyouok_telegram.jobs.conversations.get_chat_encryption_key",
+                "areyouok_telegram.jobs.conversations.ConversationJob._get_chat_encryption_key",
                 new=AsyncMock(side_effect=UserNotFoundForChatError("No user found")),
             ),
             patch.object(job, "stop", new=AsyncMock()) as mock_stop,
             patch("areyouok_telegram.jobs.conversations.logfire.span") as mock_span,
         ):
-            await job._run(mock_context)
+            await job.run_job()
 
         mock_stop.assert_called_once_with(mock_context)
         mock_span.assert_called_once()
@@ -559,14 +559,14 @@ class TestConversationJob:
 
         with (
             patch(
-                "areyouok_telegram.jobs.conversations.get_chat_encryption_key",
+                "areyouok_telegram.jobs.conversations.ConversationJob._get_chat_encryption_key",
                 new=AsyncMock(return_value="test_encryption_key"),
             ),
-            patch("areyouok_telegram.jobs.conversations.get_chat_session", new=AsyncMock(return_value=None)),
+            patch("areyouok_telegram.data.operations.get_or_create_active_session", new=AsyncMock(return_value=None)),
             patch.object(job, "stop", new=AsyncMock()) as mock_stop,
             patch("areyouok_telegram.jobs.conversations.logfire.span") as mock_span,
         ):
-            await job._run(mock_context)
+            await job.run_job()
 
         mock_stop.assert_called_once_with(mock_context)
         mock_span.assert_called_once()
@@ -591,10 +591,10 @@ class TestConversationJob:
 
         with (
             patch(
-                "areyouok_telegram.jobs.conversations.get_chat_encryption_key",
+                "areyouok_telegram.jobs.conversations.ConversationJob._get_chat_encryption_key",
                 new=AsyncMock(return_value="test_encryption_key"),
             ),
-            patch("areyouok_telegram.jobs.conversations.get_chat_session", new=AsyncMock(return_value=mock_session)),
+            patch("areyouok_telegram.data.operations.get_or_create_active_session", new=AsyncMock(return_value=mock_session)),
             patch.object(
                 job,
                 "_prepare_conversation_input",
@@ -617,7 +617,7 @@ class TestConversationJob:
             patch("areyouok_telegram.jobs.conversations.log_bot_message", new=AsyncMock()) as mock_log_message,
             patch("areyouok_telegram.jobs.conversations.logfire.span"),
         ):
-            await job._run(mock_context)
+            await job.run_job()
 
         # Verify message was logged
         mock_log_message.assert_called_once_with(
@@ -647,10 +647,10 @@ class TestConversationJob:
 
         with (
             patch(
-                "areyouok_telegram.jobs.conversations.get_chat_encryption_key",
+                "areyouok_telegram.jobs.conversations.ConversationJob._get_chat_encryption_key",
                 new=AsyncMock(return_value="test_encryption_key"),
             ),
-            patch("areyouok_telegram.jobs.conversations.get_chat_session", new=AsyncMock(return_value=mock_session)),
+            patch("areyouok_telegram.data.operations.get_or_create_active_session", new=AsyncMock(return_value=mock_session)),
             patch.object(
                 job,
                 "_prepare_conversation_input",
@@ -673,7 +673,7 @@ class TestConversationJob:
             patch("areyouok_telegram.jobs.conversations.log_bot_message", new=AsyncMock()) as mock_log_message,
             patch("areyouok_telegram.jobs.conversations.logfire.span"),
         ):
-            await job._run(mock_context)
+            await job.run_job()
 
         # Verify message was NOT logged when no message returned
         mock_log_message.assert_not_called()
@@ -1696,16 +1696,16 @@ class TestConversationJob:
 
         with (
             patch(
-                "areyouok_telegram.jobs.conversations.get_chat_encryption_key",
+                "areyouok_telegram.jobs.conversations.ConversationJob._get_chat_encryption_key",
                 new=AsyncMock(return_value="test_encryption_key"),
             ),
-            patch("areyouok_telegram.jobs.conversations.get_chat_session", new=AsyncMock(return_value=mock_session)),
+            patch("areyouok_telegram.data.operations.get_or_create_active_session", new=AsyncMock(return_value=mock_session)),
             patch.object(job, "close_session", new=AsyncMock()) as mock_close,
             patch.object(job, "stop", new=AsyncMock()) as mock_stop,
             patch("areyouok_telegram.jobs.conversations.post_cleanup_tasks", new=AsyncMock()) as mock_cleanup,
             patch("areyouok_telegram.jobs.conversations.logfire.span"),
         ):
-            await job._run(mock_context)
+            await job.run_job()
 
         # Verify session was closed because it used session_start as reference
         mock_close.assert_called_once_with("test_encryption_key", context=mock_context, chat_session=mock_session)
@@ -1728,16 +1728,16 @@ class TestConversationJob:
 
         with (
             patch(
-                "areyouok_telegram.jobs.conversations.get_chat_encryption_key",
+                "areyouok_telegram.jobs.conversations.ConversationJob._get_chat_encryption_key",
                 new=AsyncMock(return_value="test_encryption_key"),
             ),
-            patch("areyouok_telegram.jobs.conversations.get_chat_session", new=AsyncMock(return_value=mock_session)),
+            patch("areyouok_telegram.data.operations.get_or_create_active_session", new=AsyncMock(return_value=mock_session)),
             patch.object(job, "close_session", new=AsyncMock()) as mock_close,
             patch.object(job, "stop", new=AsyncMock()) as mock_stop,
             patch("areyouok_telegram.jobs.conversations.post_cleanup_tasks", new=AsyncMock()) as mock_cleanup,
             patch("areyouok_telegram.jobs.conversations.logfire.span"),
         ):
-            await job._run(mock_context)
+            await job.run_job()
 
         # Verify session was closed, job was stopped, and cleanup was run
         mock_close.assert_called_once_with("test_encryption_key", context=mock_context, chat_session=mock_session)

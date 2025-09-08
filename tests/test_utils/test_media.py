@@ -9,7 +9,7 @@ import pytest
 import telegram
 from pydub import AudioSegment
 
-from areyouok_telegram.handlers.exceptions import VoiceNotProcessableError
+from areyouok_telegram.utils.media import VoiceNotProcessableError
 from areyouok_telegram.utils.media import _download_file
 from areyouok_telegram.utils.media import extract_media_from_telegram_message
 from areyouok_telegram.utils.media import transcribe_voice_data_sync

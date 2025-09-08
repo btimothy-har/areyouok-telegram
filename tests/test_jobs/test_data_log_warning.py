@@ -49,7 +49,7 @@ class TestDataLogWarningJob:
             patch("areyouok_telegram.jobs.data_log_warning.USER_ENCRYPTION_SALT", "secure-salt"),
             patch("areyouok_telegram.jobs.data_log_warning.logfire.warning") as mock_warning,
         ):
-            await job._run(mock_context)
+            await job.run(mock_context)
 
             # Should log warning about chat messages
             mock_warning.assert_called_once_with(
@@ -71,7 +71,7 @@ class TestDataLogWarningJob:
             patch("areyouok_telegram.jobs.data_log_warning.USER_ENCRYPTION_SALT", "secure-salt"),
             patch("areyouok_telegram.jobs.data_log_warning.logfire.warning") as mock_warning,
         ):
-            await job._run(mock_context)
+            await job.run(mock_context)
 
             # Should not log any warning
             mock_warning.assert_not_called()
@@ -90,7 +90,7 @@ class TestDataLogWarningJob:
             patch("areyouok_telegram.jobs.data_log_warning.USER_ENCRYPTION_SALT", "secure-salt"),
             patch("areyouok_telegram.jobs.data_log_warning.logfire.warning") as mock_warning,
         ):
-            await job._run(mock_context)
+            await job.run(mock_context)
 
             # Should not log any warning
             mock_warning.assert_not_called()
@@ -109,7 +109,7 @@ class TestDataLogWarningJob:
             patch("areyouok_telegram.jobs.data_log_warning.USER_ENCRYPTION_SALT", "default-salt"),
             patch("areyouok_telegram.jobs.data_log_warning.logfire.warning") as mock_warning,
         ):
-            await job._run(mock_context)
+            await job.run(mock_context)
 
             # Should log warning about encryption salt
             mock_warning.assert_called_once_with(
@@ -131,7 +131,7 @@ class TestDataLogWarningJob:
             patch("areyouok_telegram.jobs.data_log_warning.USER_ENCRYPTION_SALT", "secure-random-salt"),
             patch("areyouok_telegram.jobs.data_log_warning.logfire.warning") as mock_warning,
         ):
-            await job._run(mock_context)
+            await job.run(mock_context)
 
             # Should not log any warning
             mock_warning.assert_not_called()
@@ -150,7 +150,7 @@ class TestDataLogWarningJob:
             patch("areyouok_telegram.jobs.data_log_warning.USER_ENCRYPTION_SALT", "default-salt"),
             patch("areyouok_telegram.jobs.data_log_warning.logfire.warning") as mock_warning,
         ):
-            await job._run(mock_context)
+            await job.run(mock_context)
 
             # Should not log any warning
             mock_warning.assert_not_called()
@@ -169,7 +169,7 @@ class TestDataLogWarningJob:
             patch("areyouok_telegram.jobs.data_log_warning.USER_ENCRYPTION_SALT", "default-salt"),
             patch("areyouok_telegram.jobs.data_log_warning.logfire.warning") as mock_warning,
         ):
-            await job._run(mock_context)
+            await job.run(mock_context)
 
             # Should log both warnings
             assert mock_warning.call_count == 2
@@ -196,7 +196,7 @@ class TestDataLogWarningJob:
             patch("areyouok_telegram.jobs.data_log_warning.USER_ENCRYPTION_SALT", "default-salt"),
             patch("areyouok_telegram.jobs.data_log_warning.logfire.warning") as mock_warning,
         ):
-            await job._run(mock_context)
+            await job.run(mock_context)
 
             # Should not log any warning in development
             mock_warning.assert_not_called()
@@ -216,7 +216,7 @@ class TestDataLogWarningJob:
             patch("areyouok_telegram.jobs.data_log_warning.USER_ENCRYPTION_SALT", "secure-salt"),
             patch("areyouok_telegram.jobs.data_log_warning.logfire.warning") as mock_warning,
         ):
-            await job._run(mock_context)
+            await job.run(mock_context)
 
             # Should log warning about chat messages
             mock_warning.assert_called_once_with(
