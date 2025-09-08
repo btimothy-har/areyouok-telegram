@@ -15,6 +15,12 @@ from areyouok_telegram.utils import extract_media_from_telegram_message
 from areyouok_telegram.utils import handle_unsupported_media
 
 
+class MissingGuidedSessionTypeError(RuntimeError):
+    def __init__(self):
+        message = "Guided Session Type must be provided."
+        super().__init__(message)
+
+
 @db_retry()
 async def get_or_create_active_session(
     *,
@@ -38,17 +44,20 @@ async def get_or_create_guided_session(
     *,
     chat_id: str,
     session: Sessions,
-    stype: GuidedSessionType,
+    stype: GuidedSessionType | None = None,
     create_if_not_exists: bool = True,
 ) -> Sessions | None:
     async with async_database() as db_conn:
         all_sessions_of_type = await GuidedSessions.get_by_chat_id(
             db_conn,
             chat_id=chat_id,
-            session_type=stype.value,
+            session_type=stype.value if stype else None,
         )
 
         if create_if_not_exists and not all_sessions_of_type:
+            if not stype:
+                raise MissingGuidedSessionTypeError()
+
             await GuidedSessions.start_new_session(
                 db_conn,
                 chat_id=chat_id,
