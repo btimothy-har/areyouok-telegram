@@ -2,7 +2,6 @@ from datetime import UTC
 from datetime import datetime
 
 import logfire
-from telegram.ext import ContextTypes
 
 from areyouok_telegram.config import ENV
 from areyouok_telegram.jobs import BaseJob
@@ -26,11 +25,11 @@ class PingJob(BaseJob):
     def name(self) -> str:
         return "ping_status"
 
-    async def _run(self, context: ContextTypes.DEFAULT_TYPE) -> None:
+    async def _run(self) -> None:
         """
         Log a ping with bot status information.
         """
-        bot_info = await telegram_call(context.bot.get_me)
+        bot_info = await telegram_call(self._run_context.bot.get_me)
         current_time = datetime.now(UTC)
         uptime = current_time - self._startup_time
 
@@ -43,5 +42,5 @@ class PingJob(BaseJob):
             timestamp=current_time.isoformat(),
             uptime_seconds=uptime.total_seconds(),
             uptime_formatted=str(uptime),
-            job_queue_size=len(context.job_queue.jobs()),
+            job_queue_size=len(self._run_context.job_queue.jobs()),
         )

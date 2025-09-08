@@ -1,5 +1,4 @@
 import logfire
-from telegram.ext import ContextTypes
 
 from areyouok_telegram.config import CONTROLLED_ENV
 from areyouok_telegram.config import ENV
@@ -23,7 +22,7 @@ class DataLogWarningJob(BaseJob):
     def name(self) -> str:
         return "data_log_warning"
 
-    async def _run(self, context: ContextTypes.DEFAULT_TYPE) -> None:  # noqa: ARG002
+    async def _run(self) -> None:
         if LOG_CHAT_MESSAGES and ENV in CONTROLLED_ENV:
             logfire.warning(
                 "Logging chat messages in a controlled environment. "

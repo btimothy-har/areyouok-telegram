@@ -4,7 +4,6 @@ from datetime import timedelta
 
 import logfire
 import telegram
-from telegram.ext import ContextTypes
 
 from areyouok_telegram.config import CHAT_SESSION_TIMEOUT_MINS
 from areyouok_telegram.data import ChatEvent
@@ -26,7 +25,6 @@ from areyouok_telegram.jobs.utils import get_next_notification
 from areyouok_telegram.jobs.utils import log_bot_activity
 from areyouok_telegram.jobs.utils import log_bot_message
 from areyouok_telegram.jobs.utils import mark_notification_completed
-from areyouok_telegram.jobs.utils import post_cleanup_tasks
 from areyouok_telegram.jobs.utils import save_session_context
 from areyouok_telegram.llms.chat import AgentResponse
 from areyouok_telegram.llms.chat import ChatAgentDependencies
@@ -68,7 +66,7 @@ class ConversationJob(BaseJob):
         """Generate a consistent job name for this chat."""
         return f"conversation:{self.chat_id}"
 
-    async def _run(self, context: ContextTypes.DEFAULT_TYPE) -> None:  # noqa: ARG002
+    async def _run(self) -> None:  # noqa: ARG002
         """Process conversation for this chat."""
 
         # Get user encryption key - this will fail for non-private chats
@@ -81,7 +79,7 @@ class ConversationJob(BaseJob):
                 _level="warning",
                 chat_id=self.chat_id,
             ):
-                await self.stop(context)
+                await self.stop()
                 return
 
         chat_session = await get_chat_session(chat_id=self.chat_id)
@@ -95,7 +93,7 @@ class ConversationJob(BaseJob):
                 _level="warning",
                 chat_id=self.chat_id,
             ):
-                await self.stop(context)
+                await self.stop()
 
         elif chat_session.has_bot_responded:
             logfire.debug("No new updates, nothing to do.")
@@ -112,11 +110,9 @@ class ConversationJob(BaseJob):
                 ):
                     await self.close_session(
                         chat_encryption_key,
-                        context=context,
                         chat_session=chat_session,
                     )
-                    await self.stop(context)
-                    await post_cleanup_tasks(context=context, chat_session=chat_session)
+                    await self.stop()
 
         else:
             with logfire.span(
@@ -125,20 +121,18 @@ class ConversationJob(BaseJob):
                 chat_id=self.chat_id,
             ):
                 await telegram_call(
-                    context.bot.send_chat_action,
+                    self._run_context.bot.send_chat_action,
                     chat_id=int(self.chat_id),
                     action=telegram.constants.ChatAction.TYPING,
                 )
 
                 message_history, dependencies = await self._prepare_conversation_input(
                     chat_encryption_key,
-                    context=context,
                     chat_session=chat_session,
                     include_context=True,
                 )
 
                 response, response_message = await self.generate_response(
-                    context=context,
                     chat_encryption_key=chat_encryption_key,
                     chat_session=chat_session,
                     conversation_history=message_history,
@@ -165,7 +159,6 @@ class ConversationJob(BaseJob):
     async def generate_response(
         self,
         *,
-        context: ContextTypes.DEFAULT_TYPE,
         chat_encryption_key: str,
         chat_session: Sessions,
         conversation_history: list[ChatEvent],
@@ -218,7 +211,6 @@ class ConversationJob(BaseJob):
         response_message = await self._execute_response(
             chat_encryption_key=chat_encryption_key,
             chat_session=chat_session,
-            context=context,
             response=agent_response,
         )
 
@@ -229,14 +221,12 @@ class ConversationJob(BaseJob):
         if agent_response.response_type == "SwitchPersonalityResponse":
             message_history, dependencies = await self._prepare_conversation_input(
                 chat_encryption_key,
-                context=context,
                 chat_session=chat_session,
                 include_context=True,
             )
             dependencies.restricted_responses.add("switch_personality")  # Disable personality switching for this run
 
             return await self.generate_response(
-                context=context,
                 chat_encryption_key=chat_encryption_key,
                 chat_session=chat_session,
                 conversation_history=message_history,
@@ -251,7 +241,6 @@ class ConversationJob(BaseJob):
         *,
         chat_encryption_key: str,
         chat_session: Sessions,
-        context: ContextTypes.DEFAULT_TYPE,
         response: AgentResponse,
     ) -> MessageTypes | None:
         """Execute the response action in the given context."""
@@ -259,7 +248,7 @@ class ConversationJob(BaseJob):
         response_message = None
 
         if response.response_type == "TextResponse":
-            response_message = await self._execute_text_response(context=context, response=response)
+            response_message = await self._execute_text_response(response=response)
 
         elif response.response_type == "ReactionResponse":
             # Get the message to react to
@@ -281,9 +270,7 @@ class ConversationJob(BaseJob):
             message.decrypt_payload(chat_encryption_key)
             telegram_message = message.telegram_object
 
-            response_message = await self._execute_reaction_response(
-                context=context, response=response, message=telegram_message
-            )
+            response_message = await self._execute_reaction_response(response=response, message=telegram_message)
 
         elif response.response_type == "SwitchPersonalityResponse":
             await save_session_context(
@@ -316,7 +303,6 @@ class ConversationJob(BaseJob):
         self,
         chat_encryption_key: str,
         *,
-        context: ContextTypes.DEFAULT_TYPE,
         chat_session: Sessions,
     ) -> None:
         """Closes the chat session and compresses the context."""
@@ -337,7 +323,6 @@ class ConversationJob(BaseJob):
 
         message_history, _ = await self._prepare_conversation_input(
             chat_encryption_key,
-            context=context,
             chat_session=chat_session,
             include_context=False,
         )
@@ -367,7 +352,6 @@ class ConversationJob(BaseJob):
         self,
         chat_encryption_key: str,
         *,
-        context: ContextTypes.DEFAULT_TYPE,
         chat_session: Sessions,
         include_context: bool = True,
     ) -> tuple[list[ChatEvent], ChatAgentDependencies | OnboardingAgentDependencies]:
@@ -450,7 +434,7 @@ class ConversationJob(BaseJob):
             notification = await get_next_notification(self.chat_id)
 
             deps_data = {
-                "tg_context": context,
+                "tg_context": self._run_context,
                 "tg_chat_id": self.chat_id,
                 "tg_session_id": chat_session.session_id,
                 "notification": notification,
@@ -476,9 +460,7 @@ class ConversationJob(BaseJob):
 
             return sorted(message_history, key=lambda x: x.timestamp), deps
 
-    async def _execute_text_response(
-        self, context: ContextTypes.DEFAULT_TYPE, response: TextResponse
-    ) -> telegram.Message | None:
+    async def _execute_text_response(self, response: TextResponse) -> telegram.Message | None:
         """
         Send a text response to the chat.
         """
@@ -491,7 +473,7 @@ class ConversationJob(BaseJob):
             reply_parameters = None
 
         reply_message = await telegram_call(
-            context.bot.send_message,
+            self._run_context.bot.send_message,
             chat_id=int(self.chat_id),
             text=response.message_text,
             reply_parameters=reply_parameters,
@@ -499,11 +481,9 @@ class ConversationJob(BaseJob):
 
         return reply_message
 
-    async def _execute_reaction_response(
-        self, context: ContextTypes.DEFAULT_TYPE, response: ReactionResponse, message: telegram.Message
-    ):
+    async def _execute_reaction_response(self, response: ReactionResponse, message: telegram.Message):
         react_sent = await telegram_call(
-            context.bot.set_message_reaction,
+            self._run_context.bot.set_message_reaction,
             chat_id=int(self.chat_id),
             message_id=int(response.react_to_message_id),
             reaction=response.emoji,
@@ -517,7 +497,7 @@ class ConversationJob(BaseJob):
                 date=datetime.now(UTC),
                 old_reaction=(),
                 new_reaction=(telegram.ReactionTypeEmoji(emoji=response.emoji),),
-                user=await context.bot.get_me(),
+                user=await self._run_context.bot.get_me(),
             )
             return reaction_message
 

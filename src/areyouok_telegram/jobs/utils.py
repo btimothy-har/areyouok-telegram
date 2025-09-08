@@ -4,7 +4,6 @@ from typing import Any
 
 import pydantic_ai
 import telegram
-from telegram.ext import ContextTypes
 
 from areyouok_telegram.data import Chats
 from areyouok_telegram.data import Context
@@ -194,17 +193,3 @@ async def generate_chat_agent(chat_session: Sessions) -> pydantic_ai.Agent:  # n
         pydantic_ai.Agent: The generated chat agent.
     """
     return chat_agent
-
-
-async def post_cleanup_tasks(
-    *,
-    context: ContextTypes.DEFAULT_TYPE,  # noqa: ARG001
-    chat_session: Sessions,  # noqa: ARG001
-) -> None:
-    """
-    Perform any post-cleanup tasks after closing a chat session.
-    This can include logging, notifications, or other cleanup actions.
-
-    Primarily used to allow for ENV-specific injection of different post-cleanup tasks.
-    """
-    return
