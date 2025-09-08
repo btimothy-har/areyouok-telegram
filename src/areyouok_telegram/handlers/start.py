@@ -2,11 +2,15 @@ import telegram
 from telegram.ext import ContextTypes
 
 from areyouok_telegram.data import SYSTEM_USER_ID
+from areyouok_telegram.data import GuidedSessions
 from areyouok_telegram.data import GuidedSessionType
+from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import operations as data_operations
+from areyouok_telegram.data.connection import async_database
 from areyouok_telegram.handlers.constants import MD2_ONBOARDING_COMPLETE_MESSAGE
 from areyouok_telegram.handlers.constants import MD2_ONBOARDING_START_MESSAGE
 from areyouok_telegram.logging import traced
+from areyouok_telegram.utils import db_retry
 from areyouok_telegram.utils import telegram_call
 
 
@@ -30,6 +34,9 @@ async def on_start_command(update: telegram.Update, context: ContextTypes.DEFAUL
         )
         return
 
+    elif onboarding_session.is_incomplete:
+        await start_new_onboarding_session(session=active_session)
+
     await data_operations.new_session_event(
         session=active_session,
         message=update.message,
@@ -50,4 +57,15 @@ async def on_start_command(update: telegram.Update, context: ContextTypes.DEFAUL
             message=bot_message,
             user_id=SYSTEM_USER_ID,
             is_user=False,
+        )
+
+
+@db_retry()
+async def start_new_onboarding_session(*, session: Sessions):
+    async with async_database() as db_conn:
+        await GuidedSessions.start_new_session(
+            db_conn,
+            chat_id=session.chat_id,
+            chat_session=session.session_id,
+            session_type=GuidedSessionType.ONBOARDING.value,
         )

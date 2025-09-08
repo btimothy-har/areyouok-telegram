@@ -46,7 +46,7 @@ async def get_or_create_guided_session(
     session: Sessions,
     stype: GuidedSessionType | None = None,
     create_if_not_exists: bool = True,
-) -> Sessions | None:
+) -> GuidedSessions | None:
     async with async_database() as db_conn:
         all_sessions_of_type = await GuidedSessions.get_by_chat_id(
             db_conn,
