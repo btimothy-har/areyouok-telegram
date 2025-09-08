@@ -11,7 +11,7 @@ from areyouok_telegram.utils import telegram_call
 
 
 @traced(extract_args=["update"])
-async def on_start_command(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):  # noqa: ARG001
+async def on_start_command(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):
     active_session = await data_operations.get_or_create_active_session(
         chat_id=str(update.effective_chat.id),
         timestamp=update.message.date,
