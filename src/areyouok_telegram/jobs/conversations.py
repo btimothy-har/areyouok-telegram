@@ -164,7 +164,7 @@ class ConversationJob(BaseJob):
                         await self._mark_notification_completed(dependencies.notification)
 
                     if agent_response.response_type == "SwitchPersonalityResponse":
-                        message_history, dependencies = await self._prepare_conversation_input(
+                        message_history, dependencies = await self.prepare_conversation_input(
                             include_context=True,
                         )
                         dependencies.restricted_responses.add(
@@ -254,61 +254,6 @@ class ConversationJob(BaseJob):
 
         return sorted(message_history, key=lambda x: x.timestamp), deps
 
-    @traced(extract_args=["response"], record_return=True)
-    async def _execute_response(
-        self,
-        *,
-        response: AgentResponse,
-    ) -> MessageTypes | None:
-        """Execute the response action in the given context."""
-
-        response_message = None
-
-        if response.response_type == "TextResponse":
-            response_message = await self._execute_text_response(response=response)
-
-        elif response.response_type == "ReactionResponse":
-            # Get the message to react to
-            async with async_database() as db_conn:
-                message, _ = await Messages.retrieve_message_by_id(
-                    db_conn,
-                    message_id=response.react_to_message_id,
-                    chat_id=self.chat_id,
-                    include_reactions=False,
-                )
-
-            if not message:
-                logfire.warning(
-                    f"Message {response.react_to_message_id} not found in chat {self.chat_id}, skipping reaction."
-                )
-                return
-
-            # Decrypt the message to get the telegram object
-            message.decrypt_payload(self.chat_encryption_key)
-            telegram_message = message.telegram_object
-
-            response_message = await self._execute_reaction_response(response=response, message=telegram_message)
-
-        elif response.response_type == "SwitchPersonalityResponse":
-            await self._save_session_context(
-                ctype=ContextType.PERSONALITY,
-                data={
-                    "personality": response.personality,
-                    "reasoning": response.reasoning,
-                },
-            )
-
-        elif response.response_type == "DoNothingResponse":
-            await self._save_session_context(
-                ctype=ContextType.RESPONSE,
-                data={
-                    "reasoning": response.reasoning,
-                },
-            )
-
-        logfire.info(f"Response executed in chat {self.chat_id}: {response.response_type}.")
-        return response_message
-
     @traced(extract_args=["chat_session"])
     async def generate_response(
         self,
@@ -365,6 +310,61 @@ class ConversationJob(BaseJob):
 
         context_report: ContextTemplate = context_run_payload.output
         return context_report
+
+    @traced(extract_args=["response"], record_return=True)
+    async def _execute_response(
+        self,
+        *,
+        response: AgentResponse,
+    ) -> MessageTypes | None:
+        """Execute the response action in the given context."""
+
+        response_message = None
+
+        if response.response_type == "TextResponse":
+            response_message = await self._execute_text_response(response=response)
+
+        elif response.response_type == "ReactionResponse":
+            # Get the message to react to
+            async with async_database() as db_conn:
+                message, _ = await Messages.retrieve_message_by_id(
+                    db_conn,
+                    message_id=response.react_to_message_id,
+                    chat_id=self.chat_id,
+                    include_reactions=False,
+                )
+
+            if not message:
+                logfire.warning(
+                    f"Message {response.react_to_message_id} not found in chat {self.chat_id}, skipping reaction."
+                )
+                return
+
+            # Decrypt the message to get the telegram object
+            message.decrypt_payload(self.chat_encryption_key)
+            telegram_message = message.telegram_object
+
+            response_message = await self._execute_reaction_response(response=response, message=telegram_message)
+
+        elif response.response_type == "SwitchPersonalityResponse":
+            await self._save_session_context(
+                ctype=ContextType.PERSONALITY,
+                data={
+                    "personality": response.personality,
+                    "reasoning": response.reasoning,
+                },
+            )
+
+        elif response.response_type == "DoNothingResponse":
+            await self._save_session_context(
+                ctype=ContextType.RESPONSE,
+                data={
+                    "reasoning": response.reasoning,
+                },
+            )
+
+        logfire.info(f"Response executed in chat {self.chat_id}: {response.response_type}.")
+        return response_message
 
     async def _execute_text_response(self, response: TextResponse) -> telegram.Message | None:
         """
@@ -438,7 +438,7 @@ class ConversationJob(BaseJob):
             )
 
     @db_retry()
-    async def _save_session_context(self, *ctype: ContextType, data: Any):
+    async def _save_session_context(self, *, ctype: ContextType, data: Any):
         """
         Create a session context for the given chat ID.
         If no session exists, create a new one.
