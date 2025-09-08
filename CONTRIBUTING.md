@@ -91,15 +91,15 @@ Dev commands are defined in the Makefile:
 
 ## AI Development
 
-We primarily use [Claude Code](https://www.anthropic.com/claude-code) as our AI development tool.
+We primarily use [Claude Code](https://www.anthropic.com/claude-code) as our local AI development tool.
 
 We **don't** require you to use Claude Code, but we actively maintain project tooling for Claude, so you will benefit from it.
 
 In an attempt to limit codebase bloat, we will **not** accept PRs to write tooling for other AI development tools.
 
-### CodeRabbit
-@coderabbitai is installed on this repo.
+### AI in GitHub
+CodeRabbit is installed on this repo.
 
 All PRs are automatically reviewed by @coderabbitai. This is **not** a blocking review.
 
-If you have a paid plan with CodeRabbit, you may leverage other features of CodeRabbit (e.g. agentic chat, etc).
+If you have a paid plan with CodeRabbit, you may leverage the paid features of CodeRabbit (e.g. agentic chat, etc).
