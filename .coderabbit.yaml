@@ -28,6 +28,9 @@ reviews:
   labeling_instructions: []
   path_filters:
     - '!tests/**'
+    - '!.claude/**'
+    - '!.github/**'
+    - '!.vscode/**'
   path_instructions: []
   abort_on_close: true
   disable_cache: false
