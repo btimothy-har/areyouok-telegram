@@ -1,11 +1,8 @@
 from datetime import UTC
 from datetime import datetime
-from typing import Any
 
 import pydantic_ai
 
-from areyouok_telegram.data import Context
-from areyouok_telegram.data import ContextType
 from areyouok_telegram.data import GuidedSessions
 from areyouok_telegram.data import GuidedSessionType
 from areyouok_telegram.data import Notifications
@@ -49,30 +46,6 @@ async def mark_notification_completed(notification: Notifications) -> None:
     """
     async with async_database() as db_conn:
         await notification.mark_as_completed(db_conn)
-
-
-@db_retry()
-async def save_session_context(
-    *,
-    chat_encryption_key: str,
-    chat_id: str,
-    chat_session: Sessions,
-    ctype: ContextType,
-    data: Any,
-):
-    """
-    Create a session context for the given chat ID.
-    If no session exists, create a new one.
-    """
-    async with async_database() as db_conn:
-        await Context.new_or_update(
-            db_conn,
-            chat_encryption_key=chat_encryption_key,
-            chat_id=chat_id,
-            session_id=chat_session.session_id,
-            ctype=ctype.value,
-            content=data,
-        )
 
 
 @db_retry()

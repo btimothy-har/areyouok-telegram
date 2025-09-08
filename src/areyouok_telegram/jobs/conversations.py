@@ -1,6 +1,7 @@
 from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
+from typing import Any
 
 import logfire
 import telegram
@@ -23,7 +24,6 @@ from areyouok_telegram.jobs.exceptions import UserNotFoundForChatError
 from areyouok_telegram.jobs.utils import close_chat_session
 from areyouok_telegram.jobs.utils import get_next_notification
 from areyouok_telegram.jobs.utils import mark_notification_completed
-from areyouok_telegram.jobs.utils import save_session_context
 from areyouok_telegram.llms.chat import AgentResponse
 from areyouok_telegram.llms.chat import ChatAgentDependencies
 from areyouok_telegram.llms.chat import OnboardingAgentDependencies
@@ -253,10 +253,7 @@ class ConversationJob(BaseJob):
             response_message = await self._execute_reaction_response(response=response, message=telegram_message)
 
         elif response.response_type == "SwitchPersonalityResponse":
-            await save_session_context(
-                chat_encryption_key=self.chat_encryption_key,
-                chat_id=self.chat_id,
-                chat_session=self.active_session,
+            await self._save_session_context(
                 ctype=ContextType.PERSONALITY,
                 data={
                     "personality": response.personality,
@@ -265,10 +262,7 @@ class ConversationJob(BaseJob):
             )
 
         elif response.response_type == "DoNothingResponse":
-            await save_session_context(
-                chat_encryption_key=self.chat_encryption_key,
-                chat_id=self.chat_id,
-                chat_session=self.active_session,
+            await self._save_session_context(
                 ctype=ContextType.RESPONSE,
                 data={
                     "reasoning": response.reasoning,
@@ -302,10 +296,7 @@ class ConversationJob(BaseJob):
             compressed_context = await self._compress_session_context(
                 message_history=message_history,
             )
-            await save_session_context(
-                chat_encryption_key=self.chat_encryption_key,
-                chat_id=self.chat_id,
-                chat_session=self.active_session,
+            await self._save_session_context(
                 ctype=ContextType.SESSION,
                 data=compressed_context.content,
             )
@@ -519,4 +510,20 @@ class ConversationJob(BaseJob):
                 db_conn,
                 timestamp=self._run_timestamp,
                 is_user=False,  # This is a bot response
+            )
+
+    @db_retry()
+    async def _save_session_context(self, *ctype: ContextType, data: Any):
+        """
+        Create a session context for the given chat ID.
+        If no session exists, create a new one.
+        """
+        async with async_database() as db_conn:
+            await Context.new_or_update(
+                db_conn,
+                chat_encryption_key=self.chat_encryption_key,
+                chat_id=self.chat_id,
+                session_id=self.active_session.session_id,
+                ctype=ctype.value,
+                content=data,
             )
