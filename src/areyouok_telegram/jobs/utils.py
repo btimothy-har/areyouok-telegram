@@ -5,7 +5,6 @@ from typing import Any
 import pydantic_ai
 import telegram
 
-from areyouok_telegram.data import Chats
 from areyouok_telegram.data import Context
 from areyouok_telegram.data import ContextType
 from areyouok_telegram.data import GuidedSessions
@@ -15,7 +14,6 @@ from areyouok_telegram.data import MessageTypes
 from areyouok_telegram.data import Notifications
 from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database
-from areyouok_telegram.jobs.exceptions import UserNotFoundForChatError
 from areyouok_telegram.llms.chat import chat_agent
 from areyouok_telegram.utils import db_retry
 
@@ -27,29 +25,6 @@ async def get_chat_session(chat_id: str) -> Sessions:
     """
     async with async_database() as db_conn:
         return await Sessions.get_active_session(db_conn, chat_id=chat_id)
-
-
-@db_retry()
-async def get_chat_encryption_key(chat_id: str) -> str:
-    """
-    Get the chat encryption key for a given chat_id.
-
-    Args:
-        chat_id: The chat ID to get the encryption key for
-
-    Returns:
-        The chat's encryption key
-
-    Raises:
-        UserNotFoundForChatError: If no chat is found (will be renamed to ChatNotFoundError later)
-    """
-    async with async_database() as db_conn:
-        chat_obj = await Chats.get_by_id(db_conn, chat_id=chat_id)
-
-        if not chat_obj:
-            raise UserNotFoundForChatError(chat_id)
-
-        return chat_obj.retrieve_key()
 
 
 @db_retry()

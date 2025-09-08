@@ -7,6 +7,7 @@ import telegram
 
 from areyouok_telegram.config import CHAT_SESSION_TIMEOUT_MINS
 from areyouok_telegram.data import ChatEvent
+from areyouok_telegram.data import Chats
 from areyouok_telegram.data import Context
 from areyouok_telegram.data import ContextType
 from areyouok_telegram.data import GuidedSessions
@@ -19,7 +20,6 @@ from areyouok_telegram.data import async_database
 from areyouok_telegram.jobs import BaseJob
 from areyouok_telegram.jobs.exceptions import UserNotFoundForChatError
 from areyouok_telegram.jobs.utils import close_chat_session
-from areyouok_telegram.jobs.utils import get_chat_encryption_key
 from areyouok_telegram.jobs.utils import get_chat_session
 from areyouok_telegram.jobs.utils import get_next_notification
 from areyouok_telegram.jobs.utils import log_bot_activity
@@ -60,6 +60,7 @@ class ConversationJob(BaseJob):
         """
         super().__init__()
         self.chat_id = str(chat_id)
+        self.chat_encryption_key = None
 
     @property
     def name(self) -> str:
@@ -71,7 +72,7 @@ class ConversationJob(BaseJob):
 
         # Get user encryption key - this will fail for non-private chats
         try:
-            chat_encryption_key = await get_chat_encryption_key(self.chat_id)
+            self.chat_encryption_key = await self._get_chat_encryption_key()
         except UserNotFoundForChatError:
             with logfire.span(
                 f"Stopping conversation job for chat {self.chat_id} - no user found.",
@@ -108,10 +109,7 @@ class ConversationJob(BaseJob):
                     _span_name="ConversationJob._run.close_session",
                     chat_id=self.chat_id,
                 ):
-                    await self.close_session(
-                        chat_encryption_key,
-                        chat_session=chat_session,
-                    )
+                    await self.close_session(chat_session=chat_session)
                     await self.stop()
 
         else:
@@ -127,13 +125,11 @@ class ConversationJob(BaseJob):
                 )
 
                 message_history, dependencies = await self._prepare_conversation_input(
-                    chat_encryption_key,
                     chat_session=chat_session,
                     include_context=True,
                 )
 
                 response, response_message = await self.generate_response(
-                    chat_encryption_key=chat_encryption_key,
                     chat_session=chat_session,
                     conversation_history=message_history,
                     dependencies=dependencies,
@@ -143,7 +139,7 @@ class ConversationJob(BaseJob):
                     # Log the bot's response message
                     await log_bot_message(
                         bot_id=str(self._bot_id),
-                        chat_encryption_key=chat_encryption_key,
+                        chat_encryption_key=self.chat_encryption_key,
                         chat_id=self.chat_id,
                         chat_session=chat_session,
                         message=response_message,
@@ -159,7 +155,6 @@ class ConversationJob(BaseJob):
     async def generate_response(
         self,
         *,
-        chat_encryption_key: str,
         chat_session: Sessions,
         conversation_history: list[ChatEvent],
         dependencies: ChatAgentDependencies | OnboardingAgentDependencies,
@@ -209,7 +204,6 @@ class ConversationJob(BaseJob):
         agent_response: AgentResponse = agent_run_payload.output
 
         response_message = await self._execute_response(
-            chat_encryption_key=chat_encryption_key,
             chat_session=chat_session,
             response=agent_response,
         )
@@ -220,14 +214,12 @@ class ConversationJob(BaseJob):
 
         if agent_response.response_type == "SwitchPersonalityResponse":
             message_history, dependencies = await self._prepare_conversation_input(
-                chat_encryption_key,
                 chat_session=chat_session,
                 include_context=True,
             )
             dependencies.restricted_responses.add("switch_personality")  # Disable personality switching for this run
 
             return await self.generate_response(
-                chat_encryption_key=chat_encryption_key,
                 chat_session=chat_session,
                 conversation_history=message_history,
                 dependencies=dependencies,
@@ -239,7 +231,6 @@ class ConversationJob(BaseJob):
     async def _execute_response(
         self,
         *,
-        chat_encryption_key: str,
         chat_session: Sessions,
         response: AgentResponse,
     ) -> MessageTypes | None:
@@ -267,14 +258,14 @@ class ConversationJob(BaseJob):
                 return
 
             # Decrypt the message to get the telegram object
-            message.decrypt_payload(chat_encryption_key)
+            message.decrypt_payload(self.chat_encryption_key)
             telegram_message = message.telegram_object
 
             response_message = await self._execute_reaction_response(response=response, message=telegram_message)
 
         elif response.response_type == "SwitchPersonalityResponse":
             await save_session_context(
-                chat_encryption_key=chat_encryption_key,
+                chat_encryption_key=self.chat_encryption_key,
                 chat_id=self.chat_id,
                 chat_session=chat_session,
                 ctype=ContextType.PERSONALITY,
@@ -286,7 +277,7 @@ class ConversationJob(BaseJob):
 
         elif response.response_type == "DoNothingResponse":
             await save_session_context(
-                chat_encryption_key=chat_encryption_key,
+                chat_encryption_key=self.chat_encryption_key,
                 chat_id=self.chat_id,
                 chat_session=chat_session,
                 ctype=ContextType.RESPONSE,
@@ -301,7 +292,6 @@ class ConversationJob(BaseJob):
     @traced(extract_args=["chat_session"])
     async def close_session(
         self,
-        chat_encryption_key: str,
         *,
         chat_session: Sessions,
     ) -> None:
@@ -322,7 +312,6 @@ class ConversationJob(BaseJob):
             return
 
         message_history, _ = await self._prepare_conversation_input(
-            chat_encryption_key,
             chat_session=chat_session,
             include_context=False,
         )
@@ -333,7 +322,7 @@ class ConversationJob(BaseJob):
                 message_history=message_history,
             )
             await save_session_context(
-                chat_encryption_key=chat_encryption_key,
+                chat_encryption_key=self.chat_encryption_key,
                 chat_id=self.chat_id,
                 chat_session=chat_session,
                 ctype=ContextType.SESSION,
@@ -350,7 +339,6 @@ class ConversationJob(BaseJob):
     @db_retry()
     async def _prepare_conversation_input(
         self,
-        chat_encryption_key: str,
         *,
         chat_session: Sessions,
         include_context: bool = True,
@@ -396,7 +384,7 @@ class ConversationJob(BaseJob):
                     session_context.extend([c for c in chat_context_items if c.session_id == chat_session.session_id])
 
                     # Decrypt all context items
-                    [c.decrypt_content(chat_encryption_key=chat_encryption_key) for c in session_context]
+                    [c.decrypt_content(chat_encryption_key=self.chat_encryption_key) for c in session_context]
 
                     # Convert context items to ChatEvent objects
                     # and extend the message history
@@ -411,7 +399,7 @@ class ConversationJob(BaseJob):
 
             # Filter messages to only those created before the run timestamp
             raw_messages = [msg for msg in raw_messages if msg.created_at <= self._run_timestamp]
-            [msg.decrypt_payload(chat_encryption_key) for msg in raw_messages]
+            [msg.decrypt_payload(self.chat_encryption_key) for msg in raw_messages]
 
             for msg in raw_messages:
                 if msg.message_type == "Message":
@@ -426,7 +414,7 @@ class ConversationJob(BaseJob):
                     continue  # Skip unknown message types
 
                 if media:
-                    [m.decrypt_content(chat_encryption_key=chat_encryption_key) for m in media]
+                    [m.decrypt_content(chat_encryption_key=self.chat_encryption_key) for m in media]
 
                 message_history.append(ChatEvent.from_message(msg, media))
 
@@ -446,7 +434,7 @@ class ConversationJob(BaseJob):
 
             else:
                 if latest_personality_context:
-                    latest_personality_context.decrypt_content(chat_encryption_key=chat_encryption_key)
+                    latest_personality_context.decrypt_content(chat_encryption_key=self.chat_encryption_key)
                     chat_personality = (
                         latest_personality_context.content.get("personality", "exploration")
                         if isinstance(latest_personality_context.content, dict)
@@ -524,3 +512,22 @@ class ConversationJob(BaseJob):
 
         context_report: ContextTemplate = context_run_payload.output
         return context_report
+
+    @db_retry()
+    async def _get_chat_encryption_key(self) -> str:
+        """
+        Get the chat encryption key for the chat.
+
+        Returns:
+            The chat's encryption key
+
+        Raises:
+            UserNotFoundForChatError: If no chat is found (will be renamed to ChatNotFoundError later)
+        """
+        async with async_database() as db_conn:
+            chat_obj = await Chats.get_by_id(db_conn, chat_id=self.chat_id)
+
+            if not chat_obj:
+                raise UserNotFoundForChatError(self.chat_id)
+
+            return chat_obj.retrieve_key()
