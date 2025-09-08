@@ -396,6 +396,8 @@ class ConversationJob(BaseJob):
         )
 
         if react_sent:
+            bot_user = await telegram_call(self._run_context.bot.get_me)
+
             # Manually create MessageReactionUpdated object as Telegram API does not return it
             reaction_message = telegram.MessageReactionUpdated(
                 chat=message.chat,
@@ -403,7 +405,7 @@ class ConversationJob(BaseJob):
                 date=datetime.now(UTC),
                 old_reaction=(),
                 new_reaction=(telegram.ReactionTypeEmoji(emoji=response.emoji),),
-                user=await self._run_context.bot.get_me(),
+                user=bot_user,
             )
             return reaction_message
 
