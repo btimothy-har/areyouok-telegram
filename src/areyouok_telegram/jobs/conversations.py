@@ -17,10 +17,10 @@ from areyouok_telegram.data import Messages
 from areyouok_telegram.data import MessageTypes
 from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database
+from areyouok_telegram.data import operations as data_operations
 from areyouok_telegram.jobs import BaseJob
 from areyouok_telegram.jobs.exceptions import UserNotFoundForChatError
 from areyouok_telegram.jobs.utils import close_chat_session
-from areyouok_telegram.jobs.utils import get_chat_session
 from areyouok_telegram.jobs.utils import get_next_notification
 from areyouok_telegram.jobs.utils import log_bot_activity
 from areyouok_telegram.jobs.utils import log_bot_message
@@ -60,7 +60,9 @@ class ConversationJob(BaseJob):
         """
         super().__init__()
         self.chat_id = str(chat_id)
-        self.chat_encryption_key = None
+        self.chat_encryption_key: str | None = None
+
+        self.active_session: Sessions | None = None
 
     @property
     def name(self) -> str:
@@ -83,9 +85,12 @@ class ConversationJob(BaseJob):
                 await self.stop()
                 return
 
-        chat_session = await get_chat_session(chat_id=self.chat_id)
+        self.active_session = await data_operations.get_or_create_active_session(
+            chat_id=self.chat_id,
+            create_if_not_exists=False,
+        )
 
-        if not chat_session:
+        if not self.active_session:
             # If no active session is found, log a warning and stop the job
             # This can happen if the user submits a command without chatting
             with logfire.span(
@@ -96,25 +101,25 @@ class ConversationJob(BaseJob):
             ):
                 await self.stop()
 
-        elif chat_session.has_bot_responded:
+        elif self.active_session.has_bot_responded:
             logfire.debug("No new updates, nothing to do.")
 
             # If the last user activity was more than an hour ago, stop the job
-            reference_ts = chat_session.last_user_activity or chat_session.session_start
+            reference_ts = self.active_session.last_user_activity or self.active_session.session_start
             inactivity_duration = self._run_timestamp - reference_ts
 
             if inactivity_duration > timedelta(minutes=CHAT_SESSION_TIMEOUT_MINS):
                 with logfire.span(
-                    f"Closing chat session {chat_session.session_id} due to inactivity.",
+                    f"Closing chat session {self.active_session.session_id} due to inactivity.",
                     _span_name="ConversationJob._run.close_session",
                     chat_id=self.chat_id,
                 ):
-                    await self.close_session(chat_session=chat_session)
+                    await self.close_session()
                     await self.stop()
 
         else:
             with logfire.span(
-                f"Generating response in {chat_session.session_id}.",
+                f"Generating response in {self.active_session.session_id}.",
                 _span_name="ConversationJob._run.respond",
                 chat_id=self.chat_id,
             ):
@@ -125,12 +130,10 @@ class ConversationJob(BaseJob):
                 )
 
                 message_history, dependencies = await self._prepare_conversation_input(
-                    chat_session=chat_session,
                     include_context=True,
                 )
 
                 response, response_message = await self.generate_response(
-                    chat_session=chat_session,
                     conversation_history=message_history,
                     dependencies=dependencies,
                 )
@@ -141,13 +144,13 @@ class ConversationJob(BaseJob):
                         bot_id=str(self._bot_id),
                         chat_encryption_key=self.chat_encryption_key,
                         chat_id=self.chat_id,
-                        chat_session=chat_session,
+                        chat_session=self.active_session,
                         message=response_message,
                         reasoning=response.reasoning,
                     )
 
                 await log_bot_activity(
-                    chat_session=chat_session,
+                    chat_session=self.active_session,
                     timestamp=self._run_timestamp,
                 )
 
@@ -155,7 +158,6 @@ class ConversationJob(BaseJob):
     async def generate_response(
         self,
         *,
-        chat_session: Sessions,
         conversation_history: list[ChatEvent],
         dependencies: ChatAgentDependencies | OnboardingAgentDependencies,
     ) -> tuple[AgentResponse | None, MessageTypes | None]:
@@ -192,7 +194,7 @@ class ConversationJob(BaseJob):
         agent_run_payload = await run_agent_with_tracking(
             agent,
             chat_id=self.chat_id,
-            session_id=chat_session.session_id,
+            session_id=self.active_session.session_id,
             run_kwargs={
                 "message_history": [
                     c.to_model_message(str(self._bot_id), agent_run_time) for c in conversation_history
@@ -203,24 +205,17 @@ class ConversationJob(BaseJob):
 
         agent_response: AgentResponse = agent_run_payload.output
 
-        response_message = await self._execute_response(
-            chat_session=chat_session,
-            response=agent_response,
-        )
+        response_message = await self._execute_response(response=agent_response)
 
         # Mark notification as completed if we have one and response was generated successfully
         if dependencies.notification and agent_response:
             await mark_notification_completed(dependencies.notification)
 
         if agent_response.response_type == "SwitchPersonalityResponse":
-            message_history, dependencies = await self._prepare_conversation_input(
-                chat_session=chat_session,
-                include_context=True,
-            )
+            message_history, dependencies = await self._prepare_conversation_input(include_context=True)
             dependencies.restricted_responses.add("switch_personality")  # Disable personality switching for this run
 
             return await self.generate_response(
-                chat_session=chat_session,
                 conversation_history=message_history,
                 dependencies=dependencies,
             )
@@ -231,7 +226,6 @@ class ConversationJob(BaseJob):
     async def _execute_response(
         self,
         *,
-        chat_session: Sessions,
         response: AgentResponse,
     ) -> MessageTypes | None:
         """Execute the response action in the given context."""
@@ -267,7 +261,7 @@ class ConversationJob(BaseJob):
             await save_session_context(
                 chat_encryption_key=self.chat_encryption_key,
                 chat_id=self.chat_id,
-                chat_session=chat_session,
+                chat_session=self.active_session,
                 ctype=ContextType.PERSONALITY,
                 data={
                     "personality": response.personality,
@@ -279,7 +273,7 @@ class ConversationJob(BaseJob):
             await save_session_context(
                 chat_encryption_key=self.chat_encryption_key,
                 chat_id=self.chat_id,
-                chat_session=chat_session,
+                chat_session=self.active_session,
                 ctype=ContextType.RESPONSE,
                 data={
                     "reasoning": response.reasoning,
@@ -290,57 +284,48 @@ class ConversationJob(BaseJob):
         return response_message
 
     @traced(extract_args=["chat_session"])
-    async def close_session(
-        self,
-        *,
-        chat_session: Sessions,
-    ) -> None:
+    async def close_session(self) -> None:
         """Closes the chat session and compresses the context."""
 
         async with async_database() as db_conn:
             context = await Context.get_by_session_id(
                 db_conn,
-                session_id=chat_session.session_key,
+                session_id=self.active_session.session_id,
                 ctype="session",
             )
 
         if context:
             logfire.warning(
                 "Context already exists for session, skipping compression.",
-                session_id=chat_session.session_id,
+                session_id=self.active_session.session_id,
             )
             return
 
-        message_history, _ = await self._prepare_conversation_input(
-            chat_session=chat_session,
-            include_context=False,
-        )
+        message_history, _ = await self._prepare_conversation_input(include_context=False)
 
         if len(message_history) > 0:
             compressed_context = await self._compress_session_context(
-                chat_session=chat_session,
                 message_history=message_history,
             )
             await save_session_context(
                 chat_encryption_key=self.chat_encryption_key,
                 chat_id=self.chat_id,
-                chat_session=chat_session,
+                chat_session=self.active_session,
                 ctype=ContextType.SESSION,
                 data=compressed_context.content,
             )
 
         else:
-            logfire.warning(f"No messages found in chat session {chat_session.session_id}, nothing to compress.")
+            logfire.warning(f"No messages found in chat session {self.active_session.session_id}, nothing to compress.")
 
-        await close_chat_session(chat_session)
-        logfire.info(f"Session {chat_session.session_id} closed due to inactivity.")
+        await close_chat_session(self.active_session)
+        logfire.info(f"Session {self.active_session.session_id} closed due to inactivity.")
 
     @traced(extract_args=["chat_session", "include_context"])
     @db_retry()
     async def _prepare_conversation_input(
         self,
         *,
-        chat_session: Sessions,
         include_context: bool = True,
     ) -> tuple[list[ChatEvent], ChatAgentDependencies | OnboardingAgentDependencies]:
         """Prepare the conversation input for the chat session.
@@ -355,7 +340,7 @@ class ConversationJob(BaseJob):
             # Check for active onboarding sessions linked to this chat session
             onboarding_sessions = await GuidedSessions.get_by_chat_session(
                 db_conn,
-                chat_session=chat_session.session_key,
+                chat_session=self.active_session.session_id,
                 session_type=GuidedSessionType.ONBOARDING.value,
             )
 
@@ -381,7 +366,9 @@ class ConversationJob(BaseJob):
                         and c.created_at >= (self._run_timestamp - timedelta(days=1))
                     ]
                     # Include all other context items for the session
-                    session_context.extend([c for c in chat_context_items if c.session_id == chat_session.session_id])
+                    session_context.extend([
+                        c for c in chat_context_items if c.session_id == self.active_session.session_id
+                    ])
 
                     # Decrypt all context items
                     [c.decrypt_content(chat_encryption_key=self.chat_encryption_key) for c in session_context]
@@ -395,7 +382,7 @@ class ConversationJob(BaseJob):
                     )
 
             # Get all messages from the session
-            raw_messages = await chat_session.get_messages(db_conn)
+            raw_messages = await self.active_session.get_messages(db_conn)
 
             # Filter messages to only those created before the run timestamp
             raw_messages = [msg for msg in raw_messages if msg.created_at <= self._run_timestamp]
@@ -424,7 +411,7 @@ class ConversationJob(BaseJob):
             deps_data = {
                 "tg_context": self._run_context,
                 "tg_chat_id": self.chat_id,
-                "tg_session_id": chat_session.session_id,
+                "tg_session_id": self.active_session.session_id,
                 "notification": notification,
             }
 
@@ -491,9 +478,7 @@ class ConversationJob(BaseJob):
 
         return None
 
-    async def _compress_session_context(
-        self, chat_session: Sessions, message_history: list[ChatEvent]
-    ) -> ContextTemplate:
+    async def _compress_session_context(self, message_history: list[ChatEvent]) -> ContextTemplate:
         """
         Compress the session context for this chat.
         """
@@ -504,7 +489,7 @@ class ConversationJob(BaseJob):
         context_run_payload = await run_agent_with_tracking(
             context_compression_agent,
             chat_id=self.chat_id,
-            session_id=chat_session.session_id,
+            session_id=self.active_session.session_id,
             run_kwargs={
                 "message_history": [c.to_model_message(self._bot_id, agent_run_time) for c in message_history],
             },
