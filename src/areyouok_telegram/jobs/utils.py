@@ -19,15 +19,6 @@ from areyouok_telegram.utils import db_retry
 
 
 @db_retry()
-async def get_chat_session(chat_id: str) -> Sessions:
-    """
-    Retrieve the active session for a given chat ID.
-    """
-    async with async_database() as db_conn:
-        return await Sessions.get_active_session(db_conn, chat_id=chat_id)
-
-
-@db_retry()
 async def get_all_inactive_sessions(from_dt: datetime, to_dt: datetime) -> list["Sessions"]:
     """
     Retrieve all inactive sessions that ended within the specified time range.
