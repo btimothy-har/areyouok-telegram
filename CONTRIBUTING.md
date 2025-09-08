@@ -71,7 +71,7 @@ This project uses a simplified mono-project src-layout structure:
    Insert your own Telegram bot token here, as created in the previous steps.
    >
    > **PG_CONNECTION_STRING**<br />
-   The Postgres connection string to your Postgres instance, without the leading protocol. 
+   The Postgres connection string to your Postgres instance, without the leading protocol. We insert the protocol within the application.
    e.g. `username:password@address:port/database`, omitting the leading `postgres://...`
    > 
    > **OPENROUTER_API_KEY**<br />
@@ -100,6 +100,6 @@ In an attempt to limit codebase bloat, we will **not** accept PRs to write tooli
 ### AI in GitHub
 CodeRabbit is installed on this repo.
 
-All PRs are automatically reviewed by @coderabbitai. This is **not** a blocking review.
+All PRs are automatically reviewed by CodeRabbit. Reviews are **non‑blocking** and advisory; however, please address relevant CodeRabbit comments in the PR thread like any other review.
 
-If you have a paid plan with CodeRabbit, you may leverage the paid features of CodeRabbit (e.g. agentic chat, etc).
+If you have a paid plan with CodeRabbit, you may leverage additional features (e.g., agentic chat) in GitHub directly.
