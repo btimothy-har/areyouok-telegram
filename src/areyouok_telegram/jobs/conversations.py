@@ -133,7 +133,7 @@ class ConversationJob(BaseJob):
                                 "nothing to compress."
                             )
 
-                    await data_operations.close_chat_session(self.active_session)
+                    await data_operations.close_chat_session(chat_session=self.active_session)
                     logfire.info(f"Session {self.active_session.session_id} closed due to inactivity.")
 
                     await self.stop()
@@ -485,9 +485,9 @@ class ConversationJob(BaseJob):
                     if c.type == ContextType.SESSION.value and c.created_at >= (self._run_timestamp - timedelta(days=1))
                 ]
                 # Include all other context items for the session
-                session_context.extend(
-                    [c for c in chat_context_items if c.session_id == self.active_session.session_id]
-                )
+                session_context.extend([
+                    c for c in chat_context_items if c.session_id == self.active_session.session_id
+                ])
 
                 # Decrypt all context items
                 [c.decrypt_content(chat_encryption_key=self.chat_encryption_key) for c in session_context]
