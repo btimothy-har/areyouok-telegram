@@ -10,6 +10,7 @@ import pytest
 import telegram
 
 from areyouok_telegram.data import operations as data_operations
+from areyouok_telegram.data.models.chat_event import SYSTEM_USER_ID
 from areyouok_telegram.data.models.guided_sessions import GuidedSessionType
 
 
@@ -28,7 +29,7 @@ class TestGetOrCreateActiveSession:
 
             with patch(
                 "areyouok_telegram.data.operations.Sessions.get_active_session",
-                new=AsyncMock(return_value=mock_session)
+                new=AsyncMock(return_value=mock_session),
             ) as mock_get_active:
                 result = await data_operations.get_or_create_active_session(chat_id="chat123")
 
@@ -47,18 +48,14 @@ class TestGetOrCreateActiveSession:
 
             with (
                 patch(
-                    "areyouok_telegram.data.operations.Sessions.get_active_session",
-                    new=AsyncMock(return_value=None)
+                    "areyouok_telegram.data.operations.Sessions.get_active_session", new=AsyncMock(return_value=None)
                 ) as mock_get_active,
                 patch(
                     "areyouok_telegram.data.operations.Sessions.create_session",
-                    new=AsyncMock(return_value=mock_session)
+                    new=AsyncMock(return_value=mock_session),
                 ) as mock_create,
             ):
-                result = await data_operations.get_or_create_active_session(
-                    chat_id="chat123",
-                    timestamp=frozen_time
-                )
+                result = await data_operations.get_or_create_active_session(chat_id="chat123", timestamp=frozen_time)
 
         assert result == mock_session
         mock_get_active.assert_called_once_with(mock_db_conn, chat_id="chat123")
@@ -73,17 +70,12 @@ class TestGetOrCreateActiveSession:
 
             with (
                 patch(
-                    "areyouok_telegram.data.operations.Sessions.get_active_session",
-                    new=AsyncMock(return_value=None)
+                    "areyouok_telegram.data.operations.Sessions.get_active_session", new=AsyncMock(return_value=None)
                 ) as mock_get_active,
-                patch(
-                    "areyouok_telegram.data.operations.Sessions.create_session",
-                    new=AsyncMock()
-                ) as mock_create,
+                patch("areyouok_telegram.data.operations.Sessions.create_session", new=AsyncMock()) as mock_create,
             ):
                 result = await data_operations.get_or_create_active_session(
-                    chat_id="chat123",
-                    create_if_not_exists=False
+                    chat_id="chat123", create_if_not_exists=False
                 )
 
         assert result is None
@@ -107,19 +99,15 @@ class TestGetOrCreateGuidedSession:
 
             with patch(
                 "areyouok_telegram.data.operations.GuidedSessions.get_by_chat_id",
-                new=AsyncMock(return_value=[mock_guided_session])
+                new=AsyncMock(return_value=[mock_guided_session]),
             ) as mock_get_by_chat:
                 result = await data_operations.get_or_create_guided_session(
-                    chat_id="chat123",
-                    session=mock_session,
-                    stype=GuidedSessionType.ONBOARDING
+                    chat_id="chat123", session=mock_session, stype=GuidedSessionType.ONBOARDING
                 )
 
         assert result == mock_guided_session
         mock_get_by_chat.assert_called_once_with(
-            mock_db_conn,
-            chat_id="chat123",
-            session_type=GuidedSessionType.ONBOARDING.value
+            mock_db_conn, chat_id="chat123", session_type=GuidedSessionType.ONBOARDING.value
         )
 
     @pytest.mark.asyncio
@@ -135,36 +123,27 @@ class TestGetOrCreateGuidedSession:
 
             with (
                 patch(
-                    "areyouok_telegram.data.operations.GuidedSessions.get_by_chat_id",
-                    new=AsyncMock(return_value=[])
+                    "areyouok_telegram.data.operations.GuidedSessions.get_by_chat_id", new=AsyncMock(return_value=[])
                 ) as mock_get_by_chat,
                 patch(
-                    "areyouok_telegram.data.operations.GuidedSessions.start_new_session",
-                    new=AsyncMock()
+                    "areyouok_telegram.data.operations.GuidedSessions.start_new_session", new=AsyncMock()
                 ) as mock_start_new,
                 patch(
                     "areyouok_telegram.data.operations.GuidedSessions.get_by_chat_session",
-                    new=AsyncMock(return_value=[mock_guided_session])
+                    new=AsyncMock(return_value=[mock_guided_session]),
                 ) as mock_get_by_session,
             ):
                 result = await data_operations.get_or_create_guided_session(
-                    chat_id="chat123",
-                    session=mock_session,
-                    stype=GuidedSessionType.ONBOARDING
+                    chat_id="chat123", session=mock_session, stype=GuidedSessionType.ONBOARDING
                 )
 
         assert result == mock_guided_session
         mock_get_by_chat.assert_called_once()
         mock_start_new.assert_called_once_with(
-            mock_db_conn,
-            chat_id="chat123",
-            chat_session="session123",
-            session_type=GuidedSessionType.ONBOARDING.value
+            mock_db_conn, chat_id="chat123", chat_session="session123", session_type=GuidedSessionType.ONBOARDING.value
         )
         mock_get_by_session.assert_called_once_with(
-            mock_db_conn,
-            chat_session="session123",
-            session_type=GuidedSessionType.ONBOARDING.value
+            mock_db_conn, chat_session="session123", session_type=GuidedSessionType.ONBOARDING.value
         )
 
     @pytest.mark.asyncio
@@ -179,19 +158,17 @@ class TestGetOrCreateGuidedSession:
 
             with (
                 patch(
-                    "areyouok_telegram.data.operations.GuidedSessions.get_by_chat_id",
-                    new=AsyncMock(return_value=[])
+                    "areyouok_telegram.data.operations.GuidedSessions.get_by_chat_id", new=AsyncMock(return_value=[])
                 ) as mock_get_by_chat,
                 patch(
-                    "areyouok_telegram.data.operations.GuidedSessions.start_new_session",
-                    new=AsyncMock()
+                    "areyouok_telegram.data.operations.GuidedSessions.start_new_session", new=AsyncMock()
                 ) as mock_start_new,
             ):
                 result = await data_operations.get_or_create_guided_session(
                     chat_id="chat123",
                     session=mock_session,
                     stype=GuidedSessionType.ONBOARDING,
-                    create_if_not_exists=False
+                    create_if_not_exists=False,
                 )
 
         assert result is None
@@ -226,16 +203,14 @@ class TestNewSessionEvent:
 
             with (
                 patch(
-                    "areyouok_telegram.data.operations.Chats.get_by_id",
-                    new=AsyncMock(return_value=mock_chat)
+                    "areyouok_telegram.data.operations.Chats.get_by_id", new=AsyncMock(return_value=mock_chat)
                 ) as mock_get_chat,
                 patch(
-                    "areyouok_telegram.data.operations.Messages.new_or_update",
-                    new=AsyncMock()
+                    "areyouok_telegram.data.operations.Messages.new_or_update", new=AsyncMock()
                 ) as mock_new_or_update,
                 patch(
                     "areyouok_telegram.data.operations.extract_media_from_telegram_message",
-                    new=AsyncMock(return_value=0)
+                    new=AsyncMock(return_value=0),
                 ) as mock_extract_media,
             ):
                 await data_operations.new_session_event(
@@ -243,7 +218,7 @@ class TestNewSessionEvent:
                     message=mock_message,
                     user_id="user789",
                     is_user=True,
-                    reasoning="Test reasoning"
+                    reasoning="Test reasoning",
                 )
 
         mock_get_chat.assert_called_once_with(mock_db_conn, chat_id="chat456")
@@ -254,14 +229,11 @@ class TestNewSessionEvent:
             chat_id="chat456",
             message=mock_message,
             session_key="session123",
-            reasoning="Test reasoning"
+            reasoning="Test reasoning",
         )
         mock_session.new_message.assert_called_once_with(mock_db_conn, timestamp=frozen_time, is_user=True)
         mock_extract_media.assert_called_once_with(
-            mock_db_conn,
-            "encryption_key",
-            message=mock_message,
-            session_id="session123"
+            mock_db_conn, "encryption_key", message=mock_message, session_id="session123"
         )
 
     @pytest.mark.asyncio
@@ -285,19 +257,14 @@ class TestNewSessionEvent:
 
             with (
                 patch(
-                    "areyouok_telegram.data.operations.Chats.get_by_id",
-                    new=AsyncMock(return_value=mock_chat)
+                    "areyouok_telegram.data.operations.Chats.get_by_id", new=AsyncMock(return_value=mock_chat)
                 ) as mock_get_chat,
                 patch(
-                    "areyouok_telegram.data.operations.Messages.new_or_update",
-                    new=AsyncMock()
+                    "areyouok_telegram.data.operations.Messages.new_or_update", new=AsyncMock()
                 ) as mock_new_or_update,
             ):
                 await data_operations.new_session_event(
-                    session=mock_session,
-                    message=mock_reaction,
-                    user_id="user789",
-                    is_user=False
+                    session=mock_session, message=mock_reaction, user_id="user789", is_user=False
                 )
 
         mock_get_chat.assert_called_once_with(mock_db_conn, chat_id="chat456")
@@ -308,14 +275,13 @@ class TestNewSessionEvent:
             chat_id="chat456",
             message=mock_reaction,
             session_key="session123",
-            reasoning=None
+            reasoning=None,
         )
         mock_session.new_activity.assert_called_once_with(mock_db_conn, timestamp=frozen_time, is_user=False)
 
     @pytest.mark.asyncio
     async def test_system_user_no_activity_log(self, frozen_time):
         """Test that system user messages don't log session activity."""
-        from areyouok_telegram.data.models.chat_event import SYSTEM_USER_ID
 
         mock_session = MagicMock()
         mock_session.session_id = "session123"
@@ -336,24 +302,15 @@ class TestNewSessionEvent:
             mock_async_db.return_value.__aenter__.return_value = mock_db_conn
 
             with (
-                patch(
-                    "areyouok_telegram.data.operations.Chats.get_by_id",
-                    new=AsyncMock(return_value=mock_chat)
-                ),
-                patch(
-                    "areyouok_telegram.data.operations.Messages.new_or_update",
-                    new=AsyncMock()
-                ),
+                patch("areyouok_telegram.data.operations.Chats.get_by_id", new=AsyncMock(return_value=mock_chat)),
+                patch("areyouok_telegram.data.operations.Messages.new_or_update", new=AsyncMock()),
                 patch(
                     "areyouok_telegram.data.operations.extract_media_from_telegram_message",
-                    new=AsyncMock(return_value=0)
+                    new=AsyncMock(return_value=0),
                 ),
             ):
                 await data_operations.new_session_event(
-                    session=mock_session,
-                    message=mock_message,
-                    user_id=SYSTEM_USER_ID,
-                    is_user=False
+                    session=mock_session, message=mock_message, user_id=SYSTEM_USER_ID, is_user=False
                 )
 
         # Verify no session activity was logged for system user
@@ -382,36 +339,22 @@ class TestNewSessionEvent:
             mock_async_db.return_value.__aenter__.return_value = mock_db_conn
 
             with (
-                patch(
-                    "areyouok_telegram.data.operations.Chats.get_by_id",
-                    new=AsyncMock(return_value=mock_chat)
-                ),
-                patch(
-                    "areyouok_telegram.data.operations.Messages.new_or_update",
-                    new=AsyncMock()
-                ),
+                patch("areyouok_telegram.data.operations.Chats.get_by_id", new=AsyncMock(return_value=mock_chat)),
+                patch("areyouok_telegram.data.operations.Messages.new_or_update", new=AsyncMock()),
                 patch(
                     "areyouok_telegram.data.operations.extract_media_from_telegram_message",
-                    new=AsyncMock(return_value=2)
+                    new=AsyncMock(return_value=2),
                 ) as mock_extract_media,
                 patch(
-                    "areyouok_telegram.data.operations.handle_unsupported_media",
-                    new=AsyncMock()
+                    "areyouok_telegram.data.operations.handle_unsupported_media", new=AsyncMock()
                 ) as mock_handle_unsupported,
             ):
                 await data_operations.new_session_event(
-                    session=mock_session,
-                    message=mock_message,
-                    user_id="user789",
-                    is_user=True
+                    session=mock_session, message=mock_message, user_id="user789", is_user=True
                 )
 
         mock_extract_media.assert_called_once()
-        mock_handle_unsupported.assert_called_once_with(
-            mock_db_conn,
-            chat_id="chat456",
-            message_id=123
-        )
+        mock_handle_unsupported.assert_called_once_with(mock_db_conn, chat_id="chat456", message_id=123)
 
 
 class TestCloseChatSession:
@@ -434,15 +377,11 @@ class TestCloseChatSession:
 
             with patch(
                 "areyouok_telegram.data.operations.get_or_create_guided_session",
-                new=AsyncMock(return_value=[mock_guided_session])
+                new=AsyncMock(return_value=[mock_guided_session]),
             ) as mock_get_guided:
                 await data_operations.close_chat_session(chat_session=mock_session)
 
-        mock_get_guided.assert_called_once_with(
-            chat_id="chat123",
-            session=mock_session,
-            create_if_not_exists=False
-        )
+        mock_get_guided.assert_called_once_with(chat_id="chat123", session=mock_session, create_if_not_exists=False)
         mock_guided_session.inactivate.assert_called_once_with(mock_db_conn, timestamp=frozen_time)
         mock_session.close_session.assert_called_once_with(mock_db_conn, timestamp=frozen_time)
 
@@ -458,16 +397,11 @@ class TestCloseChatSession:
             mock_async_db.return_value.__aenter__.return_value = mock_db_conn
 
             with patch(
-                "areyouok_telegram.data.operations.get_or_create_guided_session",
-                new=AsyncMock(return_value=None)
+                "areyouok_telegram.data.operations.get_or_create_guided_session", new=AsyncMock(return_value=None)
             ) as mock_get_guided:
                 await data_operations.close_chat_session(chat_session=mock_session)
 
-        mock_get_guided.assert_called_once_with(
-            chat_id="chat123",
-            session=mock_session,
-            create_if_not_exists=False
-        )
+        mock_get_guided.assert_called_once_with(chat_id="chat123", session=mock_session, create_if_not_exists=False)
         mock_session.close_session.assert_called_once_with(mock_db_conn, timestamp=frozen_time)
 
     @pytest.mark.asyncio
@@ -487,7 +421,7 @@ class TestCloseChatSession:
 
             with patch(
                 "areyouok_telegram.data.operations.get_or_create_guided_session",
-                new=AsyncMock(return_value=[mock_guided_session])
+                new=AsyncMock(return_value=[mock_guided_session]),
             ):
                 await data_operations.close_chat_session(chat_session=mock_session)
 
