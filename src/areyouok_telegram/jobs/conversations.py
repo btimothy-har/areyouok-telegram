@@ -467,6 +467,8 @@ class ConversationJob(BaseJob):
 
     @db_retry()
     async def _get_chat_context(self) -> list[Context]:
+        chat_context = []
+
         async with async_database() as db_conn:
             chat_context_items = await Context.retrieve_context_by_chat(
                 db_conn,
@@ -477,20 +479,18 @@ class ConversationJob(BaseJob):
                 chat_context_items.sort(key=lambda c: c.created_at, reverse=True)
 
                 # Historical conversation context - only include those created within the last 24 hours
-                session_context = [
+                chat_context = [
                     c
                     for c in chat_context_items
                     if c.type == ContextType.SESSION.value and c.created_at >= (self._run_timestamp - timedelta(days=1))
                 ]
                 # Include all other context items for the session
-                session_context.extend(
-                    [c for c in chat_context_items if c.session_id == self.active_session.session_id]
-                )
+                chat_context.extend([c for c in chat_context_items if c.session_id == self.active_session.session_id])
 
                 # Decrypt all context items
-                [c.decrypt_content(chat_encryption_key=self.chat_encryption_key) for c in session_context]
+                [c.decrypt_content(chat_encryption_key=self.chat_encryption_key) for c in chat_context]
 
-        return chat_context_items or []
+        return chat_context
 
     @db_retry()
     async def _get_chat_history(self) -> list[ChatEvent]:
