@@ -254,7 +254,7 @@ class ConversationJob(BaseJob):
 
         return sorted(message_history, key=lambda x: x.timestamp), deps
 
-    @traced(extract_args=["chat_session"])
+    @traced(extract_args=False)
     async def generate_response(
         self,
         *,
