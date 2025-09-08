@@ -195,7 +195,7 @@ async def _download_file(
             file_id=file.file_id,
             file_unique_id=file.file_unique_id,
             chat_id=str(message.chat.id),
-            message_id=str(message.id),
+            message_id=str(message.message_id),
             file_size=file.file_size,
             content_bytes=bytes(content_bytes),
         )
@@ -206,7 +206,7 @@ async def _download_file(
                 "Transcribing voice message",
                 _span_name="handlers.utils._download_file.transcribe_voice",
                 chat_id=message.chat.id,
-                message_id=message.id,
+                message_id=message.message_id,
                 file_id=file.file_id,
                 file_unique_id=file.file_unique_id,
             ):
@@ -234,7 +234,7 @@ async def _download_file(
                         file_id=f"{file.file_id}_transcription",
                         file_unique_id=f"{file.file_unique_id}_transcription",
                         chat_id=str(message.chat.id),
-                        message_id=str(message.id),
+                        message_id=str(message.message_id),
                         file_size=len(transcription_bytes),
                         content_bytes=transcription_bytes,
                     )
@@ -246,7 +246,7 @@ async def _download_file(
                     logfire.exception(
                         "Voice message could not be transcribed.",
                         chat_id=message.chat.id,
-                        message_id=message.id,
+                        message_id=message.message_id,
                         file_id=file.file_id,
                         file_unique_id=file.file_unique_id,
                     )
@@ -256,7 +256,7 @@ async def _download_file(
             "Failed to download file.",
             exc_info=e,
             chat_id=message.chat.id,
-            message_id=message.id,
+            message_id=message.message_id,
             file_id=file.file_id,
             file_unique_id=file.file_unique_id,
         )
