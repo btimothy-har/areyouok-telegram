@@ -98,11 +98,11 @@ class TestTranscribeVoiceDataSync:
             # Verify OpenAI transcription was called 3 times (3 segments)
             assert mock_client.audio.transcriptions.create.call_count == 3
 
-            # Verify the prompt for second and third segments uses previous transcription object
+            # Verify the prompt for second and third segments uses previous transcription text
             calls = mock_client.audio.transcriptions.create.call_args_list
             assert calls[0][1]["prompt"] is None
-            assert calls[1][1]["prompt"] == mock_transcriptions[0]
-            assert calls[2][1]["prompt"] == mock_transcriptions[1]
+            assert calls[1][1]["prompt"] == mock_transcriptions[0].text
+            assert calls[2][1]["prompt"] == mock_transcriptions[1].text
 
     def test_transcribe_voice_data_sync_exception(self):
         """Test that exceptions are wrapped in VoiceNotProcessableError."""
