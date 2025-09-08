@@ -136,7 +136,7 @@ async def close_chat_session(*, chat_session: Sessions):
 
         guided_sessions = await GuidedSessions.get_by_chat_session(
             db_conn,
-            chat_session=chat_session,
+            chat_session=chat_session.session_id,
         )
 
         if guided_sessions:
