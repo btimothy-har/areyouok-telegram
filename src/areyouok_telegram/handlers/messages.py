@@ -40,12 +40,12 @@ async def on_edit_message(update: telegram.Update, context: ContextTypes.DEFAULT
 
     active_session = await data_operations.get_or_create_active_session(
         chat_id=str(update.effective_chat.id),
-        timestamp=update.message.date,
+        timestamp=update.edited_message.date,
     )
 
     await data_operations.new_session_event(
         session=active_session,
-        message=update.message,
+        message=update.edited_message,
         user_id=str(update.effective_user.id),
         is_user=True,
     )
@@ -59,12 +59,12 @@ async def on_message_react(update: telegram.Update, context: ContextTypes.DEFAUL
 
     active_session = await data_operations.get_or_create_active_session(
         chat_id=str(update.effective_chat.id),
-        timestamp=update.message.date,
+        timestamp=update.message_reaction.date,
     )
 
     await data_operations.new_session_event(
         session=active_session,
-        message=update.message,
+        message=update.message_reaction,
         user_id=str(update.effective_user.id),
         is_user=True,
     )
