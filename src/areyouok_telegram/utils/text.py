@@ -28,10 +28,8 @@ def split_long_message(message: str, max_length: int = 4000) -> list[str]:
             if current:
                 chunks.append(current)
                 current = ""
-            for i in range(0, len(line), max_length):
-                chunks.append(line[i : i + max_length])
+            chunks.extend(line[i : i + max_length] for i in range(0, len(line), max_length))
             continue
-
         test = f"{current}\n{line}" if current else line
         if len(test) > max_length:
             chunks.append(current)
