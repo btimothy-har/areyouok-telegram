@@ -130,15 +130,15 @@ async def close_chat_session(*, chat_session: Sessions):
     """
     close_ts = datetime.now(UTC)
 
-    guided_sessions = await get_or_create_guided_session(
-        chat_id=chat_session.chat_id,
-        session=chat_session,
-        create_if_not_exists=False,
-    )
-
     async with async_database() as db_conn:
         # Check for any active guided sessions (onboarding, etc.) linked to this session
         # Inactivate any active onboarding sessions
+
+        guided_sessions = await GuidedSessions.get_by_chat_session(
+            db_conn,
+            chat_session=chat_session,
+        )
+
         if guided_sessions:
             for s in guided_sessions:
                 if s.is_active:
