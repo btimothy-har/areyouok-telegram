@@ -22,7 +22,7 @@ class DataLogWarningJob(BaseJob):
     def name(self) -> str:
         return "data_log_warning"
 
-    async def _run(self) -> None:
+    async def run_job(self) -> None:
         if LOG_CHAT_MESSAGES and ENV in CONTROLLED_ENV:
             logfire.warning(
                 "Logging chat messages in a controlled environment. "

@@ -25,7 +25,7 @@ class PingJob(BaseJob):
     def name(self) -> str:
         return "ping_status"
 
-    async def _run(self) -> None:
+    async def run_job(self) -> None:
         """
         Log a ping with bot status information.
         """

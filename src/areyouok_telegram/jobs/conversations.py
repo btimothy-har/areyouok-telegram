@@ -64,7 +64,7 @@ class ConversationJob(BaseJob):
         """Generate a consistent job name for this chat."""
         return f"conversation:{self.chat_id}"
 
-    async def _run(self) -> None:  # noqa: ARG002
+    async def run_job(self) -> None:  # noqa: ARG002
         """Process conversation for this chat."""
 
         # Get user encryption key - this will fail for non-private chats
@@ -161,7 +161,7 @@ class ConversationJob(BaseJob):
                     )
 
                     if dependencies.notification and agent_response:
-                        await self.mark_notification_completed(dependencies.notification)
+                        await self._mark_notification_completed(dependencies.notification)
 
                     if agent_response.response_type == "SwitchPersonalityResponse":
                         message_history, dependencies = await self._prepare_conversation_input(
@@ -463,7 +463,7 @@ class ConversationJob(BaseJob):
             )
         return context | None
 
-    @db_retry
+    @db_retry()
     async def _get_chat_context(self) -> list[ChatEvent]:
         context_items = []
 
@@ -494,7 +494,7 @@ class ConversationJob(BaseJob):
 
         return context_items
 
-    @db_retry
+    @db_retry()
     async def _get_chat_history(self) -> list[ChatEvent]:
         message_history = []
 
@@ -539,7 +539,7 @@ class ConversationJob(BaseJob):
             return await Notifications.get_next_pending(db_conn, chat_id=self.chat_id)
 
     @db_retry()
-    async def mark_notification_completed(self, notification: Notifications):
+    async def _mark_notification_completed(self, notification: Notifications):
         async with async_database() as db_conn:
             await notification.mark_as_completed(db_conn)
 

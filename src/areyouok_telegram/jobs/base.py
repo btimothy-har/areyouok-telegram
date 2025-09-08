@@ -45,7 +45,7 @@ class BaseJob(ABC):
         self._run_context = context
         self._bot_id = context.bot.id
 
-        await self._run()
+        await self.run_job()
 
     @traced(extract_args=False)
     async def stop(self) -> None:
@@ -73,8 +73,8 @@ class BaseJob(ABC):
         raise NotImplementedError("Subclasses must implement the 'name' property.")
 
     @abstractmethod
-    async def _run(self) -> None:
+    async def run_job(self) -> None:
         """
         Internal method to run the job. This should be overridden by subclasses to implement the job's logic.
         """
-        raise NotImplementedError("Subclasses must implement the '_run' method.")
+        raise NotImplementedError("Subclasses must implement the 'run_job' method.")
