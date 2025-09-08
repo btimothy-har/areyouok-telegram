@@ -43,7 +43,8 @@ async def on_settings_command(update: telegram.Update, context: ContextTypes.DEF
         # Normalize field name: "name" -> "preferred_name"
         normalized_field_name = "preferred_name" if field_arg == "name" else field_arg
 
-        await context.bot.set_message_reaction(
+        await telegram_call(
+            context.bot.set_message_reaction,
             chat_id=update.effective_chat.id,
             message_id=update.message.id,
             reaction="👌",
@@ -70,7 +71,7 @@ async def on_settings_command(update: telegram.Update, context: ContextTypes.DEF
         await telegram_call(
             context.bot.send_message,
             chat_id=update.effective_chat.id,
-            text=update_outcome.feedback,
+            text=update_outcome.feedback or "Settings updated successfully.",
         )
 
     else:
