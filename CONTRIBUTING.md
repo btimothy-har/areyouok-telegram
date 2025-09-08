@@ -71,15 +71,15 @@ This project uses a simplified mono-project src-layout structure:
    Insert your own Telegram bot token here, as created in the previous steps.
    >
    > **PG_CONNECTION_STRING**<br />
-   The Postgres connection string to your Postgres instance, without the leading protocol. 
+   The Postgres connection string to your Postgres instance, without the leading protocol. We insert the protocol within the application.
    e.g. `username:password@address:port/database`, omitting the leading `postgres://...`
    > 
    > **OPENROUTER_API_KEY**<br />
    If you are using provider-direct API keys, then provide **both** `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`.
 
-### Utility Commands
+### Dev Commands
 
-We configure some utility functions in the Makefile that are useful for developing locally:
+Dev commands are defined in the Makefile:
 
 - `make test`: Runs the entire test suite with coverage included.
 - `make lint`: Lints the codebase, flagging errors without fixing issues.
@@ -91,11 +91,15 @@ We configure some utility functions in the Makefile that are useful for developi
 
 ## AI Development
 
-This project primarily uses [Claude Code](https://www.anthropic.com/claude-code) as our AI development tool.
+We primarily use [Claude Code](https://www.anthropic.com/claude-code) as our local AI development tool.
 
 We **don't** require you to use Claude Code, but we actively maintain project tooling for Claude, so you will benefit from it.
 
-### Claude Code in GitHub
-You may use Claude Code via the following commands in our repository issues/PRs:
-- `@claude propose` on issues, to develop a proposal to address the issue.
-- `@claude review` on PRs, to get a PR review from Claude.
+In an attempt to limit codebase bloat, we will **not** accept PRs to write tooling for other AI development tools.
+
+### AI in GitHub
+CodeRabbit is installed on this repo.
+
+All PRs are automatically reviewed by CodeRabbit. Reviews are **non‑blocking** and advisory; however, please address relevant CodeRabbit comments in the PR thread like any other review.
+
+If you have a paid plan with CodeRabbit, you may leverage additional features (e.g., agentic chat) in GitHub directly.
