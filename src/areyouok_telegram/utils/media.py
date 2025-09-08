@@ -256,7 +256,7 @@ async def _download_file(
     except Exception as e:
         logfire.exception(
             "Failed to download file.",
-            exc_info=e,
+            _exc_info=e,
             chat_id=message.chat.id,
             message_id=message.message_id,
             file_id=file.file_id,

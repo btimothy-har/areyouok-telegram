@@ -73,8 +73,8 @@ async def _download_file(
     message: telegram.Message,
     file: telegram.File,
     session_id: str | None = None,
-) -> bytes:
-    """Download a Telegram file as bytes.
+) -> None:
+    """Download and persist a Telegram file.
 
     Args:
         db_conn: Database connection
@@ -151,7 +151,7 @@ async def _download_file(
     except Exception as e:
         logfire.exception(
             "Failed to download file.",
-            exc_info=e,
+            _exc_info=e,
             chat_id=message.chat.id,
             message_id=message.id,
             file_id=file.file_id,
