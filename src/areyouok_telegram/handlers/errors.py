@@ -52,10 +52,20 @@ def _chunk_traceback_message(exception: Exception) -> list[str]:
 
     # Escape backticks in the traceback for MarkdownV2 code block
     tb_string = tb_string.replace("`", "\\`")
-    full_message = f"An exception was raised while handling an update\n\n```\n{tb_string}\n```"
 
-    # Split the message if it's too long
-    return split_long_message(full_message)
+    # Split the traceback text only (not the full message with code fences)
+    base_message = "An exception was raised while handling an update\n\n"
+
+    # Calculate available space for traceback content
+    # Account for: base message + code fence markers + some buffer
+    code_fence_overhead = len("```\n") + len("\n```")
+    available_length = 4000 - len(base_message) - code_fence_overhead
+
+    # Split just the traceback content
+    tb_chunks = split_long_message(tb_string, max_length=available_length)
+
+    # Wrap each chunk in its own code fence
+    return [f"{base_message}```\n{chunk}\n```" for chunk in tb_chunks]
 
 
 async def _send_message_to_developer(bot: telegram.Bot, message: str):
