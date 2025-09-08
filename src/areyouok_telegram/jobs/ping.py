@@ -4,7 +4,7 @@ from datetime import datetime
 import logfire
 
 from areyouok_telegram.config import ENV
-from areyouok_telegram.jobs import BaseJob
+from areyouok_telegram.jobs.base import BaseJob
 from areyouok_telegram.utils import telegram_call
 
 

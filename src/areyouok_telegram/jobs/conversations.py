@@ -19,7 +19,7 @@ from areyouok_telegram.data import Notifications
 from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database
 from areyouok_telegram.data import operations as data_operations
-from areyouok_telegram.jobs import BaseJob
+from areyouok_telegram.jobs.base import BaseJob
 from areyouok_telegram.jobs.exceptions import UserNotFoundForChatError
 from areyouok_telegram.llms.chat import AgentResponse
 from areyouok_telegram.llms.chat import ChatAgentDependencies
