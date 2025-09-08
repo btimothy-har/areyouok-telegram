@@ -74,6 +74,18 @@ async def instructions_with_personality_switch(ctx: pydantic_ai.RunContext[ChatA
         restrict_response_text += RESTRICT_PERSONALITY_SWITCH
         restrict_response_text += "\n"
 
+    user_preferences_text = (
+        USER_PREFERENCES.format(
+            preferred_name=user_metadata.preferred_name,
+            country=user_metadata.country,
+            timezone=user_metadata.timezone,
+            current_time=user_metadata.get_current_time(),
+            communication_style=user_metadata.communication_style,
+        )
+        if user_metadata
+        else None
+    )
+
     prompt = BaseChatPromptTemplate(
         response=RESPONSE_PROMPT.format(response_restrictions=restrict_response_text),
         message=MESSAGE_FOR_USER_PROMPT.format(important_message_for_user=ctx.deps.notification.content)
@@ -85,13 +97,7 @@ async def instructions_with_personality_switch(ctx: pydantic_ai.RunContext[ChatA
             if "switch_personality" not in ctx.deps.restricted_responses
             else None,
         ),
-        user_preferences=USER_PREFERENCES.format(
-            preferred_name=user_metadata.preferred_name,
-            country=user_metadata.country,
-            timezone=user_metadata.timezone,
-            current_time=user_metadata.get_current_time(),
-            communication_style=user_metadata.communication_style,
-        ),
+        user_preferences=user_preferences_text,
     )
     return prompt.as_prompt_string()
 
