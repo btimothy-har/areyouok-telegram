@@ -14,6 +14,11 @@ from areyouok_telegram.logging import traced
 JOB_LOCK = defaultdict(asyncio.Lock)
 
 
+class RunContextNotInitializedError(RuntimeError):
+    def __init__(self, job_name: str):
+        super().__init__(f"Run context not initialized for job: {job_name}.")
+
+
 class BaseJob(ABC):
     """
     Base class for all jobs in the areyouok-telegram application.
@@ -52,6 +57,9 @@ class BaseJob(ABC):
         """
         Stops the job gracefully.
         """
+        if self._run_context is None:
+            raise RunContextNotInitializedError(self.name)
+
         async with JOB_LOCK[self.id]:
             existing_jobs = self._run_context.job_queue.get_jobs_by_name(self.name)
             if not existing_jobs:
