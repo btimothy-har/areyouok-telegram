@@ -365,6 +365,7 @@ class TestCloseChatSession:
         """Test successfully closing a chat session."""
         mock_session = MagicMock()
         mock_session.chat_id = "chat123"
+        mock_session.session_id = "session123"
         mock_session.close_session = AsyncMock()
 
         mock_guided_session = MagicMock()
@@ -381,7 +382,7 @@ class TestCloseChatSession:
             ) as mock_get_guided:
                 await data_operations.close_chat_session(chat_session=mock_session)
 
-        mock_get_guided.assert_called_once_with(mock_db_conn, chat_session=mock_session)
+        mock_get_guided.assert_called_once_with(mock_db_conn, chat_session="session123")
         mock_guided_session.inactivate.assert_called_once_with(mock_db_conn, timestamp=frozen_time)
         mock_session.close_session.assert_called_once_with(mock_db_conn, timestamp=frozen_time)
 
@@ -390,6 +391,7 @@ class TestCloseChatSession:
         """Test closing session when no guided sessions exist."""
         mock_session = MagicMock()
         mock_session.chat_id = "chat123"
+        mock_session.session_id = "session123"
         mock_session.close_session = AsyncMock()
 
         with patch("areyouok_telegram.data.operations.async_database") as mock_async_db:
@@ -401,7 +403,7 @@ class TestCloseChatSession:
             ) as mock_get_guided:
                 await data_operations.close_chat_session(chat_session=mock_session)
 
-        mock_get_guided.assert_called_once_with(mock_db_conn, chat_session=mock_session)
+        mock_get_guided.assert_called_once_with(mock_db_conn, chat_session="session123")
         mock_session.close_session.assert_called_once_with(mock_db_conn, timestamp=frozen_time)
 
     @pytest.mark.asyncio
@@ -409,6 +411,7 @@ class TestCloseChatSession:
         """Test closing session when guided sessions are already inactive."""
         mock_session = MagicMock()
         mock_session.chat_id = "chat123"
+        mock_session.session_id = "session123"
         mock_session.close_session = AsyncMock()
 
         mock_guided_session = MagicMock()
