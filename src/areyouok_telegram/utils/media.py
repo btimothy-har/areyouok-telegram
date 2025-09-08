@@ -156,7 +156,9 @@ def transcribe_voice_data_sync(voice_data: bytes) -> list[openai_audio.transcrip
                 model="gpt-4o-transcribe",
                 chunking_strategy="auto",
                 language="en",
-                prompt=transcriptions[-1] if transcriptions else None,
+                prompt=transcriptions[-1].text
+                if transcriptions and getattr(transcriptions[-1], "text", None)
+                else None,
                 temperature=0.2,
             )
             transcriptions.append(transcription)
