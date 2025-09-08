@@ -77,9 +77,9 @@ This project uses a simplified mono-project src-layout structure:
    > **OPENROUTER_API_KEY**<br />
    If you are using provider-direct API keys, then provide **both** `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`.
 
-### Utility Commands
+### Dev Commands
 
-We configure some utility functions in the Makefile that are useful for developing locally:
+Dev commands are defined in the Makefile:
 
 - `make test`: Runs the entire test suite with coverage included.
 - `make lint`: Lints the codebase, flagging errors without fixing issues.
