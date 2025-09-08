@@ -1,6 +1,5 @@
 """Tests for handlers/errors.py."""
 
-import traceback
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from unittest.mock import patch
@@ -138,7 +137,10 @@ class TestOnErrorEvent:
             patch("areyouok_telegram.handlers.errors.DEVELOPER_THREAD_ID", "thread456"),
             patch("areyouok_telegram.handlers.errors.logfire.exception") as mock_log_exception,
             patch("areyouok_telegram.handlers.errors.logfire.info") as mock_log_info,
-            patch("areyouok_telegram.handlers.errors.telegram_call", new=AsyncMock(side_effect=mock_telegram_call_side_effect)) as mock_telegram_call,
+            patch(
+                "areyouok_telegram.handlers.errors.telegram_call",
+                new=AsyncMock(side_effect=mock_telegram_call_side_effect),
+            ) as mock_telegram_call,
         ):
             await on_error_event(mock_update, mock_context)
 
@@ -259,7 +261,10 @@ class TestOnErrorEvent:
             patch("areyouok_telegram.handlers.errors.DEVELOPER_THREAD_ID", "thread456"),
             patch("areyouok_telegram.handlers.errors.logfire.exception") as mock_log_exception,
             patch("areyouok_telegram.handlers.errors.logfire.info") as mock_log_info,
-            patch("areyouok_telegram.handlers.errors.telegram_call", new=AsyncMock(side_effect=mock_telegram_call_side_effect)) as mock_telegram_call,
+            patch(
+                "areyouok_telegram.handlers.errors.telegram_call",
+                new=AsyncMock(side_effect=mock_telegram_call_side_effect),
+            ) as mock_telegram_call,
         ):
             # The error handler should complete successfully without raising
             await on_error_event(mock_update, mock_context)

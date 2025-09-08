@@ -40,7 +40,7 @@ class TestOnNewMessage:
         with (
             patch(
                 "areyouok_telegram.handlers.messages.data_operations.get_or_create_active_session",
-                new=AsyncMock(return_value=mock_active_session)
+                new=AsyncMock(return_value=mock_active_session),
             ) as mock_get_session,
             patch(
                 "areyouok_telegram.handlers.messages.data_operations.new_session_event", new=AsyncMock()
@@ -109,7 +109,7 @@ class TestOnEditMessage:
         with (
             patch(
                 "areyouok_telegram.handlers.messages.data_operations.get_or_create_active_session",
-                new=AsyncMock(return_value=mock_active_session)
+                new=AsyncMock(return_value=mock_active_session),
             ) as mock_get_session,
             patch(
                 "areyouok_telegram.handlers.messages.data_operations.new_session_event", new=AsyncMock()
@@ -170,7 +170,7 @@ class TestOnMessageReact:
         with (
             patch(
                 "areyouok_telegram.handlers.messages.data_operations.get_or_create_active_session",
-                new=AsyncMock(return_value=mock_active_session)
+                new=AsyncMock(return_value=mock_active_session),
             ) as mock_get_session,
             patch(
                 "areyouok_telegram.handlers.messages.data_operations.new_session_event", new=AsyncMock()

@@ -200,4 +200,3 @@ class TestOnNewUpdate:
             # Job should not be scheduled since there's no chat
             mock_schedule_job.assert_not_called()
             mock_conversation_job.assert_not_called()
-

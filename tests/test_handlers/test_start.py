@@ -3,7 +3,6 @@
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from unittest.mock import patch
-from unittest import mock
 
 import pytest
 import telegram
@@ -43,15 +42,14 @@ class TestOnStartCommand:
         with (
             patch(
                 "areyouok_telegram.handlers.start.data_operations.get_or_create_active_session",
-                new=AsyncMock(return_value=mock_session)
+                new=AsyncMock(return_value=mock_session),
             ) as mock_get_session,
             patch(
                 "areyouok_telegram.handlers.start.data_operations.get_or_create_guided_session",
-                new=AsyncMock(return_value=mock_onboarding_session)
+                new=AsyncMock(return_value=mock_onboarding_session),
             ) as mock_get_guided_session,
             patch(
-                "areyouok_telegram.handlers.start.data_operations.new_session_event",
-                new=AsyncMock()
+                "areyouok_telegram.handlers.start.data_operations.new_session_event", new=AsyncMock()
             ) as mock_new_session_event,
         ):
             await on_start_command(mock_update, mock_context)
@@ -62,9 +60,7 @@ class TestOnStartCommand:
                 timestamp=mock_telegram_message.date,
             )
             mock_get_guided_session.assert_called_once_with(
-                chat_id=str(mock_telegram_chat.id),
-                session=mock_session,
-                stype=GuidedSessionType.ONBOARDING
+                chat_id=str(mock_telegram_chat.id), session=mock_session, stype=GuidedSessionType.ONBOARDING
             )
             mock_new_session_event.assert_called_once_with(
                 session=mock_session,
@@ -101,19 +97,16 @@ class TestOnStartCommand:
         with (
             patch(
                 "areyouok_telegram.handlers.start.data_operations.get_or_create_active_session",
-                new=AsyncMock(return_value=mock_session)
+                new=AsyncMock(return_value=mock_session),
             ) as mock_get_session,
             patch(
                 "areyouok_telegram.handlers.start.data_operations.get_or_create_guided_session",
-                new=AsyncMock(return_value=mock_onboarding_session)
+                new=AsyncMock(return_value=mock_onboarding_session),
             ) as mock_get_guided_session,
             patch(
-                "areyouok_telegram.handlers.start.data_operations.new_session_event",
-                new=AsyncMock()
+                "areyouok_telegram.handlers.start.data_operations.new_session_event", new=AsyncMock()
             ) as mock_new_session_event,
-            patch(
-                "areyouok_telegram.handlers.start.MD2_ONBOARDING_COMPLETE_MESSAGE", "Onboarding already completed!"
-            ),
+            patch("areyouok_telegram.handlers.start.MD2_ONBOARDING_COMPLETE_MESSAGE", "Onboarding already completed!"),
         ):
             await on_start_command(mock_update, mock_context)
 
@@ -123,9 +116,7 @@ class TestOnStartCommand:
                 timestamp=mock_telegram_message.date,
             )
             mock_get_guided_session.assert_called_once_with(
-                chat_id=str(mock_telegram_chat.id),
-                session=mock_session,
-                stype=GuidedSessionType.ONBOARDING
+                chat_id=str(mock_telegram_chat.id), session=mock_session, stype=GuidedSessionType.ONBOARDING
             )
 
             # Should not save session event since early return
@@ -166,15 +157,14 @@ class TestOnStartCommand:
         with (
             patch(
                 "areyouok_telegram.handlers.start.data_operations.get_or_create_active_session",
-                new=AsyncMock(return_value=mock_session)
+                new=AsyncMock(return_value=mock_session),
             ) as mock_get_session,
             patch(
                 "areyouok_telegram.handlers.start.data_operations.get_or_create_guided_session",
-                new=AsyncMock(return_value=mock_onboarding_session)
+                new=AsyncMock(return_value=mock_onboarding_session),
             ) as mock_get_guided_session,
             patch(
-                "areyouok_telegram.handlers.start.data_operations.new_session_event",
-                new=AsyncMock()
+                "areyouok_telegram.handlers.start.data_operations.new_session_event", new=AsyncMock()
             ) as mock_new_session_event,
             patch("areyouok_telegram.handlers.start.MD2_ONBOARDING_START_MESSAGE", "Hello there! Please wait..."),
         ):
@@ -186,9 +176,7 @@ class TestOnStartCommand:
                 timestamp=mock_telegram_message.date,
             )
             mock_get_guided_session.assert_called_once_with(
-                chat_id=str(mock_telegram_chat.id),
-                session=mock_session,
-                stype=GuidedSessionType.ONBOARDING
+                chat_id=str(mock_telegram_chat.id), session=mock_session, stype=GuidedSessionType.ONBOARDING
             )
 
             # Verify session events were logged
@@ -199,14 +187,14 @@ class TestOnStartCommand:
             assert user_event_call[1]["session"] == mock_session
             assert user_event_call[1]["message"] == mock_telegram_message
             assert user_event_call[1]["user_id"] == str(mock_telegram_user.id)
-            assert user_event_call[1]["is_user"] == True
+            assert user_event_call[1]["is_user"]
 
             # Second call: bot greeting message event
             bot_event_call = mock_new_session_event.call_args_list[1]
             assert bot_event_call[1]["session"] == mock_session
             assert bot_event_call[1]["message"] == mock_bot_message
             assert bot_event_call[1]["user_id"] == SYSTEM_USER_ID
-            assert bot_event_call[1]["is_user"] == False
+            assert not bot_event_call[1]["is_user"]
 
             # Verify greeting message was sent
             mock_context.bot.send_message.assert_called_once_with(

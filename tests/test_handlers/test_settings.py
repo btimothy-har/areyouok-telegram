@@ -8,9 +8,9 @@ import pytest
 import telegram
 from telegram.ext import ContextTypes
 
-from areyouok_telegram.handlers.settings import on_settings_command
 from areyouok_telegram.handlers.settings import _construct_user_settings_response
 from areyouok_telegram.handlers.settings import _update_user_metadata_field
+from areyouok_telegram.handlers.settings import on_settings_command
 
 
 class TestOnSettingsCommand:
@@ -245,7 +245,9 @@ class TestOnSettingsCommand:
         mock_context.bot = AsyncMock()
 
         with (
-            patch("areyouok_telegram.handlers.settings.data_operations.get_or_create_active_session") as mock_get_active_session,
+            patch(
+                "areyouok_telegram.handlers.settings.data_operations.get_or_create_active_session"
+            ) as mock_get_active_session,
             patch("areyouok_telegram.handlers.settings._update_user_metadata_field") as mock_update_field,
         ):
             # Mock session
