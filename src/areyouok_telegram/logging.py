@@ -23,9 +23,9 @@ def traced(
     the span name to the function's module path.
 
     Args:
-        message: Optional message template for the span (can use {arg} placeholders)
+        msg_template: Optional message template for the span (can use {arg} placeholders)
         extract_args: Whether to extract and log function arguments (default: True)
-        **attributes: Additional attributes to include in the span
+        record_return: Whether to record the function return value (default: False)
 
     Example:
         @traced("Processing message")
@@ -33,7 +33,7 @@ def traced(
             # Will create span with name "handlers.messages.on_new_message"
             ...
 
-        @traced("Handling {event_type} event", user_id=123)
+        @traced("Handling {event_type} event", extract_args=["event_type"])
         async def handle_event(event_type: str):
             # Will create span with name "handlers.events.handle_event"
             ...
