@@ -213,8 +213,8 @@ class ConversationJob(BaseJob):
         if include_context:
             # Gather chat context
             chat_context_items = await self._get_chat_context()
-            message_history.extend(chat_context_items)
 
+            message_history.extend([ChatEvent.from_context(c) for c in chat_context_items])
             latest_personality_context = next(
                 (c for c in chat_context_items if c.type == ContextType.PERSONALITY.value), None
             )
@@ -466,9 +466,7 @@ class ConversationJob(BaseJob):
         return context
 
     @db_retry()
-    async def _get_chat_context(self) -> list[ChatEvent]:
-        context_items = []
-
+    async def _get_chat_context(self) -> list[Context]:
         async with async_database() as db_conn:
             chat_context_items = await Context.retrieve_context_by_chat(
                 db_conn,
@@ -492,9 +490,7 @@ class ConversationJob(BaseJob):
                 # Decrypt all context items
                 [c.decrypt_content(chat_encryption_key=self.chat_encryption_key) for c in session_context]
 
-                context_items.extend([ChatEvent.from_context(c) for c in session_context])
-
-        return context_items
+        return chat_context_items or []
 
     @db_retry()
     async def _get_chat_history(self) -> list[ChatEvent]:
