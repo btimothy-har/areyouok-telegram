@@ -46,7 +46,7 @@ async def on_settings_command(update: telegram.Update, context: ContextTypes.DEF
         await telegram_call(
             context.bot.set_message_reaction,
             chat_id=update.effective_chat.id,
-            message_id=update.message.id,
+            message_id=update.message.message_id,
             reaction="👌",
         )
 

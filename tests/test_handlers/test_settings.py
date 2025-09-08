@@ -65,7 +65,7 @@ class TestOnSettingsCommand:
         mock_update.effective_chat = mock_telegram_chat
         mock_update.message = mock_telegram_message
         mock_update.message.text = "/settings name Alice Smith"
-        mock_update.message.id = 12345
+        mock_update.message.message_id = 12345
 
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
         mock_context.bot = AsyncMock()
@@ -134,7 +134,7 @@ class TestOnSettingsCommand:
         mock_update.effective_chat = mock_telegram_chat
         mock_update.message = mock_telegram_message
         mock_update.message.text = "/settings country USA"
-        mock_update.message.id = 12345
+        mock_update.message.message_id = 12345
 
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
         mock_context.bot = AsyncMock()
@@ -178,7 +178,7 @@ class TestOnSettingsCommand:
         mock_update.effective_chat = mock_telegram_chat
         mock_update.message = mock_telegram_message
         mock_update.message.text = "/settings timezone America/New_York"
-        mock_update.message.id = 12345
+        mock_update.message.message_id = 12345
 
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
         mock_context.bot = AsyncMock()
@@ -239,7 +239,7 @@ class TestOnSettingsCommand:
         mock_update.effective_chat = mock_telegram_chat
         mock_update.message = mock_telegram_message
         mock_update.message.text = "/settings name Alice"  # Use 'name' to test normalization
-        mock_update.message.id = 12345
+        mock_update.message.message_id = 12345
 
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
         mock_context.bot = AsyncMock()
