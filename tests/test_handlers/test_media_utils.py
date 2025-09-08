@@ -126,6 +126,7 @@ class TestDownloadFile:
         mock_message = MagicMock(spec=telegram.Message)
         mock_message.chat.id = 123
         mock_message.id = 456
+        mock_message.message_id = 456  # Both aliases should return the same value
         mock_message.voice = None  # Not a voice message
 
         mock_file = MagicMock(spec=telegram.File)
@@ -248,6 +249,7 @@ class TestDownloadFile:
         mock_message = MagicMock(spec=telegram.Message)
         mock_message.chat.id = 123
         mock_message.id = 456
+        mock_message.message_id = 456  # Both aliases should return the same value
         mock_message.voice = mock_voice
 
         mock_file = MagicMock(spec=telegram.File)
