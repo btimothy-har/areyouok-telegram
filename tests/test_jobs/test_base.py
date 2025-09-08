@@ -11,8 +11,8 @@ from unittest.mock import patch
 import pytest
 from telegram.ext import ContextTypes
 
-from areyouok_telegram.jobs.base import BaseJob
 from areyouok_telegram.jobs.base import JOB_LOCK
+from areyouok_telegram.jobs.base import BaseJob
 
 
 class ConcreteJob(BaseJob):

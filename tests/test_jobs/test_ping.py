@@ -133,7 +133,7 @@ class TestPingJob:
 
         # Run the job (this sets up context and calls run_job internally)
         await job.run(mock_context)
-        
+
         # Verify job_queue.jobs was called to get queue size
         mock_context.job_queue.jobs.assert_called_once()
 
@@ -162,7 +162,7 @@ class TestPingJob:
             frozen_time.tick(delta=timedelta(hours=1, minutes=30))
             current_time = datetime.now(UTC)
 
-            # Run the job (this sets up context and calls run_job internally)  
+            # Run the job (this sets up context and calls run_job internally)
             await job.run(mock_context)
 
             # Verify uptime calculation would be correct
