@@ -18,22 +18,29 @@ def split_long_message(message: str, max_length: int = 4000) -> list[str]:
     if len(message) <= max_length:
         return [message]
 
-    # Split by lines to keep traceback readable
     lines = message.split("\n")
-    chunks = []
-    current_chunk = ""
+    chunks: list[str] = []
+    current = ""
 
     for line in lines:
-        test_chunk = current_chunk + "\n" + line if current_chunk else line
-        if len(test_chunk) > max_length and current_chunk:
-            chunks.append(current_chunk)
-            current_chunk = line
+        # Break overly long single lines
+        if len(line) > max_length:
+            if current:
+                chunks.append(current)
+                current = ""
+            for i in range(0, len(line), max_length):
+                chunks.append(line[i : i + max_length])
+            continue
+
+        test = f"{current}\n{line}" if current else line
+        if len(test) > max_length:
+            chunks.append(current)
+            current = line
         else:
-            current_chunk = test_chunk
+            current = test
 
-    if current_chunk:
-        chunks.append(current_chunk)
-
+    if current:
+        chunks.append(current)
     return chunks
 
 
