@@ -22,8 +22,6 @@ from areyouok_telegram.jobs import BaseJob
 from areyouok_telegram.jobs.exceptions import UserNotFoundForChatError
 from areyouok_telegram.jobs.utils import close_chat_session
 from areyouok_telegram.jobs.utils import get_next_notification
-from areyouok_telegram.jobs.utils import log_bot_activity
-from areyouok_telegram.jobs.utils import log_bot_message
 from areyouok_telegram.jobs.utils import mark_notification_completed
 from areyouok_telegram.jobs.utils import save_session_context
 from areyouok_telegram.llms.chat import AgentResponse
@@ -140,19 +138,16 @@ class ConversationJob(BaseJob):
 
                 if response_message:
                     # Log the bot's response message
-                    await log_bot_message(
-                        bot_id=str(self._bot_id),
-                        chat_encryption_key=self.chat_encryption_key,
-                        chat_id=self.chat_id,
-                        chat_session=self.active_session,
+                    await data_operations.new_session_event(
+                        session=self.active_session,
                         message=response_message,
+                        user_id=str(self._bot_id),
+                        is_user=False,
                         reasoning=response.reasoning,
                     )
 
-                await log_bot_activity(
-                    chat_session=self.active_session,
-                    timestamp=self._run_timestamp,
-                )
+                # Always log bot activity
+                await self._log_bot_activity()
 
     @traced(extract_args=["chat_session"])
     async def generate_response(
@@ -516,3 +511,12 @@ class ConversationJob(BaseJob):
                 raise UserNotFoundForChatError(self.chat_id)
 
             return chat_obj.retrieve_key()
+
+    @db_retry()
+    async def _log_bot_activity(self) -> None:
+        async with async_database() as db_conn:
+            await self.active_session.new_activity(
+                db_conn,
+                timestamp=self._run_timestamp,
+                is_user=False,  # This is a bot response
+            )

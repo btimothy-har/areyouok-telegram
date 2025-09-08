@@ -3,14 +3,11 @@ from datetime import datetime
 from typing import Any
 
 import pydantic_ai
-import telegram
 
 from areyouok_telegram.data import Context
 from areyouok_telegram.data import ContextType
 from areyouok_telegram.data import GuidedSessions
 from areyouok_telegram.data import GuidedSessionType
-from areyouok_telegram.data import Messages
-from areyouok_telegram.data import MessageTypes
 from areyouok_telegram.data import Notifications
 from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database
@@ -52,50 +49,6 @@ async def mark_notification_completed(notification: Notifications) -> None:
     """
     async with async_database() as db_conn:
         await notification.mark_as_completed(db_conn)
-
-
-@db_retry()
-async def log_bot_message(
-    *,
-    bot_id: str,
-    chat_encryption_key: str,
-    chat_id: str,
-    chat_session: Sessions,
-    message: MessageTypes,
-    reasoning: str,
-) -> None:
-    async with async_database() as db_conn:
-        await Messages.new_or_update(
-            db_conn,
-            user_encryption_key=chat_encryption_key,
-            user_id=bot_id,  # Bot's user ID as the sender
-            chat_id=chat_id,
-            message=message,
-            session_key=chat_session.session_id,  # Use the session key for the chat session
-            reasoning=reasoning,  # Store AI reasoning
-        )
-
-        if isinstance(message, telegram.Message):
-            await chat_session.new_message(
-                db_conn,
-                timestamp=message.date,
-                is_user=False,  # This is a bot response
-            )
-
-
-@db_retry()
-async def log_bot_activity(
-    *,
-    chat_session: Sessions,
-    timestamp: datetime,
-) -> None:
-    async with async_database() as db_conn:
-        # Always create a new activity for the bot, even if no response message is provided
-        await chat_session.new_activity(
-            db_conn,
-            timestamp=timestamp,
-            is_user=False,  # This is a bot response
-        )
 
 
 @db_retry()
