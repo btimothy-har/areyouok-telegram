@@ -112,3 +112,29 @@ async def new_session_event(
                     chat_id=session.chat_id,
                     message_id=message.message_id,
                 )
+
+
+@db_retry()
+async def close_chat_session(*, chat_session: Sessions):
+    """
+    Close the chat session and clean up any resources.
+    """
+    close_ts = datetime.now(UTC)
+
+    guided_sessions = await get_or_create_guided_session(
+        chat_id=chat_session.chat_id,
+        session=chat_session,
+        create_if_not_exists=False,
+    )
+
+    async with async_database() as db_conn:
+        # Check for any active guided sessions (onboarding, etc.) linked to this session
+        # Inactivate any active onboarding sessions
+        for s in guided_sessions:
+            if s.is_active:
+                await s.inactivate(db_conn, timestamp=close_ts)
+
+        await chat_session.close_session(
+            db_conn,
+            timestamp=close_ts,
+        )

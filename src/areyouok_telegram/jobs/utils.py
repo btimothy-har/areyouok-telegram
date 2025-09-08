@@ -1,10 +1,7 @@
-from datetime import UTC
 from datetime import datetime
 
 import pydantic_ai
 
-from areyouok_telegram.data import GuidedSessions
-from areyouok_telegram.data import GuidedSessionType
 from areyouok_telegram.data import Notifications
 from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database
@@ -46,30 +43,6 @@ async def mark_notification_completed(notification: Notifications) -> None:
     """
     async with async_database() as db_conn:
         await notification.mark_as_completed(db_conn)
-
-
-@db_retry()
-async def close_chat_session(chat_session: Sessions):
-    """
-    Close the chat session and clean up any resources.
-    """
-    close_ts = datetime.now(UTC)
-
-    async with async_database() as db_conn:
-        # Check for any active guided sessions (onboarding, etc.) linked to this session
-        onboarding_sessions = await GuidedSessions.get_by_chat_session(
-            db_conn, chat_session=chat_session.session_key, session_type=GuidedSessionType.ONBOARDING.value
-        )
-
-        # Inactivate any active onboarding sessions
-        for onboarding in onboarding_sessions:
-            if onboarding.is_active:
-                await onboarding.inactivate(db_conn, timestamp=close_ts)
-
-        await chat_session.close_session(
-            db_conn,
-            timestamp=close_ts,
-        )
 
 
 async def generate_chat_agent(chat_session: Sessions) -> pydantic_ai.Agent:  # noqa: ARG001

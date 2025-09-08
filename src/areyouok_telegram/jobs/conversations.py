@@ -21,7 +21,6 @@ from areyouok_telegram.data import async_database
 from areyouok_telegram.data import operations as data_operations
 from areyouok_telegram.jobs import BaseJob
 from areyouok_telegram.jobs.exceptions import UserNotFoundForChatError
-from areyouok_telegram.jobs.utils import close_chat_session
 from areyouok_telegram.jobs.utils import get_next_notification
 from areyouok_telegram.jobs.utils import mark_notification_completed
 from areyouok_telegram.llms.chat import AgentResponse
@@ -304,7 +303,7 @@ class ConversationJob(BaseJob):
         else:
             logfire.warning(f"No messages found in chat session {self.active_session.session_id}, nothing to compress.")
 
-        await close_chat_session(self.active_session)
+        await data_operations.close_chat_session(self.active_session)
         logfire.info(f"Session {self.active_session.session_id} closed due to inactivity.")
 
     @traced(extract_args=["chat_session", "include_context"])
