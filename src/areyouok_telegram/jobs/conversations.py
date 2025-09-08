@@ -304,7 +304,7 @@ class ConversationJob(BaseJob):
             chat_id=self.chat_id,
             session_id=self.active_session.session_id,
             run_kwargs={
-                "message_history": [c.to_model_message(self._bot_id, agent_run_time) for c in message_history],
+                "message_history": [c.to_model_message(str(self._bot_id), agent_run_time) for c in message_history],
             },
         )
 
