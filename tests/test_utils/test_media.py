@@ -192,9 +192,7 @@ class TestDownloadFile:
                 "areyouok_telegram.utils.media.asyncio.to_thread",
                 new=AsyncMock(return_value=mock_transcriptions),
             ),
-            patch(
-                "areyouok_telegram.utils.media.LLMUsage.track_generic_usage", new=AsyncMock()
-            ) as mock_track_usage,
+            patch("areyouok_telegram.utils.media.LLMUsage.track_generic_usage", new=AsyncMock()) as mock_track_usage,
             patch("areyouok_telegram.utils.media.logfire.span"),
             patch("areyouok_telegram.utils.media.logfire.info") as mock_log_info,
         ):
