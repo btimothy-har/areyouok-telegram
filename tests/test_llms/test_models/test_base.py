@@ -11,8 +11,9 @@ from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.providers.openrouter import OpenRouterProvider
 
 from areyouok_telegram.llms.exceptions import ModelConfigurationError
-from areyouok_telegram.llms.exceptions import ModelInputError
-from areyouok_telegram.llms.models.base import BaseModelConfig
+from areyouok_telegram.llms.models import BaseModelConfig
+from areyouok_telegram.llms.models import ClaudeSonnet4
+from areyouok_telegram.llms.models import GPT5Nano
 
 
 @pytest.fixture(autouse=True)
@@ -27,12 +28,10 @@ class TestBaseModelConfig:
     def test_init_with_model_id(self):
         """Test successful initialization with model_id."""
         config = BaseModelConfig(
-            model_name="test-model",
-            provider="openai",
             model_id="gpt-4",
+            provider="openai",
         )
 
-        assert config.model_name == "test-model"
         assert config.provider == "openai"
         assert config.model_id == "gpt-4"
         assert config.openrouter_id is None
@@ -41,14 +40,13 @@ class TestBaseModelConfig:
     def test_init_with_openrouter_id(self):
         """Test successful initialization with openrouter_id."""
         config = BaseModelConfig(
-            model_name="test-model",
+            model_id="claude-3-sonnet-20241022",
             provider="anthropic",
             openrouter_id="anthropic/claude-3-sonnet",
         )
 
-        assert config.model_name == "test-model"
         assert config.provider == "anthropic"
-        assert config.model_id is None
+        assert config.model_id == "claude-3-sonnet-20241022"
         assert config.openrouter_id == "anthropic/claude-3-sonnet"
         assert config.model_settings is None
 
@@ -57,43 +55,29 @@ class TestBaseModelConfig:
         model_settings = MagicMock(spec=pydantic_ai.settings.ModelSettings)
 
         config = BaseModelConfig(
-            model_name="test-model",
-            provider="openai",
             model_id="gpt-4",
+            provider="openai",
             openrouter_id="openai/gpt-4",
             model_settings=model_settings,
         )
 
-        assert config.model_name == "test-model"
         assert config.provider == "openai"
         assert config.model_id == "gpt-4"
         assert config.openrouter_id == "openai/gpt-4"
         assert config.model_settings == model_settings
 
-    def test_init_raises_model_input_error_when_no_ids_provided(self):
-        """Test that ModelInputError is raised when neither model_id nor openrouter_id is provided."""
-        # This tests line 32: raise ModelInputError()
-        with pytest.raises(ModelInputError) as exc_info:
-            BaseModelConfig(
-                model_name="test-model",
-                provider="openai",
-            )
-
-        assert "Either model_id or openrouter_id must be provided." in str(exc_info.value)
-
-    @patch("areyouok_telegram.llms.models.base.ANTHROPIC_API_KEY", "test-anthropic-key")
+    @patch("areyouok_telegram.llms.models.ANTHROPIC_API_KEY", "test-anthropic-key")
     def test_primary_model_anthropic_with_api_key(self):
         """Test primary_model returns AnthropicModel when provider is anthropic and API key exists."""
         model_settings = MagicMock(spec=pydantic_ai.settings.ModelSettings)
 
         config = BaseModelConfig(
-            model_name="test-model",
-            provider="anthropic",
             model_id="claude-3-sonnet-20241022",
+            provider="anthropic",
             model_settings=model_settings,
         )
 
-        with patch("areyouok_telegram.llms.models.base.AnthropicModel") as mock_anthropic:
+        with patch("areyouok_telegram.llms.models.AnthropicModel") as mock_anthropic:
             mock_model = MagicMock(spec=AnthropicModel)
             mock_anthropic.return_value = mock_model
 
@@ -105,19 +89,18 @@ class TestBaseModelConfig:
             )
             assert result == mock_model
 
-    @patch("areyouok_telegram.llms.models.base.OPENAI_API_KEY", "test-openai-key")
+    @patch("areyouok_telegram.llms.models.OPENAI_API_KEY", "test-openai-key")
     def test_primary_model_openai_with_api_key(self):
         """Test primary_model returns OpenAIModel when provider is openai and API key exists."""
         model_settings = MagicMock(spec=pydantic_ai.settings.ModelSettings)
 
         config = BaseModelConfig(
-            model_name="test-model",
-            provider="openai",
             model_id="gpt-4",
+            provider="openai",
             model_settings=model_settings,
         )
 
-        with patch("areyouok_telegram.llms.models.base.OpenAIModel") as mock_openai:
+        with patch("areyouok_telegram.llms.models.OpenAIModel") as mock_openai:
             mock_model = MagicMock(spec=OpenAIModel)
             mock_openai.return_value = mock_model
 
@@ -129,48 +112,45 @@ class TestBaseModelConfig:
             )
             assert result == mock_model
 
-    @patch("areyouok_telegram.llms.models.base.ANTHROPIC_API_KEY", None)
+    @patch("areyouok_telegram.llms.models.ANTHROPIC_API_KEY", None)
     def test_primary_model_returns_none_when_anthropic_no_api_key(self):
         """Test primary_model returns None when provider is anthropic but no API key exists."""
         # This tests line 66: return None
         config = BaseModelConfig(
-            model_name="test-model",
-            provider="anthropic",
             model_id="claude-3-sonnet-20241022",
+            provider="anthropic",
         )
 
         result = config.primary_model
         assert result is None
 
-    @patch("areyouok_telegram.llms.models.base.OPENAI_API_KEY", None)
+    @patch("areyouok_telegram.llms.models.OPENAI_API_KEY", None)
     def test_primary_model_returns_none_when_openai_no_api_key(self):
         """Test primary_model returns None when provider is openai but no API key exists."""
         # This tests line 66: return None
         config = BaseModelConfig(
-            model_name="test-model",
-            provider="openai",
             model_id="gpt-4",
+            provider="openai",
         )
 
         result = config.primary_model
         assert result is None
 
-    @patch("areyouok_telegram.llms.models.base.OPENROUTER_API_KEY", "test-openrouter-key")
+    @patch("areyouok_telegram.llms.models.OPENROUTER_API_KEY", "test-openrouter-key")
     def test_openrouter_model_with_api_key_and_id(self):
         """Test openrouter_model returns OpenAIModel when openrouter_id and API key exist."""
         model_settings = MagicMock(spec=pydantic_ai.settings.ModelSettings)
 
         config = BaseModelConfig(
-            model_name="test-model",
-            provider="openai",
             model_id="gpt-4",
+            provider="openai",
             openrouter_id="openai/gpt-4-turbo",
             model_settings=model_settings,
         )
 
         with (
-            patch("areyouok_telegram.llms.models.base.OpenAIModel") as mock_openai,
-            patch("areyouok_telegram.llms.models.base.OpenRouterProvider") as mock_provider,
+            patch("areyouok_telegram.llms.models.OpenAIModel") as mock_openai,
+            patch("areyouok_telegram.llms.models.OpenRouterProvider") as mock_provider,
         ):
             mock_model = MagicMock(spec=OpenAIModel)
             mock_openai.return_value = mock_model
@@ -187,42 +167,39 @@ class TestBaseModelConfig:
             )
             assert result == mock_model
 
-    @patch("areyouok_telegram.llms.models.base.OPENROUTER_API_KEY", None)
+    @patch("areyouok_telegram.llms.models.OPENROUTER_API_KEY", None)
     def test_openrouter_model_returns_none_when_no_api_key(self):
         """Test openrouter_model returns None when no OpenRouter API key exists."""
         # This tests line 77: return None
         config = BaseModelConfig(
-            model_name="test-model",
-            provider="openai",
             model_id="gpt-4",
+            provider="openai",
             openrouter_id="openai/gpt-4-turbo",
         )
 
         result = config.openrouter_model
         assert result is None
 
-    @patch("areyouok_telegram.llms.models.base.OPENROUTER_API_KEY", "test-openrouter-key")
+    @patch("areyouok_telegram.llms.models.OPENROUTER_API_KEY", "test-openrouter-key")
     def test_openrouter_model_returns_none_when_no_openrouter_id(self):
         """Test openrouter_model returns None when no openrouter_id is provided."""
         # This tests line 77: return None
         config = BaseModelConfig(
-            model_name="test-model",
-            provider="openai",
             model_id="gpt-4",
+            provider="openai",
             # openrouter_id is None
         )
 
         result = config.openrouter_model
         assert result is None
 
-    @patch("areyouok_telegram.llms.models.base.OPENAI_API_KEY", "test-openai-key")
-    @patch("areyouok_telegram.llms.models.base.OPENROUTER_API_KEY", "test-openrouter-key")
+    @patch("areyouok_telegram.llms.models.OPENAI_API_KEY", "test-openai-key")
+    @patch("areyouok_telegram.llms.models.OPENROUTER_API_KEY", "test-openrouter-key")
     def test_model_property_returns_fallback_model_when_both_models_available(self):
         """Test model property returns FallbackModel when both primary and openrouter models are available."""
         config = BaseModelConfig(
-            model_name="test-model",
-            provider="openai",
             model_id="gpt-4",
+            provider="openai",
             openrouter_id="openai/gpt-4-turbo",
         )
 
@@ -230,10 +207,10 @@ class TestBaseModelConfig:
         mock_openrouter = MagicMock(spec=pydantic_ai.models.Model)
 
         with (
-            patch("areyouok_telegram.llms.models.base.OpenAIModel") as mock_openai_cls,
-            patch("areyouok_telegram.llms.models.base.OpenRouterProvider") as mock_provider_cls,
-            patch("areyouok_telegram.llms.models.base.FallbackModel") as mock_fallback,
-            patch("areyouok_telegram.llms.models.base.should_retry_llm_error") as mock_retry_func,
+            patch("areyouok_telegram.llms.models.OpenAIModel") as mock_openai_cls,
+            patch("areyouok_telegram.llms.models.OpenRouterProvider") as mock_provider_cls,
+            patch("areyouok_telegram.llms.models.FallbackModel") as mock_fallback,
+            patch("areyouok_telegram.llms.models.should_retry_llm_error") as mock_retry_func,
         ):
             # Set up calls: first call for primary model, second call for openrouter model
             def openai_side_effect(*_args, **kwargs):
@@ -259,42 +236,40 @@ class TestBaseModelConfig:
             )
             assert result == mock_fallback_model
 
-    @patch("areyouok_telegram.llms.models.base.OPENAI_API_KEY", "test-openai-key")
-    @patch("areyouok_telegram.llms.models.base.OPENROUTER_API_KEY", None)
+    @patch("areyouok_telegram.llms.models.OPENAI_API_KEY", "test-openai-key")
+    @patch("areyouok_telegram.llms.models.OPENROUTER_API_KEY", None)
     def test_model_property_returns_primary_model_only(self):
         """Test model property returns primary model when only primary model is available."""
         # This tests lines 46-47: elif self.primary_model: return self.primary_model
         config = BaseModelConfig(
-            model_name="test-model",
-            provider="openai",
             model_id="gpt-4",
+            provider="openai",
         )
 
         mock_primary = MagicMock(spec=pydantic_ai.models.Model)
 
-        with patch("areyouok_telegram.llms.models.base.OpenAIModel") as mock_openai:
+        with patch("areyouok_telegram.llms.models.OpenAIModel") as mock_openai:
             mock_openai.return_value = mock_primary
 
             result = config.model
             assert result == mock_primary
 
-    @patch("areyouok_telegram.llms.models.base.OPENAI_API_KEY", None)
-    @patch("areyouok_telegram.llms.models.base.OPENROUTER_API_KEY", "test-openrouter-key")
+    @patch("areyouok_telegram.llms.models.OPENAI_API_KEY", None)
+    @patch("areyouok_telegram.llms.models.OPENROUTER_API_KEY", "test-openrouter-key")
     def test_model_property_returns_openrouter_model_only(self):
         """Test model property returns openrouter model when only openrouter model is available."""
         # This tests lines 48-49: elif self.openrouter_model: return self.openrouter_model
         config = BaseModelConfig(
-            model_name="test-model",
-            provider="openai",
             model_id="gpt-4",
+            provider="openai",
             openrouter_id="openai/gpt-4-turbo",
         )
 
         mock_openrouter = MagicMock(spec=pydantic_ai.models.Model)
 
         with (
-            patch("areyouok_telegram.llms.models.base.OpenAIModel") as mock_openai,
-            patch("areyouok_telegram.llms.models.base.OpenRouterProvider") as mock_provider,
+            patch("areyouok_telegram.llms.models.OpenAIModel") as mock_openai,
+            patch("areyouok_telegram.llms.models.OpenRouterProvider") as mock_provider,
         ):
             mock_openai.return_value = mock_openrouter
             mock_provider.return_value = MagicMock(spec=OpenRouterProvider)
@@ -302,18 +277,111 @@ class TestBaseModelConfig:
             result = config.model
             assert result == mock_openrouter
 
-    @patch("areyouok_telegram.llms.models.base.OPENAI_API_KEY", None)
-    @patch("areyouok_telegram.llms.models.base.OPENROUTER_API_KEY", None)
+    @patch("areyouok_telegram.llms.models.OPENAI_API_KEY", None)
+    @patch("areyouok_telegram.llms.models.OPENROUTER_API_KEY", None)
     def test_model_property_raises_configuration_error_when_no_models(self):
         """Test model property raises ModelConfigurationError when no models are available."""
         # This tests lines 50-51: else: raise ModelConfigurationError()
         config = BaseModelConfig(
-            model_name="test-model",
-            provider="openai",
             model_id="gpt-4",
+            provider="openai",
         )
 
         with pytest.raises(ModelConfigurationError) as exc_info:
             _ = config.model
 
         assert "No valid model configuration found" in str(exc_info.value)
+
+
+class TestClaudeSonnet4:
+    """Test the ClaudeSonnet4 class."""
+
+    def test_init_with_default_settings(self):
+        """Test successful initialization with default settings."""
+        config = ClaudeSonnet4()
+
+        assert config.model_id == "claude-sonnet-4-20250514"
+        assert config.provider == "anthropic"
+        assert config.openrouter_id == "anthropic/claude-sonnet-4"
+        assert config.model_settings == ClaudeSonnet4.DEFAULT_SETTINGS
+
+    def test_init_with_custom_settings(self):
+        """Test successful initialization with custom settings."""
+        custom_settings = pydantic_ai.settings.ModelSettings(temperature=0.8, parallel_tool_calls=True)
+        config = ClaudeSonnet4(model_settings=custom_settings)
+
+        assert config.model_id == "claude-sonnet-4-20250514"
+        assert config.provider == "anthropic"
+        assert config.openrouter_id == "anthropic/claude-sonnet-4"
+        assert config.model_settings == custom_settings
+
+    def test_default_settings_configuration(self):
+        """Test the default settings configuration."""
+        settings = ClaudeSonnet4.DEFAULT_SETTINGS
+
+        assert settings["temperature"] == 0.6
+        assert settings["parallel_tool_calls"] is False
+
+    @patch("areyouok_telegram.llms.models.ANTHROPIC_API_KEY", "test-anthropic-key")
+    def test_model_property_works_with_anthropic_api_key(self):
+        """Test that the model property works with Anthropic API key."""
+        config = ClaudeSonnet4()
+
+        with patch("areyouok_telegram.llms.models.AnthropicModel") as mock_anthropic:
+            mock_model = MagicMock(spec=AnthropicModel)
+            mock_anthropic.return_value = mock_model
+
+            result = config.primary_model
+
+            mock_anthropic.assert_called_once_with(
+                model_name="claude-sonnet-4-20250514",
+                settings=ClaudeSonnet4.DEFAULT_SETTINGS,
+            )
+            assert result == mock_model
+
+
+class TestGPT5Nano:
+    """Test the GPT5Nano class."""
+
+    def test_init_with_default_settings(self):
+        """Test successful initialization with default settings."""
+        config = GPT5Nano()
+
+        assert config.model_id == "gpt-5-nano-2025-08-07"
+        assert config.provider == "openai"
+        assert config.openrouter_id == "openai/gpt-5-nano"
+        assert config.model_settings == GPT5Nano.DEFAULT_SETTINGS
+
+    def test_init_with_custom_settings(self):
+        """Test successful initialization with custom settings."""
+        custom_settings = pydantic_ai.settings.ModelSettings(temperature=0.5, parallel_tool_calls=True)
+        config = GPT5Nano(model_settings=custom_settings)
+
+        assert config.model_id == "gpt-5-nano-2025-08-07"
+        assert config.provider == "openai"
+        assert config.openrouter_id == "openai/gpt-5-nano"
+        assert config.model_settings == custom_settings
+
+    def test_default_settings_configuration(self):
+        """Test the default settings configuration."""
+        settings = GPT5Nano.DEFAULT_SETTINGS
+
+        assert settings["temperature"] == 0.0
+        assert settings["parallel_tool_calls"] is False
+
+    @patch("areyouok_telegram.llms.models.OPENAI_API_KEY", "test-openai-key")
+    def test_model_property_works_with_openai_api_key(self):
+        """Test that the model property works with OpenAI API key."""
+        config = GPT5Nano()
+
+        with patch("areyouok_telegram.llms.models.OpenAIModel") as mock_openai:
+            mock_model = MagicMock(spec=OpenAIModel)
+            mock_openai.return_value = mock_model
+
+            result = config.primary_model
+
+            mock_openai.assert_called_once_with(
+                model_name="gpt-5-nano-2025-08-07",
+                settings=GPT5Nano.DEFAULT_SETTINGS,
+            )
+            assert result == mock_model
