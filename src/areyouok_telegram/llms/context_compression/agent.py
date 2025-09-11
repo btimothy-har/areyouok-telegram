@@ -8,7 +8,7 @@ from areyouok_telegram.llms.context_compression.constants import FEEDBACK_DESC
 from areyouok_telegram.llms.context_compression.constants import LIFE_SITUATION_DESC
 from areyouok_telegram.llms.context_compression.constants import PERSONAL_CONTEXT_DESC
 from areyouok_telegram.llms.context_compression.constants import PRACTICAL_MATTERS_DESC
-from areyouok_telegram.llms.models import CHAT_SONNET_4
+from areyouok_telegram.llms.models import ClaudeSonnet4
 
 
 class ContextTemplate(pydantic.BaseModel):
@@ -50,8 +50,15 @@ class ContextTemplate(pydantic.BaseModel):
         )
 
 
+agent_model = ClaudeSonnet4(
+    model_settings=pydantic_ai.settings.ModelSettings(
+        temperature=0.0,
+        parallel_tool_calls=False,
+    )
+)
+
 context_compression_agent = pydantic_ai.Agent(
-    model=CHAT_SONNET_4.model,
+    model=agent_model.model,
     output_type=ContextTemplate,
     name="context_compression_agent",
     end_strategy="exhaustive",

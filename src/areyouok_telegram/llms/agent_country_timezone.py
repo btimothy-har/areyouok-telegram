@@ -4,7 +4,7 @@ import pydantic_ai
 from areyouok_telegram.data import UserMetadata
 from areyouok_telegram.data.models.user_metadata import InvalidTimezoneError
 from areyouok_telegram.llms.exceptions import MetadataFieldUpdateError
-from areyouok_telegram.llms.models import UTILITY_GPT_5_NANO
+from areyouok_telegram.llms.models import GPT5Nano
 
 
 class CountryTimezone(pydantic.BaseModel):
@@ -15,7 +15,7 @@ class CountryTimezone(pydantic.BaseModel):
 
 
 country_timezone_agent = pydantic_ai.Agent(
-    model=UTILITY_GPT_5_NANO.model,
+    model=GPT5Nano().model,
     output_type=CountryTimezone,
     name="country_timezone_agent",
     end_strategy="exhaustive",
