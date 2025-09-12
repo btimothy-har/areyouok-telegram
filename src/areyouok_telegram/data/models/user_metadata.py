@@ -69,6 +69,8 @@ class UserMetadata(Base):
     _UNENCRYPTED_FIELDS = {
         "country": "country",
         "timezone": "timezone",
+        "user_response_speed": "user_response_speed",
+        "agent_response_speed": "agent_response_speed",
         "communication_style": "communication_style",
     }
 
@@ -82,6 +84,9 @@ class UserMetadata(Base):
 
     country = Column(String, nullable=True)
     timezone = Column(String, nullable=True)
+
+    user_response_speed = Column(String, nullable=True)
+    agent_response_speed = Column(String, nullable=True)
 
     communication_style = Column(String, nullable=True)
 
@@ -160,6 +165,10 @@ class UserMetadata(Base):
                 value = cls._validate_country(value)
             elif field == "timezone":
                 value = cls._validate_timezone(value)
+            elif field in ["user_response_speed", "agent_response_speed"]:
+                value = value.lower() or "normal"
+                if value not in ["fast", "normal", "slow"]:
+                    raise InvalidFieldValueError(field, value, "one of: 'fast', 'normal', 'slow'")
 
         now = datetime.now(UTC)
         user_key = cls.generate_user_key(user_id)
