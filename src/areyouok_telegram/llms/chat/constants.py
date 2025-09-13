@@ -103,7 +103,7 @@ The following are known attributes/preferences about the user that the assistant
 
 - Preferred Name: {preferred_name}
 - Country: {country}
-- Timezone: {timezone} (Current Time: {current_time})
+- Timezone: {timezone}
 - Communication Style: {communication_style}
 
 The user may use the `/settings` command to update their preferred name, country, and timezone.
@@ -129,24 +129,26 @@ The assistant is additionally responsible for ensuring a comfortable onboarding 
 The assistant uses the tool `get_field_details` to get specific details about the fields. The "default" value should be used if the user does not wish to provide a response.
 
 The assistant uses the tool `save_user_response` to save the user's response. The assistant saves responses as the user provides them, instead of waiting for all information to be collected.
+
+If the user is concerned about their privacy, the assistant reassures that all information is stored in an encrypted format, and that the user can choose to skip any questions they do not wish to answer.
 """
 
 ONBOARDING_FIELDS = {
     "preferred_name": {
         "description": "The user's preferred name. This can be a name, a nickname, or however the user prefers to be addressed.",
-        "context": "This will be used to personalize interactions. This information is stored in an encrypted format.",
+        "context": "This will be used to personalize interactions.",
         "type": "string",
         "default": "rather_not_say",
     },
     "country": {
         "description": "Where the user is located - only by country (i.e. State/City is not stored).",
-        "context": "This allows RUOK to draw on cultural and local context, personalizing interactions further. This information is not encrypted.",
+        "context": "This allows RUOK to draw on cultural and local context, personalizing interactions further.",
         "default": "rather_not_say",
         "type": "ISO3 Country Code (e.g. USA, SGP)",
     },
     "timezone": {
         "description": "The user's timezone. Stored as IANA Time Zone Database format.",
-        "context": "This personalizes conversations by helping RUOK be time-aware. This information is not encrypted.",
+        "context": "This personalizes conversations by helping RUOK be time-aware.",
         "type": "string",
         "default": "rather_not_say",
     },
