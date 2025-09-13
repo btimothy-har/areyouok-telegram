@@ -107,12 +107,8 @@ class TestConversationJob:
                     )
                 ),
             ),
-            patch.object(
-                job, "generate_response", new=AsyncMock(return_value=mock_response)
-            ) as mock_generate,
-            patch.object(
-                job, "execute_response", new=AsyncMock(return_value=mock_message)
-            ) as mock_execute,
+            patch.object(job, "generate_response", new=AsyncMock(return_value=mock_response)) as mock_generate,
+            patch.object(job, "execute_response", new=AsyncMock(return_value=mock_message)),
             patch.object(job, "_log_bot_activity", new=AsyncMock()) as mock_log_activity,
             patch.object(job, "_get_user_metadata", new=AsyncMock(return_value=None)),
             patch("areyouok_telegram.jobs.conversations.asyncio.sleep", new=AsyncMock()),
@@ -642,8 +638,10 @@ class TestConversationJob:
                 new=AsyncMock(side_effect=[mock_switch_response, mock_final_response]),
             ) as mock_generate,
             patch.object(
-                job, "execute_response", new=AsyncMock(side_effect=[None, mock_message]),
-            ) as mock_execute,
+                job,
+                "execute_response",
+                new=AsyncMock(side_effect=[None, mock_message]),
+            ),
             patch.object(job, "_log_bot_activity", new=AsyncMock()),
             patch.object(job, "_get_user_metadata", new=AsyncMock(return_value=None)),
             patch("areyouok_telegram.jobs.conversations.asyncio.sleep", new=AsyncMock()),
