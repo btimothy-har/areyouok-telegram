@@ -3,6 +3,7 @@ from dataclasses import field
 from datetime import datetime
 from typing import Literal
 from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfoNotFoundError
 
 import pydantic_ai
 from pydantic_ai import RunContext
@@ -141,13 +142,13 @@ async def get_current_time(ctx: RunContext[ChatAgentDependencies]) -> str:
     async with async_database() as db_conn:
         user_metadata = await UserMetadata.get_by_user_id(db_conn, user_id=ctx.deps.tg_chat_id)
 
-    if user_metadata.timezone:
+    if user_metadata.timezone and user_metadata.timezone != "rather_not_say":
         try:
             current_time = datetime.now(ZoneInfo(user_metadata.timezone)).strftime("%Y-%m-%d %H:%M %Z")
-        except Exception:
+        except ZoneInfoNotFoundError:
             pass
         else:
-            return f"The current time in the user's timezone ({user_metadata.timezone}) is {current_time}."
+            return f"Current time in the user's timezone ({user_metadata.timezone}): {current_time}."
 
     return "The user's timezone is not set or invalid, so the current time cannot be determined."
 
