@@ -8,5 +8,6 @@ MD2_SETTINGS_DISPLAY_TEMPLATE = r"""*Your Current Settings:*
 📝 *Preferred Name:* {name}
 🌍 *Country:* {country}
 🕐 *Timezone:* {timezone}
+⚡️ *Response Speed:* {response_speed}
 
 Use `/settings \[field\] \[value\]` to update your settings\."""

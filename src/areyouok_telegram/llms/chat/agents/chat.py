@@ -78,11 +78,11 @@ async def instructions_with_personality_switch(ctx: pydantic_ai.RunContext[ChatA
 
     user_preferences_text = (
         USER_PREFERENCES.format(
-            preferred_name=user_metadata.preferred_name,
-            country=user_metadata.country,
-            timezone=user_metadata.timezone,
-            current_time=user_metadata.get_current_time(),
-            communication_style=user_metadata.communication_style,
+            preferred_name=user_metadata.preferred_name or "Not provided.",
+            country=user_metadata.country or "Not provided.",
+            timezone=user_metadata.timezone or "Not provided.",
+            current_time=user_metadata.get_current_time() or "Not available.",
+            communication_style=user_metadata.communication_style or "",
         )
         if user_metadata
         else None
@@ -171,3 +171,44 @@ async def update_communication_style(
     )
 
     return f"User's new communication_style updated to: {anon_text.output}."
+
+
+@chat_agent.tool
+async def update_response_speed(
+    ctx: RunContext[ChatAgentDependencies],
+    response_speed_adjustment: Literal["faster", "slower"],
+) -> str:
+    """
+    Adjust the agent's response speed as you learn more about the user.
+    This tool may be used to granularly adjust the agent's response speed by one step faster or slower.
+    """
+
+    async with async_database() as db_conn:
+        user_metadata = await UserMetadata.get_by_user_id(db_conn, user_id=ctx.deps.tg_chat_id)
+
+        current_response_speed_adj = (user_metadata.response_speed_adj if user_metadata else 0) or 0
+
+        if response_speed_adjustment == "faster":
+            new_speed_adj = max(current_response_speed_adj - 1, -1)
+        else:
+            new_speed_adj = current_response_speed_adj + 1
+
+        try:
+            await UserMetadata.update_metadata(
+                db_conn,
+                user_id=ctx.deps.tg_chat_id,
+                field="response_speed_adj",
+                value=new_speed_adj,
+            )
+
+        except Exception as e:
+            raise MetadataFieldUpdateError("response_speed_adj", str(e)) from e
+
+    # Log the metadata update to context
+    await log_metadata_update_context(
+        chat_id=ctx.deps.tg_chat_id,
+        session_id=ctx.deps.tg_session_id,
+        content=f"Updated usermeta: adjusted response speed {response_speed_adjustment}.",
+    )
+
+    return f"Made response speed {response_speed_adjustment}."

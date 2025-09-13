@@ -125,6 +125,7 @@ async def _construct_user_settings_response(user_id: str):
             name = user_metadata.preferred_name or "Not set"
             country = user_metadata.country_display_name or "Not set"
             timezone = user_metadata.timezone or "Not set"
+            response_speed = user_metadata.response_speed or "Not set"
 
             # Handle "rather_not_say" values for timezone
             if timezone == "rather_not_say":
@@ -133,11 +134,13 @@ async def _construct_user_settings_response(user_id: str):
             name = "Not set"
             country = "Not set"
             timezone = "Not set"
+            response_speed = "Not set"
 
         settings_text = MD2_SETTINGS_DISPLAY_TEMPLATE.format(
             name=escape_markdown_v2(name),
             country=escape_markdown_v2(country),
             timezone=escape_markdown_v2(timezone),
+            response_speed=escape_markdown_v2(response_speed),
         )
 
     return settings_text

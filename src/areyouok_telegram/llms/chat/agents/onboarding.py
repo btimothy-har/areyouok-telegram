@@ -81,7 +81,12 @@ async def onboarding_instructions(ctx: RunContext[OnboardingAgentDependencies]) 
         restrict_response_text += RESTRICT_TEXT_RESPONSE
         restrict_response_text += "\n"
 
-    onboarding_fields = ["preferred_name", "country", "communication_style"]
+    onboarding_fields = [
+        "preferred_name",
+        "country",
+        "communication_style",
+        "response_speed",
+    ]
 
     async with async_database() as db_conn:
         user_metadata = await UserMetadata.get_by_user_id(db_conn, user_id=ctx.deps.tg_chat_id)
@@ -95,6 +100,9 @@ async def onboarding_instructions(ctx: RunContext[OnboardingAgentDependencies]) 
 
         if user_metadata.communication_style:
             onboarding_fields.remove("communication_style")
+
+        if user_metadata.response_speed:
+            onboarding_fields.remove("response_speed")
 
     prompt = BaseChatPromptTemplate(
         response=RESPONSE_PROMPT.format(response_restrictions=restrict_response_text),
