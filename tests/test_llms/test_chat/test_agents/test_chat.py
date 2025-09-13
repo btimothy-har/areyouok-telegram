@@ -171,7 +171,6 @@ class TestInstructionsWithPersonalitySwitch:
             mock_get_user.assert_called_once_with(ANY, user_id=mock_run_context.deps.tg_chat_id)
 
 
-
 class TestUpdateCommunicationStyleTool:
     """Test update_communication_style tool."""
 

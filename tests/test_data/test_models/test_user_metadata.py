@@ -399,8 +399,12 @@ class TestUserMetadata:
             existing_user = MagicMock(spec=UserMetadata)
             existing_user._get_metadata.return_value = {"timezone": "UTC"}
 
-            with patch.object(UserMetadata, "get_by_user_id", side_effect=[existing_user, MagicMock(spec=UserMetadata)]):
-                await UserMetadata.update_metadata(mock_db_session, user_id="user123", field=field_name, value=field_value)
+            with patch.object(
+                UserMetadata, "get_by_user_id", side_effect=[existing_user, MagicMock(spec=UserMetadata)]
+            ):
+                await UserMetadata.update_metadata(
+                    mock_db_session, user_id="user123", field=field_name, value=field_value
+                )
 
     @pytest.mark.asyncio
     async def test_update_metadata_unencrypted_string_values(self, mock_db_session):
@@ -412,8 +416,12 @@ class TestUserMetadata:
             existing_user = MagicMock(spec=UserMetadata)
             existing_user._get_metadata.return_value = {"timezone": "UTC"}
 
-            with patch.object(UserMetadata, "get_by_user_id", side_effect=[existing_user, MagicMock(spec=UserMetadata)]):
-                await UserMetadata.update_metadata(mock_db_session, user_id="user123", field="country", value=country_value)
+            with patch.object(
+                UserMetadata, "get_by_user_id", side_effect=[existing_user, MagicMock(spec=UserMetadata)]
+            ):
+                await UserMetadata.update_metadata(
+                    mock_db_session, user_id="user123", field="country", value=country_value
+                )
 
     @pytest.mark.asyncio
     async def test_update_metadata_unencrypted_field_with_value(self, mock_db_session):
@@ -707,7 +715,6 @@ class TestUserMetadata:
         }
 
         assert result == expected
-
 
 
 class TestInvalidFieldError:
