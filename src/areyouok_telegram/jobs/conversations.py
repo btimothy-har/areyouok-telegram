@@ -1,3 +1,4 @@
+import asyncio
 from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
@@ -17,6 +18,7 @@ from areyouok_telegram.data import Messages
 from areyouok_telegram.data import MessageTypes
 from areyouok_telegram.data import Notifications
 from areyouok_telegram.data import Sessions
+from areyouok_telegram.data import UserMetadata
 from areyouok_telegram.data import async_database
 from areyouok_telegram.data import operations as data_operations
 from areyouok_telegram.jobs.base import BaseJob
@@ -185,6 +187,12 @@ class ConversationJob(BaseJob):
 
                 # Always log bot activity
                 await self._log_bot_activity()
+
+            user_metadata = await self._get_user_metadata()
+
+            response_delay = getattr(user_metadata, "response_wait_time", 0) if user_metadata else 2
+            if response_delay > 0:
+                await asyncio.sleep(response_delay)
 
     @traced(extract_args=["include_context"])
     async def prepare_conversation_input(
@@ -410,6 +418,22 @@ class ConversationJob(BaseJob):
             return reaction_message
 
         return None
+
+    @db_retry()
+    async def _get_user_metadata(self) -> UserMetadata | None:
+        """
+        Get the user metadata for the chat.
+
+        Returns:
+            The user metadata, or None if no metadata exists
+        """
+        async with async_database() as db_conn:
+            chat_obj = await UserMetadata.get_by_user_id(db_conn, user_id=self.chat_id)
+
+            if not chat_obj:
+                return None
+
+            return chat_obj
 
     @db_retry()
     async def _get_chat_encryption_key(self) -> str:
