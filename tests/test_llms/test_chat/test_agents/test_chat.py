@@ -8,7 +8,6 @@ from unittest.mock import patch
 import pytest
 from freezegun import freeze_time
 from telegram.ext import ContextTypes
-from zoneinfo import ZoneInfo
 
 from areyouok_telegram.data.models.notifications import Notifications
 from areyouok_telegram.data.models.user_metadata import UserMetadata
@@ -523,7 +522,7 @@ class TestGetCurrentTimeTool:
 
         test_timezones = [
             "Europe/London",
-            "Asia/Tokyo", 
+            "Asia/Tokyo",
             "Australia/Sydney",
             "America/Los_Angeles",
         ]
