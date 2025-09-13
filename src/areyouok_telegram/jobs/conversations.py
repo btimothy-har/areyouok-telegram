@@ -1,3 +1,4 @@
+import asyncio
 from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
@@ -17,10 +18,12 @@ from areyouok_telegram.data import Messages
 from areyouok_telegram.data import MessageTypes
 from areyouok_telegram.data import Notifications
 from areyouok_telegram.data import Sessions
+from areyouok_telegram.data import UserMetadata
 from areyouok_telegram.data import async_database
 from areyouok_telegram.data import operations as data_operations
 from areyouok_telegram.jobs.base import BaseJob
 from areyouok_telegram.jobs.exceptions import UserNotFoundForChatError
+from areyouok_telegram.llms import run_agent_with_tracking
 from areyouok_telegram.llms.chat import AgentResponse
 from areyouok_telegram.llms.chat import ChatAgentDependencies
 from areyouok_telegram.llms.chat import OnboardingAgentDependencies
@@ -30,7 +33,6 @@ from areyouok_telegram.llms.chat import chat_agent
 from areyouok_telegram.llms.chat import onboarding_agent
 from areyouok_telegram.llms.context_compression import ContextTemplate
 from areyouok_telegram.llms.context_compression import context_compression_agent
-from areyouok_telegram.llms.utils import run_agent_with_tracking
 from areyouok_telegram.logging import traced
 from areyouok_telegram.utils import db_retry
 from areyouok_telegram.utils import telegram_call
@@ -144,33 +146,44 @@ class ConversationJob(BaseJob):
                 _span_name="ConversationJob._run.respond",
                 chat_id=self.chat_id,
             ):
-                await telegram_call(
-                    self._run_context.bot.send_chat_action,
-                    chat_id=int(self.chat_id),
-                    action=telegram.constants.ChatAction.TYPING,
-                )
-
-                message_history, dependencies = await self.prepare_conversation_input(
-                    include_context=True,
-                )
+                run_count = 0
 
                 while True:
-                    agent_response, response_message = await self.generate_response(
+                    run_count += 1
+
+                    await telegram_call(
+                        self._run_context.bot.send_chat_action,
+                        chat_id=int(self.chat_id),
+                        action=telegram.constants.ChatAction.TYPING,
+                    )
+
+                    message_history, dependencies = await self.prepare_conversation_input(
+                        include_context=True,
+                    )
+                    agent_response = await self.generate_response(
                         conversation_history=message_history,
                         dependencies=dependencies,
                     )
 
-                    if dependencies.notification and agent_response:
-                        await self._mark_notification_completed(dependencies.notification)
-
                     if agent_response.response_type == "SwitchPersonalityResponse":
-                        message_history, dependencies = await self.prepare_conversation_input(
-                            include_context=True,
-                        )
+                        response_message = await self.execute_response(response=agent_response)
                         dependencies.restricted_responses.add(
                             "switch_personality"
                         )  # Disable personality switching for this run
+                        run_count = 0
                         continue
+
+                    elif run_count <= 3:
+                        self.active_session = await data_operations.get_or_create_active_session(
+                            chat_id=str(self.chat_id),
+                            create_if_not_exists=False,
+                        )
+                        if self.active_session.last_user_message > self._run_timestamp:
+                            self._run_timestamp = self.active_session.last_user_message
+                            await self.apply_response_delay()
+                            continue
+
+                    response_message = await self.execute_response(response=agent_response)
                     break
 
                 if response_message:
@@ -183,8 +196,13 @@ class ConversationJob(BaseJob):
                         reasoning=agent_response.reasoning,
                     )
 
+                    if dependencies.notification and isinstance(response_message, telegram.Message):
+                        await self._mark_notification_completed(dependencies.notification)
+
                 # Always log bot activity
                 await self._log_bot_activity()
+
+            await self.apply_response_delay()
 
     @traced(extract_args=["include_context"])
     async def prepare_conversation_input(
@@ -260,7 +278,7 @@ class ConversationJob(BaseJob):
         *,
         conversation_history: list[ChatEvent],
         dependencies: ChatAgentDependencies | OnboardingAgentDependencies,
-    ) -> tuple[AgentResponse | None, MessageTypes | None]:
+    ) -> AgentResponse:
         """Process messages for this chat and send appropriate replies.
 
         Returns:
@@ -286,9 +304,7 @@ class ConversationJob(BaseJob):
 
         agent_response: AgentResponse = agent_run_payload.output
 
-        response_message = await self._execute_response(response=agent_response)
-
-        return agent_response, response_message
+        return agent_response
 
     @traced(extract_args=False)
     async def compress_session_context(self, message_history: list[ChatEvent]) -> ContextTemplate:
@@ -311,8 +327,14 @@ class ConversationJob(BaseJob):
         context_report: ContextTemplate = context_run_payload.output
         return context_report
 
+    async def apply_response_delay(self):
+        user_metadata = await self._get_user_metadata()
+        response_delay = getattr(user_metadata, "response_wait_time", 0) if user_metadata else 2
+        if response_delay > 0:
+            await asyncio.sleep(response_delay)
+
     @traced(extract_args=["response"], record_return=True)
-    async def _execute_response(
+    async def execute_response(
         self,
         *,
         response: AgentResponse,
@@ -410,6 +432,22 @@ class ConversationJob(BaseJob):
             return reaction_message
 
         return None
+
+    @db_retry()
+    async def _get_user_metadata(self) -> UserMetadata | None:
+        """
+        Get the user metadata for the chat.
+
+        Returns:
+            The user metadata, or None if no metadata exists
+        """
+        async with async_database() as db_conn:
+            chat_obj = await UserMetadata.get_by_user_id(db_conn, user_id=self.chat_id)
+
+            if not chat_obj:
+                return None
+
+            return chat_obj
 
     @db_retry()
     async def _get_chat_encryption_key(self) -> str:

@@ -538,6 +538,8 @@ class TestUserMetadata:
             "user_id": "user123",
             "preferred_name": "John Doe",
             "communication_style": "casual",
+            "response_speed": None,
+            "response_speed_adj": None,
             "country": "USA",
             "timezone": "America/New_York",
         }

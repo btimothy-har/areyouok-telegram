@@ -146,7 +146,7 @@ ONBOARDING_FIELDS = {
     },
     "timezone": {
         "description": "The user's timezone. Stored as IANA Time Zone Database format.",
-        "context": "This personalizes conversations by helping RUOK be time-aware. This information is encrypted.",
+        "context": "This personalizes conversations by helping RUOK be time-aware. This information is not encrypted.",
         "type": "string",
         "default": "rather_not_say",
     },
@@ -155,5 +155,11 @@ ONBOARDING_FIELDS = {
         "context": "RUOK gradually learns and adapts how best to communicate with you.",
         "type": "string",
         "default": "rather_not_say",
+    },
+    "response_speed": {
+        "description": "How fast the user prefers the assistant's responses to be. Options are: fast, normal, slow.",
+        "context": "This helps RUOK pace its responses appropriately.",
+        "type": "string",
+        "default": "normal",
     },
 }

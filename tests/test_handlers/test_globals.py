@@ -58,7 +58,7 @@ class TestOnNewUpdate:
             call_args = mock_schedule_job.call_args
             assert call_args.kwargs["context"] == mock_context
             assert call_args.kwargs["job"] == mock_conversation_job.return_value
-            assert call_args.kwargs["interval"] == timedelta(seconds=3)
+            assert call_args.kwargs["interval"] == timedelta(milliseconds=500)
             # Check that first is approximately 2 seconds in the future
             first_time = call_args.kwargs["first"]
             expected_time = datetime.now(UTC) + timedelta(seconds=2)

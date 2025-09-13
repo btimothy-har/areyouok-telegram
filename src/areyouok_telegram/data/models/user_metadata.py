@@ -21,6 +21,12 @@ from areyouok_telegram.encryption import decrypt_content
 from areyouok_telegram.encryption import encrypt_content
 from areyouok_telegram.logging import traced
 
+RESPONSE_SPEED_MAP = {
+    "fast": 0.0,
+    "normal": 2.0,
+    "slow": 5.0,
+}
+
 
 class InvalidFieldError(Exception):
     """Raised when an invalid field name is provided."""
@@ -69,6 +75,8 @@ class UserMetadata(Base):
     _UNENCRYPTED_FIELDS = {
         "country": "country",
         "timezone": "timezone",
+        "response_speed": "response_speed",
+        "response_speed_adj": "response_speed_adj",
         "communication_style": "communication_style",
     }
 
@@ -82,6 +90,9 @@ class UserMetadata(Base):
 
     country = Column(String, nullable=True)
     timezone = Column(String, nullable=True)
+
+    response_speed = Column(String, nullable=True)
+    response_speed_adj = Column(Integer, nullable=True)
 
     communication_style = Column(String, nullable=True)
 
@@ -99,6 +110,9 @@ class UserMetadata(Base):
     @property
     def preferred_name(self) -> str | None:
         """Get user's preferred name."""
+        if not self._preferred_name:
+            return None
+
         return self._decrypt_field("preferred_name", self._preferred_name)
 
     @property
@@ -120,6 +134,17 @@ class UserMetadata(Base):
             return self.country
         else:
             return country.name if country else self.country
+
+    @property
+    def response_wait_time(self) -> float:
+        """Get the user's preferred response wait time in seconds.
+
+        Returns:
+            Response wait time in seconds (fast=5, normal=15, slow=30), or 15 if not set
+        """
+
+        response_speed_adj = self.response_speed_adj or 0
+        return max(RESPONSE_SPEED_MAP.get(self.response_speed, 2.0) + response_speed_adj, 0)
 
     @classmethod
     @traced(extract_args=["user_id", "field"])
@@ -160,6 +185,15 @@ class UserMetadata(Base):
                 value = cls._validate_country(value)
             elif field == "timezone":
                 value = cls._validate_timezone(value)
+            elif field == "response_speed":
+                value = value.lower() or "normal"
+                if value not in ["fast", "normal", "slow"]:
+                    raise InvalidFieldValueError(field, value, "one of: 'fast', 'normal', 'slow'")
+            elif field == "response_speed_adj":
+                try:
+                    value = int(value)
+                except (TypeError, ValueError) as e:
+                    raise InvalidFieldValueError(field, value, "an integer number of seconds or None") from e
 
         now = datetime.now(UTC)
         user_key = cls.generate_user_key(user_id)
@@ -268,6 +302,8 @@ class UserMetadata(Base):
             "user_id": self.user_id,
             "preferred_name": self.preferred_name,
             "communication_style": self.communication_style,
+            "response_speed": self.response_speed,
+            "response_speed_adj": self.response_speed_adj,
             "country": self.country,
             "timezone": self.timezone,
         }

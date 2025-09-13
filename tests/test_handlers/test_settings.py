@@ -378,6 +378,7 @@ class TestConstructUserSettingsResponse:
         mock_user_metadata.country = "USA"
         mock_user_metadata.country_display_name = "United States"
         mock_user_metadata.timezone = "America/New_York"
+        mock_user_metadata.response_speed = "normal"
         mock_get_by_user_id.return_value = mock_user_metadata
 
         user_id = "123456789"
@@ -403,6 +404,7 @@ class TestConstructUserSettingsResponse:
                 ((mock_user_metadata.preferred_name,),),
                 ((mock_user_metadata.country_display_name,),),
                 ((mock_user_metadata.timezone,),),
+                ((mock_user_metadata.response_speed,),),
             ]
             assert mock_escape.call_args_list == expected_escape_calls
 
@@ -411,6 +413,7 @@ class TestConstructUserSettingsResponse:
                 name="escaped_Alice Smith",
                 country="escaped_United States",
                 timezone="escaped_America/New_York",
+                response_speed="escaped_normal",
             )
 
             assert result == "**Your Settings:**\n• Name: Alice Smith"
@@ -448,10 +451,11 @@ class TestConstructUserSettingsResponse:
                 name="escaped_Not set",
                 country="escaped_Not set",
                 timezone="escaped_Not set",
+                response_speed="escaped_Not set",
             )
 
             # Verify escaping was called for each "Not set" value
-            assert mock_escape.call_count == 3
+            assert mock_escape.call_count == 4
             for call in mock_escape.call_args_list:
                 assert call[0][0] == "Not set"
 
@@ -473,6 +477,7 @@ class TestConstructUserSettingsResponse:
         mock_user_metadata.country = "rather_not_say"
         mock_user_metadata.country_display_name = "Prefer not to say"
         mock_user_metadata.timezone = "rather_not_say"
+        mock_user_metadata.response_speed = "fast"
         mock_get_by_user_id.return_value = mock_user_metadata
 
         user_id = "123456789"
@@ -495,6 +500,7 @@ class TestConstructUserSettingsResponse:
                 name="escaped_Alice",
                 country="escaped_Prefer not to say",
                 timezone="escaped_Prefer not to say",
+                response_speed="escaped_fast",
             )
 
             assert result == "**Your Settings:**\n• Mixed values"

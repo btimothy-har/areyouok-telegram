@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Literal
 
 import pydantic
 import pydantic_ai
@@ -53,6 +54,7 @@ able to manage the following settings:
 - country
 - timezone
 - communication style
+- response speed
 
 Your task is to facilitate data entry by translating user's input into database actions. Use \
 the tools available to you to perform database actions.
@@ -179,6 +181,34 @@ async def update_communication_style(
     )
 
     return f"communication_style updated successfully to {new_value}."
+
+
+@settings_agent.tool
+async def update_response_speed(
+    ctx: RunContext[SettingsAgentDependencies],
+    new_value: Literal["fast", "normal", "slow"],
+) -> str:
+    """Update the user's response speed."""
+
+    async with async_database() as db_conn:
+        try:
+            await UserMetadata.update_metadata(
+                db_conn,
+                user_id=ctx.deps.tg_chat_id,
+                field="response_speed",
+                value=new_value,
+            )
+
+        except Exception as e:
+            raise MetadataFieldUpdateError("response_speed", str(e)) from e
+
+    await log_metadata_update_context(
+        chat_id=ctx.deps.tg_chat_id,
+        session_id=ctx.deps.tg_session_id,
+        content=f"Updated user settings: response_speed is now {new_value}",
+    )
+
+    return f"response_speed updated successfully to {new_value}."
 
 
 @settings_agent.output_validator
