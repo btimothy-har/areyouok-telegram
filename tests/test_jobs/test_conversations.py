@@ -76,6 +76,7 @@ class TestConversationJob:
         mock_session = MagicMock()
         mock_session.has_bot_responded = False
         mock_session.session_id = "session123"
+        mock_session.last_user_message = frozen_time - timedelta(minutes=1)
 
         mock_response = TextResponse(reasoning="Test reasoning", message_text="Hello!", reply_to_message_id=None)
         mock_message = MagicMock(spec=telegram.Message)
@@ -107,8 +108,11 @@ class TestConversationJob:
                 ),
             ),
             patch.object(
-                job, "generate_response", new=AsyncMock(return_value=(mock_response, mock_message))
+                job, "generate_response", new=AsyncMock(return_value=mock_response)
             ) as mock_generate,
+            patch.object(
+                job, "execute_response", new=AsyncMock(return_value=mock_message)
+            ) as mock_execute,
             patch.object(job, "_log_bot_activity", new=AsyncMock()) as mock_log_activity,
             patch.object(job, "_get_user_metadata", new=AsyncMock(return_value=None)),
             patch("areyouok_telegram.jobs.conversations.asyncio.sleep", new=AsyncMock()),
@@ -151,7 +155,7 @@ class TestConversationJob:
             patch(
                 "areyouok_telegram.jobs.conversations.run_agent_with_tracking", new=AsyncMock(return_value=mock_payload)
             ),
-            patch.object(job, "_execute_response", new=AsyncMock(return_value=mock_message)),
+            patch.object(job, "execute_response", new=AsyncMock(return_value=mock_message)),
             patch.object(job, "_mark_notification_completed", new=AsyncMock()) as mock_mark_notification,
         ):
             result = await job.generate_response(
@@ -159,7 +163,7 @@ class TestConversationJob:
                 dependencies=mock_deps,
             )
 
-        assert result == (mock_response, mock_message)
+        assert result == mock_response
         # Verify notification completion was not called since there was no notification
         mock_mark_notification.assert_not_called()
 
@@ -208,7 +212,7 @@ class TestConversationJob:
             patch.object(job, "_execute_text_response", new=AsyncMock(return_value=mock_message)) as mock_execute_text,
             patch("areyouok_telegram.jobs.conversations.logfire.info") as mock_log_info,
         ):
-            result = await job._execute_response(response=mock_response)
+            result = await job.execute_response(response=mock_response)
 
         assert result == mock_message
         mock_execute_text.assert_called_once_with(response=mock_response)
@@ -246,7 +250,7 @@ class TestConversationJob:
             mock_db_conn = AsyncMock()
             mock_async_db.return_value.__aenter__.return_value = mock_db_conn
 
-            result = await job._execute_response(response=mock_response)
+            result = await job.execute_response(response=mock_response)
 
         assert result == mock_reaction
         mock_execute_reaction.assert_called_once_with(response=mock_response, message=mock_message.telegram_object)
@@ -274,7 +278,7 @@ class TestConversationJob:
             mock_db_conn = AsyncMock()
             mock_async_db.return_value.__aenter__.return_value = mock_db_conn
 
-            result = await job._execute_response(response=mock_response)
+            result = await job.execute_response(response=mock_response)
 
         assert result is None
         mock_log_warning.assert_called_once_with("Message 456 not found in chat 123, skipping reaction.")
@@ -390,6 +394,7 @@ class TestConversationJob:
         mock_session = MagicMock()
         mock_session.has_bot_responded = False
         mock_session.session_id = "session123"
+        mock_session.last_user_message = frozen_time - timedelta(minutes=1)
 
         mock_response = TextResponse(reasoning="Test reasoning", message_text="Hello!", reply_to_message_id=None)
         mock_message = MagicMock(spec=telegram.Message)
@@ -420,7 +425,8 @@ class TestConversationJob:
                     )
                 ),
             ),
-            patch.object(job, "generate_response", new=AsyncMock(return_value=(mock_response, mock_message))),
+            patch.object(job, "generate_response", new=AsyncMock(return_value=mock_response)),
+            patch.object(job, "execute_response", new=AsyncMock(return_value=mock_message)),
             patch.object(job, "_log_bot_activity", new=AsyncMock()),
             patch.object(job, "_get_user_metadata", new=AsyncMock(return_value=None)),
             patch("areyouok_telegram.jobs.conversations.asyncio.sleep", new=AsyncMock()),
@@ -450,6 +456,7 @@ class TestConversationJob:
         mock_session = MagicMock()
         mock_session.has_bot_responded = False
         mock_session.session_id = "session123"
+        mock_session.last_user_message = frozen_time - timedelta(minutes=1)
 
         mock_response = DoNothingResponse(reasoning="Do nothing")
 
@@ -479,7 +486,8 @@ class TestConversationJob:
                     )
                 ),
             ),
-            patch.object(job, "generate_response", new=AsyncMock(return_value=(mock_response, None))),
+            patch.object(job, "generate_response", new=AsyncMock(return_value=mock_response)),
+            patch.object(job, "execute_response", new=AsyncMock(return_value=None)),
             patch.object(job, "_log_bot_activity", new=AsyncMock()),
             patch.object(job, "_get_user_metadata", new=AsyncMock(return_value=None)),
             patch("areyouok_telegram.jobs.conversations.asyncio.sleep", new=AsyncMock()),
@@ -582,6 +590,7 @@ class TestConversationJob:
         mock_session = MagicMock()
         mock_session.has_bot_responded = False
         mock_session.session_id = "session123"
+        mock_session.last_user_message = frozen_time - timedelta(minutes=1)
 
         mock_switch_response = SwitchPersonalityResponse(reasoning="Switch personality", personality="celebration")
         mock_final_response = TextResponse(
@@ -630,8 +639,11 @@ class TestConversationJob:
             patch.object(
                 job,
                 "generate_response",
-                new=AsyncMock(side_effect=[(mock_switch_response, None), (mock_final_response, mock_message)]),
+                new=AsyncMock(side_effect=[mock_switch_response, mock_final_response]),
             ) as mock_generate,
+            patch.object(
+                job, "execute_response", new=AsyncMock(side_effect=[None, mock_message]),
+            ) as mock_execute,
             patch.object(job, "_log_bot_activity", new=AsyncMock()),
             patch.object(job, "_get_user_metadata", new=AsyncMock(return_value=None)),
             patch("areyouok_telegram.jobs.conversations.asyncio.sleep", new=AsyncMock()),
@@ -657,7 +669,7 @@ class TestConversationJob:
             patch.object(job, "_save_session_context", new=AsyncMock()) as mock_save,
             patch("areyouok_telegram.jobs.conversations.logfire.info") as mock_log_info,
         ):
-            result = await job._execute_response(response=mock_response)
+            result = await job.execute_response(response=mock_response)
 
         assert result is None
         mock_save.assert_called_once_with(
@@ -683,7 +695,7 @@ class TestConversationJob:
             patch.object(job, "_save_session_context", new=AsyncMock()) as mock_save,
             patch("areyouok_telegram.jobs.conversations.logfire.info") as mock_log_info,
         ):
-            result = await job._execute_response(response=mock_response)
+            result = await job.execute_response(response=mock_response)
 
         assert result is None
         mock_save.assert_called_once_with(
@@ -1022,9 +1034,10 @@ class TestConversationJob:
         mock_session = MagicMock()
         mock_session.has_bot_responded = False
         mock_session.session_id = "session123"
+        mock_session.last_user_message = frozen_time - timedelta(minutes=1)
 
         mock_response = TextResponse(reasoning="Test reasoning", message_text="Test response", reply_to_message_id=None)
-        mock_message = MagicMock()
+        mock_message = MagicMock(spec=telegram.Message)
 
         # Create a mock notification object
         mock_notification = MagicMock(spec=Notifications)
@@ -1046,7 +1059,8 @@ class TestConversationJob:
                 new=AsyncMock(return_value=mock_session),
             ),
             patch.object(job, "prepare_conversation_input", new=AsyncMock(return_value=([], mock_deps))),
-            patch.object(job, "generate_response", new=AsyncMock(return_value=(mock_response, mock_message))),
+            patch.object(job, "generate_response", new=AsyncMock(return_value=mock_response)),
+            patch.object(job, "execute_response", new=AsyncMock(return_value=mock_message)),
             patch.object(job, "_mark_notification_completed", new=AsyncMock()) as mock_mark_notification,
             patch.object(job, "_log_bot_activity", new=AsyncMock()),
             patch.object(job, "_get_user_metadata", new=AsyncMock(return_value=None)),
@@ -1071,6 +1085,7 @@ class TestConversationJob:
         mock_session = MagicMock()
         mock_session.has_bot_responded = False
         mock_session.session_id = "session123"
+        mock_session.last_user_message = frozen_time - timedelta(minutes=1)
 
         # Agent returns DoNothingResponse
         mock_response = DoNothingResponse(reasoning="Nothing to do")
@@ -1095,7 +1110,8 @@ class TestConversationJob:
                 new=AsyncMock(return_value=mock_session),
             ),
             patch.object(job, "prepare_conversation_input", new=AsyncMock(return_value=([], mock_deps))),
-            patch.object(job, "generate_response", new=AsyncMock(return_value=(mock_response, None))),
+            patch.object(job, "generate_response", new=AsyncMock(return_value=mock_response)),
+            patch.object(job, "execute_response", new=AsyncMock(return_value=None)),
             patch.object(job, "_mark_notification_completed", new=AsyncMock()) as mock_mark_notification,
             patch.object(job, "_log_bot_activity", new=AsyncMock()),
             patch.object(job, "_get_user_metadata", new=AsyncMock(return_value=None)),
@@ -1105,8 +1121,8 @@ class TestConversationJob:
         ):
             await job.run_job()
 
-        # Verify notification was marked as completed since agent_response is valid
-        mock_mark_notification.assert_called_once_with(mock_notification)
+        # Verify notification was NOT marked as completed since DoNothingResponse returns None (no telegram.Message)
+        mock_mark_notification.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_generate_response_no_notification_completion_when_no_notification(self):
@@ -1135,7 +1151,7 @@ class TestConversationJob:
             patch(
                 "areyouok_telegram.jobs.conversations.run_agent_with_tracking", new=AsyncMock(return_value=mock_payload)
             ),
-            patch.object(job, "_execute_response", new=AsyncMock(return_value=mock_message)),
+            patch.object(job, "execute_response", new=AsyncMock(return_value=mock_message)),
             patch.object(job, "_mark_notification_completed", new=AsyncMock()) as mock_mark_notification,
         ):
             result = await job.generate_response(
@@ -1143,7 +1159,7 @@ class TestConversationJob:
                 dependencies=mock_deps,
             )
 
-        assert result == (mock_response, mock_message)
+        assert result == mock_response
         # Verify notification completion was NOT called since there was no notification
         mock_mark_notification.assert_not_called()
 

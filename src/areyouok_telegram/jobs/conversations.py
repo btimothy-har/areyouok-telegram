@@ -146,33 +146,44 @@ class ConversationJob(BaseJob):
                 _span_name="ConversationJob._run.respond",
                 chat_id=self.chat_id,
             ):
-                await telegram_call(
-                    self._run_context.bot.send_chat_action,
-                    chat_id=int(self.chat_id),
-                    action=telegram.constants.ChatAction.TYPING,
-                )
-
-                message_history, dependencies = await self.prepare_conversation_input(
-                    include_context=True,
-                )
+                run_count = 0
 
                 while True:
-                    agent_response, response_message = await self.generate_response(
+                    run_count += 1
+
+                    await telegram_call(
+                        self._run_context.bot.send_chat_action,
+                        chat_id=int(self.chat_id),
+                        action=telegram.constants.ChatAction.TYPING,
+                    )
+
+                    message_history, dependencies = await self.prepare_conversation_input(
+                        include_context=True,
+                    )
+                    agent_response = await self.generate_response(
                         conversation_history=message_history,
                         dependencies=dependencies,
                     )
 
-                    if dependencies.notification and agent_response:
-                        await self._mark_notification_completed(dependencies.notification)
-
                     if agent_response.response_type == "SwitchPersonalityResponse":
-                        message_history, dependencies = await self.prepare_conversation_input(
-                            include_context=True,
-                        )
+                        response_message = await self.execute_response(response=agent_response)
                         dependencies.restricted_responses.add(
                             "switch_personality"
                         )  # Disable personality switching for this run
+                        run_count = 0
                         continue
+
+                    elif run_count <= 3:
+                        self.active_session = await data_operations.get_or_create_active_session(
+                            chat_id=str(self.chat_id),
+                            create_if_not_exists=False,
+                        )
+                        if self.active_session.last_user_message > self._run_timestamp:
+                            self._run_timestamp = self.active_session.last_user_message
+                            await self.apply_response_delay()
+                            continue
+
+                    response_message = await self.execute_response(response=agent_response)
                     break
 
                 if response_message:
@@ -185,14 +196,13 @@ class ConversationJob(BaseJob):
                         reasoning=agent_response.reasoning,
                     )
 
+                    if dependencies.notification and isinstance(response_message, telegram.Message):
+                        await self._mark_notification_completed(dependencies.notification)
+
                 # Always log bot activity
                 await self._log_bot_activity()
 
-            user_metadata = await self._get_user_metadata()
-
-            response_delay = getattr(user_metadata, "response_wait_time", 0) if user_metadata else 2
-            if response_delay > 0:
-                await asyncio.sleep(response_delay)
+            await self.apply_response_delay()
 
     @traced(extract_args=["include_context"])
     async def prepare_conversation_input(
@@ -268,7 +278,7 @@ class ConversationJob(BaseJob):
         *,
         conversation_history: list[ChatEvent],
         dependencies: ChatAgentDependencies | OnboardingAgentDependencies,
-    ) -> tuple[AgentResponse | None, MessageTypes | None]:
+    ) -> AgentResponse:
         """Process messages for this chat and send appropriate replies.
 
         Returns:
@@ -294,9 +304,7 @@ class ConversationJob(BaseJob):
 
         agent_response: AgentResponse = agent_run_payload.output
 
-        response_message = await self._execute_response(response=agent_response)
-
-        return agent_response, response_message
+        return agent_response
 
     @traced(extract_args=False)
     async def compress_session_context(self, message_history: list[ChatEvent]) -> ContextTemplate:
@@ -319,8 +327,14 @@ class ConversationJob(BaseJob):
         context_report: ContextTemplate = context_run_payload.output
         return context_report
 
+    async def apply_response_delay(self):
+        user_metadata = await self._get_user_metadata()
+        response_delay = getattr(user_metadata, "response_wait_time", 0) if user_metadata else 2
+        if response_delay > 0:
+            await asyncio.sleep(response_delay)
+
     @traced(extract_args=["response"], record_return=True)
-    async def _execute_response(
+    async def execute_response(
         self,
         *,
         response: AgentResponse,
