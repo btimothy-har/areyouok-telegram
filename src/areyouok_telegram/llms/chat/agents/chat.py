@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from dataclasses import field
+from datetime import datetime
 from typing import Literal
+from zoneinfo import ZoneInfo
 
 import pydantic_ai
 from pydantic_ai import RunContext
@@ -76,17 +78,24 @@ async def instructions_with_personality_switch(ctx: pydantic_ai.RunContext[ChatA
         restrict_response_text += RESTRICT_PERSONALITY_SWITCH
         restrict_response_text += "\n"
 
-    user_preferences_text = (
-        USER_PREFERENCES.format(
+    if user_metadata:
+        if user_metadata.timezone:
+            try:
+                timezone = user_metadata.timezone
+                current_time = datetime.now(ZoneInfo(user_metadata.timezone)).strftime("%Y-%m-%d %H:%M %Z")
+            except Exception:
+                timezone = "Not provided."
+                current_time = "Not available."
+
+        user_preferences_text = USER_PREFERENCES.format(
             preferred_name=user_metadata.preferred_name or "Not provided.",
             country=user_metadata.country or "Not provided.",
-            timezone=user_metadata.timezone or "Not provided.",
-            current_time=user_metadata.get_current_time() or "Not available.",
+            timezone=timezone,
+            current_time=current_time,
             communication_style=user_metadata.communication_style or "",
         )
-        if user_metadata
-        else None
-    )
+    else:
+        user_preferences_text = ""
 
     prompt = BaseChatPromptTemplate(
         response=RESPONSE_PROMPT.format(response_restrictions=restrict_response_text),

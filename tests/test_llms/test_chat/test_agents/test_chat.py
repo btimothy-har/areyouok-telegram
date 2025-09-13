@@ -77,7 +77,6 @@ class TestInstructionsWithPersonalitySwitch:
         metadata.country = "USA"
         metadata.timezone = "America/New_York"
         metadata.communication_style = "casual and friendly"
-        metadata.get_current_time.return_value = datetime(2025, 1, 1, 15, 30, 0, tzinfo=ZoneInfo("America/New_York"))
         return metadata
 
     @pytest.fixture
@@ -167,19 +166,12 @@ class TestInstructionsWithPersonalitySwitch:
             mock_metadata.country = "Test"
             mock_metadata.timezone = "UTC"
             mock_metadata.communication_style = "Test"
-            mock_metadata.get_current_time.return_value = None
             mock_get_user.return_value = mock_metadata
 
             await instructions_with_personality_switch(mock_run_context)
 
             mock_get_user.assert_called_once_with(ANY, user_id=mock_run_context.deps.tg_chat_id)
 
-    @pytest.mark.asyncio
-    async def test_instructions_calls_get_current_time(self, mock_run_context, mock_user_metadata):
-        """Test that user metadata get_current_time method is called."""
-        await instructions_with_personality_switch(mock_run_context)
-
-        mock_user_metadata.get_current_time.assert_called_once()
 
 
 class TestUpdateCommunicationStyleTool:
