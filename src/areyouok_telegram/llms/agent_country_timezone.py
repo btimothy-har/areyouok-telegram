@@ -37,7 +37,7 @@ Return the timezone string in IANA format, and only the timezone string.
 @country_timezone_agent.output_validator
 async def validate_country_timezone_output(ctx: pydantic_ai.RunContext, data: CountryTimezone) -> CountryTimezone:  # noqa: ARG001
     try:
-        UserMetadata._validate_timezone(data.timezone)
+        UserMetadata.validate_field("timezone", data.timezone)
     except InvalidTimezoneError as e:
         raise MetadataFieldUpdateError("timezone") from e
 

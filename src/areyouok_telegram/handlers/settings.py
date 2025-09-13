@@ -1,3 +1,4 @@
+import pycountry
 import telegram
 from telegram.ext import ContextTypes
 
@@ -123,7 +124,14 @@ async def _construct_user_settings_response(user_id: str):
         # Format settings display
         if user_metadata:
             name = user_metadata.preferred_name or "Not set"
-            country = user_metadata.country_display_name or "Not set"
+
+            if not user_metadata.country:
+                country = "Not set"
+            elif user_metadata.country == "rather_not_say":
+                country = "Prefer not to say"
+            else:
+                country = pycountry.countries.get(alpha_3=user_metadata.country).name
+
             timezone = user_metadata.timezone or "Not set"
             response_speed = user_metadata.response_speed or "Not set"
 
