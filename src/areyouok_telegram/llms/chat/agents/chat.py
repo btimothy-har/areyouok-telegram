@@ -79,19 +79,10 @@ async def instructions_with_personality_switch(ctx: pydantic_ai.RunContext[ChatA
         restrict_response_text += "\n"
 
     if user_metadata:
-        if user_metadata.timezone:
-            try:
-                timezone = user_metadata.timezone
-                current_time = datetime.now(ZoneInfo(user_metadata.timezone)).strftime("%Y-%m-%d %H:%M %Z")
-            except Exception:
-                timezone = "Not provided."
-                current_time = "Not available."
-
         user_preferences_text = USER_PREFERENCES.format(
             preferred_name=user_metadata.preferred_name or "Not provided.",
             country=user_metadata.country or "Not provided.",
-            timezone=timezone,
-            current_time=current_time,
+            timezone=user_metadata.timezone or "Not provided.",
             communication_style=user_metadata.communication_style or "",
         )
     else:
@@ -137,6 +128,28 @@ async def validate_agent_response(
         )
 
     return data
+
+
+@chat_agent.tool
+async def get_current_time(ctx: RunContext[ChatAgentDependencies]) -> str:
+    """
+    Get the current time in the user's timezone, if the user has set their timezone.
+    This can be used to make the conversation more contextually relevant by being time-aware.
+
+    e.g. In the day time, the user may be working or busy. In the evening, the user may be winding down.
+    """
+    async with async_database() as db_conn:
+        user_metadata = await UserMetadata.get_by_user_id(db_conn, user_id=ctx.deps.tg_chat_id)
+
+    if user_metadata.timezone:
+        try:
+            current_time = datetime.now(ZoneInfo(user_metadata.timezone)).strftime("%Y-%m-%d %H:%M %Z")
+        except Exception:
+            pass
+        else:
+            return f"The current time in the user's timezone ({user_metadata.timezone}) is {current_time}."
+
+    return "The user's timezone is not set or invalid, so the current time cannot be determined."
 
 
 @chat_agent.tool
