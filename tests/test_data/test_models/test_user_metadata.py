@@ -1,15 +1,11 @@
 """Tests for UserMetadata model."""
 
 import hashlib
-import json
 from datetime import UTC
-from datetime import datetime
 from unittest.mock import MagicMock
 from unittest.mock import patch
-from zoneinfo import ZoneInfo
 
 import pytest
-from freezegun import freeze_time
 
 from areyouok_telegram.data.models.user_metadata import InvalidCountryCodeError
 from areyouok_telegram.data.models.user_metadata import InvalidFieldError
@@ -68,7 +64,7 @@ class TestUserMetadata:
         """Test _get_metadata decrypts, parses JSON and caches metadata dict."""
         mock_decrypt.return_value = '{"preferred_name": "John Doe", "country": "USA"}'
         mock_json.loads.return_value = {"preferred_name": "John Doe", "country": "USA"}
-        
+
         metadata = UserMetadata()
         metadata.user_key = "test_key"
         metadata.content = "encrypted_json"
@@ -101,7 +97,7 @@ class TestUserMetadata:
         """Test _set_metadata encrypts JSON and updates cache."""
         mock_json.dumps.return_value = '{"preferred_name": "John Doe"}'
         mock_encrypt.return_value = "encrypted_json"
-        
+
         metadata = UserMetadata()
         metadata.user_key = "test_key"
         metadata_dict = {"preferred_name": "John Doe"}
@@ -214,14 +210,14 @@ class TestUserMetadata:
     async def test_update_metadata_with_new_user(self, mock_encrypt, mock_db_session):
         """Test update_metadata creates new user metadata when user doesn't exist."""
         mock_encrypt.return_value = "encrypted_json"
-        
+
         # Mock get_by_user_id to return None (user doesn't exist)
         with patch.object(UserMetadata, "get_by_user_id", side_effect=[None, MagicMock(spec=UserMetadata)]):
             await UserMetadata.update_metadata(mock_db_session, user_id="user123", field="preferred_name", value="John")
 
         # Verify encryption was called with JSON containing the field
         mock_encrypt.assert_called_once_with('{"preferred_name": "John"}')
-        
+
         # Verify database execute was called
         mock_db_session.execute.assert_called_once()
 
@@ -230,17 +226,17 @@ class TestUserMetadata:
     async def test_update_metadata_with_existing_user(self, mock_encrypt, mock_db_session):
         """Test update_metadata updates existing user metadata."""
         mock_encrypt.return_value = "encrypted_json"
-        
+
         # Create mock existing user with metadata
         existing_user = MagicMock(spec=UserMetadata)
         existing_user._get_metadata.return_value = {"country": "USA"}
-        
+
         with patch.object(UserMetadata, "get_by_user_id", side_effect=[existing_user, MagicMock(spec=UserMetadata)]):
             await UserMetadata.update_metadata(mock_db_session, user_id="user123", field="preferred_name", value="John")
 
         # Verify encryption was called with JSON containing both fields
         mock_encrypt.assert_called_once_with('{"country": "USA", "preferred_name": "John"}')
-        
+
         # Verify database execute was called
         mock_db_session.execute.assert_called_once()
 
@@ -249,17 +245,17 @@ class TestUserMetadata:
     async def test_update_metadata_with_none_value(self, mock_encrypt, mock_db_session):
         """Test update_metadata removes field when value is None."""
         mock_encrypt.return_value = "encrypted_json"
-        
+
         # Create mock existing user with metadata
         existing_user = MagicMock(spec=UserMetadata)
         existing_user._get_metadata.return_value = {"preferred_name": "John", "country": "USA"}
-        
+
         with patch.object(UserMetadata, "get_by_user_id", side_effect=[existing_user, MagicMock(spec=UserMetadata)]):
             await UserMetadata.update_metadata(mock_db_session, user_id="user123", field="preferred_name", value=None)
 
         # Verify encryption was called with JSON that no longer contains preferred_name
         mock_encrypt.assert_called_once_with('{"country": "USA"}')
-        
+
         # Verify database execute was called
         mock_db_session.execute.assert_called_once()
 
@@ -267,11 +263,11 @@ class TestUserMetadata:
     async def test_update_metadata_database_upsert_structure(self, mock_db_session):
         """Test update_metadata creates correct database upsert statement."""
         user_id = "user123"
-        
+
         # Create mock existing user with proper metadata
         existing_user = MagicMock(spec=UserMetadata)
         existing_user._get_metadata.return_value = {"timezone": "UTC"}
-        
+
         mock_updated_user = MagicMock(spec=UserMetadata)
 
         with patch.object(UserMetadata, "get_by_user_id", side_effect=[existing_user, mock_updated_user]):
@@ -364,7 +360,7 @@ class TestUserMetadata:
             await UserMetadata.update_metadata(mock_db_session, user_id="user123", field="preferred_name", value=None)
 
         # Verify encryption was called with empty dict (user doesn't exist, field removed)
-        mock_encrypt.assert_called_once_with('{}')
+        mock_encrypt.assert_called_once_with("{}")
 
         # Verify database execute was called
         mock_db_session.execute.assert_called_once()
@@ -402,7 +398,7 @@ class TestUserMetadata:
             # Create mock existing user with proper metadata
             existing_user = MagicMock(spec=UserMetadata)
             existing_user._get_metadata.return_value = {"timezone": "UTC"}
-            
+
             with patch.object(UserMetadata, "get_by_user_id", side_effect=[existing_user, MagicMock(spec=UserMetadata)]):
                 await UserMetadata.update_metadata(mock_db_session, user_id="user123", field=field_name, value=field_value)
 
@@ -415,7 +411,7 @@ class TestUserMetadata:
             # Create mock existing user with proper metadata
             existing_user = MagicMock(spec=UserMetadata)
             existing_user._get_metadata.return_value = {"timezone": "UTC"}
-            
+
             with patch.object(UserMetadata, "get_by_user_id", side_effect=[existing_user, MagicMock(spec=UserMetadata)]):
                 await UserMetadata.update_metadata(mock_db_session, user_id="user123", field="country", value=country_value)
 
@@ -434,7 +430,7 @@ class TestUserMetadata:
         # Create mock existing user with proper metadata
         existing_user = MagicMock(spec=UserMetadata)
         existing_user._get_metadata.return_value = {"country": "USA"}
-        
+
         with patch.object(UserMetadata, "get_by_user_id", side_effect=[existing_user, MagicMock(spec=UserMetadata)]):
             await UserMetadata.update_metadata(
                 mock_db_session, user_id="user123", field="communication_style", value="formal"
@@ -449,7 +445,7 @@ class TestUserMetadata:
         # Create mock existing user with proper metadata
         existing_user = MagicMock(spec=UserMetadata)
         existing_user._get_metadata.return_value = {"country": "USA"}
-        
+
         with patch.object(UserMetadata, "get_by_user_id", side_effect=[existing_user, MagicMock(spec=UserMetadata)]):
             await UserMetadata.update_metadata(
                 mock_db_session, user_id="user123", field="timezone", value="America/New_York"
@@ -499,7 +495,7 @@ class TestUserMetadata:
 
         # Verify cache key is the user_key
         assert UserMetadata._metadata_cache.get(metadata.user_key) == test_data
-        
+
         # Test that _get_metadata uses the cache correctly
         result = metadata._get_metadata()
         assert result == test_data
@@ -569,11 +565,11 @@ class TestUserMetadata:
         # Valid string
         result = UserMetadata.validate_field("preferred_name", "John Doe")
         assert result == "John Doe"
-        
+
         # None value
         result = UserMetadata.validate_field("preferred_name", None)
         assert result is None
-        
+
         # Invalid type
         with pytest.raises(InvalidFieldValueError) as exc_info:
             UserMetadata.validate_field("preferred_name", 123)
@@ -585,7 +581,7 @@ class TestUserMetadata:
         # Valid country code
         result = UserMetadata.validate_field("country", "USA")
         assert result == "USA"
-        
+
         # Rather not say
         result = UserMetadata.validate_field("country", "rather_not_say")
         assert result == "rather_not_say"
@@ -595,7 +591,7 @@ class TestUserMetadata:
         # Rather not say
         result = UserMetadata.validate_field("timezone", "rather_not_say")
         assert result == "rather_not_say"
-        
+
         # Valid timezone (case insensitive)
         with patch("areyouok_telegram.data.models.user_metadata.available_timezones") as mock_timezones:
             mock_timezones.return_value = {"America/New_York", "Europe/London"}
@@ -607,13 +603,13 @@ class TestUserMetadata:
         # Valid values
         result = UserMetadata.validate_field("response_speed", "fast")
         assert result == "fast"
-        
+
         result = UserMetadata.validate_field("response_speed", "NORMAL")
         assert result == "normal"
-        
+
         result = UserMetadata.validate_field("response_speed", "slow")
         assert result == "slow"
-        
+
         # Invalid value
         with pytest.raises(InvalidFieldValueError) as exc_info:
             UserMetadata.validate_field("response_speed", "invalid")
@@ -625,15 +621,15 @@ class TestUserMetadata:
         # Valid integer
         result = UserMetadata.validate_field("response_speed_adj", 5)
         assert result == 5
-        
+
         # String that can be converted to int
         result = UserMetadata.validate_field("response_speed_adj", "10")
         assert result == 10
-        
+
         # None value
         result = UserMetadata.validate_field("response_speed_adj", None)
         assert result is None
-        
+
         # Invalid value
         with pytest.raises(InvalidFieldValueError) as exc_info:
             UserMetadata.validate_field("response_speed_adj", "not_a_number")
@@ -645,11 +641,11 @@ class TestUserMetadata:
         # Valid string
         result = UserMetadata.validate_field("communication_style", "casual")
         assert result == "casual"
-        
+
         # None value
         result = UserMetadata.validate_field("communication_style", None)
         assert result is None
-        
+
         # Invalid type
         with pytest.raises(InvalidFieldValueError) as exc_info:
             UserMetadata.validate_field("communication_style", 123)
@@ -686,7 +682,7 @@ class TestUserMetadata:
         metadata = UserMetadata()
         metadata.user_key = "test_key"
         metadata.user_id = "user123"
-        
+
         # Pre-populate cache with test data
         test_metadata = {
             "preferred_name": "John Doe",

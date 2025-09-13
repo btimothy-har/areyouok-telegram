@@ -1,11 +1,9 @@
 """Tests for chat agents."""
 
-from datetime import datetime
 from unittest.mock import ANY
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from unittest.mock import patch
-from zoneinfo import ZoneInfo
 
 import pytest
 from telegram.ext import ContextTypes
