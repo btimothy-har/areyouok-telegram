@@ -5,10 +5,10 @@ from areyouok_telegram.data import UserMetadata
 from areyouok_telegram.data import async_database
 from areyouok_telegram.data import operations as data_operations
 from areyouok_telegram.handlers.constants import MD2_SETTINGS_DISPLAY_TEMPLATE
+from areyouok_telegram.llms import run_agent_with_tracking
 from areyouok_telegram.llms.agent_settings import SettingsAgentDependencies
 from areyouok_telegram.llms.agent_settings import SettingsUpdateResponse
 from areyouok_telegram.llms.agent_settings import settings_agent
-from areyouok_telegram.llms.utils import run_agent_with_tracking
 from areyouok_telegram.logging import traced
 from areyouok_telegram.utils import db_retry
 from areyouok_telegram.utils import escape_markdown_v2

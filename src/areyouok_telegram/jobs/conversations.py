@@ -23,6 +23,7 @@ from areyouok_telegram.data import async_database
 from areyouok_telegram.data import operations as data_operations
 from areyouok_telegram.jobs.base import BaseJob
 from areyouok_telegram.jobs.exceptions import UserNotFoundForChatError
+from areyouok_telegram.llms import run_agent_with_tracking
 from areyouok_telegram.llms.chat import AgentResponse
 from areyouok_telegram.llms.chat import ChatAgentDependencies
 from areyouok_telegram.llms.chat import OnboardingAgentDependencies
@@ -32,7 +33,6 @@ from areyouok_telegram.llms.chat import chat_agent
 from areyouok_telegram.llms.chat import onboarding_agent
 from areyouok_telegram.llms.context_compression import ContextTemplate
 from areyouok_telegram.llms.context_compression import context_compression_agent
-from areyouok_telegram.llms.utils import run_agent_with_tracking
 from areyouok_telegram.logging import traced
 from areyouok_telegram.utils import db_retry
 from areyouok_telegram.utils import telegram_call
