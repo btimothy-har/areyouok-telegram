@@ -110,6 +110,8 @@ class TestConversationJob:
                 job, "generate_response", new=AsyncMock(return_value=(mock_response, mock_message))
             ) as mock_generate,
             patch.object(job, "_log_bot_activity", new=AsyncMock()) as mock_log_activity,
+            patch.object(job, "_get_user_metadata", new=AsyncMock(return_value=None)),
+            patch("areyouok_telegram.jobs.conversations.asyncio.sleep", new=AsyncMock()),
             patch("areyouok_telegram.data.operations.new_session_event", new=AsyncMock()),
             patch("areyouok_telegram.jobs.conversations.logfire.span"),
         ):
@@ -420,6 +422,8 @@ class TestConversationJob:
             ),
             patch.object(job, "generate_response", new=AsyncMock(return_value=(mock_response, mock_message))),
             patch.object(job, "_log_bot_activity", new=AsyncMock()),
+            patch.object(job, "_get_user_metadata", new=AsyncMock(return_value=None)),
+            patch("areyouok_telegram.jobs.conversations.asyncio.sleep", new=AsyncMock()),
             patch("areyouok_telegram.data.operations.new_session_event", new=AsyncMock()) as mock_log_event,
             patch("areyouok_telegram.jobs.conversations.logfire.span"),
         ):
@@ -477,6 +481,8 @@ class TestConversationJob:
             ),
             patch.object(job, "generate_response", new=AsyncMock(return_value=(mock_response, None))),
             patch.object(job, "_log_bot_activity", new=AsyncMock()),
+            patch.object(job, "_get_user_metadata", new=AsyncMock(return_value=None)),
+            patch("areyouok_telegram.jobs.conversations.asyncio.sleep", new=AsyncMock()),
             patch("areyouok_telegram.data.operations.new_session_event", new=AsyncMock()) as mock_log_event,
             patch("areyouok_telegram.jobs.conversations.logfire.span"),
         ):
@@ -627,6 +633,8 @@ class TestConversationJob:
                 new=AsyncMock(side_effect=[(mock_switch_response, None), (mock_final_response, mock_message)]),
             ) as mock_generate,
             patch.object(job, "_log_bot_activity", new=AsyncMock()),
+            patch.object(job, "_get_user_metadata", new=AsyncMock(return_value=None)),
+            patch("areyouok_telegram.jobs.conversations.asyncio.sleep", new=AsyncMock()),
             patch("areyouok_telegram.data.operations.new_session_event", new=AsyncMock()),
             patch("areyouok_telegram.jobs.conversations.logfire.span"),
         ):
@@ -1041,6 +1049,8 @@ class TestConversationJob:
             patch.object(job, "generate_response", new=AsyncMock(return_value=(mock_response, mock_message))),
             patch.object(job, "_mark_notification_completed", new=AsyncMock()) as mock_mark_notification,
             patch.object(job, "_log_bot_activity", new=AsyncMock()),
+            patch.object(job, "_get_user_metadata", new=AsyncMock(return_value=None)),
+            patch("areyouok_telegram.jobs.conversations.asyncio.sleep", new=AsyncMock()),
             patch("areyouok_telegram.data.operations.new_session_event", new=AsyncMock()),
             patch("areyouok_telegram.jobs.conversations.logfire.span"),
         ):
@@ -1088,6 +1098,8 @@ class TestConversationJob:
             patch.object(job, "generate_response", new=AsyncMock(return_value=(mock_response, None))),
             patch.object(job, "_mark_notification_completed", new=AsyncMock()) as mock_mark_notification,
             patch.object(job, "_log_bot_activity", new=AsyncMock()),
+            patch.object(job, "_get_user_metadata", new=AsyncMock(return_value=None)),
+            patch("areyouok_telegram.jobs.conversations.asyncio.sleep", new=AsyncMock()),
             patch("areyouok_telegram.data.operations.new_session_event", new=AsyncMock()),
             patch("areyouok_telegram.jobs.conversations.logfire.span"),
         ):
