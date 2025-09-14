@@ -1,19 +1,19 @@
 """Tests for chat agents."""
 
-from datetime import datetime
 from unittest.mock import ANY
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from unittest.mock import patch
-from zoneinfo import ZoneInfo
 
 import pytest
+from freezegun import freeze_time
 from telegram.ext import ContextTypes
 
 from areyouok_telegram.data.models.notifications import Notifications
 from areyouok_telegram.data.models.user_metadata import UserMetadata
 from areyouok_telegram.llms.agent_anonymizer import anonymization_agent
 from areyouok_telegram.llms.chat.agents.chat import ChatAgentDependencies
+from areyouok_telegram.llms.chat.agents.chat import get_current_time
 from areyouok_telegram.llms.chat.agents.chat import instructions_with_personality_switch
 from areyouok_telegram.llms.chat.agents.chat import update_communication_style
 from areyouok_telegram.llms.chat.personalities import PersonalityTypes
@@ -77,7 +77,6 @@ class TestInstructionsWithPersonalitySwitch:
         metadata.country = "USA"
         metadata.timezone = "America/New_York"
         metadata.communication_style = "casual and friendly"
-        metadata.get_current_time.return_value = datetime(2025, 1, 1, 15, 30, 0, tzinfo=ZoneInfo("America/New_York"))
         return metadata
 
     @pytest.fixture
@@ -167,19 +166,11 @@ class TestInstructionsWithPersonalitySwitch:
             mock_metadata.country = "Test"
             mock_metadata.timezone = "UTC"
             mock_metadata.communication_style = "Test"
-            mock_metadata.get_current_time.return_value = None
             mock_get_user.return_value = mock_metadata
 
             await instructions_with_personality_switch(mock_run_context)
 
             mock_get_user.assert_called_once_with(ANY, user_id=mock_run_context.deps.tg_chat_id)
-
-    @pytest.mark.asyncio
-    async def test_instructions_calls_get_current_time(self, mock_run_context, mock_user_metadata):
-        """Test that user metadata get_current_time method is called."""
-        await instructions_with_personality_switch(mock_run_context)
-
-        mock_user_metadata.get_current_time.assert_called_once()
 
 
 class TestUpdateCommunicationStyleTool:
@@ -336,3 +327,236 @@ class TestUpdateCommunicationStyleTool:
             assert call_args[1]["chat_id"] == "123456"
             assert call_args[1]["session_id"] == "session_123"
             assert call_args[1]["run_kwargs"]["user_prompt"] == new_style
+
+
+class TestGetCurrentTimeTool:
+    """Test get_current_time tool."""
+
+    @pytest.fixture
+    def mock_run_context(self):
+        """Create mock pydantic_ai run context."""
+        context = MagicMock()
+        context.deps = MagicMock(spec=ChatAgentDependencies)
+        context.deps.tg_chat_id = "123456"
+        return context
+
+    @pytest.fixture
+    def mock_user_metadata_with_timezone(self):
+        """Create mock user metadata with valid timezone."""
+        metadata = MagicMock(spec=UserMetadata)
+        metadata.timezone = "America/New_York"
+        return metadata
+
+    @pytest.fixture
+    def mock_user_metadata_no_timezone(self):
+        """Create mock user metadata with no timezone set."""
+        metadata = MagicMock(spec=UserMetadata)
+        metadata.timezone = None
+        return metadata
+
+    @pytest.fixture
+    def mock_user_metadata_invalid_timezone(self):
+        """Create mock user metadata with invalid timezone."""
+        metadata = MagicMock(spec=UserMetadata)
+        metadata.timezone = "Invalid/Timezone"
+        return metadata
+
+    @pytest.mark.asyncio
+    @patch("areyouok_telegram.llms.chat.agents.chat.async_database")
+    @freeze_time("2024-01-15 14:30:45")
+    async def test_get_current_time_with_valid_timezone(
+        self, mock_async_db, mock_run_context, mock_user_metadata_with_timezone
+    ):
+        """Test get_current_time with user having valid timezone."""
+        # Setup mocks
+        mock_db_conn = AsyncMock()
+        mock_async_db.return_value.__aenter__ = AsyncMock(return_value=mock_db_conn)
+        mock_async_db.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        with patch.object(UserMetadata, "get_by_user_id", new_callable=AsyncMock) as mock_get_user:
+            mock_get_user.return_value = mock_user_metadata_with_timezone
+
+            result = await get_current_time(mock_run_context)
+
+            # Verify database call
+            mock_get_user.assert_called_once_with(mock_db_conn, user_id="123456")
+
+            # Verify result contains expected time information
+            assert "America/New_York" in result
+            assert "Current time in the user's timezone" in result
+            assert "2024-01-15" in result
+            # Time should be converted from UTC to EST (UTC-5)
+            assert "09:30" in result or "EST" in result
+
+    @pytest.mark.asyncio
+    @patch("areyouok_telegram.llms.chat.agents.chat.async_database")
+    async def test_get_current_time_with_no_timezone(
+        self, mock_async_db, mock_run_context, mock_user_metadata_no_timezone
+    ):
+        """Test get_current_time when user has no timezone set."""
+        # Setup mocks
+        mock_db_conn = AsyncMock()
+        mock_async_db.return_value.__aenter__ = AsyncMock(return_value=mock_db_conn)
+        mock_async_db.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        with patch.object(UserMetadata, "get_by_user_id", new_callable=AsyncMock) as mock_get_user:
+            mock_get_user.return_value = mock_user_metadata_no_timezone
+
+            result = await get_current_time(mock_run_context)
+
+            # Verify database call
+            mock_get_user.assert_called_once_with(mock_db_conn, user_id="123456")
+
+            # Verify error message is returned
+            assert result == "The user's timezone is not set or invalid, so the current time cannot be determined."
+
+    @pytest.mark.asyncio
+    @patch("areyouok_telegram.llms.chat.agents.chat.async_database")
+    @freeze_time("2024-01-15 20:15:30")
+    async def test_get_current_time_with_invalid_timezone(
+        self, mock_async_db, mock_run_context, mock_user_metadata_invalid_timezone
+    ):
+        """Test get_current_time when user has invalid timezone."""
+        # Setup mocks
+        mock_db_conn = AsyncMock()
+        mock_async_db.return_value.__aenter__ = AsyncMock(return_value=mock_db_conn)
+        mock_async_db.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        with patch.object(UserMetadata, "get_by_user_id", new_callable=AsyncMock) as mock_get_user:
+            mock_get_user.return_value = mock_user_metadata_invalid_timezone
+
+            result = await get_current_time(mock_run_context)
+
+            # Verify database call
+            mock_get_user.assert_called_once_with(mock_db_conn, user_id="123456")
+
+            # Verify error message is returned when timezone is invalid
+            assert result == "The user's timezone is not set or invalid, so the current time cannot be determined."
+
+    @pytest.mark.asyncio
+    @patch("areyouok_telegram.llms.chat.agents.chat.async_database")
+    @freeze_time("2024-07-20 12:00:00")  # Summer time for DST testing
+    async def test_get_current_time_with_dst_timezone(self, mock_async_db, mock_run_context):
+        """Test get_current_time with timezone that observes DST."""
+        # Setup mocks
+        mock_db_conn = AsyncMock()
+        mock_async_db.return_value.__aenter__ = AsyncMock(return_value=mock_db_conn)
+        mock_async_db.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        # Create metadata with DST-observing timezone
+        mock_metadata = MagicMock(spec=UserMetadata)
+        mock_metadata.timezone = "America/New_York"
+
+        with patch.object(UserMetadata, "get_by_user_id", new_callable=AsyncMock) as mock_get_user:
+            mock_get_user.return_value = mock_metadata
+
+            result = await get_current_time(mock_run_context)
+
+            # Verify database call
+            mock_get_user.assert_called_once_with(mock_db_conn, user_id="123456")
+
+            # Verify result contains expected time information
+            assert "America/New_York" in result
+            assert "Current time in the user's timezone" in result
+            assert "2024-07-20" in result
+            # Time should be converted from UTC to EDT (UTC-4 during summer)
+            assert "08:00" in result or "EDT" in result
+
+    @pytest.mark.asyncio
+    @patch("areyouok_telegram.llms.chat.agents.chat.async_database")
+    @freeze_time("2024-01-15 09:45:15")
+    async def test_get_current_time_with_utc_timezone(self, mock_async_db, mock_run_context):
+        """Test get_current_time with UTC timezone."""
+        # Setup mocks
+        mock_db_conn = AsyncMock()
+        mock_async_db.return_value.__aenter__ = AsyncMock(return_value=mock_db_conn)
+        mock_async_db.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        # Create metadata with UTC timezone
+        mock_metadata = MagicMock(spec=UserMetadata)
+        mock_metadata.timezone = "UTC"
+
+        with patch.object(UserMetadata, "get_by_user_id", new_callable=AsyncMock) as mock_get_user:
+            mock_get_user.return_value = mock_metadata
+
+            result = await get_current_time(mock_run_context)
+
+            # Verify database call
+            mock_get_user.assert_called_once_with(mock_db_conn, user_id="123456")
+
+            # Verify result contains expected time information
+            assert "UTC" in result
+            assert "Current time in the user's timezone" in result
+            assert "2024-01-15 09:45 UTC" in result
+
+    @pytest.mark.asyncio
+    @patch("areyouok_telegram.llms.chat.agents.chat.async_database")
+    async def test_get_current_time_database_called_correctly(self, mock_async_db, mock_run_context):
+        """Test that UserMetadata.get_by_user_id is called with correct parameters."""
+        # Setup mocks
+        mock_db_conn = AsyncMock()
+        mock_async_db.return_value.__aenter__ = AsyncMock(return_value=mock_db_conn)
+        mock_async_db.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        mock_metadata = MagicMock(spec=UserMetadata)
+        mock_metadata.timezone = None
+
+        with patch.object(UserMetadata, "get_by_user_id", new_callable=AsyncMock) as mock_get_user:
+            mock_get_user.return_value = mock_metadata
+
+            await get_current_time(mock_run_context)
+
+            # Verify database connection and method call
+            mock_async_db.assert_called_once()
+            mock_get_user.assert_called_once_with(mock_db_conn, user_id=mock_run_context.deps.tg_chat_id)
+
+    @pytest.mark.asyncio
+    @patch("areyouok_telegram.llms.chat.agents.chat.async_database")
+    @freeze_time("2024-03-10 12:00:00")  # Use noon UTC to avoid date changes in timezones
+    async def test_get_current_time_with_different_timezones(self, mock_async_db, mock_run_context):
+        """Test get_current_time with various valid timezones."""
+        # Setup mocks
+        mock_db_conn = AsyncMock()
+        mock_async_db.return_value.__aenter__ = AsyncMock(return_value=mock_db_conn)
+        mock_async_db.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        test_timezones = [
+            "Europe/London",
+            "Asia/Tokyo",
+            "Australia/Sydney",
+            "America/Los_Angeles",
+        ]
+
+        for timezone_name in test_timezones:
+            mock_metadata = MagicMock(spec=UserMetadata)
+            mock_metadata.timezone = timezone_name
+
+            with patch.object(UserMetadata, "get_by_user_id", new_callable=AsyncMock) as mock_get_user:
+                mock_get_user.return_value = mock_metadata
+
+                result = await get_current_time(mock_run_context)
+
+                # Verify result contains timezone information
+                assert timezone_name in result
+                assert "Current time in the user's timezone" in result
+                assert "2024-03-" in result  # Should contain the date, but day might vary by timezone
+
+    @pytest.mark.asyncio
+    @patch("areyouok_telegram.llms.chat.agents.chat.async_database")
+    async def test_get_current_time_exception_handling(self, mock_async_db, mock_run_context):
+        """Test that ZoneInfo exceptions are properly handled."""
+        # Setup mocks
+        mock_db_conn = AsyncMock()
+        mock_async_db.return_value.__aenter__ = AsyncMock(return_value=mock_db_conn)
+        mock_async_db.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        mock_metadata = MagicMock(spec=UserMetadata)
+        mock_metadata.timezone = "Definitely/NotAValidTimezone"
+
+        with patch.object(UserMetadata, "get_by_user_id", new_callable=AsyncMock) as mock_get_user:
+            mock_get_user.return_value = mock_metadata
+
+            result = await get_current_time(mock_run_context)
+
+            # Verify error message is returned
+            assert result == "The user's timezone is not set or invalid, so the current time cannot be determined."

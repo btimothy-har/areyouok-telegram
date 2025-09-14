@@ -1,4 +1,5 @@
 import hashlib
+import json
 from datetime import UTC
 from datetime import datetime
 from typing import Any
@@ -62,39 +63,27 @@ class InvalidTimezoneError(InvalidFieldValueError):
 
 
 class UserMetadata(Base):
-    """User metadata and preferences with selective field encryption."""
+    """User metadata and preferences stored as encrypted JSON."""
 
     __tablename__ = "user_metadata"
     __table_args__ = {"schema": ENV}
 
-    # Field mappings for validation
-    _ENCRYPTED_FIELDS = {
-        "preferred_name": "_preferred_name",
+    # Valid metadata fields
+    _VALID_FIELDS = {
+        "preferred_name",
+        "country",
+        "timezone",
+        "response_speed",
+        "response_speed_adj",
+        "communication_style",
     }
 
-    _UNENCRYPTED_FIELDS = {
-        "country": "country",
-        "timezone": "timezone",
-        "response_speed": "response_speed",
-        "response_speed_adj": "response_speed_adj",
-        "communication_style": "communication_style",
-    }
-
-    # TTL cache for decrypted fields (1 hour TTL, max 1000 entries)
-    _field_cache: TTLCache[str, str] = TTLCache(maxsize=1000, ttl=1 * 60 * 60)
+    # TTL cache for decrypted metadata (1 hour TTL, max 1000 entries)
+    _metadata_cache: TTLCache[str, dict] = TTLCache(maxsize=1000, ttl=1 * 60 * 60)
 
     user_key = Column(String, nullable=False, unique=True)
     user_id = Column(String, nullable=False, unique=True)
-
-    _preferred_name = Column(String, nullable=True)
-
-    country = Column(String, nullable=True)
-    timezone = Column(String, nullable=True)
-
-    response_speed = Column(String, nullable=True)
-    response_speed_adj = Column(Integer, nullable=True)
-
-    communication_style = Column(String, nullable=True)
+    content = Column(String, nullable=True)  # Stores encrypted JSON string
 
     # Metadata
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -106,43 +95,74 @@ class UserMetadata(Base):
         """Generate a unique key for user metadata based on their user ID."""
         return hashlib.sha256(f"metadata:{user_id}".encode()).hexdigest()
 
-    # Read-only properties for encrypted fields
+    def _get_metadata(self) -> dict:
+        """Get decrypted metadata from cache or decrypt from database.
+
+        Returns:
+            dict: The decrypted metadata dictionary
+        """
+        # Check cache first
+        if self.user_key in self._metadata_cache:
+            return self._metadata_cache[self.user_key]
+
+        # Decrypt if not cached and metadata exists
+        if self.content:
+            decrypted_json = decrypt_content(self.content)
+            metadata_dict = json.loads(decrypted_json) if decrypted_json else {}
+            self._metadata_cache[self.user_key] = metadata_dict
+            return metadata_dict
+
+        return {}
+
+    def _set_metadata(self, metadata_dict: dict):
+        """Encrypt and store metadata.
+
+        Args:
+            metadata_dict: The metadata dictionary to encrypt and store
+        """
+        json_str = json.dumps(metadata_dict)
+        self.content = encrypt_content(json_str)
+        # Update cache
+        self._metadata_cache[self.user_key] = metadata_dict
+
+    # Read-only properties for metadata fields
     @property
     def preferred_name(self) -> str | None:
         """Get user's preferred name."""
-        if not self._preferred_name:
-            return None
-
-        return self._decrypt_field("preferred_name", self._preferred_name)
+        return self._get_metadata().get("preferred_name")
 
     @property
-    def country_display_name(self) -> str | None:
-        """Get user's country as a full country name instead of ISO3 code.
+    def country(self) -> str | None:
+        """Get user's country."""
+        return self._get_metadata().get("country")
 
-        Returns:
-            Full country name, "Prefer not to say", or None if not set
-        """
-        if not self.country:
-            return None
+    @property
+    def timezone(self) -> str | None:
+        """Get user's timezone."""
+        return self._get_metadata().get("timezone")
 
-        if self.country == "rather_not_say":
-            return "Prefer not to say"
+    @property
+    def response_speed(self) -> str | None:
+        """Get user's response speed preference."""
+        return self._get_metadata().get("response_speed")
 
-        try:
-            country = pycountry.countries.get(alpha_3=self.country.upper())
-        except (AttributeError, LookupError):
-            return self.country
-        else:
-            return country.name if country else self.country
+    @property
+    def response_speed_adj(self) -> int | None:
+        """Get user's response speed adjustment."""
+        return self._get_metadata().get("response_speed_adj")
+
+    @property
+    def communication_style(self) -> str | None:
+        """Get user's communication style preference."""
+        return self._get_metadata().get("communication_style")
 
     @property
     def response_wait_time(self) -> float:
         """Get the user's preferred response wait time in seconds.
 
         Returns:
-            Response wait time in seconds (fast=5, normal=15, slow=30), or 15 if not set
+            Response wait time in seconds (fast=0, normal=2, slow=5), with adjustment
         """
-
         response_speed_adj = self.response_speed_adj or 0
         return max(RESPONSE_SPEED_MAP.get(self.response_speed, 2.0) + response_speed_adj, 0)
 
@@ -172,61 +192,49 @@ class UserMetadata(Base):
             InvalidFieldValueError: If value provided is incorrect for the field
         """
         # Validate field name
-        if field not in cls._ENCRYPTED_FIELDS and field not in cls._UNENCRYPTED_FIELDS:
-            valid_fields = list(cls._ENCRYPTED_FIELDS.keys()) + list(cls._UNENCRYPTED_FIELDS.keys())
+        if field not in cls._VALID_FIELDS:
+            valid_fields = list(cls._VALID_FIELDS)
             raise InvalidFieldError(field, valid_fields)
 
         # Validate and normalize field values
-        if value is not None:  # Allow None for clearing fields
-            # Validate encrypted field types (must be strings)
-            if field in cls._ENCRYPTED_FIELDS and not isinstance(value, str):
-                raise InvalidFieldValueError(field, value, "a string or None")
-            if field == "country":
-                value = cls._validate_country(value)
-            elif field == "timezone":
-                value = cls._validate_timezone(value)
-            elif field == "response_speed":
-                value = value.lower() or "normal"
-                if value not in ["fast", "normal", "slow"]:
-                    raise InvalidFieldValueError(field, value, "one of: 'fast', 'normal', 'slow'")
-            elif field == "response_speed_adj":
-                try:
-                    value = int(value)
-                except (TypeError, ValueError) as e:
-                    raise InvalidFieldValueError(field, value, "an integer number of seconds or None") from e
+        validated_value = cls.validate_field(field, value)
 
         now = datetime.now(UTC)
         user_key = cls.generate_user_key(user_id)
+
+        # Get existing metadata or create new
+        existing = await cls.get_by_user_id(db_conn, user_id=user_id)
+
+        if existing:
+            metadata_dict = existing._get_metadata()
+        else:
+            metadata_dict = {}
+
+        # Update the field in the dictionary
+        if validated_value is None:
+            metadata_dict.pop(field, None)
+        else:
+            metadata_dict[field] = validated_value
+
+        # Encrypt the entire JSON
+        encrypted_json = encrypt_content(json.dumps(metadata_dict))
 
         # Prepare values for database update
         values = {
             "user_key": user_key,
             "user_id": user_id,
+            "content": encrypted_json,
             "created_at": now,
             "updated_at": now,
         }
 
-        # Handle encrypted fields
-        if field in cls._ENCRYPTED_FIELDS:
-            db_field = cls._ENCRYPTED_FIELDS[field]
-            values[db_field] = encrypt_content(value) if value is not None else None
-        # Handle unencrypted fields
-        elif field in cls._UNENCRYPTED_FIELDS:
-            db_field = cls._UNENCRYPTED_FIELDS[field]
-            values[db_field] = value
-
         stmt = pg_insert(cls).values(**values)
 
-        # On conflict, only update the specific field being changed and updated_at
-        update_values = {"updated_at": stmt.excluded.updated_at}
-
-        # Add the specific field being updated
-        if field in cls._ENCRYPTED_FIELDS:
-            db_field = cls._ENCRYPTED_FIELDS[field]
-            update_values[db_field] = stmt.excluded[db_field]
-        elif field in cls._UNENCRYPTED_FIELDS:
-            db_field = cls._UNENCRYPTED_FIELDS[field]
-            update_values[db_field] = stmt.excluded[db_field]
+        # On conflict, update metadata and updated_at
+        update_values = {
+            "content": stmt.excluded.content,
+            "updated_at": stmt.excluded.updated_at,
+        }
 
         stmt = stmt.on_conflict_do_update(
             index_elements=["user_key"],
@@ -234,6 +242,9 @@ class UserMetadata(Base):
         )
 
         await db_conn.execute(stmt)
+
+        # Return the updated object
+        return await cls.get_by_user_id(db_conn, user_id=user_id)
 
     @classmethod
     async def get_by_user_id(
@@ -247,106 +258,88 @@ class UserMetadata(Base):
         result = await db_conn.execute(stmt)
         return result.scalars().first()
 
-    @staticmethod
-    def _validate_country(value: str) -> str:
-        """Validate country field.
+    @classmethod
+    def validate_field(cls, field: str, value: Any) -> Any:
+        """Validate and normalize a field value.
 
         Args:
-            value: Country code or special value
+            field: Field name to validate
+            value: Value to validate
 
         Returns:
-            The validated country value
+            The validated and normalized value
 
         Raises:
-            InvalidCountryCodeError: If the country code is invalid
+            InvalidFieldValueError: If value is invalid for the field
         """
-        # Allow special value for privacy
-        if value.lower() == "rather_not_say":
-            return "rather_not_say"
+        if value is None:
+            return None
 
-        # Check for valid ISO3 country code
-        country = pycountry.countries.get(alpha_3=value.upper())
-        if country:
-            return value.upper()
+        if field == "preferred_name":
+            if not isinstance(value, str):
+                raise InvalidFieldValueError(field, value, "a string or None")
+            return value
 
-        raise InvalidCountryCodeError(value)
+        elif field == "country":
+            if not isinstance(value, str):
+                raise InvalidFieldValueError(field, value, "a string or None")
 
-    @staticmethod
-    def _validate_timezone(value: str) -> str:
-        """Validate timezone field.
+            if value.lower() == "rather_not_say":
+                return "rather_not_say"
+            else:
+                country = pycountry.countries.get(alpha_3=value.upper())
+                if country:
+                    return value.upper()
+            raise InvalidCountryCodeError(value)
 
-        Args:
-            value: Timezone identifier
+        elif field == "timezone":
+            if not isinstance(value, str):
+                raise InvalidFieldValueError(field, value, "a string or None")
 
-        Returns:
-            The validated timezone value
+            if value.lower() == "rather_not_say":
+                return "rather_not_say"
+            else:
+                all_timezones = available_timezones()
+                for tz in all_timezones:
+                    if tz.lower() == value.lower():
+                        ZoneInfo(tz)
+                        return tz
 
-        Raises:
-            InvalidTimezoneError: If the timezone is invalid
-        """
-        if value.lower() == "rather_not_say":
-            return "rather_not_say"
+            raise InvalidTimezoneError(value)
 
-        all_timezones = available_timezones()
+        elif field == "response_speed":
+            if not isinstance(value, str):
+                raise InvalidFieldValueError(field, value, "a string or None")
 
-        for tz in all_timezones:
-            if tz.lower() == value.lower():
-                ZoneInfo(tz)
-                return tz
+            value = value.lower() or "normal"
+            if value not in ["fast", "normal", "slow"]:
+                raise InvalidFieldValueError(field, value, "one of: 'fast', 'normal', 'slow'")
 
-        raise InvalidTimezoneError(value)
+            return value
+
+        elif field == "response_speed_adj":
+            try:
+                return int(value)
+            except (TypeError, ValueError) as e:
+                raise InvalidFieldValueError(field, value, "an integer number of seconds or None") from e
+
+        elif field == "communication_style":
+            if not isinstance(value, str):
+                raise InvalidFieldValueError(field, value, "a string or None")
+            return value
+
+        else:
+            return value
 
     def to_dict(self) -> dict[str, Any]:
         """Return a dictionary representation of the user metadata."""
+        metadata = self._get_metadata()
         return {
             "user_id": self.user_id,
-            "preferred_name": self.preferred_name,
-            "communication_style": self.communication_style,
-            "response_speed": self.response_speed,
-            "response_speed_adj": self.response_speed_adj,
-            "country": self.country,
-            "timezone": self.timezone,
+            "preferred_name": metadata.get("preferred_name"),
+            "communication_style": metadata.get("communication_style"),
+            "response_speed": metadata.get("response_speed"),
+            "response_speed_adj": metadata.get("response_speed_adj"),
+            "country": metadata.get("country"),
+            "timezone": metadata.get("timezone"),
         }
-
-    def get_current_time(self) -> datetime | None:
-        """Get the current time in the user's timezone.
-
-        Returns:
-            datetime: Current time in user's timezone, or None if timezone is not set or is 'rather_not_say'
-        """
-        if self.timezone is None or self.timezone == "rather_not_say":
-            return None
-
-        try:
-            user_tz = ZoneInfo(self.timezone)
-            return datetime.now(user_tz)
-        except Exception:
-            # If timezone is invalid, return None
-            return None
-
-    def _decrypt_field(self, field_name: str, encrypted_value: str) -> str | None:
-        """Decrypt a field value with caching.
-
-        Args:
-            field_name: Name of the field (for caching)
-            encrypted_value: Encrypted value to decrypt
-
-        Returns:
-            str: The decrypted value, or None if encrypted_value is None
-        """
-        if encrypted_value is None:
-            return None
-
-        cache_key = f"{self.user_key}:{field_name}"
-
-        # Check cache first
-        cached_value = self._field_cache.get(cache_key)
-        if cached_value is not None:
-            return cached_value
-
-        # Decrypt and cache
-        decrypted_value = decrypt_content(encrypted_value)
-        if decrypted_value is not None:
-            self._field_cache[cache_key] = decrypted_value
-
-        return decrypted_value
