@@ -9,11 +9,11 @@ import pytest
 from pydantic_ai import models
 
 from areyouok_telegram.llms.agent_settings import FeedbackMissingError
-from areyouok_telegram.llms.agent_settings import SettingsAgentDependencies
-from areyouok_telegram.llms.agent_settings import SettingsUpdateResponse
-from areyouok_telegram.llms.agent_settings import settings_agent
+from areyouok_telegram.llms.agent_settings import PreferencesAgentDependencies
+from areyouok_telegram.llms.agent_settings import PreferencesUpdateResponse
+from areyouok_telegram.llms.agent_settings import preferences_agent
 from areyouok_telegram.llms.agent_settings import update_preferred_name
-from areyouok_telegram.llms.agent_settings import validate_settings_agent_output
+from areyouok_telegram.llms.agent_settings import validate_preferences_agent_output
 from areyouok_telegram.llms.exceptions import MetadataFieldUpdateError
 
 # Block real model requests in tests
@@ -37,55 +37,55 @@ class TestFeedbackMissingError:
         assert isinstance(error, pydantic_ai.ModelRetry)
 
 
-class TestSettingsAgentDependencies:
+class TestPreferencesAgentDependencies:
     """Test SettingsAgentDependencies dataclass."""
 
-    def test_settings_agent_dependencies_creation(self):
-        """Test SettingsAgentDependencies can be created with required fields."""
-        deps = SettingsAgentDependencies(tg_chat_id="123456789", tg_session_id="session_456")
+    def test_preferences_agent_dependencies_creation(self):
+        """Test PreferencesAgentDependencies can be created with required fields."""
+        deps = PreferencesAgentDependencies(tg_chat_id="123456789", tg_session_id="session_456")
 
         assert deps.tg_chat_id == "123456789"
         assert deps.tg_session_id == "session_456"
 
-    def test_settings_agent_dependencies_fields_required(self):
+    def test_preferences_agent_dependencies_fields_required(self):
         """Test that all fields are required."""
         # Should raise TypeError if required fields are missing
         with pytest.raises(TypeError):
-            SettingsAgentDependencies()  # Missing required fields
+            PreferencesAgentDependencies()  # Missing required fields
 
 
-class TestSettingsUpdateResponse:
+class TestPreferencesUpdateResponse:
     """Test SettingsUpdateResponse model."""
 
-    def test_settings_update_response_creation(self):
-        """Test SettingsUpdateResponse can be created."""
-        response = SettingsUpdateResponse(completed=True, feedback="Successfully updated your settings.")
+    def test_preferences_update_response_creation(self):
+        """Test PreferencesUpdateResponse can be created."""
+        response = PreferencesUpdateResponse(completed=True, feedback="Successfully updated your preferences.")
 
         assert response.completed is True
-        assert response.feedback == "Successfully updated your settings."
+        assert response.feedback == "Successfully updated your preferences."
 
-    def test_settings_update_response_defaults(self):
-        """Test SettingsUpdateResponse has correct default values."""
-        response = SettingsUpdateResponse(completed=True)
+    def test_preferences_update_response_defaults(self):
+        """Test PreferencesUpdateResponse has correct default values."""
+        response = PreferencesUpdateResponse(completed=True)
 
         assert response.completed is True
         assert response.feedback is None
 
-    def test_settings_update_response_validation(self):
-        """Test SettingsUpdateResponse validates field types."""
+    def test_preferences_update_response_validation(self):
+        """Test PreferencesUpdateResponse validates field types."""
         # Test with invalid types
         with pytest.raises(ValueError):
-            SettingsUpdateResponse(completed="not a boolean")
+            PreferencesUpdateResponse(completed="not a boolean")
 
 
-class TestSettingsAgentTools:
+class TestPreferencesAgentTools:
     """Test settings agent tool functions."""
 
     @pytest.fixture
     def mock_context(self):
         """Create a mock context for agent tools."""
         mock_ctx = MagicMock()
-        mock_deps = SettingsAgentDependencies(tg_chat_id="123456789", tg_session_id="session_456")
+        mock_deps = PreferencesAgentDependencies(tg_chat_id="123456789", tg_session_id="session_456")
         mock_ctx.deps = mock_deps
         return mock_ctx
 
@@ -117,7 +117,7 @@ class TestSettingsAgentTools:
         mock_log_context.assert_called_once_with(
             chat_id=mock_context.deps.tg_chat_id,
             session_id=mock_context.deps.tg_session_id,
-            content="Updated user settings: preferred_name is now Alice Smith",
+            content="Updated user preferences: preferred_name is now Alice Smith",
         )
 
         # Verify return value
@@ -147,51 +147,51 @@ class TestSettingsAgentTools:
         assert error.__cause__ == database_error
 
 
-class TestSettingsAgentValidation:
+class TestPreferencesAgentValidation:
     """Test settings agent output validation."""
 
     @pytest.mark.asyncio
-    async def test_validate_settings_agent_output_completed_true(self):
+    async def test_validate_preferences_agent_output_completed_true(self):
         """Test validation passes when completed is True."""
         mock_ctx = MagicMock()
 
-        response = SettingsUpdateResponse(completed=True, feedback="Success!")
-        result = await validate_settings_agent_output(mock_ctx, response)
+        response = PreferencesUpdateResponse(completed=True, feedback="Success!")
+        result = await validate_preferences_agent_output(mock_ctx, response)
 
         assert result == response
         assert result.completed is True
         assert result.feedback == "Success!"
 
     @pytest.mark.asyncio
-    async def test_validate_settings_agent_output_completed_false_no_feedback_raises_error(self):
+    async def test_validate_preferences_agent_output_completed_false_no_feedback_raises_error(self):
         """Test validation raises error when completed is False and no feedback provided."""
         mock_ctx = MagicMock()
 
-        response = SettingsUpdateResponse(completed=False, feedback=None)
+        response = PreferencesUpdateResponse(completed=False, feedback=None)
 
         with pytest.raises(FeedbackMissingError):
-            await validate_settings_agent_output(mock_ctx, response)
+            await validate_preferences_agent_output(mock_ctx, response)
 
 
-class TestSettingsAgent:
+class TestPreferencesAgent:
     """Test the settings agent configuration (unit tests only)."""
 
-    def test_settings_agent_configuration(self):
-        """Test that settings agent is properly configured."""
+    def test_preferences_agent_configuration(self):
+        """Test that preferences agent is properly configured."""
         # Verify agent properties
-        assert settings_agent.name == "settings_agent"
-        assert settings_agent.output_type == SettingsUpdateResponse
-        assert settings_agent.end_strategy == "exhaustive"
+        assert preferences_agent.name == "preferences_agent"
+        assert preferences_agent.output_type == PreferencesUpdateResponse
+        assert preferences_agent.end_strategy == "exhaustive"
 
         # Verify model is configured
-        assert hasattr(settings_agent, "model")
+        assert hasattr(preferences_agent, "model")
 
-    def test_settings_agent_dependencies_structure(self):
-        """Test SettingsAgentDependencies structure."""
+    def test_preferences_agent_dependencies_structure(self):
+        """Test PreferencesAgentDependencies structure."""
         chat_id = "test_chat_123"
         session_id = "test_session_456"
 
-        deps = SettingsAgentDependencies(tg_chat_id=chat_id, tg_session_id=session_id)
+        deps = PreferencesAgentDependencies(tg_chat_id=chat_id, tg_session_id=session_id)
 
         # Verify dependencies structure
         assert deps.tg_chat_id == chat_id

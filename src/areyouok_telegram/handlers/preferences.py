@@ -7,9 +7,9 @@ from areyouok_telegram.data import async_database
 from areyouok_telegram.data import operations as data_operations
 from areyouok_telegram.handlers.constants import MD2_PREFERENCES_DISPLAY_TEMPLATE
 from areyouok_telegram.llms import run_agent_with_tracking
-from areyouok_telegram.llms.agent_settings import SettingsAgentDependencies
-from areyouok_telegram.llms.agent_settings import SettingsUpdateResponse
-from areyouok_telegram.llms.agent_settings import settings_agent
+from areyouok_telegram.llms.agent_settings import PreferencesAgentDependencies
+from areyouok_telegram.llms.agent_settings import PreferencesUpdateResponse
+from areyouok_telegram.llms.agent_settings import preferences_agent
 from areyouok_telegram.logging import traced
 from areyouok_telegram.utils import db_retry
 from areyouok_telegram.utils import escape_markdown_v2
@@ -92,22 +92,22 @@ async def _update_user_metadata_field(
     session_id: str,
     field_name: str,
     new_value: str,
-) -> SettingsUpdateResponse:
+) -> PreferencesUpdateResponse:
     update_instruction = f"Update {field_name} to {new_value}."
 
     update = await run_agent_with_tracking(
-        settings_agent,
+        preferences_agent,
         chat_id=chat_id,
         session_id=session_id,
         run_kwargs={
             "user_prompt": update_instruction,
-            "deps": SettingsAgentDependencies(
+            "deps": PreferencesAgentDependencies(
                 tg_chat_id=chat_id,
                 tg_session_id=session_id,
             ),
         },
     )
-    update_outcome: SettingsUpdateResponse = update.output
+    update_outcome: PreferencesUpdateResponse = update.output
 
     return update_outcome
 

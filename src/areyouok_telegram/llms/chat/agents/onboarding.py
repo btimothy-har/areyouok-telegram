@@ -17,9 +17,9 @@ from areyouok_telegram.data import UserMetadata
 from areyouok_telegram.data import async_database
 from areyouok_telegram.llms.agent_country_timezone import CountryTimezone
 from areyouok_telegram.llms.agent_country_timezone import country_timezone_agent
-from areyouok_telegram.llms.agent_settings import SettingsAgentDependencies
-from areyouok_telegram.llms.agent_settings import SettingsUpdateResponse
-from areyouok_telegram.llms.agent_settings import settings_agent
+from areyouok_telegram.llms.agent_settings import PreferencesAgentDependencies
+from areyouok_telegram.llms.agent_settings import PreferencesUpdateResponse
+from areyouok_telegram.llms.agent_settings import preferences_agent
 from areyouok_telegram.llms.chat.constants import MESSAGE_FOR_USER_PROMPT
 from areyouok_telegram.llms.chat.constants import ONBOARDING_FIELDS
 from areyouok_telegram.llms.chat.constants import ONBOARDING_OBJECTIVES
@@ -170,18 +170,18 @@ async def save_user_response(
                 )
 
     update = await run_agent_with_tracking(
-        settings_agent,
+        preferences_agent,
         chat_id=ctx.deps.tg_chat_id,
         session_id=ctx.deps.tg_session_id,
         run_kwargs={
             "user_prompt": update_instruction,
-            "deps": SettingsAgentDependencies(
+            "deps": PreferencesAgentDependencies(
                 tg_chat_id=ctx.deps.tg_chat_id,
                 tg_session_id=ctx.deps.tg_session_id,
             ),
         },
     )
-    update_outcome: SettingsUpdateResponse = update.output
+    update_outcome: PreferencesUpdateResponse = update.output
 
     if not update_outcome.completed:
         raise MetadataFieldUpdateError(field, f"Error updating {field}: {update_outcome.feedback}.")
