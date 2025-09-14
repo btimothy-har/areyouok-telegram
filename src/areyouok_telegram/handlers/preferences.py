@@ -5,7 +5,7 @@ from telegram.ext import ContextTypes
 from areyouok_telegram.data import UserMetadata
 from areyouok_telegram.data import async_database
 from areyouok_telegram.data import operations as data_operations
-from areyouok_telegram.handlers.constants import MD2_SETTINGS_DISPLAY_TEMPLATE
+from areyouok_telegram.handlers.constants import MD2_PREFERENCES_DISPLAY_TEMPLATE
 from areyouok_telegram.llms import run_agent_with_tracking
 from areyouok_telegram.llms.agent_settings import SettingsAgentDependencies
 from areyouok_telegram.llms.agent_settings import SettingsUpdateResponse
@@ -18,12 +18,12 @@ from areyouok_telegram.utils import telegram_call
 
 @traced(extract_args=["update"])
 @db_retry()
-async def on_settings_command(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /settings command - display user's current preferences."""
+async def on_preferences_command(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /preferences command - display user's current preferences."""
 
     command_input = update.message.text
 
-    # Parse command arguments: /settings [field_arg] [text_input]
+    # Parse command arguments: /preferences [field_arg] [text_input]
     command_parts = command_input.split(maxsplit=2)  # Split into max 3 parts
     field_arg = None
     text_input = None
@@ -76,12 +76,12 @@ async def on_settings_command(update: telegram.Update, context: ContextTypes.DEF
         )
 
     else:
-        user_settings_text = await _construct_user_settings_response(user_id=str(update.effective_user.id))
+        user_preferences_text = await _construct_user_preferences_response(user_id=str(update.effective_user.id))
 
         await telegram_call(
             context.bot.send_message,
             chat_id=update.effective_chat.id,
-            text=user_settings_text,
+            text=user_preferences_text,
             parse_mode="MarkdownV2",
         )
 
@@ -113,7 +113,7 @@ async def _update_user_metadata_field(
 
 
 @db_retry()
-async def _construct_user_settings_response(user_id: str):
+async def _construct_user_preferences_response(user_id: str):
     async with async_database() as db_conn:
         # Get user metadata
         user_metadata = await UserMetadata.get_by_user_id(
@@ -144,11 +144,11 @@ async def _construct_user_settings_response(user_id: str):
             timezone = "Not set"
             response_speed = "Not set"
 
-        settings_text = MD2_SETTINGS_DISPLAY_TEMPLATE.format(
+        preferences_text = MD2_PREFERENCES_DISPLAY_TEMPLATE.format(
             name=escape_markdown_v2(name),
             country=escape_markdown_v2(country),
             timezone=escape_markdown_v2(timezone),
             response_speed=escape_markdown_v2(response_speed),
         )
 
-    return settings_text
+    return preferences_text

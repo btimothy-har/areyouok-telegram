@@ -172,7 +172,7 @@ async def setup_bot_commands(ctx: Application | ContextTypes.DEFAULT_TYPE):
     """Set the bot commands with proper error handling."""
     commands = [
         telegram.BotCommand("start", "Start onboarding"),
-        telegram.BotCommand("settings", "View your current preferences"),
+        telegram.BotCommand("preferences", "View your current preferences"),
     ]
 
     try:

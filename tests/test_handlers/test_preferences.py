@@ -1,4 +1,4 @@
-"""Tests for handlers/settings.py."""
+"""Tests for handlers/preferences.py."""
 
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
@@ -8,49 +8,49 @@ import pytest
 import telegram
 from telegram.ext import ContextTypes
 
-from areyouok_telegram.handlers.settings import _construct_user_settings_response
-from areyouok_telegram.handlers.settings import _update_user_metadata_field
-from areyouok_telegram.handlers.settings import on_settings_command
+from areyouok_telegram.handlers.preferences import _construct_user_preferences_response
+from areyouok_telegram.handlers.preferences import _update_user_metadata_field
+from areyouok_telegram.handlers.preferences import on_preferences_command
 
 
-class TestOnSettingsCommand:
-    """Test the on_settings_command handler."""
+class TestOnPreferencesCommand:
+    """Test the on_preferences_command handler."""
 
     @pytest.mark.asyncio
-    @patch("areyouok_telegram.handlers.settings._construct_user_settings_response")
-    async def test_on_settings_command_display_settings(
+    @patch("areyouok_telegram.handlers.preferences._construct_user_preferences_response")
+    async def test_on_preferences_command_display_preferences(
         self, mock_construct_response, mock_telegram_user, mock_telegram_chat, mock_telegram_message
     ):
-        """Test settings command displays current settings when no arguments provided."""
+        """Test preferences command displays current preferences when no arguments provided."""
         # Setup mocks
         mock_update = MagicMock(spec=telegram.Update)
         mock_update.effective_user = mock_telegram_user
         mock_update.effective_chat = mock_telegram_chat
         mock_update.message = mock_telegram_message
-        mock_update.message.text = "/settings"
+        mock_update.message.text = "/preferences"
 
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
         mock_context.bot = AsyncMock()
 
-        mock_construct_response.return_value = "**Your Current Settings:**\n• Name: John Doe"
+        mock_construct_response.return_value = "**Your Current Preferences:**\n• Name: John Doe"
 
         # Call handler
-        await on_settings_command(mock_update, mock_context)
+        await on_preferences_command(mock_update, mock_context)
 
-        # Verify settings response was constructed
+        # Verify preferences response was constructed
         mock_construct_response.assert_called_once_with(user_id=str(mock_telegram_user.id))
 
         # Verify message was sent
         mock_context.bot.send_message.assert_called_once_with(
             chat_id=mock_telegram_chat.id,
-            text="**Your Current Settings:**\n• Name: John Doe",
+            text="**Your Current Preferences:**\n• Name: John Doe",
             parse_mode="MarkdownV2",
         )
 
     @pytest.mark.asyncio
-    @patch("areyouok_telegram.handlers.settings._update_user_metadata_field")
-    @patch("areyouok_telegram.handlers.settings.data_operations.get_or_create_active_session")
-    async def test_on_settings_command_update_preferred_name(
+    @patch("areyouok_telegram.handlers.preferences._update_user_metadata_field")
+    @patch("areyouok_telegram.handlers.preferences.data_operations.get_or_create_active_session")
+    async def test_on_preferences_command_update_preferred_name(
         self,
         mock_get_active_session,
         mock_update_field,
@@ -58,13 +58,13 @@ class TestOnSettingsCommand:
         mock_telegram_chat,
         mock_telegram_message,
     ):
-        """Test settings command updates preferred name field."""
+        """Test preferences command updates preferred name field."""
         # Setup mocks
         mock_update = MagicMock(spec=telegram.Update)
         mock_update.effective_user = mock_telegram_user
         mock_update.effective_chat = mock_telegram_chat
         mock_update.message = mock_telegram_message
-        mock_update.message.text = "/settings name Alice Smith"
+        mock_update.message.text = "/preferences name Alice Smith"
         mock_update.message.message_id = 12345
 
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
@@ -81,7 +81,7 @@ class TestOnSettingsCommand:
         mock_update_field.return_value = mock_response
 
         # Call handler
-        await on_settings_command(mock_update, mock_context)
+        await on_preferences_command(mock_update, mock_context)
 
         # Verify reaction was set
         mock_context.bot.set_message_reaction.assert_called_once_with(
@@ -117,9 +117,9 @@ class TestOnSettingsCommand:
         )
 
     @pytest.mark.asyncio
-    @patch("areyouok_telegram.handlers.settings._update_user_metadata_field")
-    @patch("areyouok_telegram.handlers.settings.data_operations.get_or_create_active_session")
-    async def test_on_settings_command_update_country(
+    @patch("areyouok_telegram.handlers.preferences._update_user_metadata_field")
+    @patch("areyouok_telegram.handlers.preferences.data_operations.get_or_create_active_session")
+    async def test_on_preferences_command_update_country(
         self,
         mock_get_active_session,
         mock_update_field,
@@ -127,13 +127,13 @@ class TestOnSettingsCommand:
         mock_telegram_chat,
         mock_telegram_message,
     ):
-        """Test settings command updates country field."""
+        """Test preferences command updates country field."""
         # Setup mocks
         mock_update = MagicMock(spec=telegram.Update)
         mock_update.effective_user = mock_telegram_user
         mock_update.effective_chat = mock_telegram_chat
         mock_update.message = mock_telegram_message
-        mock_update.message.text = "/settings country USA"
+        mock_update.message.text = "/preferences country USA"
         mock_update.message.message_id = 12345
 
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
@@ -150,7 +150,7 @@ class TestOnSettingsCommand:
         mock_update_field.return_value = mock_response
 
         # Call handler
-        await on_settings_command(mock_update, mock_context)
+        await on_preferences_command(mock_update, mock_context)
 
         # Verify field update was called with correct parameters
         mock_update_field.assert_called_once_with(
@@ -161,9 +161,9 @@ class TestOnSettingsCommand:
         )
 
     @pytest.mark.asyncio
-    @patch("areyouok_telegram.handlers.settings._update_user_metadata_field")
-    @patch("areyouok_telegram.handlers.settings.data_operations.get_or_create_active_session")
-    async def test_on_settings_command_update_timezone(
+    @patch("areyouok_telegram.handlers.preferences._update_user_metadata_field")
+    @patch("areyouok_telegram.handlers.preferences.data_operations.get_or_create_active_session")
+    async def test_on_preferences_command_update_timezone(
         self,
         mock_get_active_session,
         mock_update_field,
@@ -171,13 +171,13 @@ class TestOnSettingsCommand:
         mock_telegram_chat,
         mock_telegram_message,
     ):
-        """Test settings command updates timezone field."""
+        """Test preferences command updates timezone field."""
         # Setup mocks
         mock_update = MagicMock(spec=telegram.Update)
         mock_update.effective_user = mock_telegram_user
         mock_update.effective_chat = mock_telegram_chat
         mock_update.message = mock_telegram_message
-        mock_update.message.text = "/settings timezone America/New_York"
+        mock_update.message.text = "/preferences timezone America/New_York"
         mock_update.message.message_id = 12345
 
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
@@ -194,7 +194,7 @@ class TestOnSettingsCommand:
         mock_update_field.return_value = mock_response
 
         # Call handler
-        await on_settings_command(mock_update, mock_context)
+        await on_preferences_command(mock_update, mock_context)
 
         # Verify field update was called with correct parameters
         mock_update_field.assert_called_once_with(
@@ -205,22 +205,22 @@ class TestOnSettingsCommand:
         )
 
     @pytest.mark.asyncio
-    async def test_on_settings_command_invalid_field(
+    async def test_on_preferences_command_invalid_field(
         self, mock_telegram_user, mock_telegram_chat, mock_telegram_message
     ):
-        """Test settings command with invalid field name."""
+        """Test preferences command with invalid field name."""
         # Setup mocks
         mock_update = MagicMock(spec=telegram.Update)
         mock_update.effective_user = mock_telegram_user
         mock_update.effective_chat = mock_telegram_chat
         mock_update.message = mock_telegram_message
-        mock_update.message.text = "/settings invalid_field some_value"
+        mock_update.message.text = "/preferences invalid_field some_value"
 
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
         mock_context.bot = AsyncMock()
 
         # Call handler
-        await on_settings_command(mock_update, mock_context)
+        await on_preferences_command(mock_update, mock_context)
 
         # Verify error message was sent
         mock_context.bot.send_message.assert_called_once_with(
@@ -229,7 +229,7 @@ class TestOnSettingsCommand:
         )
 
     @pytest.mark.asyncio
-    async def test_on_settings_command_field_normalization(
+    async def test_on_preferences_command_field_normalization(
         self, mock_telegram_user, mock_telegram_chat, mock_telegram_message
     ):
         """Test that 'name' field is normalized to 'preferred_name'."""
@@ -238,7 +238,7 @@ class TestOnSettingsCommand:
         mock_update.effective_user = mock_telegram_user
         mock_update.effective_chat = mock_telegram_chat
         mock_update.message = mock_telegram_message
-        mock_update.message.text = "/settings name Alice"  # Use 'name' to test normalization
+        mock_update.message.text = "/preferences name Alice"  # Use 'name' to test normalization
         mock_update.message.message_id = 12345
 
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
@@ -246,9 +246,9 @@ class TestOnSettingsCommand:
 
         with (
             patch(
-                "areyouok_telegram.handlers.settings.data_operations.get_or_create_active_session"
+                "areyouok_telegram.handlers.preferences.data_operations.get_or_create_active_session"
             ) as mock_get_active_session,
-            patch("areyouok_telegram.handlers.settings._update_user_metadata_field") as mock_update_field,
+            patch("areyouok_telegram.handlers.preferences._update_user_metadata_field") as mock_update_field,
         ):
             # Mock session
             mock_session = MagicMock()
@@ -261,7 +261,7 @@ class TestOnSettingsCommand:
             mock_update_field.return_value = mock_response
 
             # Call handler
-            await on_settings_command(mock_update, mock_context)
+            await on_preferences_command(mock_update, mock_context)
 
             # Verify the field name was normalized from 'name' to 'preferred_name'
             mock_update_field.assert_called_once_with(
@@ -276,7 +276,7 @@ class TestUpdateUserMetadataField:
     """Test _update_user_metadata_field private function."""
 
     @pytest.mark.asyncio
-    @patch("areyouok_telegram.handlers.settings.run_agent_with_tracking")
+    @patch("areyouok_telegram.handlers.preferences.run_agent_with_tracking")
     async def test_update_user_metadata_field_success(self, mock_run_agent):
         """Test successful metadata field update."""
         # Setup mock response
@@ -324,7 +324,7 @@ class TestUpdateUserMetadataField:
         assert result.feedback == "Successfully updated your preferred name to Alice."
 
     @pytest.mark.asyncio
-    @patch("areyouok_telegram.handlers.settings.run_agent_with_tracking")
+    @patch("areyouok_telegram.handlers.preferences.run_agent_with_tracking")
     async def test_update_user_metadata_field_different_fields(self, mock_run_agent):
         """Test updating different metadata fields."""
         # Setup mock response
@@ -359,13 +359,13 @@ class TestUpdateUserMetadataField:
             assert run_kwargs["user_prompt"] == expected_instruction
 
 
-class TestConstructUserSettingsResponse:
-    """Test _construct_user_settings_response private function."""
+class TestConstructUserPreferencesResponse:
+    """Test _construct_user_preferences_response private function."""
 
     @pytest.mark.asyncio
-    @patch("areyouok_telegram.handlers.settings.async_database")
-    @patch("areyouok_telegram.handlers.settings.UserMetadata.get_by_user_id")
-    async def test_construct_user_settings_response_with_metadata(self, mock_get_by_user_id, mock_async_database):
+    @patch("areyouok_telegram.handlers.preferences.async_database")
+    @patch("areyouok_telegram.handlers.preferences.UserMetadata.get_by_user_id")
+    async def test_construct_user_preferences_response_with_metadata(self, mock_get_by_user_id, mock_async_database):
         """Test constructing response when user has metadata."""
         # Setup database mock
         mock_db_conn = AsyncMock()
@@ -384,17 +384,17 @@ class TestConstructUserSettingsResponse:
         user_id = "123456789"
 
         with (
-            patch("areyouok_telegram.handlers.settings.MD2_SETTINGS_DISPLAY_TEMPLATE") as mock_template,
-            patch("areyouok_telegram.handlers.settings.escape_markdown_v2") as mock_escape,
+            patch("areyouok_telegram.handlers.preferences.MD2_PREFERENCES_DISPLAY_TEMPLATE") as mock_template,
+            patch("areyouok_telegram.handlers.preferences.escape_markdown_v2") as mock_escape,
         ):
             # Mock template formatting
-            mock_template.format.return_value = "**Your Settings:**\n• Name: Alice Smith"
+            mock_template.format.return_value = "**Your Preferences:**\n• Name: Alice Smith"
 
             # Mock markdown escaping
             mock_escape.side_effect = lambda x: f"escaped_{x}"
 
             # Call function
-            result = await _construct_user_settings_response(user_id)
+            result = await _construct_user_preferences_response(user_id)
 
             # Verify database operations
             mock_get_by_user_id.assert_called_once_with(mock_db_conn, user_id=user_id)
@@ -416,12 +416,12 @@ class TestConstructUserSettingsResponse:
                 response_speed="escaped_normal",
             )
 
-            assert result == "**Your Settings:**\n• Name: Alice Smith"
+            assert result == "**Your Preferences:**\n• Name: Alice Smith"
 
     @pytest.mark.asyncio
-    @patch("areyouok_telegram.handlers.settings.async_database")
-    @patch("areyouok_telegram.handlers.settings.UserMetadata.get_by_user_id")
-    async def test_construct_user_settings_response_no_metadata(self, mock_get_by_user_id, mock_async_database):
+    @patch("areyouok_telegram.handlers.preferences.async_database")
+    @patch("areyouok_telegram.handlers.preferences.UserMetadata.get_by_user_id")
+    async def test_construct_user_preferences_response_no_metadata(self, mock_get_by_user_id, mock_async_database):
         """Test constructing response when user has no metadata."""
         # Setup database mock
         mock_db_conn = AsyncMock()
@@ -434,17 +434,17 @@ class TestConstructUserSettingsResponse:
         user_id = "123456789"
 
         with (
-            patch("areyouok_telegram.handlers.settings.MD2_SETTINGS_DISPLAY_TEMPLATE") as mock_template,
-            patch("areyouok_telegram.handlers.settings.escape_markdown_v2") as mock_escape,
+            patch("areyouok_telegram.handlers.preferences.MD2_PREFERENCES_DISPLAY_TEMPLATE") as mock_template,
+            patch("areyouok_telegram.handlers.preferences.escape_markdown_v2") as mock_escape,
         ):
             # Mock template formatting
-            mock_template.format.return_value = "**Your Settings:**\n• All fields: Not set"
+            mock_template.format.return_value = "**Your Preferences:**\n• All fields: Not set"
 
             # Mock markdown escaping
             mock_escape.return_value = "escaped_Not set"
 
             # Call function
-            result = await _construct_user_settings_response(user_id)
+            result = await _construct_user_preferences_response(user_id)
 
             # Verify all fields default to "Not set"
             mock_template.format.assert_called_once_with(
@@ -459,12 +459,12 @@ class TestConstructUserSettingsResponse:
             for call in mock_escape.call_args_list:
                 assert call[0][0] == "Not set"
 
-            assert result == "**Your Settings:**\n• All fields: Not set"
+            assert result == "**Your Preferences:**\n• All fields: Not set"
 
     @pytest.mark.asyncio
-    @patch("areyouok_telegram.handlers.settings.async_database")
-    @patch("areyouok_telegram.handlers.settings.UserMetadata.get_by_user_id")
-    async def test_construct_user_settings_response_rather_not_say(self, mock_get_by_user_id, mock_async_database):
+    @patch("areyouok_telegram.handlers.preferences.async_database")
+    @patch("areyouok_telegram.handlers.preferences.UserMetadata.get_by_user_id")
+    async def test_construct_user_preferences_response_rather_not_say(self, mock_get_by_user_id, mock_async_database):
         """Test constructing response with 'rather_not_say' values."""
         # Setup database mock
         mock_db_conn = AsyncMock()
@@ -483,17 +483,17 @@ class TestConstructUserSettingsResponse:
         user_id = "123456789"
 
         with (
-            patch("areyouok_telegram.handlers.settings.MD2_SETTINGS_DISPLAY_TEMPLATE") as mock_template,
-            patch("areyouok_telegram.handlers.settings.escape_markdown_v2") as mock_escape,
+            patch("areyouok_telegram.handlers.preferences.MD2_PREFERENCES_DISPLAY_TEMPLATE") as mock_template,
+            patch("areyouok_telegram.handlers.preferences.escape_markdown_v2") as mock_escape,
         ):
             # Mock template formatting
-            mock_template.format.return_value = "**Your Settings:**\n• Mixed values"
+            mock_template.format.return_value = "**Your Preferences:**\n• Mixed values"
 
             # Mock markdown escaping
             mock_escape.side_effect = lambda x: f"escaped_{x}"
 
             # Call function
-            result = await _construct_user_settings_response(user_id)
+            result = await _construct_user_preferences_response(user_id)
 
             # Verify special handling of "rather_not_say" values
             mock_template.format.assert_called_once_with(
@@ -503,4 +503,4 @@ class TestConstructUserSettingsResponse:
                 response_speed="escaped_fast",
             )
 
-            assert result == "**Your Settings:**\n• Mixed values"
+            assert result == "**Your Preferences:**\n• Mixed values"
