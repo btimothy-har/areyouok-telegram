@@ -17,9 +17,9 @@ from areyouok_telegram.data import UserMetadata
 from areyouok_telegram.data import async_database
 from areyouok_telegram.llms.agent_country_timezone import CountryTimezone
 from areyouok_telegram.llms.agent_country_timezone import country_timezone_agent
-from areyouok_telegram.llms.agent_settings import PreferencesAgentDependencies
-from areyouok_telegram.llms.agent_settings import PreferencesUpdateResponse
-from areyouok_telegram.llms.agent_settings import preferences_agent
+from areyouok_telegram.llms.agent_preferences import PreferencesAgentDependencies
+from areyouok_telegram.llms.agent_preferences import PreferencesUpdateResponse
+from areyouok_telegram.llms.agent_preferences import preferences_agent
 from areyouok_telegram.llms.chat.constants import MESSAGE_FOR_USER_PROMPT
 from areyouok_telegram.llms.chat.constants import ONBOARDING_FIELDS
 from areyouok_telegram.llms.chat.constants import ONBOARDING_OBJECTIVES

@@ -1,4 +1,4 @@
-"""Tests for llms/agent_settings.py using pydantic_ai testing."""
+"""Tests for llms/agent_preferences.py using pydantic_ai testing."""
 
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
@@ -8,12 +8,12 @@ import pydantic_ai
 import pytest
 from pydantic_ai import models
 
-from areyouok_telegram.llms.agent_settings import FeedbackMissingError
-from areyouok_telegram.llms.agent_settings import PreferencesAgentDependencies
-from areyouok_telegram.llms.agent_settings import PreferencesUpdateResponse
-from areyouok_telegram.llms.agent_settings import preferences_agent
-from areyouok_telegram.llms.agent_settings import update_preferred_name
-from areyouok_telegram.llms.agent_settings import validate_preferences_agent_output
+from areyouok_telegram.llms.agent_preferences import FeedbackMissingError
+from areyouok_telegram.llms.agent_preferences import PreferencesAgentDependencies
+from areyouok_telegram.llms.agent_preferences import PreferencesUpdateResponse
+from areyouok_telegram.llms.agent_preferences import preferences_agent
+from areyouok_telegram.llms.agent_preferences import update_preferred_name
+from areyouok_telegram.llms.agent_preferences import validate_preferences_agent_output
 from areyouok_telegram.llms.exceptions import MetadataFieldUpdateError
 
 # Block real model requests in tests
@@ -90,9 +90,9 @@ class TestPreferencesAgentTools:
         return mock_ctx
 
     @pytest.mark.asyncio
-    @patch("areyouok_telegram.llms.agent_settings.async_database")
-    @patch("areyouok_telegram.llms.agent_settings.UserMetadata.update_metadata")
-    @patch("areyouok_telegram.llms.agent_settings.log_metadata_update_context")
+    @patch("areyouok_telegram.llms.agent_preferences.async_database")
+    @patch("areyouok_telegram.llms.agent_preferences.UserMetadata.update_metadata")
+    @patch("areyouok_telegram.llms.agent_preferences.log_metadata_update_context")
     async def test_update_preferred_name_success(
         self, mock_log_context, mock_update_metadata, mock_async_database, mock_context
     ):
@@ -124,8 +124,8 @@ class TestPreferencesAgentTools:
         assert result == "preferred_name updated successfully to Alice Smith."
 
     @pytest.mark.asyncio
-    @patch("areyouok_telegram.llms.agent_settings.async_database")
-    @patch("areyouok_telegram.llms.agent_settings.UserMetadata.update_metadata")
+    @patch("areyouok_telegram.llms.agent_preferences.async_database")
+    @patch("areyouok_telegram.llms.agent_preferences.UserMetadata.update_metadata")
     async def test_update_preferred_name_database_error(self, mock_update_metadata, mock_async_database, mock_context):
         """Test preferred name update with database error."""
         # Setup database mock

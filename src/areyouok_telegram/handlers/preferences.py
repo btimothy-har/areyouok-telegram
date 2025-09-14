@@ -7,9 +7,9 @@ from areyouok_telegram.data import async_database
 from areyouok_telegram.data import operations as data_operations
 from areyouok_telegram.handlers.constants import MD2_PREFERENCES_DISPLAY_TEMPLATE
 from areyouok_telegram.llms import run_agent_with_tracking
-from areyouok_telegram.llms.agent_settings import PreferencesAgentDependencies
-from areyouok_telegram.llms.agent_settings import PreferencesUpdateResponse
-from areyouok_telegram.llms.agent_settings import preferences_agent
+from areyouok_telegram.llms.agent_preferences import PreferencesAgentDependencies
+from areyouok_telegram.llms.agent_preferences import PreferencesUpdateResponse
+from areyouok_telegram.llms.agent_preferences import preferences_agent
 from areyouok_telegram.logging import traced
 from areyouok_telegram.utils import db_retry
 from areyouok_telegram.utils import escape_markdown_v2
