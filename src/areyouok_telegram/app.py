@@ -15,7 +15,7 @@ from areyouok_telegram.handlers import on_error_event
 from areyouok_telegram.handlers import on_message_react
 from areyouok_telegram.handlers import on_new_message
 from areyouok_telegram.handlers import on_new_update
-from areyouok_telegram.handlers import on_settings_command
+from areyouok_telegram.handlers import on_preferences_command
 from areyouok_telegram.handlers import on_start_command
 from areyouok_telegram.logging import traced
 from areyouok_telegram.setup import restore_active_sessions
@@ -59,7 +59,7 @@ def create_application() -> Application:
 
     # Command Handlers
     application.add_handler(CommandHandler("start", on_start_command, block=False), group=1)
-    application.add_handler(CommandHandler("settings", on_settings_command, block=False), group=1)
+    application.add_handler(CommandHandler("preferences", on_preferences_command, block=False), group=1)
 
     # Message Handlers
     application.add_handler(MessageHandler(filters.UpdateType.MESSAGE, on_new_message, block=False), group=1)

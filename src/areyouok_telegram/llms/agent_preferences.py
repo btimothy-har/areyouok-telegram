@@ -21,14 +21,14 @@ class FeedbackMissingError(pydantic_ai.ModelRetry):
 
 
 @dataclass
-class SettingsAgentDependencies:
-    """Dependencies for the onboarding agent."""
+class PreferencesAgentDependencies:
+    """Dependencies for the preferences agent."""
 
     tg_chat_id: str
     tg_session_id: str
 
 
-class SettingsUpdateResponse(pydantic.BaseModel):
+class PreferencesUpdateResponse(pydantic.BaseModel):
     """Model for user settings response."""
 
     completed: bool = pydantic.Field(description="Whether the update was successful.")
@@ -37,18 +37,18 @@ class SettingsUpdateResponse(pydantic.BaseModel):
     )
 
 
-settings_agent = pydantic_ai.Agent(
+preferences_agent = pydantic_ai.Agent(
     model=GPT5Nano().model,
-    output_type=SettingsUpdateResponse,
-    name="settings_agent",
+    output_type=PreferencesUpdateResponse,
+    name="preferences_agent",
     end_strategy="exhaustive",
 )
 
 
-@settings_agent.instructions
+@preferences_agent.instructions
 def generate_instructions() -> str:
     return """
-You are a backend agent responsible for managing user's settings and preferences. You are \
+You are a backend agent responsible for managing user preferences. You are \
 able to manage the following settings:
 - preferred name
 - country
@@ -71,9 +71,9 @@ You do not need to ask for confirmation from the user before processing their ch
     """
 
 
-@settings_agent.tool
+@preferences_agent.tool
 async def update_preferred_name(
-    ctx: RunContext[SettingsAgentDependencies],
+    ctx: RunContext[PreferencesAgentDependencies],
     new_value: str,
 ) -> str:
     """Update the user's preferred name."""
@@ -93,15 +93,15 @@ async def update_preferred_name(
     await log_metadata_update_context(
         chat_id=ctx.deps.tg_chat_id,
         session_id=ctx.deps.tg_session_id,
-        content=f"Updated user settings: preferred_name is now {new_value}",
+        content=f"Updated user preferences: preferred_name is now {new_value}",
     )
 
     return f"preferred_name updated successfully to {new_value}."
 
 
-@settings_agent.tool
+@preferences_agent.tool
 async def update_country(
-    ctx: RunContext[SettingsAgentDependencies],
+    ctx: RunContext[PreferencesAgentDependencies],
     new_value: str,
 ) -> str:
     """Update the user's country."""
@@ -121,15 +121,15 @@ async def update_country(
     await log_metadata_update_context(
         chat_id=ctx.deps.tg_chat_id,
         session_id=ctx.deps.tg_session_id,
-        content=f"Updated user settings: country is now {new_value}",
+        content=f"Updated user preferences: country is now {new_value}",
     )
 
     return f"country updated successfully to {new_value}."
 
 
-@settings_agent.tool
+@preferences_agent.tool
 async def update_timezone(
-    ctx: RunContext[SettingsAgentDependencies],
+    ctx: RunContext[PreferencesAgentDependencies],
     new_value: str,
 ) -> str:
     """Update the user's timezone."""
@@ -149,15 +149,15 @@ async def update_timezone(
     await log_metadata_update_context(
         chat_id=ctx.deps.tg_chat_id,
         session_id=ctx.deps.tg_session_id,
-        content=f"Updated user settings: timezone is now {new_value}",
+        content=f"Updated user preferences: timezone is now {new_value}",
     )
 
     return f"timezone updated successfully to {new_value}."
 
 
-@settings_agent.tool
+@preferences_agent.tool
 async def update_communication_style(
-    ctx: RunContext[SettingsAgentDependencies],
+    ctx: RunContext[PreferencesAgentDependencies],
     new_value: str,
 ) -> str:
     """Update the user's communication style."""
@@ -177,15 +177,15 @@ async def update_communication_style(
     await log_metadata_update_context(
         chat_id=ctx.deps.tg_chat_id,
         session_id=ctx.deps.tg_session_id,
-        content=f"Updated user settings: communication_style is now {new_value}",
+        content=f"Updated user preferences: communication_style is now {new_value}",
     )
 
     return f"communication_style updated successfully to {new_value}."
 
 
-@settings_agent.tool
+@preferences_agent.tool
 async def update_response_speed(
-    ctx: RunContext[SettingsAgentDependencies],
+    ctx: RunContext[PreferencesAgentDependencies],
     new_value: Literal["fast", "normal", "slow"],
 ) -> str:
     """Update the user's response speed."""
@@ -205,17 +205,17 @@ async def update_response_speed(
     await log_metadata_update_context(
         chat_id=ctx.deps.tg_chat_id,
         session_id=ctx.deps.tg_session_id,
-        content=f"Updated user settings: response_speed is now {new_value}",
+        content=f"Updated user preferences: response_speed is now {new_value}",
     )
 
     return f"response_speed updated successfully to {new_value}."
 
 
-@settings_agent.output_validator
-async def validate_settings_agent_output(
+@preferences_agent.output_validator
+async def validate_preferences_agent_output(
     ctx: pydantic_ai.RunContext,  # noqa: ARG001
-    data: SettingsUpdateResponse,
-) -> SettingsUpdateResponse:
+    data: PreferencesUpdateResponse,
+) -> PreferencesUpdateResponse:
     if not data.completed and not data.feedback:
         raise FeedbackMissingError()
 
