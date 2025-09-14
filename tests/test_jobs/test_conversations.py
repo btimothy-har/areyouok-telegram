@@ -227,7 +227,7 @@ class TestConversationJob:
 
         # Create a Messages mock (SQLAlchemy object), not a telegram.Message
         mock_message = MagicMock()
-        mock_message.decrypt_payload = MagicMock(return_value='{"message_id": 456}')
+        mock_message.decrypt = MagicMock()
         mock_message.telegram_object = MagicMock(spec=telegram.Message)
 
         mock_reaction = MagicMock(spec=telegram.MessageReactionUpdated)
@@ -895,7 +895,7 @@ class TestConversationJob:
         mock_message.message_type = "MessageReactionUpdated"
         mock_message.message_id = "msg123"
         mock_message.created_at = frozen_time
-        mock_message.decrypt_payload = MagicMock()
+        mock_message.decrypt = MagicMock()
 
         mock_chat_event = MagicMock()
 

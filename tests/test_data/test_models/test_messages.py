@@ -19,10 +19,12 @@ from areyouok_telegram.encryption.exceptions import ContentNotDecryptedError
 
 @pytest.fixture(autouse=True)
 def clear_cache():
-    """Clear the data cache before and after each test."""
+    """Clear the data and reasoning caches before and after each test."""
     Messages._data_cache.clear()
+    Messages._reasoning_cache.clear()
     yield
     Messages._data_cache.clear()
+    Messages._reasoning_cache.clear()
 
 
 class TestMessages:
@@ -60,51 +62,101 @@ class TestMessages:
 
         assert exc_info.value.message_type == "InvalidType"
 
-    def test_encrypt_payload(self):
-        """Test payload encryption."""
+    def test_encrypt(self):
+        """Test content encryption for both dict and string."""
         payload_dict = {"message_id": 123, "text": "test message"}
+        reasoning_text = "AI reasoning"
         user_key = Fernet.generate_key().decode("utf-8")
 
-        encrypted = Messages.encrypt_payload(payload_dict, user_key)
+        # Test dict encryption (payload)
+        encrypted_payload = Messages.encrypt(payload_dict, user_key)
 
-        # Should be a string (base64 encoded encrypted data)
-        assert isinstance(encrypted, str)
-        assert len(encrypted) > 0
+        # Test string encryption (reasoning)
+        encrypted_reasoning = Messages.encrypt(reasoning_text, user_key)
 
-        # Should be able to decrypt it back
+        # Should be strings (base64 encoded encrypted data)
+        assert isinstance(encrypted_payload, str)
+        assert len(encrypted_payload) > 0
+        assert isinstance(encrypted_reasoning, str)
+        assert len(encrypted_reasoning) > 0
+
+        # Should be able to decrypt them back
         fernet = Fernet(user_key.encode())
-        decrypted_bytes = fernet.decrypt(encrypted.encode("utf-8"))
-        decrypted_dict = json.loads(decrypted_bytes.decode("utf-8"))
+
+        # Decrypt payload
+        decrypted_payload_bytes = fernet.decrypt(encrypted_payload.encode("utf-8"))
+        decrypted_dict = json.loads(decrypted_payload_bytes.decode("utf-8"))
         assert decrypted_dict == payload_dict
 
-    def test_decrypt_payload(self):
-        """Test payload decryption."""
+        # Decrypt reasoning
+        decrypted_reasoning_bytes = fernet.decrypt(encrypted_reasoning.encode("utf-8"))
+        decrypted_reasoning = decrypted_reasoning_bytes.decode("utf-8")
+        assert decrypted_reasoning == reasoning_text
+
+    def test_decrypt(self):
+        """Test payload and reasoning decryption."""
         payload_dict = {"message_id": 456, "text": "another test"}
+        reasoning_text = "AI reasoning for this message"
         user_key = Fernet.generate_key().decode("utf-8")
 
-        # First encrypt
-        encrypted = Messages.encrypt_payload(payload_dict, user_key)
+        # First encrypt both
+        encrypted_payload = Messages.encrypt(payload_dict, user_key)
+        encrypted_reasoning = Messages.encrypt(reasoning_text, user_key)
 
-        # Create message instance with encrypted payload and message_key
+        # Create message instance with encrypted content and message_key
         msg = Messages()
         msg.message_key = "test_key"
-        msg.encrypted_payload = encrypted
+        msg.encrypted_payload = encrypted_payload
+        msg.encrypted_reasoning = encrypted_reasoning
 
-        # Decrypt should return JSON string
-        decrypted = msg.decrypt_payload(user_key)
-        assert decrypted == json.dumps(payload_dict)
+        # Decrypt should cache both
+        msg.decrypt(user_key)
 
-        # Verify it's cached
+        # Verify payload is cached
         assert msg._data_cache["test_key"] == json.dumps(payload_dict)
 
-    def test_decrypt_payload_no_encrypted_payload(self):
-        """Test decrypt_payload returns None when no encrypted payload."""
+        # Verify reasoning is cached
+        assert msg._reasoning_cache["test_key"] == reasoning_text
+
+    def test_decrypt_no_encrypted_content(self):
+        """Test decrypt handles cases with no encrypted content."""
         msg = Messages()
+        msg.message_key = "test_key"
         msg.encrypted_payload = None
+        msg.encrypted_reasoning = None
         user_key = Fernet.generate_key().decode("utf-8")
 
-        result = msg.decrypt_payload(user_key)
-        assert result is None
+        # Should not raise an error
+        msg.decrypt(user_key)
+
+        # Verify nothing is cached
+        assert "test_key" not in msg._data_cache
+        assert "test_key" not in msg._reasoning_cache
+
+    def test_reasoning_property(self):
+        """Test reasoning property access."""
+        reasoning_text = "AI reasoning for this message"
+        user_key = Fernet.generate_key().decode("utf-8")
+
+        # Test with encrypted reasoning
+        msg = Messages()
+        msg.message_key = "test_key"
+        msg.encrypted_reasoning = Messages.encrypt(reasoning_text, user_key)
+
+        # Before decryption, should raise error
+        with pytest.raises(ContentNotDecryptedError):
+            _ = msg.reasoning
+
+        # After decryption, should return reasoning
+        msg.decrypt(user_key)
+        assert msg.reasoning == reasoning_text
+
+        # Test with no encrypted reasoning
+        msg2 = Messages()
+        msg2.message_key = "test_key_2"
+        msg2.encrypted_reasoning = None
+        msg2.decrypt(user_key)
+        assert msg2.reasoning is None
 
     def test_telegram_object_with_decrypted_payload(self):
         """Test accessing telegram_object property after decryption."""
@@ -115,10 +167,10 @@ class TestMessages:
         user_key = Fernet.generate_key().decode("utf-8")
 
         # Encrypt the payload
-        msg.encrypted_payload = Messages.encrypt_payload(payload_dict, user_key)
+        msg.encrypted_payload = Messages.encrypt(payload_dict, user_key)
 
         # First decrypt the payload to cache it
-        msg.decrypt_payload(user_key)
+        msg.decrypt(user_key)
 
         # Mock the de_json method
         with patch.object(telegram.Message, "de_json") as mock_de_json:
