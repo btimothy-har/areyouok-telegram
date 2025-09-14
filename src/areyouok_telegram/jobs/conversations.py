@@ -539,7 +539,8 @@ class ConversationJob(BaseJob):
 
             # Filter messages to only those created before the run timestamp
             raw_messages = [msg for msg in raw_messages if msg.created_at <= self._run_timestamp]
-            [msg.decrypt(self.chat_encryption_key) for msg in raw_messages]
+            for msg in raw_messages:
+                msg.decrypt(self.chat_encryption_key)
 
             for msg in raw_messages:
                 if msg.message_type == "Message":

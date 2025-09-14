@@ -97,6 +97,10 @@ class Messages(Base):
 
         Args:
             user_encryption_key: The user's Fernet encryption key
+
+        Raises:
+            ValueError: If the encryption key format is invalid
+            InvalidToken: If the encryption key is wrong or data is corrupted
         """
         fernet = Fernet(user_encryption_key.encode())
 
