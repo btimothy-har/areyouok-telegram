@@ -42,7 +42,7 @@ class Messages(Base):
     user_id = Column(String, nullable=False)
     chat_id = Column(String, nullable=False)
     encrypted_payload = Column(String, nullable=False)
-    reasoning = Column(Text, nullable=True)  # Store AI reasoning, non-encrypted
+    encrypted_reasoning = Column(Text, nullable=True)  # Store AI reasoning, encrypted
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     # Associate with a session key if needed
@@ -52,6 +52,8 @@ class Messages(Base):
 
     # TTL cache for decrypted payload (1 hour TTL, max 1000 entries)
     _data_cache: TTLCache[str, str] = TTLCache(maxsize=1000, ttl=1 * 60 * 60)
+    # TTL cache for decrypted reasoning (1 hour TTL, max 1000 entries)
+    _reasoning_cache: TTLCache[str, str] = TTLCache(maxsize=1000, ttl=1 * 60 * 60)
 
     @staticmethod
     def generate_message_key(user_id: str, chat_id: str, message_id: int, message_type: str) -> str:
@@ -69,41 +71,66 @@ class Messages(Base):
             raise InvalidMessageTypeError(self.message_type)
 
     @classmethod
-    def encrypt_payload(cls, payload_dict: dict, user_encryption_key: str) -> str:
-        """Encrypt the payload using the user's encryption key.
+    def encrypt(cls, content: dict | str, user_encryption_key: str) -> str:
+        """Encrypt content using the user's encryption key.
 
         Args:
-            payload_dict: The payload dictionary to encrypt
+            content: The content to encrypt (dict for payload, str for reasoning)
             user_encryption_key: The user's Fernet encryption key
 
         Returns:
-            str: The encrypted payload as base64-encoded string
+            str: The encrypted content as base64-encoded string
         """
         fernet = Fernet(user_encryption_key.encode())
-        payload_json = json.dumps(payload_dict)
-        encrypted_bytes = fernet.encrypt(payload_json.encode("utf-8"))
+
+        # Convert dict to JSON string if needed
+        if isinstance(content, dict):
+            content_str = json.dumps(content)
+        else:
+            content_str = content
+
+        encrypted_bytes = fernet.encrypt(content_str.encode("utf-8"))
         return encrypted_bytes.decode("utf-8")
 
-    def decrypt_payload(self, user_encryption_key: str) -> str | None:
-        """Decrypt the payload using the user's encryption key and cache it.
+    def decrypt(self, user_encryption_key: str) -> None:
+        """Decrypt both payload and reasoning using the user's encryption key and cache them.
 
         Args:
             user_encryption_key: The user's Fernet encryption key
 
-        Returns:
-            str: The decrypted payload JSON string, or None if no encrypted payload
+        Raises:
+            ValueError: If the encryption key format is invalid
+            InvalidToken: If the encryption key is wrong or data is corrupted
         """
-        if not self.encrypted_payload:
-            return None
-
         fernet = Fernet(user_encryption_key.encode())
-        encrypted_bytes = self.encrypted_payload.encode("utf-8")
-        decrypted_bytes = fernet.decrypt(encrypted_bytes)
-        payload_json = decrypted_bytes.decode("utf-8")
 
-        # Cache the decrypted payload JSON string
-        self._data_cache[self.message_key] = payload_json
-        return payload_json
+        # Decrypt payload if present and not already cached
+        if self.encrypted_payload and self.message_key not in self._data_cache:
+            encrypted_bytes = self.encrypted_payload.encode("utf-8")
+            decrypted_bytes = fernet.decrypt(encrypted_bytes)
+            payload_json = decrypted_bytes.decode("utf-8")
+            self._data_cache[self.message_key] = payload_json
+
+        # Decrypt reasoning if present and not already cached
+        if self.encrypted_reasoning and self.message_key not in self._reasoning_cache:
+            encrypted_bytes = self.encrypted_reasoning.encode("utf-8")
+            decrypted_bytes = fernet.decrypt(encrypted_bytes)
+            reasoning_text = decrypted_bytes.decode("utf-8")
+            self._reasoning_cache[self.message_key] = reasoning_text
+
+    @property
+    def reasoning(self) -> str | None:
+        """Get the decrypted reasoning from cache.
+
+        Returns:
+            str | None: The decrypted reasoning text, or None if not cached
+
+        Raises:
+            ContentNotDecryptedError: If reasoning hasn't been decrypted yet
+        """
+        if self.encrypted_reasoning and self.message_key not in self._reasoning_cache:
+            raise ContentNotDecryptedError(self.message_key)
+        return self._reasoning_cache.get(self.message_key)
 
     @property
     def telegram_object(self) -> MessageTypes | None:
@@ -154,7 +181,10 @@ class Messages(Base):
         message_key = cls.generate_message_key(user_id, chat_id, message.message_id, message.__class__.__name__)
 
         # Encrypt the payload
-        encrypted_payload = cls.encrypt_payload(message.to_dict(), user_encryption_key)
+        encrypted_payload = cls.encrypt(message.to_dict(), user_encryption_key)
+
+        # Encrypt reasoning if provided
+        encrypted_reasoning = cls.encrypt(reasoning, user_encryption_key) if reasoning else None
 
         stmt = pg_insert(cls).values(
             message_key=message_key,
@@ -163,8 +193,8 @@ class Messages(Base):
             user_id=str(user_id),
             chat_id=str(chat_id),
             encrypted_payload=encrypted_payload,
+            encrypted_reasoning=encrypted_reasoning,
             session_key=session_key,
-            reasoning=reasoning,
             created_at=now,
             updated_at=now,
         )
@@ -173,7 +203,7 @@ class Messages(Base):
             index_elements=["message_key"],
             set_={
                 "encrypted_payload": stmt.excluded.encrypted_payload,
-                "reasoning": stmt.excluded.reasoning,
+                "encrypted_reasoning": stmt.excluded.encrypted_reasoning,
                 "updated_at": stmt.excluded.updated_at,
             },
         )
