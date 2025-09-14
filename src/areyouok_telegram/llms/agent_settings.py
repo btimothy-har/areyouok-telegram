@@ -22,7 +22,7 @@ class FeedbackMissingError(pydantic_ai.ModelRetry):
 
 @dataclass
 class PreferencesAgentDependencies:
-    """Dependencies for the onboarding agent."""
+    """Dependencies for the preferences agent."""
 
     tg_chat_id: str
     tg_session_id: str
@@ -48,7 +48,7 @@ preferences_agent = pydantic_ai.Agent(
 @preferences_agent.instructions
 def generate_instructions() -> str:
     return """
-You are a backend agent responsible for managing user's settings and preferences. You are \
+You are a backend agent responsible for managing user preferences. You are \
 able to manage the following settings:
 - preferred name
 - country

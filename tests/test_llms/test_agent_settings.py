@@ -38,7 +38,7 @@ class TestFeedbackMissingError:
 
 
 class TestPreferencesAgentDependencies:
-    """Test SettingsAgentDependencies dataclass."""
+    """Test PreferencesAgentDependencies dataclass."""
 
     def test_preferences_agent_dependencies_creation(self):
         """Test PreferencesAgentDependencies can be created with required fields."""
@@ -55,7 +55,7 @@ class TestPreferencesAgentDependencies:
 
 
 class TestPreferencesUpdateResponse:
-    """Test SettingsUpdateResponse model."""
+    """Test PreferencesUpdateResponse model."""
 
     def test_preferences_update_response_creation(self):
         """Test PreferencesUpdateResponse can be created."""
@@ -79,7 +79,7 @@ class TestPreferencesUpdateResponse:
 
 
 class TestPreferencesAgentTools:
-    """Test settings agent tool functions."""
+    """Test preferences agent tool functions."""
 
     @pytest.fixture
     def mock_context(self):
@@ -148,7 +148,7 @@ class TestPreferencesAgentTools:
 
 
 class TestPreferencesAgentValidation:
-    """Test settings agent output validation."""
+    """Test preferences agent output validation."""
 
     @pytest.mark.asyncio
     async def test_validate_preferences_agent_output_completed_true(self):
@@ -174,7 +174,7 @@ class TestPreferencesAgentValidation:
 
 
 class TestPreferencesAgent:
-    """Test the settings agent configuration (unit tests only)."""
+    """Test the preferences agent configuration (unit tests only)."""
 
     def test_preferences_agent_configuration(self):
         """Test that preferences agent is properly configured."""
