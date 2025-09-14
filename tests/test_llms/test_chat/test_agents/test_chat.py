@@ -383,7 +383,7 @@ class TestGetCurrentTimeTool:
 
             # Verify result contains expected time information
             assert "America/New_York" in result
-            assert "The current time in the user's timezone" in result
+            assert "Current time in the user's timezone" in result
             assert "2024-01-15" in result
             # Time should be converted from UTC to EST (UTC-5)
             assert "09:30" in result or "EST" in result
@@ -457,7 +457,7 @@ class TestGetCurrentTimeTool:
 
             # Verify result contains expected time information
             assert "America/New_York" in result
-            assert "The current time in the user's timezone" in result
+            assert "Current time in the user's timezone" in result
             assert "2024-07-20" in result
             # Time should be converted from UTC to EDT (UTC-4 during summer)
             assert "08:00" in result or "EDT" in result
@@ -486,7 +486,7 @@ class TestGetCurrentTimeTool:
 
             # Verify result contains expected time information
             assert "UTC" in result
-            assert "The current time in the user's timezone" in result
+            assert "Current time in the user's timezone" in result
             assert "2024-01-15 09:45 UTC" in result
 
     @pytest.mark.asyncio
@@ -538,7 +538,7 @@ class TestGetCurrentTimeTool:
 
                 # Verify result contains timezone information
                 assert timezone_name in result
-                assert "The current time in the user's timezone" in result
+                assert "Current time in the user's timezone" in result
                 assert "2024-03-" in result  # Should contain the date, but day might vary by timezone
 
     @pytest.mark.asyncio
