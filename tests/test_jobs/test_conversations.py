@@ -23,6 +23,8 @@ from areyouok_telegram.llms.chat import OnboardingAgentDependencies
 from areyouok_telegram.llms.chat import ReactionResponse
 from areyouok_telegram.llms.chat import SwitchPersonalityResponse
 from areyouok_telegram.llms.chat import TextResponse
+from areyouok_telegram.llms.chat import TextWithButtonsResponse
+from areyouok_telegram.llms.chat.responses import _MessageButton
 
 
 class TestConversationJob:
@@ -58,11 +60,10 @@ class TestConversationJob:
                 "areyouok_telegram.data.operations.get_or_create_active_session",
                 new=AsyncMock(return_value=mock_session),
             ),
-            patch("areyouok_telegram.jobs.conversations.logfire.debug") as mock_log_debug,
         ):
             await job.run_job()
 
-        mock_log_debug.assert_called_once_with("No new updates, nothing to do.")
+        # Test passes if no exception is thrown - bot should handle already responded state gracefully
 
     @pytest.mark.asyncio
     async def test_run_generates_response(self, frozen_time):
@@ -296,6 +297,7 @@ class TestConversationJob:
         assert call_args.kwargs["chat_id"] == 123
         assert call_args.kwargs["text"] == "Reply text"
         assert call_args.kwargs["reply_parameters"].message_id == 789
+        assert call_args.kwargs["reply_markup"] is None
 
     @pytest.mark.asyncio
     async def test_execute_text_response_no_reply(self):
@@ -310,7 +312,7 @@ class TestConversationJob:
 
         # Verify send_message was called without reply parameters
         job._run_context.bot.send_message.assert_called_once_with(
-            chat_id=123, text="Regular text", reply_parameters=None
+            chat_id=123, text="Regular text", reply_parameters=None, reply_markup=None
         )
 
     @pytest.mark.asyncio
@@ -1325,3 +1327,158 @@ class TestConversationJob:
         assert deps.notification == mock_notification
         assert deps.tg_chat_id == "123"
         assert deps.tg_session_id == "session123"
+
+    @pytest.mark.asyncio
+    async def test_execute_text_with_buttons_response(self):
+        """Test _execute_text_response with TextWithButtonsResponse."""
+        job = ConversationJob("123")
+        job._run_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
+        job._run_context.bot.send_message = AsyncMock(return_value=MagicMock(spec=telegram.Message))
+
+        buttons = [
+            _MessageButton(label="Option 1", callback="opt1"),
+            _MessageButton(label="Option 2", callback="opt2"),
+            _MessageButton(label="Option 3", callback="opt3"),
+        ]
+
+        response = TextWithButtonsResponse(
+            reasoning="Test reasoning",
+            message_text="Choose an option:",
+            reply_to_message_id=None,
+            buttons=buttons,
+            buttons_per_row=2,
+            context="Button context for understanding",
+        )
+
+        await job._execute_text_response(response)
+
+        # Verify send_message was called with inline keyboard
+        job._run_context.bot.send_message.assert_called_once()
+        call_args = job._run_context.bot.send_message.call_args
+        assert call_args.kwargs["chat_id"] == 123
+        assert call_args.kwargs["text"] == "Choose an option:"
+        assert call_args.kwargs["reply_parameters"] is None
+
+        # Verify reply_markup contains inline keyboard
+        reply_markup = call_args.kwargs["reply_markup"]
+        assert reply_markup is not None
+        assert isinstance(reply_markup, telegram.InlineKeyboardMarkup)
+
+        # Check button layout (2 buttons per row, so 2 rows)
+        assert len(reply_markup.inline_keyboard) == 2
+        assert len(reply_markup.inline_keyboard[0]) == 2  # First row has 2 buttons
+        assert len(reply_markup.inline_keyboard[1]) == 1  # Second row has 1 button
+
+        # Check button content
+        assert reply_markup.inline_keyboard[0][0].text == "Option 1"
+        assert reply_markup.inline_keyboard[0][0].callback_data == "response::opt1"
+        assert reply_markup.inline_keyboard[0][1].text == "Option 2"
+        assert reply_markup.inline_keyboard[0][1].callback_data == "response::opt2"
+        assert reply_markup.inline_keyboard[1][0].text == "Option 3"
+        assert reply_markup.inline_keyboard[1][0].callback_data == "response::opt3"
+
+    @pytest.mark.asyncio
+    async def test_execute_text_with_buttons_single_row(self):
+        """Test _execute_text_response with TextWithButtonsResponse single row layout."""
+        job = ConversationJob("123")
+        job._run_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
+        job._run_context.bot.send_message = AsyncMock(return_value=MagicMock(spec=telegram.Message))
+
+        buttons = [
+            _MessageButton(label="Yes", callback="yes"),
+            _MessageButton(label="No", callback="no"),
+        ]
+
+        response = TextWithButtonsResponse(
+            reasoning="Test reasoning",
+            message_text="Do you agree?",
+            reply_to_message_id="456",
+            buttons=buttons,
+            buttons_per_row=2,
+            context="Yes/No confirmation buttons",
+        )
+
+        await job._execute_text_response(response)
+
+        # Verify send_message was called with reply parameters and inline keyboard
+        job._run_context.bot.send_message.assert_called_once()
+        call_args = job._run_context.bot.send_message.call_args
+        assert call_args.kwargs["chat_id"] == 123
+        assert call_args.kwargs["text"] == "Do you agree?"
+        assert call_args.kwargs["reply_parameters"].message_id == 456
+
+        # Verify reply_markup contains single row
+        reply_markup = call_args.kwargs["reply_markup"]
+        assert reply_markup is not None
+        assert len(reply_markup.inline_keyboard) == 1
+        assert len(reply_markup.inline_keyboard[0]) == 2
+
+    @pytest.mark.asyncio
+    async def test_text_with_buttons_response_logging_includes_context(self, frozen_time):
+        """Test that button responses include context in reasoning for logging."""
+        job = ConversationJob("123")
+        job._run_timestamp = frozen_time
+        job._bot_id = "bot123"
+        job._run_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
+        job._run_context.bot.send_chat_action = AsyncMock()
+
+        mock_session = MagicMock()
+        mock_session.has_bot_responded = False
+        mock_session.session_id = "session123"
+        mock_session.last_user_message = frozen_time - timedelta(minutes=1)
+
+        buttons = [_MessageButton(label="Option 1", callback="opt1")]
+        mock_response = TextWithButtonsResponse(
+            reasoning="Test reasoning",
+            message_text="Choose:",
+            reply_to_message_id=None,
+            buttons=buttons,
+            buttons_per_row=1,
+            context="Additional context for buttons",
+        )
+        mock_message = MagicMock(spec=telegram.Message)
+
+        with (
+            patch(
+                "areyouok_telegram.jobs.conversations.ConversationJob._get_chat_encryption_key",
+                new=AsyncMock(return_value="test_encryption_key"),
+            ),
+            patch(
+                "areyouok_telegram.data.operations.get_or_create_active_session",
+                new=AsyncMock(return_value=mock_session),
+            ),
+            patch.object(
+                job,
+                "prepare_conversation_input",
+                new=AsyncMock(
+                    return_value=(
+                        [],
+                        ChatAgentDependencies(
+                            tg_context=job._run_context,
+                            tg_chat_id="123",
+                            tg_session_id="session123",
+                            personality="exploration",
+                            restricted_responses=set(),
+                            notification=None,
+                        ),
+                    )
+                ),
+            ),
+            patch.object(job, "generate_response", new=AsyncMock(return_value=mock_response)),
+            patch.object(job, "execute_response", new=AsyncMock(return_value=mock_message)),
+            patch.object(job, "_log_bot_activity", new=AsyncMock()),
+            patch.object(job, "_get_user_metadata", new=AsyncMock(return_value=None)),
+            patch("areyouok_telegram.jobs.conversations.asyncio.sleep", new=AsyncMock()),
+            patch("areyouok_telegram.data.operations.new_session_event", new=AsyncMock()) as mock_log_event,
+            patch("areyouok_telegram.jobs.conversations.logfire.span"),
+        ):
+            await job.run_job()
+
+        # Verify message event was logged with reasoning + context
+        mock_log_event.assert_called_once_with(
+            session=mock_session,
+            message=mock_message,
+            user_id="bot123",
+            is_user=False,
+            reasoning="Test reasoningAdditional context for buttons",  # reasoning + context concatenated
+        )

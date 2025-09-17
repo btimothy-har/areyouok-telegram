@@ -182,15 +182,16 @@ class TestChatEvent:
             )
 
     def test_user_id_validation_context_event(self, mock_context_sqlalchemy):
-        """Test that user_id is not allowed for context events."""
-        with pytest.raises(ValueError, match="User ID is only allowed for message events"):
-            ChatEvent(
-                timestamp=mock_context_sqlalchemy.created_at,
-                event_type="prior_conversation_summary",
-                event_data={"content": "test"},
-                attachments=[],
-                user_id="user123",
-            )
+        """Test that user_id is allowed for context events (e.g., button actions)."""
+        # This should not raise an error - user_id is now allowed for context events
+        event = ChatEvent(
+            timestamp=mock_context_sqlalchemy.created_at,
+            event_type="prior_conversation_summary",
+            event_data={"content": "test"},
+            attachments=[],
+            user_id="user123",
+        )
+        assert event.user_id == "user123"
 
     def test_unsupported_message_type(self, mock_messages_sqlalchemy, mock_telegram_message):
         """Test error for unsupported message types."""
