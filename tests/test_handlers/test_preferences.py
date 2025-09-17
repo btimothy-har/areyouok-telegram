@@ -17,9 +17,17 @@ class TestOnPreferencesCommand:
     """Test the on_preferences_command handler."""
 
     @pytest.mark.asyncio
+    @patch("areyouok_telegram.handlers.preferences.data_operations.track_command_usage")
+    @patch("areyouok_telegram.handlers.preferences.data_operations.get_or_create_active_session")
     @patch("areyouok_telegram.handlers.preferences._construct_user_preferences_response")
     async def test_on_preferences_command_display_preferences(
-        self, mock_construct_response, mock_telegram_user, mock_telegram_chat, mock_telegram_message
+        self,
+        mock_construct_response,
+        mock_get_session,
+        mock_track_usage,
+        mock_telegram_user,
+        mock_telegram_chat,
+        mock_telegram_message,
     ):
         """Test preferences command displays current preferences when no arguments provided."""
         # Setup mocks
@@ -31,6 +39,11 @@ class TestOnPreferencesCommand:
 
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
         mock_context.bot = AsyncMock()
+
+        mock_session = MagicMock()
+        mock_session.session_id = "session123"
+        mock_get_session.return_value = mock_session
+        mock_track_usage.return_value = None
 
         mock_construct_response.return_value = "**Your Current Preferences:**\n• Name: John Doe"
 
@@ -205,8 +218,15 @@ class TestOnPreferencesCommand:
         )
 
     @pytest.mark.asyncio
+    @patch("areyouok_telegram.handlers.preferences.data_operations.track_command_usage")
+    @patch("areyouok_telegram.handlers.preferences.data_operations.get_or_create_active_session")
     async def test_on_preferences_command_invalid_field(
-        self, mock_telegram_user, mock_telegram_chat, mock_telegram_message
+        self,
+        mock_get_session,
+        mock_track_usage,
+        mock_telegram_user,
+        mock_telegram_chat,
+        mock_telegram_message,
     ):
         """Test preferences command with invalid field name."""
         # Setup mocks
@@ -218,6 +238,11 @@ class TestOnPreferencesCommand:
 
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
         mock_context.bot = AsyncMock()
+
+        mock_session = MagicMock()
+        mock_session.session_id = "session123"
+        mock_get_session.return_value = mock_session
+        mock_track_usage.return_value = None
 
         # Call handler
         await on_preferences_command(mock_update, mock_context)

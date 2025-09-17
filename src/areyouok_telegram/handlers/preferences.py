@@ -21,6 +21,19 @@ from areyouok_telegram.utils import telegram_call
 async def on_preferences_command(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /preferences command - display user's current preferences."""
 
+    # Get active session up front
+    active_session = await data_operations.get_or_create_active_session(
+        chat_id=str(update.effective_chat.id),
+        timestamp=update.message.date,
+    )
+
+    # Track command usage
+    await data_operations.track_command_usage(
+        command="preferences",
+        chat_id=str(update.effective_chat.id),
+        session_id=active_session.session_id,
+    )
+
     command_input = update.message.text
 
     # Parse command arguments: /preferences [field_arg] [text_input]
@@ -55,11 +68,6 @@ async def on_preferences_command(update: telegram.Update, context: ContextTypes.
             context.bot.send_chat_action,
             chat_id=update.effective_chat.id,
             action=telegram.constants.ChatAction.TYPING,
-        )
-
-        active_session = await data_operations.get_or_create_active_session(
-            chat_id=str(update.effective_chat.id),
-            timestamp=update.message.date,
         )
 
         update_outcome = await _update_user_metadata_field(
