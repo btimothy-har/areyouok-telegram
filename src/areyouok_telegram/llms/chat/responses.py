@@ -3,6 +3,8 @@ from typing import Literal
 import pydantic
 from telegram.constants import ReactionEmoji
 
+from areyouok_telegram.llms.exceptions import CallbackLimitError
+
 
 class _MessageButton(pydantic.BaseModel):
     """A button attached to a message."""
@@ -15,6 +17,15 @@ class _MessageButton(pydantic.BaseModel):
         description="The information you want to receive when the user presses the button.",
         max_length=40,
     )
+
+    @pydantic.field_validator("callback")
+    @classmethod
+    def validate_callback_with_prefix(cls, v: str) -> str:
+        """Validate that callback with 'response::' prefix doesn't exceed 64 bytes."""
+        prefixed_callback = f"response::{v}"
+        if len(prefixed_callback.encode("utf-8")) > 64:
+            raise CallbackLimitError(v, len(prefixed_callback.encode("utf-8")))
+        return v
 
 
 class BaseAgentResponse(pydantic.BaseModel):

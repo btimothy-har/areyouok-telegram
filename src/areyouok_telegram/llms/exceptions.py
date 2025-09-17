@@ -21,6 +21,16 @@ class InvalidMessageError(pydantic_ai.ModelRetry):
         self.message_id = message_id
 
 
+class CallbackLimitError(ValueError, pydantic_ai.ModelRetry):
+    """Exception raised when the callback data exceeds the allowed limit."""
+
+    def __init__(self, callback: str, size: int):
+        super().__init__(
+            f"Callback data exceeds the allowed limit: {callback}. Max of 64 bytes allowed, got {size} bytes."
+        )
+        self.callback = callback
+
+
 class ReactToSelfError(pydantic_ai.ModelRetry):
     """Exception raised when the agent tries to react to its own message."""
 
