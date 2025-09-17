@@ -24,3 +24,11 @@ class NoMessageReactionError(BaseHandlerError):
     def __init__(self, update_id):
         super().__init__(f"Expected to receive a message reaction in update: {update_id}")
         self.update_id = update_id
+
+
+class InvalidCallbackDataError(BaseHandlerError):
+    """Raised when callback data is invalid or improperly formatted."""
+
+    def __init__(self, update_id):
+        super().__init__(f"Invalid callback data in update: {update_id}")
+        self.update_id = update_id

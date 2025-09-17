@@ -29,6 +29,7 @@ from areyouok_telegram.llms.chat import ChatAgentDependencies
 from areyouok_telegram.llms.chat import OnboardingAgentDependencies
 from areyouok_telegram.llms.chat import ReactionResponse
 from areyouok_telegram.llms.chat import TextResponse
+from areyouok_telegram.llms.chat import TextWithButtonsResponse
 from areyouok_telegram.llms.chat import chat_agent
 from areyouok_telegram.llms.chat import onboarding_agent
 from areyouok_telegram.llms.context_compression import ContextTemplate
@@ -99,8 +100,6 @@ class ConversationJob(BaseJob):
                 await self.stop()
 
         elif self.active_session.has_bot_responded:
-            logfire.debug("No new updates, nothing to do.")
-
             # If the last user activity was more than an hour ago, stop the job
             reference_ts = self.active_session.last_user_activity or self.active_session.session_start
             inactivity_duration = self._run_timestamp - reference_ts
@@ -187,13 +186,18 @@ class ConversationJob(BaseJob):
                     break
 
                 if response_message:
+                    if agent_response.response_type in ["TextWithButtonsResponse"]:
+                        reasoning = agent_response.reasoning + agent_response.context
+                    else:
+                        reasoning = agent_response.reasoning
+
                     # Log the bot's response message
                     await data_operations.new_session_event(
                         session=self.active_session,
                         message=response_message,
                         user_id=str(self._bot_id),
                         is_user=False,
-                        reasoning=agent_response.reasoning,
+                        reasoning=reasoning,
                     )
 
                     if dependencies.notification and isinstance(response_message, telegram.Message):
@@ -268,9 +272,11 @@ class ConversationJob(BaseJob):
             deps_data["personality"] = chat_personality
             deps = ChatAgentDependencies(**deps_data)
 
+        message_history.sort(key=lambda x: x.timestamp)
+
         deps.restricted_responses = self._check_restricted_responses(message_history, deps)
 
-        return sorted(message_history, key=lambda x: x.timestamp), deps
+        return message_history, deps
 
     @traced(extract_args=False)
     async def generate_response(
@@ -343,7 +349,7 @@ class ConversationJob(BaseJob):
 
         response_message = None
 
-        if response.response_type == "TextResponse":
+        if response.response_type in ["TextResponse", "TextWithButtonsResponse"]:
             response_message = await self._execute_text_response(response=response)
 
         elif response.response_type == "ReactionResponse":
@@ -388,7 +394,7 @@ class ConversationJob(BaseJob):
         logfire.info(f"Response executed in chat {self.chat_id}: {response.response_type}.")
         return response_message
 
-    async def _execute_text_response(self, response: TextResponse) -> telegram.Message | None:
+    async def _execute_text_response(self, response: TextResponse | TextWithButtonsResponse) -> telegram.Message | None:
         """
         Send a text response to the chat.
         """
@@ -400,11 +406,29 @@ class ConversationJob(BaseJob):
         else:
             reply_parameters = None
 
+        if response.response_type == "TextWithButtonsResponse":
+            # Group buttons into rows based on buttons_per_row
+            button_rows = []
+            for i in range(0, len(response.buttons), response.buttons_per_row):
+                row_buttons = [
+                    telegram.InlineKeyboardButton(
+                        text=btn.label,
+                        callback_data=f"response::{btn.callback}",
+                    )
+                    for btn in response.buttons[i : i + response.buttons_per_row]
+                ]
+                button_rows.append(row_buttons)
+
+            reply_markup = telegram.InlineKeyboardMarkup(inline_keyboard=button_rows)
+        else:
+            reply_markup = None
+
         reply_message = await telegram_call(
             self._run_context.bot.send_message,
             chat_id=int(self.chat_id),
             text=response.message_text,
             reply_parameters=reply_parameters,
+            reply_markup=reply_markup,
         )
 
         return reply_message

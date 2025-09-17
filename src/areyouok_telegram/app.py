@@ -3,6 +3,7 @@
 import telegram
 from telegram.ext import Application
 from telegram.ext import ApplicationBuilder
+from telegram.ext import CallbackQueryHandler
 from telegram.ext import CommandHandler
 from telegram.ext import MessageHandler
 from telegram.ext import MessageReactionHandler
@@ -10,6 +11,7 @@ from telegram.ext import TypeHandler
 from telegram.ext import filters
 
 from areyouok_telegram.config import TELEGRAM_BOT_TOKEN
+from areyouok_telegram.handlers import on_dynamic_response_callback
 from areyouok_telegram.handlers import on_edit_message
 from areyouok_telegram.handlers import on_error_event
 from areyouok_telegram.handlers import on_message_react
@@ -67,5 +69,10 @@ def create_application() -> Application:
 
     # Reaction Handler
     application.add_handler(MessageReactionHandler(on_message_react, message_reaction_types=-1, block=False), group=1)
+
+    # Callback Handlers
+    application.add_handler(
+        CallbackQueryHandler(on_dynamic_response_callback, pattern=r"^response::", block=False), group=1
+    )
 
     return application

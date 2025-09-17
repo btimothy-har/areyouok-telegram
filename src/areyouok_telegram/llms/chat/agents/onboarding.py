@@ -29,6 +29,7 @@ from areyouok_telegram.llms.chat.prompt import BaseChatPromptTemplate
 from areyouok_telegram.llms.chat.responses import DoNothingResponse
 from areyouok_telegram.llms.chat.responses import ReactionResponse
 from areyouok_telegram.llms.chat.responses import TextResponse
+from areyouok_telegram.llms.chat.responses import TextWithButtonsResponse
 from areyouok_telegram.llms.chat.utils import check_restricted_responses
 from areyouok_telegram.llms.chat.utils import check_special_instructions
 from areyouok_telegram.llms.chat.utils import validate_response_data
@@ -38,7 +39,7 @@ from areyouok_telegram.llms.models import ClaudeSonnet4
 from areyouok_telegram.llms.utils import log_metadata_update_context
 from areyouok_telegram.llms.utils import run_agent_with_tracking
 
-AgentResponse = TextResponse | ReactionResponse | DoNothingResponse
+AgentResponse = TextResponse | ReactionResponse | TextWithButtonsResponse | DoNothingResponse
 
 
 @dataclass

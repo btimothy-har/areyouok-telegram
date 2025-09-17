@@ -3,6 +3,30 @@ from typing import Literal
 import pydantic
 from telegram.constants import ReactionEmoji
 
+from areyouok_telegram.llms.exceptions import CallbackLimitError
+
+
+class _MessageButton(pydantic.BaseModel):
+    """A button attached to a message."""
+
+    label: str = pydantic.Field(
+        description="The text to display on the button. Emojis accepted.",
+        max_length=50,
+    )
+    callback: str = pydantic.Field(
+        description="The information you want to receive when the user presses the button.",
+        max_length=40,
+    )
+
+    @pydantic.field_validator("callback", mode="before")
+    @classmethod
+    def validate_callback_size(cls, v: str) -> str:
+        """Validate that callback with 'response::' prefix doesn't exceed 64 bytes."""
+        prefixed_callback = f"response::{v}"
+        if len(prefixed_callback.encode("utf-8")) > 64:
+            raise CallbackLimitError(v, len(prefixed_callback.encode("utf-8")))
+        return v
+
 
 class BaseAgentResponse(pydantic.BaseModel):
     """Base class for agent responses."""
@@ -23,6 +47,32 @@ class TextResponse(BaseAgentResponse):
     message_text: str = pydantic.Field(description="The text message to send as a reply to the user.")
     reply_to_message_id: str | None = pydantic.Field(
         default=None, description="Message ID to reply to, if replying directly to a message. Use only when necessary."
+    )
+
+
+class TextWithButtonsResponse(TextResponse):
+    """
+    Attach a set of buttons to a text message.
+    Buttons are permanently attached to the message and can be pressed multiple times.
+    Actions taken by the user are injected into context, instead of being sent as a message.
+    User will still be able to type freeform messages as normal.
+    """
+
+    buttons: list[_MessageButton] = pydantic.Field(
+        description="A list of buttons to attach to the message.",
+        min_length=1,
+        max_length=3,
+    )
+    buttons_per_row: int = pydantic.Field(
+        description="Number of buttons to display per row. Must be between 1 and 5, recommended default is 3.",
+        ge=1,
+        le=5,
+    )
+    context: str = pydantic.Field(
+        description=(
+            "Context documentation for the assistant to understand the purpose of the buttons. "
+            "Include a description of each of the callbacks used in the buttons, and what they correspond to."
+        ),
     )
 
 
