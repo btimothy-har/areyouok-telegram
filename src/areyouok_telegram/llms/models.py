@@ -19,7 +19,7 @@ class BaseModelConfig:
     def __init__(
         self,
         model_id: str,
-        provider: Literal["openai", "anthropic"] = "openai",
+        provider: Literal["openai", "anthropic", "openrouter"],
         openrouter_id: str | None = None,
         model_settings: pydantic_ai.settings.ModelSettings | None = None,
     ):
@@ -71,6 +71,23 @@ class BaseModelConfig:
         return None
 
 
+class ClaudeOpus41(BaseModelConfig):
+    """Model configuration for Claude Opus 4.1."""
+
+    DEFAULT_SETTINGS = pydantic_ai.settings.ModelSettings(
+        temperature=0.6,
+        parallel_tool_calls=False,
+    )
+
+    def __init__(self, model_settings: pydantic_ai.settings.ModelSettings | None = None):
+        super().__init__(
+            model_id="claude-opus-4-1-20250805",
+            provider="anthropic",
+            openrouter_id="anthropic/claude-opus-4.1",
+            model_settings=model_settings or self.DEFAULT_SETTINGS,
+        )
+
+
 class ClaudeSonnet4(BaseModelConfig):
     """Model configuration for Claude Sonnet 4."""
 
@@ -88,6 +105,40 @@ class ClaudeSonnet4(BaseModelConfig):
         )
 
 
+class GPT5(BaseModelConfig):
+    """Model configuration for GPT-5."""
+
+    DEFAULT_SETTINGS = pydantic_ai.settings.ModelSettings(
+        temperature=0.0,
+        parallel_tool_calls=False,
+    )
+
+    def __init__(self, model_settings: pydantic_ai.settings.ModelSettings | None = None):
+        super().__init__(
+            model_id="gpt-5-2025-08-07",
+            provider="openai",
+            openrouter_id="openai/gpt-5",
+            model_settings=model_settings or self.DEFAULT_SETTINGS,
+        )
+
+
+class GPT5Mini(BaseModelConfig):
+    """Model configuration for GPT-5 Mini."""
+
+    DEFAULT_SETTINGS = pydantic_ai.settings.ModelSettings(
+        temperature=0.0,
+        parallel_tool_calls=False,
+    )
+
+    def __init__(self, model_settings: pydantic_ai.settings.ModelSettings | None = None):
+        super().__init__(
+            model_id="gpt-5-mini-2025-08-07",
+            provider="openai",
+            openrouter_id="openai/gpt-5-mini",
+            model_settings=model_settings or self.DEFAULT_SETTINGS,
+        )
+
+
 class GPT5Nano(BaseModelConfig):
     """Model configuration for GPT-5 Nano."""
 
@@ -101,5 +152,22 @@ class GPT5Nano(BaseModelConfig):
             model_id="gpt-5-nano-2025-08-07",
             provider="openai",
             openrouter_id="openai/gpt-5-nano",
+            model_settings=model_settings or self.DEFAULT_SETTINGS,
+        )
+
+
+class Gemini25Pro(BaseModelConfig):
+    """Model configuration for Google Gemini 2.5 Pro."""
+
+    DEFAULT_SETTINGS = pydantic_ai.settings.ModelSettings(
+        temperature=0.6,
+        parallel_tool_calls=False,
+    )
+
+    def __init__(self, model_settings: pydantic_ai.settings.ModelSettings | None = None):
+        super().__init__(
+            model_id="gemini-2.5-pro",
+            provider="openrouter",
+            openrouter_id="google/gemini-2.5-pro",
             model_settings=model_settings or self.DEFAULT_SETTINGS,
         )
