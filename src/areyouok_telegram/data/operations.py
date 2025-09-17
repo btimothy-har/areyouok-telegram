@@ -6,6 +6,7 @@ import telegram
 from areyouok_telegram.data.connection import async_database
 from areyouok_telegram.data.models.chat_event import SYSTEM_USER_ID
 from areyouok_telegram.data.models.chats import Chats
+from areyouok_telegram.data.models.command_usage import CommandUsage
 from areyouok_telegram.data.models.guided_sessions import GuidedSessions
 from areyouok_telegram.data.models.guided_sessions import GuidedSessionType
 from areyouok_telegram.data.models.messages import Messages
@@ -147,4 +148,27 @@ async def close_chat_session(*, chat_session: Sessions):
         await chat_session.close_session(
             db_conn,
             timestamp=close_ts,
+        )
+
+
+@db_retry()
+async def track_command_usage(
+    *,
+    command: str,
+    chat_id: str,
+    session_id: str,
+):
+    """Track command usage for analytics and monitoring.
+
+    Args:
+        command: Command name (e.g., "start", "preferences")
+        chat_id: Chat identifier
+        session_id: Session identifier
+    """
+    async with async_database() as db_conn:
+        await CommandUsage.track_command(
+            db_conn,
+            command=command,
+            chat_id=chat_id,
+            session_id=session_id,
         )

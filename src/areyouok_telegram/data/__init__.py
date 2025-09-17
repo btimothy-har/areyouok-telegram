@@ -4,6 +4,7 @@ from areyouok_telegram.data.connection import async_engine
 from areyouok_telegram.data.models.chat_event import SYSTEM_USER_ID
 from areyouok_telegram.data.models.chat_event import ChatEvent
 from areyouok_telegram.data.models.chats import Chats
+from areyouok_telegram.data.models.command_usage import CommandUsage
 from areyouok_telegram.data.models.context import Context
 from areyouok_telegram.data.models.context import ContextType
 from areyouok_telegram.data.models.guided_sessions import GuidedSessions
@@ -36,6 +37,7 @@ __all__ = [
     "Context",
     "ContextType",
     "LLMUsage",
+    "CommandUsage",
     "ChatEvent",
     "SYSTEM_USER_ID",
 ]

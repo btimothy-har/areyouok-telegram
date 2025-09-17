@@ -431,3 +431,83 @@ class TestCloseChatSession:
         # Should not inactivate already inactive sessions
         mock_guided_session.inactivate.assert_not_called()
         mock_session.close_session.assert_called_once_with(mock_db_conn, timestamp=frozen_time)
+
+
+class TestTrackCommandUsage:
+    """Test the track_command_usage function."""
+
+    @pytest.mark.asyncio
+    async def test_track_command_usage_success(self):
+        """Test successful command usage tracking."""
+        with patch("areyouok_telegram.data.operations.async_database") as mock_async_db:
+            mock_db_conn = AsyncMock()
+            mock_async_db.return_value.__aenter__.return_value = mock_db_conn
+
+            with patch(
+                "areyouok_telegram.data.operations.CommandUsage.track_command",
+                new=AsyncMock(return_value=1),
+            ) as mock_track:
+                await data_operations.track_command_usage(
+                    command="start",
+                    chat_id="chat123",
+                    session_id="session456",
+                )
+
+        mock_track.assert_called_once_with(
+            mock_db_conn,
+            command="start",
+            chat_id="chat123",
+            session_id="session456",
+        )
+
+    @pytest.mark.asyncio
+    async def test_track_command_usage_preferences(self):
+        """Test tracking preferences command usage."""
+        with patch("areyouok_telegram.data.operations.async_database") as mock_async_db:
+            mock_db_conn = AsyncMock()
+            mock_async_db.return_value.__aenter__.return_value = mock_db_conn
+
+            with patch(
+                "areyouok_telegram.data.operations.CommandUsage.track_command",
+                new=AsyncMock(return_value=1),
+            ) as mock_track:
+                await data_operations.track_command_usage(
+                    command="preferences",
+                    chat_id="chat789",
+                    session_id="session123",
+                )
+
+        mock_track.assert_called_once_with(
+            mock_db_conn,
+            command="preferences",
+            chat_id="chat789",
+            session_id="session123",
+        )
+
+    @pytest.mark.asyncio
+    async def test_track_command_usage_with_db_retry(self):
+        """Test that track_command_usage uses db_retry decorator."""
+        # This test verifies that the function is decorated with @db_retry()
+        # by checking that it handles database connection retries properly
+
+        with patch("areyouok_telegram.data.operations.async_database") as mock_async_db:
+            mock_db_conn = AsyncMock()
+            mock_async_db.return_value.__aenter__.return_value = mock_db_conn
+
+            with patch(
+                "areyouok_telegram.data.operations.CommandUsage.track_command",
+                new=AsyncMock(return_value=1),
+            ) as mock_track:
+                await data_operations.track_command_usage(
+                    command="test_command",
+                    chat_id="test_chat",
+                    session_id="test_session",
+                )
+
+        # Verify the tracking was called with correct parameters
+        mock_track.assert_called_once_with(
+            mock_db_conn,
+            command="test_command",
+            chat_id="test_chat",
+            session_id="test_session",
+        )

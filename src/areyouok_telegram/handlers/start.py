@@ -21,6 +21,12 @@ async def on_start_command(update: telegram.Update, context: ContextTypes.DEFAUL
         timestamp=update.message.date,
     )
 
+    await data_operations.track_command_usage(
+        command="start",
+        chat_id=str(update.effective_chat.id),
+        session_id=active_session.session_id,
+    )
+
     onboarding_session = await data_operations.get_or_create_guided_session(
         chat_id=str(update.effective_chat.id), session=active_session, stype=GuidedSessionType.ONBOARDING
     )
