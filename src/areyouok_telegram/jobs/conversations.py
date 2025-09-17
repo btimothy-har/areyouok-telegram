@@ -26,10 +26,10 @@ from areyouok_telegram.jobs.exceptions import UserNotFoundForChatError
 from areyouok_telegram.llms import run_agent_with_tracking
 from areyouok_telegram.llms.chat import AgentResponse
 from areyouok_telegram.llms.chat import ChatAgentDependencies
-from areyouok_telegram.llms.chat import KeyboardResponse
 from areyouok_telegram.llms.chat import OnboardingAgentDependencies
 from areyouok_telegram.llms.chat import ReactionResponse
 from areyouok_telegram.llms.chat import TextResponse
+from areyouok_telegram.llms.chat import TextWithButtonsResponse
 from areyouok_telegram.llms.chat import chat_agent
 from areyouok_telegram.llms.chat import onboarding_agent
 from areyouok_telegram.llms.context_compression import ContextTemplate
@@ -100,8 +100,6 @@ class ConversationJob(BaseJob):
                 await self.stop()
 
         elif self.active_session.has_bot_responded:
-            logfire.debug("No new updates, nothing to do.")
-
             # If the last user activity was more than an hour ago, stop the job
             reference_ts = self.active_session.last_user_activity or self.active_session.session_start
             inactivity_duration = self._run_timestamp - reference_ts
@@ -274,9 +272,11 @@ class ConversationJob(BaseJob):
             deps_data["personality"] = chat_personality
             deps = ChatAgentDependencies(**deps_data)
 
+        message_history.sort(key=lambda x: x.timestamp)
+
         deps.restricted_responses = self._check_restricted_responses(message_history, deps)
 
-        return sorted(message_history, key=lambda x: x.timestamp), deps
+        return message_history, deps
 
     @traced(extract_args=False)
     async def generate_response(
@@ -349,7 +349,7 @@ class ConversationJob(BaseJob):
 
         response_message = None
 
-        if response.response_type in ["TextResponse", "KeyboardResponse", "TextWithButtonsResponse"]:
+        if response.response_type in ["TextResponse", "TextWithButtonsResponse"]:
             response_message = await self._execute_text_response(response=response)
 
         elif response.response_type == "ReactionResponse":
@@ -394,7 +394,7 @@ class ConversationJob(BaseJob):
         logfire.info(f"Response executed in chat {self.chat_id}: {response.response_type}.")
         return response_message
 
-    async def _execute_text_response(self, response: TextResponse | KeyboardResponse) -> telegram.Message | None:
+    async def _execute_text_response(self, response: TextResponse | TextWithButtonsResponse) -> telegram.Message | None:
         """
         Send a text response to the chat.
         """
@@ -406,24 +406,18 @@ class ConversationJob(BaseJob):
         else:
             reply_parameters = None
 
-        if response.response_type == "KeyboardResponse":
-            reply_markup = telegram.ReplyKeyboardMarkup(
-                keyboard=[[telegram.KeyboardButton(text=btn.text)] for btn in response.buttons],
-                input_field_placeholder=response.tooltip_text,
-                one_time_keyboard=True,
-                resize_keyboard=True,
-            )
-        elif response.response_type == "TextWithButtonsResponse":
-            button_rows = [
-                [
+        if response.response_type == "TextWithButtonsResponse":
+            # Group buttons into rows based on buttons_per_row
+            button_rows = []
+            for i in range(0, len(response.buttons), response.buttons_per_row):
+                row_buttons = [
                     telegram.InlineKeyboardButton(
                         text=btn.label,
                         callback_data=f"response::{btn.callback}",
                     )
-                    for btn in row.buttons
+                    for btn in response.buttons[i : i + response.buttons_per_row]
                 ]
-                for row in response.button_rows
-            ]
+                button_rows.append(row_buttons)
 
             reply_markup = telegram.InlineKeyboardMarkup(inline_keyboard=button_rows)
         else:

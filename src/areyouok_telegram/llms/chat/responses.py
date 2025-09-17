@@ -30,16 +30,6 @@ class _MessageButton(pydantic.BaseModel):
     )
 
 
-class _MessageButtonRow(pydantic.BaseModel):
-    """A row of buttons for the message button response."""
-
-    buttons: list[_MessageButton] = pydantic.Field(
-        description="A list of buttons to display in this row.",
-        min_length=1,
-        max_length=5,
-    )
-
-
 class BaseAgentResponse(pydantic.BaseModel):
     """Base class for agent responses."""
 
@@ -62,36 +52,23 @@ class TextResponse(BaseAgentResponse):
     )
 
 
-class KeyboardResponse(TextResponse):
-    """
-    Display a one-time keyboard to the text message, forcing the user to select their response from a fixed list.
-    Each keyboard can only have a maximum of 5 buttons.
-    Button text should be phrased in the user's perspective, as if they are responding to the agent.
-    """
-
-    tooltip_text: str = pydantic.Field(
-        description="Tooltip text to display in the chatbox to the user, providing context.",
-        min_length=1,
-        max_length=64,
-    )
-    buttons: list[_KeyboardButton] = pydantic.Field(
-        description="A list of buttons to display on the keyboard for the user to choose from.",
-        min_length=1,
-        max_length=5,
-    )
-
-
 class TextWithButtonsResponse(TextResponse):
     """
     Attach a set of buttons to a text message.
     Buttons are permanently attached to the message and can be pressed multiple times.
     Actions taken by the user are injected into context, instead of being sent as a message.
+    User will still be able to type freeform messages as normal.
     """
 
-    button_rows: list[_MessageButtonRow] = pydantic.Field(
-        description="A list of button rows to attach to the message.",
+    buttons: list[_MessageButton] = pydantic.Field(
+        description="A list of buttons to attach to the message.",
         min_length=1,
         max_length=3,
+    )
+    buttons_per_row: int = pydantic.Field(
+        description="Number of buttons to display per row. Must be between 1 and 5, recommended default is 3.",
+        ge=1,
+        le=5,
     )
     context: str = pydantic.Field(
         description=(
