@@ -103,6 +103,24 @@ class MediaFiles(Base):
         return decrypted_bytes
 
     @property
+    def is_openai_google_supported(self) -> bool:
+        """Check if the file is supported by OpenAI and Google.
+
+        OpenAI and Google both support images, PDFs, text files, and audio files.
+
+        This property automatically excludes transcription files.
+        """
+        if self.file_id.endswith("_transcription"):
+            return False
+
+        return (
+            self.mime_type.startswith("image/")
+            or self.mime_type.startswith("application/pdf")
+            or self.mime_type.startswith("text/")
+            or self.mime_type.startswith("audio/")
+        )
+
+    @property
     def is_anthropic_supported(self) -> bool:
         """Check if the file is supported by Anthropic.
 
