@@ -23,6 +23,7 @@ from areyouok_telegram.llms.chat.constants import USER_PREFERENCES
 from areyouok_telegram.llms.chat.personalities import PersonalityTypes
 from areyouok_telegram.llms.chat.prompt import BaseChatPromptTemplate
 from areyouok_telegram.llms.chat.responses import DoNothingResponse
+from areyouok_telegram.llms.chat.responses import KeyboardResponse
 from areyouok_telegram.llms.chat.responses import ReactionResponse
 from areyouok_telegram.llms.chat.responses import SwitchPersonalityResponse
 from areyouok_telegram.llms.chat.responses import TextResponse
@@ -34,7 +35,7 @@ from areyouok_telegram.llms.models import ClaudeSonnet4
 from areyouok_telegram.llms.utils import log_metadata_update_context
 from areyouok_telegram.llms.utils import run_agent_with_tracking
 
-AgentResponse = TextResponse | ReactionResponse | SwitchPersonalityResponse | DoNothingResponse
+AgentResponse = TextResponse | ReactionResponse | KeyboardResponse | SwitchPersonalityResponse | DoNothingResponse
 
 
 @dataclass

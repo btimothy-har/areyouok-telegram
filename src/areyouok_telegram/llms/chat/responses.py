@@ -4,6 +4,19 @@ import pydantic
 from telegram.constants import ReactionEmoji
 
 
+class _KeyboardButton(pydantic.BaseModel):
+    """A button for the keyboard response."""
+
+    text: str = pydantic.Field(
+        description=(
+            "The text to display on the button. When the user presses the button, "
+            "this text will be sent to yoou as a message from the user. "
+            "Max of 50 characters."
+        ),
+        max_length=50,
+    )
+
+
 class BaseAgentResponse(pydantic.BaseModel):
     """Base class for agent responses."""
 
@@ -23,6 +36,25 @@ class TextResponse(BaseAgentResponse):
     message_text: str = pydantic.Field(description="The text message to send as a reply to the user.")
     reply_to_message_id: str | None = pydantic.Field(
         default=None, description="Message ID to reply to, if replying directly to a message. Use only when necessary."
+    )
+
+
+class KeyboardResponse(TextResponse):
+    """
+    Display a one-time keyboard to the text message, forcing the user to select their response from a fixed list.
+    Each keyboard can only have a maximum of 5 buttons.
+    Button text should be phrased in the user's perspective, as if they are responding to the agent.
+    """
+
+    tooltip_text: str = pydantic.Field(
+        description="Tooltip text to display in the chatbox to the user, providing context.",
+        min_length=1,
+        max_length=64,
+    )
+    buttons: list[_KeyboardButton] = pydantic.Field(
+        description="A list of buttons to display on the keyboard for the user to choose from.",
+        min_length=1,
+        max_length=5,
     )
 
 

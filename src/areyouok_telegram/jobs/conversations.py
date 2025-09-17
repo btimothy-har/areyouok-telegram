@@ -26,6 +26,7 @@ from areyouok_telegram.jobs.exceptions import UserNotFoundForChatError
 from areyouok_telegram.llms import run_agent_with_tracking
 from areyouok_telegram.llms.chat import AgentResponse
 from areyouok_telegram.llms.chat import ChatAgentDependencies
+from areyouok_telegram.llms.chat import KeyboardResponse
 from areyouok_telegram.llms.chat import OnboardingAgentDependencies
 from areyouok_telegram.llms.chat import ReactionResponse
 from areyouok_telegram.llms.chat import TextResponse
@@ -343,7 +344,7 @@ class ConversationJob(BaseJob):
 
         response_message = None
 
-        if response.response_type == "TextResponse":
+        if response.response_type in ["TextResponse", "KeyboardResponse"]:
             response_message = await self._execute_text_response(response=response)
 
         elif response.response_type == "ReactionResponse":
@@ -388,7 +389,7 @@ class ConversationJob(BaseJob):
         logfire.info(f"Response executed in chat {self.chat_id}: {response.response_type}.")
         return response_message
 
-    async def _execute_text_response(self, response: TextResponse) -> telegram.Message | None:
+    async def _execute_text_response(self, response: TextResponse | KeyboardResponse) -> telegram.Message | None:
         """
         Send a text response to the chat.
         """
@@ -400,11 +401,22 @@ class ConversationJob(BaseJob):
         else:
             reply_parameters = None
 
+        if response.response_type == "KeyboardResponse":
+            reply_markup = telegram.ReplyKeyboardMarkup(
+                keyboard=[[telegram.KeyboardButton(text=btn.text)] for btn in response.buttons],
+                input_field_placeholder=response.tooltip_text,
+                one_time_keyboard=True,
+                resize_keyboard=True,
+            )
+        else:
+            reply_markup = None
+
         reply_message = await telegram_call(
             self._run_context.bot.send_message,
             chat_id=int(self.chat_id),
             text=response.message_text,
             reply_parameters=reply_parameters,
+            reply_markup=reply_markup,
         )
 
         return reply_message
