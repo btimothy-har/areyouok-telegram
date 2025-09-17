@@ -18,9 +18,9 @@ class _MessageButton(pydantic.BaseModel):
         max_length=40,
     )
 
-    @pydantic.field_validator("callback")
+    @pydantic.field_validator("callback", mode="before")
     @classmethod
-    def validate_callback_with_prefix(cls, v: str) -> str:
+    def validate_callback_size(cls, v: str) -> str:
         """Validate that callback with 'response::' prefix doesn't exceed 64 bytes."""
         prefixed_callback = f"response::{v}"
         if len(prefixed_callback.encode("utf-8")) > 64:

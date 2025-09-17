@@ -78,7 +78,7 @@ async def on_dynamic_response_callback(update: telegram.Update, context: Context
     if not update.callback_query:
         raise InvalidCallbackDataError(update.update_id)
 
-    if not update.callback_query.data.startswith("response::"):
+    if not str(update.callback_query.data).startswith("response::"):
         raise InvalidCallbackDataError(update.update_id)
 
     await telegram_call(update.callback_query.answer)
