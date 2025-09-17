@@ -17,6 +17,7 @@ CONTEXT_TYPE_MAP = {
     ContextType.RESPONSE.value: "silent_response",
     ContextType.PERSONALITY.value: "switch_personality",
     ContextType.METADATA.value: "user_metadata_update",
+    ContextType.ACTION.value: "user_button_action",
 }
 
 SYSTEM_USER_ID = "system"
@@ -46,9 +47,6 @@ class ChatEvent(pydantic.BaseModel):
         if self.event_type in ["message", "reaction"]:
             if not self.user_id:
                 raise ValueError("User ID must be provided for message and reaction events.")
-            return self
-        if self.user_id:
-            raise ValueError("User ID is only allowed for message events.")
         return self
 
     @classmethod
@@ -60,18 +58,25 @@ class ChatEvent(pydantic.BaseModel):
                 "message_id": str(message.message_id),
             }
 
+            if message.telegram_object.reply_markup:
+                if isinstance(message.telegram_object.reply_markup, telegram.ReplyKeyboardMarkup):
+                    kb_options = [getattr(b, "text", str(b)) for b in message.telegram_object.reply_markup.keyboard]
+                    event_data["keyboard_options"] = kb_options
+                elif isinstance(message.telegram_object.reply_markup, telegram.InlineKeyboardMarkup):
+                    kb_options = []
+                    for row in message.telegram_object.reply_markup.inline_keyboard:
+                        for b in row:
+                            kb_options.append({"text": b.text, "callback_data": b.callback_data})
+                    event_data["message_buttons"] = kb_options
+
         elif message.message_type == "MessageReactionUpdated":
             event_type = "reaction"
 
             # Handle reactions, assuming only emoji reactions for simplicity
             # TODO: Handle custom and paid reactions
-            reaction_string = ", ".join(
-                [
-                    r.emoji
-                    for r in message.telegram_object.new_reaction
-                    if r.type == telegram.constants.ReactionType.EMOJI
-                ]
-            )
+            reaction_string = ", ".join([
+                r.emoji for r in message.telegram_object.new_reaction if r.type == telegram.constants.ReactionType.EMOJI
+            ])
             event_data = {
                 "emojis": reaction_string,
                 "to_message_id": str(message.message_id),
@@ -102,7 +107,7 @@ class ChatEvent(pydantic.BaseModel):
             },
             timestamp=context.created_at,
             attachments=[],
-            user_id=None,
+            user_id=context.chat_id if context.type == ContextType.ACTION.value else None,
         )
 
     def to_model_message(self, bot_id: str, ts_reference: datetime) -> pydantic_ai.messages.ModelResponse:

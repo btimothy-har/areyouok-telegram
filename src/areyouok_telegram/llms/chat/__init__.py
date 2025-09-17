@@ -9,6 +9,7 @@ from areyouok_telegram.llms.chat.responses import KeyboardResponse
 from areyouok_telegram.llms.chat.responses import ReactionResponse
 from areyouok_telegram.llms.chat.responses import SwitchPersonalityResponse
 from areyouok_telegram.llms.chat.responses import TextResponse
+from areyouok_telegram.llms.chat.responses import TextWithButtonsResponse
 
 AgentResponse = ChatAgentResponse | OnboardingAgentResponse
 
@@ -22,7 +23,10 @@ __all__ = [
     "onboarding_agent",
     "OnboardingAgentDependencies",
     "OnboardingAgentResponse",
+    "TextWithButtonsResponse",
     "DoNothingResponse",
     "SwitchPersonalityResponse",
     "AgentResponse",
+    "DoNothingResponse",
+    "TextWithButtonsResponse",
 ]

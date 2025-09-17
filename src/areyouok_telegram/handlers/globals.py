@@ -8,11 +8,15 @@ from telegram.constants import ChatType
 from telegram.ext import ContextTypes
 
 from areyouok_telegram.data import Chats
+from areyouok_telegram.data import Context
 from areyouok_telegram.data import Users
 from areyouok_telegram.data import async_database
+from areyouok_telegram.data import operations as data_operations
+from areyouok_telegram.handlers.exceptions import InvalidCallbackDataError
 from areyouok_telegram.jobs import ConversationJob
 from areyouok_telegram.jobs import schedule_job
 from areyouok_telegram.utils import db_retry
+from areyouok_telegram.utils import telegram_call
 
 
 async def on_new_update(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):
@@ -42,3 +46,37 @@ async def on_new_update(update: telegram.Update, context: ContextTypes.DEFAULT_T
             interval=timedelta(milliseconds=500),
             first=datetime.now(UTC) + timedelta(seconds=2),
         )
+
+
+async def on_dynamic_response_callback(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):  # noqa:ARG001
+    @db_retry()
+    async def _create_action_context():
+        chat_id = str(update.effective_chat.id)
+
+        async with async_database() as db_conn:
+            active_session = await data_operations.get_or_create_active_session(
+                chat_id=chat_id,
+                create_if_not_exists=True,
+            )
+            chat_obj = await Chats.get_by_id(db_conn, chat_id=chat_id)
+
+            await Context.new_or_update(
+                db_conn,
+                chat_encryption_key=chat_obj.retrieve_key(),
+                chat_id=str(update.effective_chat.id),
+                session_id=active_session.session_id,
+                ctype="action",
+                content=str(update.callback_query.data).removeprefix("response::"),
+            )
+
+            await active_session.new_activity(
+                db_conn,
+                timestamp=datetime.now(UTC),
+                is_user=True,
+            )
+
+    if not update.callback_query or not update.callback_query.data.startswith("response::"):
+        raise InvalidCallbackDataError(update.update_id)
+
+    await telegram_call(update.callback_query.answer)
+    await _create_action_context()

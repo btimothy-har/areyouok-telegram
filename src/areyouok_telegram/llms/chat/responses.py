@@ -9,11 +9,34 @@ class _KeyboardButton(pydantic.BaseModel):
 
     text: str = pydantic.Field(
         description=(
-            "The text to display on the button. When the user presses the button, "
-            "this text will be sent to yoou as a message from the user. "
+            "The text to display on the button. Emojis are allowed. When the user presses the button, "
+            "this text will be sent to you as a message from the user. "
             "Max of 50 characters."
         ),
         max_length=50,
+    )
+
+
+class _MessageButton(pydantic.BaseModel):
+    """A button attached to a message."""
+
+    label: str = pydantic.Field(
+        description="The text to display on the button. Emojis are allowed.",
+        max_length=50,
+    )
+    callback: str = pydantic.Field(
+        description="The information you want to receive when the user presses the button.",
+        max_length=40,
+    )
+
+
+class _MessageButtonRow(pydantic.BaseModel):
+    """A row of buttons for the message button response."""
+
+    buttons: list[_MessageButton] = pydantic.Field(
+        description="A list of buttons to display in this row.",
+        min_length=1,
+        max_length=5,
     )
 
 
@@ -55,6 +78,26 @@ class KeyboardResponse(TextResponse):
         description="A list of buttons to display on the keyboard for the user to choose from.",
         min_length=1,
         max_length=5,
+    )
+
+
+class TextWithButtonsResponse(TextResponse):
+    """
+    Attach a set of buttons to a text message.
+    Buttons are permanently attached to the message and can be pressed multiple times.
+    Actions taken by the user are injected into context, instead of being sent as a message.
+    """
+
+    button_rows: list[_MessageButtonRow] = pydantic.Field(
+        description="A list of button rows to attach to the message.",
+        min_length=1,
+        max_length=3,
+    )
+    context: str = pydantic.Field(
+        description=(
+            "Context documentation for the assistant to understand the purpose of the buttons. "
+            "Include a description of each of the callbacks used in the buttons, and what they correspond to."
+        ),
     )
 
 

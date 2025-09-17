@@ -188,13 +188,18 @@ class ConversationJob(BaseJob):
                     break
 
                 if response_message:
+                    if agent_response.response_type in ["TextWithButtonsResponse"]:
+                        reasoning = agent_response.reasoning + agent_response.context
+                    else:
+                        reasoning = agent_response.reasoning
+
                     # Log the bot's response message
                     await data_operations.new_session_event(
                         session=self.active_session,
                         message=response_message,
                         user_id=str(self._bot_id),
                         is_user=False,
-                        reasoning=agent_response.reasoning,
+                        reasoning=reasoning,
                     )
 
                     if dependencies.notification and isinstance(response_message, telegram.Message):
@@ -344,7 +349,7 @@ class ConversationJob(BaseJob):
 
         response_message = None
 
-        if response.response_type in ["TextResponse", "KeyboardResponse"]:
+        if response.response_type in ["TextResponse", "KeyboardResponse", "TextWithButtonsResponse"]:
             response_message = await self._execute_text_response(response=response)
 
         elif response.response_type == "ReactionResponse":
@@ -408,6 +413,19 @@ class ConversationJob(BaseJob):
                 one_time_keyboard=True,
                 resize_keyboard=True,
             )
+        elif response.response_type == "TextWithButtonsResponse":
+            button_rows = [
+                [
+                    telegram.InlineKeyboardButton(
+                        text=btn.label,
+                        callback_data=f"response::{btn.callback}",
+                    )
+                    for btn in row.buttons
+                ]
+                for row in response.button_rows
+            ]
+
+            reply_markup = telegram.InlineKeyboardMarkup(inline_keyboard=button_rows)
         else:
             reply_markup = None
 
