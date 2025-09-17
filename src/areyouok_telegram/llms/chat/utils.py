@@ -7,17 +7,20 @@ from areyouok_telegram.llms.chat.responses import DoNothingResponse
 from areyouok_telegram.llms.chat.responses import ReactionResponse
 from areyouok_telegram.llms.chat.responses import SwitchPersonalityResponse
 from areyouok_telegram.llms.chat.responses import TextResponse
+from areyouok_telegram.llms.chat.responses import TextWithButtonsResponse
 from areyouok_telegram.llms.exceptions import InvalidMessageError
 from areyouok_telegram.llms.exceptions import ReactToSelfError
 from areyouok_telegram.llms.exceptions import ResponseRestrictedError
 from areyouok_telegram.llms.exceptions import UnacknowledgedImportantMessageError
 from areyouok_telegram.llms.utils import run_agent_with_tracking
 
-AgentResponse = TextResponse | ReactionResponse | SwitchPersonalityResponse | DoNothingResponse
+AgentResponse = (
+    TextResponse | TextWithButtonsResponse | ReactionResponse | SwitchPersonalityResponse | DoNothingResponse
+)
 
 
 def check_restricted_responses(*, response: AgentResponse, restricted: set[str]) -> None:
-    if "text" in restricted and response.response_type == "TextResponse":
+    if "text" in restricted and response.response_type in ("TextResponse", "TextWithButtonsResponse"):
         raise ResponseRestrictedError(response.response_type)
 
     if "switch_personality" in restricted and response.response_type == "SwitchPersonalityResponse":
@@ -43,7 +46,7 @@ async def validate_response_data(*, response: AgentResponse, chat_id: str, bot_i
 async def check_special_instructions(
     *, response: AgentResponse, chat_id: str, session_id: str, instruction: str
 ) -> None:
-    if response.response_type != "TextResponse":
+    if response.response_type not in ("TextResponse", "TextWithButtonsResponse"):
         raise UnacknowledgedImportantMessageError(instruction)
 
     else:

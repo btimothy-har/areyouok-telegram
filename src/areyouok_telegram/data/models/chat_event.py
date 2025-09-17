@@ -60,8 +60,13 @@ class ChatEvent(pydantic.BaseModel):
 
             if message.telegram_object.reply_markup:
                 if isinstance(message.telegram_object.reply_markup, telegram.ReplyKeyboardMarkup):
-                    kb_options = [getattr(b, "text", str(b)) for b in message.telegram_object.reply_markup.keyboard]
+                    kb_options = [
+                        button.text if isinstance(button, telegram.KeyboardButton) else str(button)
+                        for row in message.telegram_object.reply_markup.keyboard
+                        for button in row
+                    ]
                     event_data["keyboard_options"] = kb_options
+
                 elif isinstance(message.telegram_object.reply_markup, telegram.InlineKeyboardMarkup):
                     kb_options = []
                     for row in message.telegram_object.reply_markup.inline_keyboard:
@@ -74,13 +79,9 @@ class ChatEvent(pydantic.BaseModel):
 
             # Handle reactions, assuming only emoji reactions for simplicity
             # TODO: Handle custom and paid reactions
-            reaction_string = ", ".join(
-                [
-                    r.emoji
-                    for r in message.telegram_object.new_reaction
-                    if r.type == telegram.constants.ReactionType.EMOJI
-                ]
-            )
+            reaction_string = ", ".join([
+                r.emoji for r in message.telegram_object.new_reaction if r.type == telegram.constants.ReactionType.EMOJI
+            ])
             event_data = {
                 "emojis": reaction_string,
                 "to_message_id": str(message.message_id),
