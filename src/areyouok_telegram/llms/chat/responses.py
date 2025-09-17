@@ -4,24 +4,11 @@ import pydantic
 from telegram.constants import ReactionEmoji
 
 
-class _KeyboardButton(pydantic.BaseModel):
-    """A button for the keyboard response."""
-
-    text: str = pydantic.Field(
-        description=(
-            "The text to display on the button. Emojis are allowed. When the user presses the button, "
-            "this text will be sent to you as a message from the user. "
-            "Max of 50 characters."
-        ),
-        max_length=50,
-    )
-
-
 class _MessageButton(pydantic.BaseModel):
     """A button attached to a message."""
 
     label: str = pydantic.Field(
-        description="The text to display on the button. Emojis are allowed.",
+        description="The text to display on the button. Emojis accepted.",
         max_length=50,
     )
     callback: str = pydantic.Field(
