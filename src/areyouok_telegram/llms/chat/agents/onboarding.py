@@ -129,7 +129,7 @@ def get_question_details(
 async def save_user_response(
     ctx: RunContext[OnboardingAgentDependencies],
     field: str,
-    value_to_save: Any,
+    value_to_save: str,
 ) -> str:
     """Save user response to metadata."""
 
