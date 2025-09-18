@@ -35,7 +35,9 @@ from areyouok_telegram.llms.chat.utils import check_special_instructions
 from areyouok_telegram.llms.chat.utils import validate_response_data
 from areyouok_telegram.llms.exceptions import CompleteOnboardingError
 from areyouok_telegram.llms.exceptions import MetadataFieldUpdateError
-from areyouok_telegram.llms.models import ClaudeSonnet4
+from areyouok_telegram.llms.models import GPT5
+from areyouok_telegram.llms.models import Gemini25Pro
+from areyouok_telegram.llms.models import MultiModelConfig
 from areyouok_telegram.llms.utils import log_metadata_update_context
 from areyouok_telegram.llms.utils import run_agent_with_tracking
 
@@ -54,11 +56,11 @@ class OnboardingAgentDependencies:
     notification: Notifications | None = None
 
 
-agent_model = ClaudeSonnet4(
-    model_settings=pydantic_ai.settings.ModelSettings(
-        temperature=0.2,
-        parallel_tool_calls=False,
-    )
+agent_model = MultiModelConfig(
+    models=[
+        Gemini25Pro(model_settings=pydantic_ai.settings.ModelSettings(temperature=0.2, parallel_tool_calls=False)),
+        GPT5(model_settings=pydantic_ai.settings.ModelSettings(temperature=0.2, parallel_tool_calls=False)),
+    ]
 )
 
 

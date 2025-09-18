@@ -131,17 +131,17 @@ class ChatEvent(pydantic.BaseModel):
         if self.user_id and self.user_id not in (bot_id, SYSTEM_USER_ID):
             user_content = [json.dumps(default_payload)]
 
-            compatible_media = [m for m in self.attachments if m.is_anthropic_supported]
+            compatible_media = [m for m in self.attachments if m.is_openai_google_supported]
             for m in compatible_media:
-                if m.mime_type.startswith("image/") or m.mime_type == "application/pdf":
+                if m.mime_type.startswith("text/"):
+                    user_content.append(m.bytes_data.decode("utf-8"))
+                else:
                     user_content.append(
                         pydantic_ai.BinaryContent(
                             data=m.bytes_data,
                             media_type=m.mime_type,
                         )
                     )
-                elif m.mime_type.startswith("text/"):
-                    user_content.append(m.bytes_data.decode("utf-8"))
 
             model_message = pydantic_ai.messages.ModelRequest(
                 parts=[

@@ -107,8 +107,8 @@ async def handle_unsupported_media(
 
     if stored_media:
         # Find unsupported media types (excluding audio files)
-        unsupported_media = [m for m in stored_media if not m.is_anthropic_supported]
-        unsupported_media_types = [m.mime_type for m in unsupported_media if not m.mime_type.startswith("audio/")]
+        unsupported_media = [m for m in stored_media if not m.is_openai_google_supported]
+        unsupported_media_types = [m.mime_type for m in unsupported_media]
 
         if unsupported_media_types:
             # Create notification for unsupported media

@@ -8,7 +8,9 @@ from areyouok_telegram.llms.context_compression.constants import FEEDBACK_DESC
 from areyouok_telegram.llms.context_compression.constants import LIFE_SITUATION_DESC
 from areyouok_telegram.llms.context_compression.constants import PERSONAL_CONTEXT_DESC
 from areyouok_telegram.llms.context_compression.constants import PRACTICAL_MATTERS_DESC
-from areyouok_telegram.llms.models import ClaudeSonnet4
+from areyouok_telegram.llms.models import GPT5
+from areyouok_telegram.llms.models import Gemini25Pro
+from areyouok_telegram.llms.models import MultiModelConfig
 
 
 class ContextTemplate(pydantic.BaseModel):
@@ -50,11 +52,11 @@ class ContextTemplate(pydantic.BaseModel):
         )
 
 
-agent_model = ClaudeSonnet4(
-    model_settings=pydantic_ai.settings.ModelSettings(
-        temperature=0.0,
-        parallel_tool_calls=False,
-    )
+agent_model = MultiModelConfig(
+    models=[
+        Gemini25Pro(model_settings=pydantic_ai.settings.ModelSettings(temperature=0.0, parallel_tool_calls=False)),
+        GPT5(model_settings=pydantic_ai.settings.ModelSettings(temperature=0.0, parallel_tool_calls=False)),
+    ]
 )
 
 context_compression_agent = pydantic_ai.Agent(

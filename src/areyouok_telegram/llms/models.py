@@ -171,3 +171,31 @@ class Gemini25Pro(BaseModelConfig):
             openrouter_id="google/gemini-2.5-pro",
             model_settings=model_settings or self.DEFAULT_SETTINGS,
         )
+
+
+class MultiModelConfig:
+    """Configuration for multiple models with fallback."""
+
+    def __init__(self, models: list[BaseModelConfig]):
+        self.models = models
+
+    @property
+    def model(self) -> pydantic_ai.models.Model:
+        available_models = []
+
+        for m in self.models:
+            if m.primary_model is not None:
+                available_models.append(m.primary_model)
+            if m.openrouter_model is not None:
+                available_models.append(m.openrouter_model)
+
+        if not available_models:
+            raise ModelConfigurationError()
+
+        if len(available_models) == 1:
+            return available_models[0]
+
+        return FallbackModel(
+            *available_models,
+            fallback_on=should_retry_llm_error,
+        )
