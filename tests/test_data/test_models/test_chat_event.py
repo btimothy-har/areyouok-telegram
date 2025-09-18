@@ -319,8 +319,10 @@ class TestChatEvent:
         text_media = mock_media_files(count=1, mime_type="text/plain")
         text_media.bytes_data = b"Text content"
 
-        video_media = mock_media_files(count=1, mime_type="video/mp4", is_openai_google_supported=False)  # Unsupported type
-        audio_media = mock_media_files(count=1, mime_type="audio/wav")  # Now supported with OpenAI/Google models
+        # Unsupported type
+        video_media = mock_media_files(count=1, mime_type="video/mp4", is_openai_google_supported=False)
+        # Now supported with OpenAI/Google models
+        audio_media = mock_media_files(count=1, mime_type="audio/wav")
 
         chat_event = mock_chat_event_message(
             text="Message with mixed supported/unsupported media",
