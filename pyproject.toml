@@ -63,7 +63,6 @@ select = [
     "C4", # flake8-comprehensions
     "DTZ", # flake8-datetimez
     "E", # Pycodestyle
-    "FAST", # FastAPI
     "FBT", # flake8-boolean-trap
     "F", # Pyflakes
     "ICN", # import-convention
