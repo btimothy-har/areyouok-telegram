@@ -12,8 +12,6 @@ from pydantic_ai.providers.openrouter import OpenRouterProvider
 
 from areyouok_telegram.llms.exceptions import ModelConfigurationError
 from areyouok_telegram.llms.models import BaseModelConfig
-from areyouok_telegram.llms.models import ClaudeSonnet4
-from areyouok_telegram.llms.models import GPT5Nano
 
 
 @pytest.fixture(autouse=True)
@@ -291,97 +289,3 @@ class TestBaseModelConfig:
             _ = config.model
 
         assert "No valid model configuration found" in str(exc_info.value)
-
-
-class TestClaudeSonnet4:
-    """Test the ClaudeSonnet4 class."""
-
-    def test_init_with_default_settings(self):
-        """Test successful initialization with default settings."""
-        config = ClaudeSonnet4()
-
-        assert config.model_id == "claude-sonnet-4-20250514"
-        assert config.provider == "anthropic"
-        assert config.openrouter_id == "anthropic/claude-sonnet-4"
-        assert config.model_settings == ClaudeSonnet4.DEFAULT_SETTINGS
-
-    def test_init_with_custom_settings(self):
-        """Test successful initialization with custom settings."""
-        custom_settings = pydantic_ai.settings.ModelSettings(temperature=0.8, parallel_tool_calls=True)
-        config = ClaudeSonnet4(model_settings=custom_settings)
-
-        assert config.model_id == "claude-sonnet-4-20250514"
-        assert config.provider == "anthropic"
-        assert config.openrouter_id == "anthropic/claude-sonnet-4"
-        assert config.model_settings == custom_settings
-
-    def test_default_settings_configuration(self):
-        """Test the default settings configuration."""
-        settings = ClaudeSonnet4.DEFAULT_SETTINGS
-
-        assert settings["temperature"] == 0.6
-        assert settings["parallel_tool_calls"] is False
-
-    @patch("areyouok_telegram.llms.models.ANTHROPIC_API_KEY", "test-anthropic-key")
-    def test_model_property_works_with_anthropic_api_key(self):
-        """Test that the model property works with Anthropic API key."""
-        config = ClaudeSonnet4()
-
-        with patch("areyouok_telegram.llms.models.AnthropicModel") as mock_anthropic:
-            mock_model = MagicMock(spec=AnthropicModel)
-            mock_anthropic.return_value = mock_model
-
-            result = config.primary_model
-
-            mock_anthropic.assert_called_once_with(
-                model_name="claude-sonnet-4-20250514",
-                settings=ClaudeSonnet4.DEFAULT_SETTINGS,
-            )
-            assert result == mock_model
-
-
-class TestGPT5Nano:
-    """Test the GPT5Nano class."""
-
-    def test_init_with_default_settings(self):
-        """Test successful initialization with default settings."""
-        config = GPT5Nano()
-
-        assert config.model_id == "gpt-5-nano-2025-08-07"
-        assert config.provider == "openai"
-        assert config.openrouter_id == "openai/gpt-5-nano"
-        assert config.model_settings == GPT5Nano.DEFAULT_SETTINGS
-
-    def test_init_with_custom_settings(self):
-        """Test successful initialization with custom settings."""
-        custom_settings = pydantic_ai.settings.ModelSettings(temperature=0.5, parallel_tool_calls=True)
-        config = GPT5Nano(model_settings=custom_settings)
-
-        assert config.model_id == "gpt-5-nano-2025-08-07"
-        assert config.provider == "openai"
-        assert config.openrouter_id == "openai/gpt-5-nano"
-        assert config.model_settings == custom_settings
-
-    def test_default_settings_configuration(self):
-        """Test the default settings configuration."""
-        settings = GPT5Nano.DEFAULT_SETTINGS
-
-        assert settings["temperature"] == 0.0
-        assert settings["parallel_tool_calls"] is False
-
-    @patch("areyouok_telegram.llms.models.OPENAI_API_KEY", "test-openai-key")
-    def test_model_property_works_with_openai_api_key(self):
-        """Test that the model property works with OpenAI API key."""
-        config = GPT5Nano()
-
-        with patch("areyouok_telegram.llms.models.OpenAIModel") as mock_openai:
-            mock_model = MagicMock(spec=OpenAIModel)
-            mock_openai.return_value = mock_model
-
-            result = config.primary_model
-
-            mock_openai.assert_called_once_with(
-                model_name="gpt-5-nano-2025-08-07",
-                settings=GPT5Nano.DEFAULT_SETTINGS,
-            )
-            assert result == mock_model

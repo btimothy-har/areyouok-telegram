@@ -292,12 +292,12 @@ class TestChatEvent:
         assert len(result.parts[0].content) == 2
         assert not result.parts[0].content[1]
 
-    def test_to_model_message_with_non_anthropic_supported_text_media(
+    def test_to_model_message_with_non_openai_google_supported_text_media(
         self, mock_chat_event_message, mock_media_files, frozen_time
     ):
-        """Test that non-Anthropic supported text media is filtered out."""
-        # Create a text file that is not Anthropic supported
-        text_media = mock_media_files(count=1, mime_type="text/plain", is_anthropic_supported=False)
+        """Test that non-OpenAI/Google supported text media is filtered out."""
+        # Create a text file that is not OpenAI/Google supported
+        text_media = mock_media_files(count=1, mime_type="text/plain", is_openai_google_supported=False)
         text_media.bytes_data = b"This should not appear"
 
         chat_event = mock_chat_event_message(
@@ -319,8 +319,10 @@ class TestChatEvent:
         text_media = mock_media_files(count=1, mime_type="text/plain")
         text_media.bytes_data = b"Text content"
 
-        video_media = mock_media_files(count=1, mime_type="video/mp4")  # Unsupported type
-        audio_media = mock_media_files(count=1, mime_type="audio/wav")  # Unsupported type
+        # Unsupported type
+        video_media = mock_media_files(count=1, mime_type="video/mp4", is_openai_google_supported=False)
+        # Now supported with OpenAI/Google models
+        audio_media = mock_media_files(count=1, mime_type="audio/wav")
 
         chat_event = mock_chat_event_message(
             text="Message with mixed supported/unsupported media",
@@ -330,9 +332,10 @@ class TestChatEvent:
 
         result = chat_event.to_model_message("bot456", frozen_time)
 
-        # Should have JSON + only the supported text content
-        # Video and audio files should be skipped since they don't match any condition
-        assert len(result.parts[0].content) == 2
+        # Should have JSON + text content + audio content
+        # Video files should be skipped since they don't match any condition
+        # Audio files are now supported with OpenAI/Google models
+        assert len(result.parts[0].content) == 3
         assert result.parts[0].content[1] == "Text content"
 
     def test_to_model_message_system_user_treated_as_bot(self, mock_chat_event_message, frozen_time):

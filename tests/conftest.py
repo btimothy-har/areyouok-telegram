@@ -119,14 +119,19 @@ def mock_context_sqlalchemy():
 def mock_media_files():
     """Factory for creating mock MediaFiles objects."""
 
-    def _create(count=1, mime_type="image/png", *, is_anthropic_supported=True):
+    def _create(count=1, mime_type="image/png", *, is_anthropic_supported=True, is_openai_google_supported=None):
         from areyouok_telegram.data.models.media import MediaFiles
+
+        # If is_openai_google_supported is not specified, use the same value as is_anthropic_supported
+        if is_openai_google_supported is None:
+            is_openai_google_supported = is_anthropic_supported
 
         files = []
         for _i in range(count):
             mock_file = MagicMock(spec=MediaFiles)
             mock_file.mime_type = mime_type
             mock_file.is_anthropic_supported = is_anthropic_supported
+            mock_file.is_openai_google_supported = is_openai_google_supported
             mock_file.bytes_data = b"fake image data"
             files.append(mock_file)
         return files if count > 1 else files[0]

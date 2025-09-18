@@ -44,9 +44,12 @@ This project uses a simplified mono-project src-layout structure:
    Create your own Telegram bot token by talking to [@BotFather](https://t.me/botfather) on Telegram. Use the `/newbot` command.
 
 4. **LLM API Keys**<br />
-   For simplicity, we recommend simply using a single OpenRouter API Key for LLM functionality. Alternatively, you may manually specify an `OPEN_API_KEY` and `ANTHROPIC_API_KEY`.
+   You will require at least an `OPENAI_API_KEY` and `OPENROUTER_API_KEY` for LLM functionality.
+   - OpenAI powers transcription and moderation
+   - OpenRouter provides all chat-based interactions
 
-   Note: You will need an `OPEN_API_KEY` for voice transcription and moderation capabilities, as these call OpenAI directly.
+   `ANTHROPIC_API_KEY` and `GEMINI_API_KEY` may be provided as alternative fallbacks to OpenRouter, but is not necessary.
+   If provider API Keys are provided, they will always be preferred over OpenRouter.
 
 ### Getting Started
 
@@ -74,8 +77,11 @@ This project uses a simplified mono-project src-layout structure:
    The Postgres connection string to your Postgres instance, without the leading protocol. We insert the protocol within the application.
    e.g. `username:password@address:port/database`, omitting the leading `postgres://...`
    > 
+   > **OPENAI_API_KEY**<br />
+   For transcription and moderation features.
+   > 
    > **OPENROUTER_API_KEY**<br />
-   If you are using provider-direct API keys, then provide **both** `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`.
+   For all other chat LLM features.
 
 ### Dev Commands
 
