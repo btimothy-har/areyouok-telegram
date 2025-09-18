@@ -56,8 +56,8 @@ class ChatAgentDependencies:
 
 agent_model = MultiModelConfig(
     models=[
-        Gemini25Pro(model_settings=pydantic_ai.settings.ModelSettings(temperature=0.6, parallel_tool_calls=False)),
-        GPT5(model_settings=pydantic_ai.settings.ModelSettings(temperature=0.6, parallel_tool_calls=False)),
+        Gemini25Pro(),
+        GPT5(model_settings=pydantic_ai.settings.ModelSettings(temperature=0.6)),
     ]
 )
 

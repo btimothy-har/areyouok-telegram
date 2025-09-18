@@ -1,9 +1,12 @@
 from typing import Literal
 
 import pydantic_ai
+from google.genai.types import HarmBlockThreshold
+from google.genai.types import HarmCategory
 from pydantic_ai.models.anthropic import AnthropicModel
 from pydantic_ai.models.fallback import FallbackModel
 from pydantic_ai.models.google import GoogleModel
+from pydantic_ai.models.google import GoogleModelSettings
 from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.providers.google import GoogleProvider
 from pydantic_ai.providers.openrouter import OpenRouterProvider
@@ -93,7 +96,7 @@ class ClaudeOpus41(BaseModelConfig):
             model_id="claude-opus-4-1-20250805",
             provider="anthropic",
             openrouter_id="anthropic/claude-opus-4.1",
-            model_settings=model_settings or self.DEFAULT_SETTINGS,
+            model_settings=pydantic_ai.settings.merge_model_settings(self.DEFAULT_SETTINGS, model_settings),
         )
 
 
@@ -110,7 +113,7 @@ class ClaudeSonnet4(BaseModelConfig):
             model_id="claude-sonnet-4-20250514",
             provider="anthropic",
             openrouter_id="anthropic/claude-sonnet-4",
-            model_settings=model_settings or self.DEFAULT_SETTINGS,
+            model_settings=pydantic_ai.settings.merge_model_settings(self.DEFAULT_SETTINGS, model_settings),
         )
 
 
@@ -127,7 +130,7 @@ class GPT5(BaseModelConfig):
             model_id="gpt-5-2025-08-07",
             provider="openai",
             openrouter_id="openai/gpt-5",
-            model_settings=model_settings or self.DEFAULT_SETTINGS,
+            model_settings=pydantic_ai.settings.merge_model_settings(self.DEFAULT_SETTINGS, model_settings),
         )
 
 
@@ -144,7 +147,7 @@ class GPT5Mini(BaseModelConfig):
             model_id="gpt-5-mini-2025-08-07",
             provider="openai",
             openrouter_id="openai/gpt-5-mini",
-            model_settings=model_settings or self.DEFAULT_SETTINGS,
+            model_settings=pydantic_ai.settings.merge_model_settings(self.DEFAULT_SETTINGS, model_settings),
         )
 
 
@@ -161,16 +164,38 @@ class GPT5Nano(BaseModelConfig):
             model_id="gpt-5-nano-2025-08-07",
             provider="openai",
             openrouter_id="openai/gpt-5-nano",
-            model_settings=model_settings or self.DEFAULT_SETTINGS,
+            model_settings=pydantic_ai.settings.merge_model_settings(self.DEFAULT_SETTINGS, model_settings),
         )
 
 
 class Gemini25Pro(BaseModelConfig):
     """Model configuration for Google Gemini 2.5 Pro."""
 
-    DEFAULT_SETTINGS = pydantic_ai.settings.ModelSettings(
+    DEFAULT_SETTINGS = GoogleModelSettings(
         temperature=0.6,
-        parallel_tool_calls=False,
+        google_thinking_config={"thinking_budget": -1},
+        google_safety_settings=[
+            {
+                "category": HarmCategory.HARM_CATEGORY_HARASSMENT,
+                "threshold": HarmBlockThreshold.BLOCK_ONLY_HIGH,
+            },
+            {
+                "category": HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                "threshold": HarmBlockThreshold.BLOCK_ONLY_HIGH,
+            },
+            {
+                "category": HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                "threshold": HarmBlockThreshold.BLOCK_ONLY_HIGH,
+            },
+            {
+                "category": HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                "threshold": HarmBlockThreshold.BLOCK_ONLY_HIGH,
+            },
+            {
+                "category": HarmCategory.HARM_CATEGORY_CIVIC_INTEGRITY,
+                "threshold": HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+            },
+        ],
     )
 
     def __init__(self, model_settings: pydantic_ai.settings.ModelSettings | None = None):
@@ -178,7 +203,46 @@ class Gemini25Pro(BaseModelConfig):
             model_id="gemini-2.5-pro",
             provider="google",
             openrouter_id="google/gemini-2.5-pro",
-            model_settings=model_settings or self.DEFAULT_SETTINGS,
+            model_settings=pydantic_ai.settings.merge_model_settings(self.DEFAULT_SETTINGS, model_settings),
+        )
+
+
+class Gemini25Flash(BaseModelConfig):
+    """Model configuration for Google Gemini 2.5 Flash."""
+
+    DEFAULT_SETTINGS = GoogleModelSettings(
+        temperature=0.6,
+        google_thinking_config={"thinking_budget": -1},
+        google_safety_settings=[
+            {
+                "category": HarmCategory.HARM_CATEGORY_HARASSMENT,
+                "threshold": HarmBlockThreshold.BLOCK_ONLY_HIGH,
+            },
+            {
+                "category": HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                "threshold": HarmBlockThreshold.BLOCK_ONLY_HIGH,
+            },
+            {
+                "category": HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                "threshold": HarmBlockThreshold.BLOCK_ONLY_HIGH,
+            },
+            {
+                "category": HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                "threshold": HarmBlockThreshold.BLOCK_ONLY_HIGH,
+            },
+            {
+                "category": HarmCategory.HARM_CATEGORY_CIVIC_INTEGRITY,
+                "threshold": HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+            },
+        ],
+    )
+
+    def __init__(self, model_settings: pydantic_ai.settings.ModelSettings | None = None):
+        super().__init__(
+            model_id="gemini-2.5-flash",
+            provider="google",
+            openrouter_id="google/gemini-2.5-flash",
+            model_settings=pydantic_ai.settings.merge_model_settings(self.DEFAULT_SETTINGS, model_settings),
         )
 
 

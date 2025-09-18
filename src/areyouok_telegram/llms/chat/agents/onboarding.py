@@ -58,8 +58,10 @@ class OnboardingAgentDependencies:
 
 agent_model = MultiModelConfig(
     models=[
-        Gemini25Pro(model_settings=pydantic_ai.settings.ModelSettings(temperature=0.2, parallel_tool_calls=False)),
-        GPT5(model_settings=pydantic_ai.settings.ModelSettings(temperature=0.2, parallel_tool_calls=False)),
+        Gemini25Pro(
+            model_settings=pydantic_ai.models.google.GoogleModelSettings(temperature=0.2),
+        ),
+        GPT5(model_settings=pydantic_ai.settings.ModelSettings(temperature=0.2)),
     ]
 )
 
