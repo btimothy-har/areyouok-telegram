@@ -49,6 +49,7 @@ This project uses a simplified mono-project src-layout structure:
    - OpenRouter provides all chat-based interactions
 
    `ANTHROPIC_API_KEY` and `GEMINI_API_KEY` may be provided as alternative fallbacks to OpenRouter, but is not necessary.
+   If provider API Keys are provided, they will always be preferred over OpenRouter.
 
 ### Getting Started
 
