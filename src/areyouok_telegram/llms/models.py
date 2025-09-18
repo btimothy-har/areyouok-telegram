@@ -3,10 +3,13 @@ from typing import Literal
 import pydantic_ai
 from pydantic_ai.models.anthropic import AnthropicModel
 from pydantic_ai.models.fallback import FallbackModel
+from pydantic_ai.models.google import GoogleModel
 from pydantic_ai.models.openai import OpenAIModel
+from pydantic_ai.providers.google import GoogleProvider
 from pydantic_ai.providers.openrouter import OpenRouterProvider
 
 from areyouok_telegram.config import ANTHROPIC_API_KEY
+from areyouok_telegram.config import GEMINI_API_KEY
 from areyouok_telegram.config import OPENAI_API_KEY
 from areyouok_telegram.config import OPENROUTER_API_KEY
 from areyouok_telegram.llms.exceptions import ModelConfigurationError
@@ -19,7 +22,7 @@ class BaseModelConfig:
     def __init__(
         self,
         model_id: str,
-        provider: Literal["openai", "anthropic", "openrouter"],
+        provider: Literal["openai", "anthropic", "google", "openrouter"],
         openrouter_id: str | None = None,
         model_settings: pydantic_ai.settings.ModelSettings | None = None,
     ):
@@ -55,6 +58,12 @@ class BaseModelConfig:
         elif self.provider == "openai" and OPENAI_API_KEY:
             return OpenAIModel(
                 model_name=self.model_id,
+                settings=self.model_settings,
+            )
+        elif self.provider == "google" and GEMINI_API_KEY:
+            return GoogleModel(
+                model_name=self.model_id,
+                provider=GoogleProvider(api_key=GEMINI_API_KEY),
                 settings=self.model_settings,
             )
         return None
@@ -167,7 +176,7 @@ class Gemini25Pro(BaseModelConfig):
     def __init__(self, model_settings: pydantic_ai.settings.ModelSettings | None = None):
         super().__init__(
             model_id="gemini-2.5-pro",
-            provider="openrouter",
+            provider="google",
             openrouter_id="google/gemini-2.5-pro",
             model_settings=model_settings or self.DEFAULT_SETTINGS,
         )
