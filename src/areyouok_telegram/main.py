@@ -89,7 +89,7 @@ if __name__ == "__main__":
             ],
         ),
     )
-
+    logfire.instrument_system_metrics()
     logfire.log_slow_async_callbacks(slow_duration=0.25)
 
     # Initialize infrastructure
