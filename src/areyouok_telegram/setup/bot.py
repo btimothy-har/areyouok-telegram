@@ -173,6 +173,7 @@ async def setup_bot_commands(ctx: Application | ContextTypes.DEFAULT_TYPE):
     commands = [
         telegram.BotCommand("start", "Start onboarding"),
         telegram.BotCommand("preferences", "View your current preferences"),
+        telegram.BotCommand("feedback", "Provide feedback about your experiences"),
     ]
 
     try:
