@@ -31,9 +31,7 @@ from areyouok_telegram.llms.chat.utils import check_restricted_responses
 from areyouok_telegram.llms.chat.utils import check_special_instructions
 from areyouok_telegram.llms.chat.utils import validate_response_data
 from areyouok_telegram.llms.exceptions import MetadataFieldUpdateError
-from areyouok_telegram.llms.models import GPT5
 from areyouok_telegram.llms.models import Gemini25Pro
-from areyouok_telegram.llms.models import MultiModelConfig
 from areyouok_telegram.llms.utils import log_metadata_update_context
 from areyouok_telegram.llms.utils import run_agent_with_tracking
 
@@ -52,12 +50,7 @@ class ChatAgentDependencies:
     notification: Notifications | None = None
 
 
-agent_model = MultiModelConfig(
-    models=[
-        Gemini25Pro(),
-        GPT5(model_settings=pydantic_ai.settings.ModelSettings(temperature=0.6)),
-    ]
-)
+agent_model = Gemini25Pro(model_settings=pydantic_ai.models.google.GoogleModelSettings(temperature=0.5))
 
 chat_agent = pydantic_ai.Agent(
     model=agent_model.model,

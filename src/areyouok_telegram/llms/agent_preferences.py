@@ -8,7 +8,7 @@ from pydantic_ai import RunContext
 from areyouok_telegram.data import UserMetadata
 from areyouok_telegram.data import async_database
 from areyouok_telegram.llms.exceptions import MetadataFieldUpdateError
-from areyouok_telegram.llms.models import GPT5Nano
+from areyouok_telegram.llms.models import ClaudeSonnet4
 from areyouok_telegram.llms.utils import log_metadata_update_context
 
 
@@ -37,8 +37,10 @@ class PreferencesUpdateResponse(pydantic.BaseModel):
     )
 
 
+agent_model = ClaudeSonnet4(model_settings=pydantic_ai.settings.ModelSettings(temperature=0.0))
+
 preferences_agent = pydantic_ai.Agent(
-    model=GPT5Nano().model,
+    model=agent_model.model,
     output_type=PreferencesUpdateResponse,
     name="preferences_agent",
     end_strategy="exhaustive",

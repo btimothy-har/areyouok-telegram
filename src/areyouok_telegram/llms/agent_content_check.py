@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import pydantic
 import pydantic_ai
 
-from areyouok_telegram.llms.models import GPT5Nano
+from areyouok_telegram.llms.models import ClaudeSonnet4
 
 
 @dataclass
@@ -24,8 +24,10 @@ class ContentCheckResponse(pydantic.BaseModel):
     )
 
 
+agent_model = ClaudeSonnet4(model_settings=pydantic_ai.settings.ModelSettings(temperature=0.0))
+
 content_check_agent = pydantic_ai.Agent(
-    model=GPT5Nano().model,
+    model=agent_model.model,
     output_type=ContentCheckResponse,
     name="content_check_agent",
     end_strategy="exhaustive",
