@@ -177,7 +177,10 @@ class ConversationJob(BaseJob):
                             chat_id=str(self.chat_id),
                             create_if_not_exists=False,
                         )
-                        if self.active_session.last_user_message > self._run_timestamp:
+                        if (
+                            self.active_session.last_user_message
+                            and self.active_session.last_user_message > self._run_timestamp
+                        ):
                             self._run_timestamp = self.active_session.last_user_message
                             await self.apply_response_delay()
                             continue
@@ -349,7 +352,7 @@ class ConversationJob(BaseJob):
 
         response_message = None
 
-        if response.response_type in ["TextResponse", "TextWithButtonsResponse"]:
+        if response.response_type in ["TextResponse", "TextWithButtonsResponse", "KeyboardResponse"]:
             response_message = await self._execute_text_response(response=response)
 
         elif response.response_type == "ReactionResponse":
@@ -420,8 +423,28 @@ class ConversationJob(BaseJob):
                 button_rows.append(row_buttons)
 
             reply_markup = telegram.InlineKeyboardMarkup(inline_keyboard=button_rows)
+
+        elif response.response_type == "KeyboardResponse":
+            button_rows = []
+            # If 3 or fewer buttons, arrange in single column (separate rows)
+            if len(response.buttons) <= 3:
+                for btn in response.buttons:
+                    button_rows.append([telegram.KeyboardButton(text=btn.text)])
+            else:
+                # For more than 3 buttons, use 3-per-row layout
+                for i in range(0, len(response.buttons), 3):
+                    row_buttons = [telegram.KeyboardButton(text=btn.text) for btn in response.buttons[i : i + 3]]
+                    button_rows.append(row_buttons)
+
+            reply_markup = telegram.ReplyKeyboardMarkup(
+                keyboard=button_rows,
+                input_field_placeholder=response.tooltip_text,
+                one_time_keyboard=True,
+                resize_keyboard=True,
+            )
+
         else:
-            reply_markup = None
+            reply_markup = telegram.ReplyKeyboardRemove()
 
         reply_message = await telegram_call(
             self._run_context.bot.send_message,

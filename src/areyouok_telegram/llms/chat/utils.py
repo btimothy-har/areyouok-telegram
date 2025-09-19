@@ -20,7 +20,11 @@ AgentResponse = (
 
 
 def check_restricted_responses(*, response: AgentResponse, restricted: set[str]) -> None:
-    if "text" in restricted and response.response_type in ("TextResponse", "TextWithButtonsResponse"):
+    if "text" in restricted and response.response_type in (
+        "TextResponse",
+        "TextWithButtonsResponse",
+        "KeyboardResponse",
+    ):
         raise ResponseRestrictedError(response.response_type)
 
     if "switch_personality" in restricted and response.response_type == "SwitchPersonalityResponse":
@@ -46,7 +50,7 @@ async def validate_response_data(*, response: AgentResponse, chat_id: str, bot_i
 async def check_special_instructions(
     *, response: AgentResponse, chat_id: str, session_id: str, instruction: str
 ) -> None:
-    if response.response_type not in ("TextResponse", "TextWithButtonsResponse"):
+    if response.response_type not in ("TextResponse", "TextWithButtonsResponse", "KeyboardResponse"):
         raise UnacknowledgedImportantMessageError(instruction)
 
     else:

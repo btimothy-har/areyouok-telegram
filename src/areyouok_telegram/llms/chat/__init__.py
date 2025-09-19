@@ -5,6 +5,7 @@ from areyouok_telegram.llms.chat.agents.onboarding import AgentResponse as Onboa
 from areyouok_telegram.llms.chat.agents.onboarding import OnboardingAgentDependencies
 from areyouok_telegram.llms.chat.agents.onboarding import onboarding_agent
 from areyouok_telegram.llms.chat.responses import DoNothingResponse
+from areyouok_telegram.llms.chat.responses import KeyboardResponse
 from areyouok_telegram.llms.chat.responses import ReactionResponse
 from areyouok_telegram.llms.chat.responses import SwitchPersonalityResponse
 from areyouok_telegram.llms.chat.responses import TextResponse
@@ -28,4 +29,5 @@ __all__ = [
     "AgentResponse",
     "DoNothingResponse",
     "TextWithButtonsResponse",
+    "KeyboardResponse",
 ]

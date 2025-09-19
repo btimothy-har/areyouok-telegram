@@ -5,10 +5,12 @@ import pytest
 from telegram.constants import ReactionEmoji
 
 from areyouok_telegram.llms.chat.responses import DoNothingResponse
+from areyouok_telegram.llms.chat.responses import KeyboardResponse
 from areyouok_telegram.llms.chat.responses import ReactionResponse
 from areyouok_telegram.llms.chat.responses import SwitchPersonalityResponse
 from areyouok_telegram.llms.chat.responses import TextResponse
 from areyouok_telegram.llms.chat.responses import TextWithButtonsResponse
+from areyouok_telegram.llms.chat.responses import _KeyboardButton
 from areyouok_telegram.llms.chat.responses import _MessageButton
 
 
@@ -230,3 +232,149 @@ class TestBaseAgentResponse:
             context="test",
         )
         assert buttons_response.response_type == "TextWithButtonsResponse"
+
+        keyboard_response = KeyboardResponse(
+            reasoning="test",
+            message_text="test",
+            tooltip_text="test",
+            buttons=[_KeyboardButton(text="Test")],
+        )
+        assert keyboard_response.response_type == "KeyboardResponse"
+
+
+class TestKeyboardButton:
+    """Test the _KeyboardButton class validation."""
+
+    def test_valid_button(self):
+        """Test creating a valid keyboard button."""
+        button = _KeyboardButton(text="Test Button")
+        assert button.text == "Test Button"
+
+    def test_text_max_length(self):
+        """Test text maximum length validation."""
+        # Valid length (50 chars)
+        valid_text = "x" * 50
+        button = _KeyboardButton(text=valid_text)
+        assert button.text == valid_text
+
+        # Invalid length (51 chars)
+        with pytest.raises(pydantic.ValidationError, match="String should have at most 50 characters"):
+            _KeyboardButton(text="x" * 51)
+
+    def test_text_with_emoji(self):
+        """Test button text with emoji characters."""
+        button = _KeyboardButton(text="👍 Yes")
+        assert button.text == "👍 Yes"
+
+    def test_empty_text_allowed(self):
+        """Test that empty text is allowed (no min_length constraint)."""
+        button = _KeyboardButton(text="")
+        assert button.text == ""
+
+
+class TestKeyboardResponse:
+    """Test the KeyboardResponse class validation."""
+
+    def test_valid_keyboard_response(self):
+        """Test creating a valid keyboard response."""
+        buttons = [
+            _KeyboardButton(text="Yes"),
+            _KeyboardButton(text="No"),
+        ]
+
+        response = KeyboardResponse(
+            reasoning="Test reasoning",
+            message_text="Do you agree?",
+            reply_to_message_id=None,
+            tooltip_text="Choose your response",
+            buttons=buttons,
+        )
+
+        assert response.message_text == "Do you agree?"
+        assert len(response.buttons) == 2
+        assert response.tooltip_text == "Choose your response"
+        assert response.response_type == "KeyboardResponse"
+
+    def test_buttons_min_length_validation(self):
+        """Test minimum number of buttons validation."""
+        with pytest.raises(pydantic.ValidationError, match="List should have at least 1 item"):
+            KeyboardResponse(
+                reasoning="Test",
+                message_text="Test",
+                tooltip_text="Test",
+                buttons=[],  # Empty list
+            )
+
+    def test_buttons_max_length_validation(self):
+        """Test maximum number of buttons validation."""
+        buttons = [
+            _KeyboardButton(text=f"Option {i}")
+            for i in range(7)  # 7 buttons (max is 6)
+        ]
+
+        with pytest.raises(pydantic.ValidationError, match="List should have at most 6 items"):
+            KeyboardResponse(
+                reasoning="Test",
+                message_text="Test",
+                tooltip_text="Test",
+                buttons=buttons,
+            )
+
+    def test_tooltip_text_min_length_validation(self):
+        """Test tooltip_text minimum length validation."""
+        buttons = [_KeyboardButton(text="Test")]
+
+        with pytest.raises(pydantic.ValidationError, match="String should have at least 1 character"):
+            KeyboardResponse(
+                reasoning="Test",
+                message_text="Test",
+                tooltip_text="",  # Empty string
+                buttons=buttons,
+            )
+
+    def test_tooltip_text_max_length_validation(self):
+        """Test tooltip_text maximum length validation."""
+        buttons = [_KeyboardButton(text="Test")]
+
+        with pytest.raises(pydantic.ValidationError, match="String should have at most 64 characters"):
+            KeyboardResponse(
+                reasoning="Test",
+                message_text="Test",
+                tooltip_text="x" * 65,  # Too long
+                buttons=buttons,
+            )
+
+    def test_maximum_valid_configuration(self):
+        """Test maximum valid button configuration (6 buttons)."""
+        buttons = [
+            _KeyboardButton(text="Option 1"),
+            _KeyboardButton(text="Option 2"),
+            _KeyboardButton(text="Option 3"),
+            _KeyboardButton(text="Option 4"),
+            _KeyboardButton(text="Option 5"),
+            _KeyboardButton(text="Option 6"),
+        ]
+
+        response = KeyboardResponse(
+            reasoning="Test reasoning",
+            message_text="Choose an option:",
+            tooltip_text="Pick one of the options below",
+            buttons=buttons,
+        )
+
+        assert len(response.buttons) == 6
+        assert response.tooltip_text == "Pick one of the options below"
+
+    def test_keyboard_response_with_reply(self):
+        """Test keyboard response with reply to message ID."""
+        buttons = [_KeyboardButton(text="Yes"), _KeyboardButton(text="No")]
+
+        response = KeyboardResponse(
+            reasoning="Reply reasoning",
+            message_text="This is a reply",
+            reply_to_message_id="123",
+            tooltip_text="Choose your answer",
+            buttons=buttons,
+        )
+
+        assert response.reply_to_message_id == "123"

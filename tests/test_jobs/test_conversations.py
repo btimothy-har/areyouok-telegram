@@ -19,11 +19,13 @@ from areyouok_telegram.jobs.conversations import ConversationJob
 from areyouok_telegram.jobs.exceptions import UserNotFoundForChatError
 from areyouok_telegram.llms.chat import ChatAgentDependencies
 from areyouok_telegram.llms.chat import DoNothingResponse
+from areyouok_telegram.llms.chat import KeyboardResponse
 from areyouok_telegram.llms.chat import OnboardingAgentDependencies
 from areyouok_telegram.llms.chat import ReactionResponse
 from areyouok_telegram.llms.chat import SwitchPersonalityResponse
 from areyouok_telegram.llms.chat import TextResponse
 from areyouok_telegram.llms.chat import TextWithButtonsResponse
+from areyouok_telegram.llms.chat.responses import _KeyboardButton
 from areyouok_telegram.llms.chat.responses import _MessageButton
 
 
@@ -297,7 +299,10 @@ class TestConversationJob:
         assert call_args.kwargs["chat_id"] == 123
         assert call_args.kwargs["text"] == "Reply text"
         assert call_args.kwargs["reply_parameters"].message_id == 789
-        assert call_args.kwargs["reply_markup"] is None
+        # Verify reply_markup removes keyboard
+        reply_markup = call_args.kwargs["reply_markup"]
+        assert reply_markup is not None
+        assert isinstance(reply_markup, telegram.ReplyKeyboardRemove)
 
     @pytest.mark.asyncio
     async def test_execute_text_response_no_reply(self):
@@ -311,9 +316,16 @@ class TestConversationJob:
         await job._execute_text_response(response)
 
         # Verify send_message was called without reply parameters
-        job._run_context.bot.send_message.assert_called_once_with(
-            chat_id=123, text="Regular text", reply_parameters=None, reply_markup=None
-        )
+        job._run_context.bot.send_message.assert_called_once()
+        call_args = job._run_context.bot.send_message.call_args
+        assert call_args.kwargs["chat_id"] == 123
+        assert call_args.kwargs["text"] == "Regular text"
+        assert call_args.kwargs["reply_parameters"] is None
+
+        # Verify reply_markup removes keyboard
+        reply_markup = call_args.kwargs["reply_markup"]
+        assert reply_markup is not None
+        assert isinstance(reply_markup, telegram.ReplyKeyboardRemove)
 
     @pytest.mark.asyncio
     async def test_execute_reaction_response_success(self):
@@ -1482,3 +1494,129 @@ class TestConversationJob:
             is_user=False,
             reasoning="Test reasoningAdditional context for buttons",  # reasoning + context concatenated
         )
+
+    @pytest.mark.asyncio
+    async def test_execute_keyboard_response_single_column(self):
+        """Test _execute_text_response with KeyboardResponse (3 or fewer buttons - single column)."""
+        job = ConversationJob("123")
+        job._run_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
+        job._run_context.bot.send_message = AsyncMock(return_value=MagicMock(spec=telegram.Message))
+
+        buttons = [
+            _KeyboardButton(text="Yes"),
+            _KeyboardButton(text="No"),
+            _KeyboardButton(text="Maybe"),
+        ]
+
+        response = KeyboardResponse(
+            reasoning="Test reasoning",
+            message_text="Do you agree?",
+            reply_to_message_id=None,
+            tooltip_text="Choose your response",
+            buttons=buttons,
+        )
+
+        await job._execute_text_response(response)
+
+        # Verify send_message was called with reply keyboard
+        job._run_context.bot.send_message.assert_called_once()
+        call_args = job._run_context.bot.send_message.call_args
+        assert call_args.kwargs["chat_id"] == 123
+        assert call_args.kwargs["text"] == "Do you agree?"
+        assert call_args.kwargs["reply_parameters"] is None
+
+        # Verify reply_markup contains reply keyboard
+        reply_markup = call_args.kwargs["reply_markup"]
+        assert reply_markup is not None
+        assert isinstance(reply_markup, telegram.ReplyKeyboardMarkup)
+
+        # Check button layout (3 or fewer buttons - single column)
+        assert len(reply_markup.keyboard) == 3  # 3 rows
+        assert len(reply_markup.keyboard[0]) == 1  # First row has 1 button
+        assert len(reply_markup.keyboard[1]) == 1  # Second row has 1 button
+        assert len(reply_markup.keyboard[2]) == 1  # Third row has 1 button
+
+        # Check button content
+        assert reply_markup.keyboard[0][0].text == "Yes"
+        assert reply_markup.keyboard[1][0].text == "No"
+        assert reply_markup.keyboard[2][0].text == "Maybe"
+
+        # Check keyboard properties
+        assert reply_markup.one_time_keyboard is True
+        assert reply_markup.resize_keyboard is True
+        assert reply_markup.input_field_placeholder == "Choose your response"
+
+    @pytest.mark.asyncio
+    async def test_execute_keyboard_response_multi_row(self):
+        """Test _execute_text_response with KeyboardResponse (more than 3 buttons - 3 per row)."""
+        job = ConversationJob("123")
+        job._run_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
+        job._run_context.bot.send_message = AsyncMock(return_value=MagicMock(spec=telegram.Message))
+
+        buttons = [
+            _KeyboardButton(text="Option 1"),
+            _KeyboardButton(text="Option 2"),
+            _KeyboardButton(text="Option 3"),
+            _KeyboardButton(text="Option 4"),
+            _KeyboardButton(text="Option 5"),
+        ]
+
+        response = KeyboardResponse(
+            reasoning="Test reasoning",
+            message_text="Choose an option:",
+            reply_to_message_id="456",
+            tooltip_text="Pick one of the options",
+            buttons=buttons,
+        )
+
+        await job._execute_text_response(response)
+
+        # Verify send_message was called with reply parameters and reply keyboard
+        job._run_context.bot.send_message.assert_called_once()
+        call_args = job._run_context.bot.send_message.call_args
+        assert call_args.kwargs["chat_id"] == 123
+        assert call_args.kwargs["text"] == "Choose an option:"
+        assert call_args.kwargs["reply_parameters"].message_id == 456
+
+        # Verify reply_markup contains reply keyboard
+        reply_markup = call_args.kwargs["reply_markup"]
+        assert reply_markup is not None
+        assert isinstance(reply_markup, telegram.ReplyKeyboardMarkup)
+
+        # Check button layout (more than 3 buttons - 3 per row)
+        assert len(reply_markup.keyboard) == 2  # 2 rows
+        assert len(reply_markup.keyboard[0]) == 3  # First row has 3 buttons
+        assert len(reply_markup.keyboard[1]) == 2  # Second row has 2 buttons
+
+        # Check button content
+        assert reply_markup.keyboard[0][0].text == "Option 1"
+        assert reply_markup.keyboard[0][1].text == "Option 2"
+        assert reply_markup.keyboard[0][2].text == "Option 3"
+        assert reply_markup.keyboard[1][0].text == "Option 4"
+        assert reply_markup.keyboard[1][1].text == "Option 5"
+
+    @pytest.mark.asyncio
+    async def test_execute_text_response_removes_keyboard_for_text_only(self):
+        """Test that TextResponse removes any existing keyboard."""
+        job = ConversationJob("123")
+        job._run_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
+        job._run_context.bot.send_message = AsyncMock(return_value=MagicMock(spec=telegram.Message))
+
+        response = TextResponse(
+            reasoning="Test reasoning",
+            message_text="Simple text response",
+            reply_to_message_id=None,
+        )
+
+        await job._execute_text_response(response)
+
+        # Verify send_message was called with ReplyKeyboardRemove
+        job._run_context.bot.send_message.assert_called_once()
+        call_args = job._run_context.bot.send_message.call_args
+        assert call_args.kwargs["chat_id"] == 123
+        assert call_args.kwargs["text"] == "Simple text response"
+
+        # Verify reply_markup removes keyboard
+        reply_markup = call_args.kwargs["reply_markup"]
+        assert reply_markup is not None
+        assert isinstance(reply_markup, telegram.ReplyKeyboardRemove)

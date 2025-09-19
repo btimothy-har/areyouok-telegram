@@ -6,6 +6,17 @@ from telegram.constants import ReactionEmoji
 from areyouok_telegram.llms.exceptions import CallbackLimitError
 
 
+class _KeyboardButton(pydantic.BaseModel):
+    text: str = pydantic.Field(
+        description=(
+            "The text to display on the button. Emojis are allowed. When the user presses the button, "
+            "this text will be sent to you as a message from the user. "
+            "Max of 50 characters."
+        ),
+        max_length=50,
+    )
+
+
 class _MessageButton(pydantic.BaseModel):
     """A button attached to a message."""
 
@@ -14,7 +25,7 @@ class _MessageButton(pydantic.BaseModel):
         max_length=50,
     )
     callback: str = pydantic.Field(
-        description="The information you want to receive when the user presses the button.",
+        description="A string to be sent back to you when the user presses the button. Maximum of 40 characters.",
         max_length=40,
     )
 
@@ -73,6 +84,26 @@ class TextWithButtonsResponse(TextResponse):
             "Context documentation for the assistant to understand the purpose of the buttons. "
             "Include a description of each of the callbacks used in the buttons, and what they correspond to."
         ),
+    )
+
+
+class KeyboardResponse(TextResponse):
+    """
+    Suggest response options to the user by displaying an additional one-time keyboard with a text message. \
+    The user's selection will be sent back as a message. Button text should be phrased in the user's perspective, \
+    as if they are responding to the agent. The user cannot modify the button text. \
+    Each keyboard can only have a maximum of 6 buttons.
+    """
+
+    tooltip_text: str = pydantic.Field(
+        description="Tooltip text to display in the chatbox to the user, providing context.",
+        min_length=1,
+        max_length=64,
+    )
+    buttons: list[_KeyboardButton] = pydantic.Field(
+        description="A list of buttons to display on the keyboard for the user to choose from.",
+        min_length=1,
+        max_length=6,
     )
 
 
