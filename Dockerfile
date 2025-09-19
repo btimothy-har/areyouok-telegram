@@ -1,6 +1,6 @@
 FROM python:3.12.10
 
-COPY --from=ghcr.io/astral-sh/uv:0.7.20 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.8.18 /uv /uvx /bin/
 
 RUN apt-get update && apt-get install -y \
     ffmpeg \
