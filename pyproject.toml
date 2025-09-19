@@ -29,7 +29,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "ruff~=0.12.0",
+    "ruff~=0.13.1",
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
     "pytest-mock>=3.14.0",
@@ -47,10 +47,10 @@ build-backend = "hatchling.build"
 packages = ["src/areyouok_telegram"]
 
 [tool.uv]
-required-version = "~=0.7.0"
+required-version = "~=0.8.18"
 
 [tool.ruff]
-required-version = "~=0.12.0"
+required-version = "~=0.13.1"
 line-length = 120
 fix = true
 exclude = ["scripts"]
