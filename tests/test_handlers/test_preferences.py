@@ -8,18 +8,18 @@ import pytest
 import telegram
 from telegram.ext import ContextTypes
 
-from areyouok_telegram.handlers.preferences import _construct_user_preferences_response
-from areyouok_telegram.handlers.preferences import _update_user_metadata_field
-from areyouok_telegram.handlers.preferences import on_preferences_command
+from areyouok_telegram.handlers.commands.preferences import _construct_user_preferences_response
+from areyouok_telegram.handlers.commands.preferences import _update_user_metadata_field
+from areyouok_telegram.handlers.commands.preferences import on_preferences_command
 
 
 class TestOnPreferencesCommand:
     """Test the on_preferences_command handler."""
 
     @pytest.mark.asyncio
-    @patch("areyouok_telegram.handlers.preferences.data_operations.track_command_usage")
-    @patch("areyouok_telegram.handlers.preferences.data_operations.get_or_create_active_session")
-    @patch("areyouok_telegram.handlers.preferences._construct_user_preferences_response")
+    @patch("areyouok_telegram.handlers.commands.preferences.data_operations.track_command_usage")
+    @patch("areyouok_telegram.handlers.commands.preferences.data_operations.get_or_create_active_session")
+    @patch("areyouok_telegram.handlers.commands.preferences._construct_user_preferences_response")
     async def test_on_preferences_command_display_preferences(
         self,
         mock_construct_response,
@@ -61,8 +61,8 @@ class TestOnPreferencesCommand:
         )
 
     @pytest.mark.asyncio
-    @patch("areyouok_telegram.handlers.preferences._update_user_metadata_field")
-    @patch("areyouok_telegram.handlers.preferences.data_operations.get_or_create_active_session")
+    @patch("areyouok_telegram.handlers.commands.preferences._update_user_metadata_field")
+    @patch("areyouok_telegram.handlers.commands.preferences.data_operations.get_or_create_active_session")
     async def test_on_preferences_command_update_preferred_name(
         self,
         mock_get_active_session,
@@ -130,8 +130,8 @@ class TestOnPreferencesCommand:
         )
 
     @pytest.mark.asyncio
-    @patch("areyouok_telegram.handlers.preferences._update_user_metadata_field")
-    @patch("areyouok_telegram.handlers.preferences.data_operations.get_or_create_active_session")
+    @patch("areyouok_telegram.handlers.commands.preferences._update_user_metadata_field")
+    @patch("areyouok_telegram.handlers.commands.preferences.data_operations.get_or_create_active_session")
     async def test_on_preferences_command_update_country(
         self,
         mock_get_active_session,
@@ -174,8 +174,8 @@ class TestOnPreferencesCommand:
         )
 
     @pytest.mark.asyncio
-    @patch("areyouok_telegram.handlers.preferences._update_user_metadata_field")
-    @patch("areyouok_telegram.handlers.preferences.data_operations.get_or_create_active_session")
+    @patch("areyouok_telegram.handlers.commands.preferences._update_user_metadata_field")
+    @patch("areyouok_telegram.handlers.commands.preferences.data_operations.get_or_create_active_session")
     async def test_on_preferences_command_update_timezone(
         self,
         mock_get_active_session,
@@ -218,8 +218,8 @@ class TestOnPreferencesCommand:
         )
 
     @pytest.mark.asyncio
-    @patch("areyouok_telegram.handlers.preferences.data_operations.track_command_usage")
-    @patch("areyouok_telegram.handlers.preferences.data_operations.get_or_create_active_session")
+    @patch("areyouok_telegram.handlers.commands.preferences.data_operations.track_command_usage")
+    @patch("areyouok_telegram.handlers.commands.preferences.data_operations.get_or_create_active_session")
     async def test_on_preferences_command_invalid_field(
         self,
         mock_get_session,
@@ -271,9 +271,9 @@ class TestOnPreferencesCommand:
 
         with (
             patch(
-                "areyouok_telegram.handlers.preferences.data_operations.get_or_create_active_session"
+                "areyouok_telegram.handlers.commands.preferences.data_operations.get_or_create_active_session"
             ) as mock_get_active_session,
-            patch("areyouok_telegram.handlers.preferences._update_user_metadata_field") as mock_update_field,
+            patch("areyouok_telegram.handlers.commands.preferences._update_user_metadata_field") as mock_update_field,
         ):
             # Mock session
             mock_session = MagicMock()
@@ -301,7 +301,7 @@ class TestUpdateUserMetadataField:
     """Test _update_user_metadata_field private function."""
 
     @pytest.mark.asyncio
-    @patch("areyouok_telegram.handlers.preferences.run_agent_with_tracking")
+    @patch("areyouok_telegram.handlers.commands.preferences.run_agent_with_tracking")
     async def test_update_user_metadata_field_success(self, mock_run_agent):
         """Test successful metadata field update."""
         # Setup mock response
@@ -349,7 +349,7 @@ class TestUpdateUserMetadataField:
         assert result.feedback == "Successfully updated your preferred name to Alice."
 
     @pytest.mark.asyncio
-    @patch("areyouok_telegram.handlers.preferences.run_agent_with_tracking")
+    @patch("areyouok_telegram.handlers.commands.preferences.run_agent_with_tracking")
     async def test_update_user_metadata_field_different_fields(self, mock_run_agent):
         """Test updating different metadata fields."""
         # Setup mock response
@@ -388,8 +388,8 @@ class TestConstructUserPreferencesResponse:
     """Test _construct_user_preferences_response private function."""
 
     @pytest.mark.asyncio
-    @patch("areyouok_telegram.handlers.preferences.async_database")
-    @patch("areyouok_telegram.handlers.preferences.UserMetadata.get_by_user_id")
+    @patch("areyouok_telegram.handlers.commands.preferences.async_database")
+    @patch("areyouok_telegram.handlers.commands.preferences.UserMetadata.get_by_user_id")
     async def test_construct_user_preferences_response_with_metadata(self, mock_get_by_user_id, mock_async_database):
         """Test constructing response when user has metadata."""
         # Setup database mock
@@ -409,8 +409,8 @@ class TestConstructUserPreferencesResponse:
         user_id = "123456789"
 
         with (
-            patch("areyouok_telegram.handlers.preferences.MD2_PREFERENCES_DISPLAY_TEMPLATE") as mock_template,
-            patch("areyouok_telegram.handlers.preferences.escape_markdown_v2") as mock_escape,
+            patch("areyouok_telegram.handlers.commands.preferences.MD2_PREFERENCES_DISPLAY_TEMPLATE") as mock_template,
+            patch("areyouok_telegram.handlers.commands.preferences.escape_markdown_v2") as mock_escape,
         ):
             # Mock template formatting
             mock_template.format.return_value = "**Your Preferences:**\n• Name: Alice Smith"
@@ -444,8 +444,8 @@ class TestConstructUserPreferencesResponse:
             assert result == "**Your Preferences:**\n• Name: Alice Smith"
 
     @pytest.mark.asyncio
-    @patch("areyouok_telegram.handlers.preferences.async_database")
-    @patch("areyouok_telegram.handlers.preferences.UserMetadata.get_by_user_id")
+    @patch("areyouok_telegram.handlers.commands.preferences.async_database")
+    @patch("areyouok_telegram.handlers.commands.preferences.UserMetadata.get_by_user_id")
     async def test_construct_user_preferences_response_no_metadata(self, mock_get_by_user_id, mock_async_database):
         """Test constructing response when user has no metadata."""
         # Setup database mock
@@ -459,8 +459,8 @@ class TestConstructUserPreferencesResponse:
         user_id = "123456789"
 
         with (
-            patch("areyouok_telegram.handlers.preferences.MD2_PREFERENCES_DISPLAY_TEMPLATE") as mock_template,
-            patch("areyouok_telegram.handlers.preferences.escape_markdown_v2") as mock_escape,
+            patch("areyouok_telegram.handlers.commands.preferences.MD2_PREFERENCES_DISPLAY_TEMPLATE") as mock_template,
+            patch("areyouok_telegram.handlers.commands.preferences.escape_markdown_v2") as mock_escape,
         ):
             # Mock template formatting
             mock_template.format.return_value = "**Your Preferences:**\n• All fields: Not set"
@@ -487,8 +487,8 @@ class TestConstructUserPreferencesResponse:
             assert result == "**Your Preferences:**\n• All fields: Not set"
 
     @pytest.mark.asyncio
-    @patch("areyouok_telegram.handlers.preferences.async_database")
-    @patch("areyouok_telegram.handlers.preferences.UserMetadata.get_by_user_id")
+    @patch("areyouok_telegram.handlers.commands.preferences.async_database")
+    @patch("areyouok_telegram.handlers.commands.preferences.UserMetadata.get_by_user_id")
     async def test_construct_user_preferences_response_rather_not_say(self, mock_get_by_user_id, mock_async_database):
         """Test constructing response with 'rather_not_say' values."""
         # Setup database mock
@@ -508,8 +508,8 @@ class TestConstructUserPreferencesResponse:
         user_id = "123456789"
 
         with (
-            patch("areyouok_telegram.handlers.preferences.MD2_PREFERENCES_DISPLAY_TEMPLATE") as mock_template,
-            patch("areyouok_telegram.handlers.preferences.escape_markdown_v2") as mock_escape,
+            patch("areyouok_telegram.handlers.commands.preferences.MD2_PREFERENCES_DISPLAY_TEMPLATE") as mock_template,
+            patch("areyouok_telegram.handlers.commands.preferences.escape_markdown_v2") as mock_escape,
         ):
             # Mock template formatting
             mock_template.format.return_value = "**Your Preferences:**\n• Mixed values"
