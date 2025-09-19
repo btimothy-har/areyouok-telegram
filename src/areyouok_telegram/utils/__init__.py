@@ -5,11 +5,13 @@ from areyouok_telegram.utils.retry import db_retry
 from areyouok_telegram.utils.retry import telegram_call
 from areyouok_telegram.utils.retry import telegram_retry
 from areyouok_telegram.utils.text import escape_markdown_v2
+from areyouok_telegram.utils.text import package_version
 from areyouok_telegram.utils.text import shorten_url
 from areyouok_telegram.utils.text import split_long_message
 
 __all__ = [
     "db_retry",
+    "package_version",
     "telegram_call",
     "telegram_retry",
     "extract_media_from_telegram_message",

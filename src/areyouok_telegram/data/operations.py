@@ -156,7 +156,7 @@ async def track_command_usage(
     *,
     command: str,
     chat_id: str,
-    session_id: str,
+    session_id: str | None = None,
 ):
     """Track command usage for analytics and monitoring.
 

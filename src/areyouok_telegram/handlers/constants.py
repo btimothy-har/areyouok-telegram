@@ -11,3 +11,5 @@ MD2_PREFERENCES_DISPLAY_TEMPLATE = r"""*Your Current Preferences:*
 ⚡️ *Response Speed:* {response_speed}
 
 Use `/preferences \[field\] \[value\]` to update your preferences\."""
+
+MD2_FEEDBACK_MESSAGE = r"Your feedback helps make Are You OK better\. Let us know what you think at the link below\."

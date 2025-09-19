@@ -175,3 +175,57 @@ class TestCommandUsage:
 
         assert result == 1
         mock_db_session.execute.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_track_command_with_none_session_id(self, mock_db_session):
+        """Test tracking command with None session_id (for feedback without active session)."""
+        # Mock execute result
+        mock_result = MagicMock()
+        mock_result.rowcount = 1
+        mock_db_session.execute.return_value = mock_result
+
+        result = await CommandUsage.track_command(
+            mock_db_session,
+            command="feedback",
+            chat_id="123456",
+            session_id=None,  # None session_id
+        )
+
+        assert result == 1
+        mock_db_session.execute.assert_called_once()
+
+        # Verify the statement was created successfully with nullable session_id
+        call_args = mock_db_session.execute.call_args[0][0]
+        assert hasattr(call_args, "table")
+        assert call_args.table.name == "command_usage"
+
+    @pytest.mark.asyncio
+    async def test_track_command_feedback_scenarios(self, mock_db_session):
+        """Test feedback command tracking in both session scenarios."""
+        # Mock execute result
+        mock_result = MagicMock()
+        mock_result.rowcount = 1
+        mock_db_session.execute.return_value = mock_result
+
+        # Test with active session
+        result1 = await CommandUsage.track_command(
+            mock_db_session,
+            command="feedback",
+            chat_id="user_with_session",
+            session_id="active_session_123",
+        )
+
+        assert result1 == 1
+
+        # Test without active session
+        result2 = await CommandUsage.track_command(
+            mock_db_session,
+            command="feedback",
+            chat_id="user_without_session",
+            session_id=None,
+        )
+
+        assert result2 == 1
+
+        # Should have been called twice
+        assert mock_db_session.execute.call_count == 2

@@ -1,7 +1,11 @@
+import asyncio
+import random
+
 import telegram
 from telegram.ext import ContextTypes
 
 from areyouok_telegram.data import operations as data_operations
+from areyouok_telegram.handlers.commands.feedback import generate_feedback_context
 from areyouok_telegram.handlers.exceptions import NoEditedMessageError
 from areyouok_telegram.handlers.exceptions import NoMessageError
 from areyouok_telegram.handlers.exceptions import NoMessageReactionError
@@ -31,6 +35,15 @@ async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_
         user_id=str(update.effective_user.id),
         is_user=True,
     )
+
+    # Pre-generate / cache context at random
+    if random.random() < 1 / 3:
+        asyncio.create_task(
+            generate_feedback_context(
+                bot_id=str(context.bot.id),
+                session=active_session,
+            )
+        )
 
 
 @traced(extract_args=["update"])

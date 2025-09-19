@@ -20,7 +20,7 @@ class CommandUsage(Base):
 
     command = Column(String, nullable=False)
     chat_id = Column(String, nullable=False)
-    session_id = Column(String, nullable=False)
+    session_id = Column(String, nullable=True)
     timestamp = Column(TIMESTAMP(timezone=True), nullable=False)
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -33,7 +33,7 @@ class CommandUsage(Base):
         *,
         command: str,
         chat_id: str,
-        session_id: str,
+        session_id: str | None = None,
     ) -> int:
         """Track command usage in the database.
 

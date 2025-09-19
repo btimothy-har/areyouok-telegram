@@ -1,7 +1,14 @@
+from importlib.metadata import version
+
 import httpx
 
 from areyouok_telegram.config import TINYURL_API_KEY
 from areyouok_telegram.logging import traced
+
+
+def package_version():
+    """Get the package version."""
+    return version("areyouok-telegram")
 
 
 def escape_markdown_v2(text: str) -> str:

@@ -79,3 +79,12 @@ class CompleteOnboardingError(pydantic_ai.ModelRetry):
 
     def __init__(self, message: str):
         super().__init__(f"Error completing onboarding: {message}")
+
+
+class ResponseLengthError(pydantic_ai.ModelRetry):
+    """Exception raised when the agent's response exceeds the allowed length."""
+
+    def __init__(self, length: int, max_length: int):
+        super().__init__(f"Response length {length} exceeds the allowed limit of {max_length} characters.")
+        self.length = length
+        self.max_length = max_length

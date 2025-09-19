@@ -1,5 +1,6 @@
 """Tests for handlers/messages.py."""
 
+import asyncio
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from unittest.mock import patch
@@ -33,6 +34,7 @@ class TestOnNewMessage:
 
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
         mock_context.bot = AsyncMock()
+        mock_context.bot.id = 123456
 
         # Create mock active session
         mock_active_session = MagicMock()
@@ -46,6 +48,9 @@ class TestOnNewMessage:
                 "areyouok_telegram.handlers.messages.data_operations.new_session_event", new=AsyncMock()
             ) as mock_new_event,
             patch("areyouok_telegram.handlers.messages.telegram_call", new=AsyncMock()) as mock_telegram_call,
+            patch("areyouok_telegram.handlers.messages.generate_feedback_context", new=AsyncMock()),
+            patch("asyncio.create_task") as mock_create_task,
+            patch("random.random", return_value=0.2),  # Mock to be < 1/3 to trigger task creation
         ):
             await on_new_message(mock_update, mock_context)
 
@@ -70,6 +75,10 @@ class TestOnNewMessage:
                 is_user=True,
             )
 
+            # Verify feedback context generation task was created
+            mock_create_task.assert_called_once()
+            # The task should be a coroutine for generate_feedback_context
+
     @pytest.mark.asyncio
     async def test_on_new_message_without_message_raises_error(self):
         """Test that handler raises NoMessageError when update has no message."""
@@ -84,6 +93,131 @@ class TestOnNewMessage:
 
         assert exc_info.value.update_id == 123
         assert "Expected to receive a new message in update: 123" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_on_new_message_creates_feedback_context_task(self, frozen_time, mock_telegram_user):
+        """Test that new message handler creates async task for feedback context generation."""
+        # Create mock update with message
+        mock_update = MagicMock(spec=telegram.Update)
+        mock_update.update_id = 456
+        mock_update.message = MagicMock(spec=telegram.Message)
+        mock_update.message.date = frozen_time
+        mock_update.effective_user = mock_telegram_user
+        mock_update.effective_chat = MagicMock(spec=telegram.Chat)
+        mock_update.effective_chat.id = 999
+
+        mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
+        mock_context.bot = AsyncMock()
+        mock_context.bot.id = "bot_789"
+
+        mock_active_session = MagicMock()
+        mock_active_session.session_id = "session_123"
+
+        with (
+            patch(
+                "areyouok_telegram.handlers.messages.data_operations.get_or_create_active_session",
+                new=AsyncMock(return_value=mock_active_session),
+            ),
+            patch("areyouok_telegram.handlers.messages.data_operations.new_session_event", new=AsyncMock()),
+            patch("areyouok_telegram.handlers.messages.telegram_call", new=AsyncMock()),
+            patch("asyncio.create_task") as mock_create_task,
+            patch("random.random", return_value=0.2),  # Mock to be < 1/3 to trigger task creation
+        ):
+            await on_new_message(mock_update, mock_context)
+
+            # Verify task creation was called
+            mock_create_task.assert_called_once()
+
+            # Get the coroutine that was passed to create_task
+            task_coro = mock_create_task.call_args[0][0]
+
+            # The task should be for generate_feedback_context with correct parameters
+            # This is an indirect test since we can't easily inspect the coroutine parameters
+            assert task_coro is not None
+
+    @pytest.mark.asyncio
+    async def test_on_new_message_feedback_task_doesnt_block_main_flow(self, frozen_time, mock_telegram_user):
+        """Test that feedback context generation doesn't block main message processing."""
+        # Create mock update with message
+        mock_update = MagicMock(spec=telegram.Update)
+        mock_update.update_id = 789
+        mock_update.message = MagicMock(spec=telegram.Message)
+        mock_update.message.date = frozen_time
+        mock_update.effective_user = mock_telegram_user
+        mock_update.effective_chat = MagicMock(spec=telegram.Chat)
+        mock_update.effective_chat.id = 111
+
+        mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
+        mock_context.bot = AsyncMock()
+        mock_context.bot.id = "bot_222"
+
+        mock_active_session = MagicMock()
+
+        # Mock a slow generate_feedback_context function
+        async def slow_generate_feedback_context(*_, **__):
+            await asyncio.sleep(0.1)  # Simulate slow operation
+            return "feedback context"
+
+        with (
+            patch(
+                "areyouok_telegram.handlers.messages.data_operations.get_or_create_active_session",
+                new=AsyncMock(return_value=mock_active_session),
+            ),
+            patch(
+                "areyouok_telegram.handlers.messages.data_operations.new_session_event", new=AsyncMock()
+            ) as mock_new_event,
+            patch("areyouok_telegram.handlers.messages.telegram_call", new=AsyncMock()) as mock_telegram_call,
+            patch(
+                "areyouok_telegram.handlers.messages.generate_feedback_context",
+                new=AsyncMock(side_effect=slow_generate_feedback_context),
+            ),
+            patch("random.random", return_value=0.2),  # Mock to be < 1/3 to trigger task creation
+        ):
+            # This should complete quickly despite the slow feedback context generation
+            await on_new_message(mock_update, mock_context)
+
+            # Verify main flow operations completed (not blocked by feedback task)
+            mock_telegram_call.assert_called_once()
+            mock_new_event.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_on_new_message_skips_feedback_context_task_when_random_high(self, frozen_time, mock_telegram_user):
+        """Test that feedback context task is not created when random value >= 1/3."""
+        # Create mock update with message
+        mock_update = MagicMock(spec=telegram.Update)
+        mock_update.update_id = 999
+        mock_update.message = MagicMock(spec=telegram.Message)
+        mock_update.message.date = frozen_time
+        mock_update.effective_user = mock_telegram_user
+        mock_update.effective_chat = MagicMock(spec=telegram.Chat)
+        mock_update.effective_chat.id = 888
+
+        mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
+        mock_context.bot = AsyncMock()
+        mock_context.bot.id = "bot_888"
+
+        mock_active_session = MagicMock()
+
+        with (
+            patch(
+                "areyouok_telegram.handlers.messages.data_operations.get_or_create_active_session",
+                new=AsyncMock(return_value=mock_active_session),
+            ),
+            patch(
+                "areyouok_telegram.handlers.messages.data_operations.new_session_event", new=AsyncMock()
+            ) as mock_new_event,
+            patch("areyouok_telegram.handlers.messages.telegram_call", new=AsyncMock()) as mock_telegram_call,
+            patch("asyncio.create_task") as mock_create_task,
+            patch("random.random", return_value=0.5),  # Mock to be >= 1/3 to skip task creation
+        ):
+            await on_new_message(mock_update, mock_context)
+
+            # Verify main flow operations completed
+            mock_telegram_call.assert_called_once()
+            mock_new_event.assert_called_once()
+
+            # Verify task creation was NOT called
+            mock_create_task.assert_not_called()
 
 
 class TestOnEditMessage:
