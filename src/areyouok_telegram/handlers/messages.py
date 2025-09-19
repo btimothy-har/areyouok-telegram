@@ -1,7 +1,10 @@
+import asyncio
+
 import telegram
 from telegram.ext import ContextTypes
 
 from areyouok_telegram.data import operations as data_operations
+from areyouok_telegram.handlers.commands.feedback import generate_feedback_context
 from areyouok_telegram.handlers.exceptions import NoEditedMessageError
 from areyouok_telegram.handlers.exceptions import NoMessageError
 from areyouok_telegram.handlers.exceptions import NoMessageReactionError
@@ -30,6 +33,13 @@ async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_
         message=update.message,
         user_id=str(update.effective_user.id),
         is_user=True,
+    )
+
+    asyncio.create_task(
+        generate_feedback_context(
+            bot_id=str(context.bot.id),
+            session=active_session,
+        )
     )
 
 
