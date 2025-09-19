@@ -16,6 +16,7 @@ dependencies = [
     "tenacity~=8.2.3",
     "logfire~=4.3.6",
     "logfire[sqlalchemy]",
+    "logfire[system-metrics]",
     "pydantic-ai~=0.4.7",
     "pydantic-ai[logfire]",
     "python-magic~=0.4.27",
