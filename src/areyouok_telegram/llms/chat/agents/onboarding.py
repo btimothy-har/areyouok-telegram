@@ -27,9 +27,9 @@ from areyouok_telegram.llms.chat.constants import RESPONSE_PROMPT
 from areyouok_telegram.llms.chat.constants import RESTRICT_TEXT_RESPONSE
 from areyouok_telegram.llms.chat.prompt import BaseChatPromptTemplate
 from areyouok_telegram.llms.chat.responses import DoNothingResponse
+from areyouok_telegram.llms.chat.responses import KeyboardResponse
 from areyouok_telegram.llms.chat.responses import ReactionResponse
 from areyouok_telegram.llms.chat.responses import TextResponse
-from areyouok_telegram.llms.chat.responses import TextWithButtonsResponse
 from areyouok_telegram.llms.chat.utils import check_restricted_responses
 from areyouok_telegram.llms.chat.utils import check_special_instructions
 from areyouok_telegram.llms.chat.utils import validate_response_data
@@ -41,7 +41,7 @@ from areyouok_telegram.llms.models import MultiModelConfig
 from areyouok_telegram.llms.utils import log_metadata_update_context
 from areyouok_telegram.llms.utils import run_agent_with_tracking
 
-AgentResponse = TextResponse | ReactionResponse | TextWithButtonsResponse | DoNothingResponse
+AgentResponse = TextResponse | ReactionResponse | DoNothingResponse | KeyboardResponse
 
 
 @dataclass
@@ -59,9 +59,9 @@ class OnboardingAgentDependencies:
 agent_model = MultiModelConfig(
     models=[
         Gemini25Pro(
-            model_settings=pydantic_ai.models.google.GoogleModelSettings(temperature=0.2),
+            model_settings=pydantic_ai.models.google.GoogleModelSettings(temperature=0.25),
         ),
-        GPT5(model_settings=pydantic_ai.settings.ModelSettings(temperature=0.2)),
+        GPT5(model_settings=pydantic_ai.settings.ModelSettings(temperature=0.25)),
     ]
 )
 
@@ -217,6 +217,31 @@ async def complete_onboarding(ctx: RunContext[OnboardingAgentDependencies]) -> s
     )
 
     return "Onboarding completed successfully."
+
+
+@onboarding_agent.tool
+async def terminate_onboarding(ctx: RunContext[OnboardingAgentDependencies]) -> str:
+    """Stop the user's onboarding without marking it as complete."""
+    async with async_database() as db_conn:
+        try:
+            onboarding = await GuidedSessions.get_by_guided_session_key(
+                db_conn, guided_session_key=ctx.deps.onboarding_session_key
+            )
+        except Exception as e:
+            raise CompleteOnboardingError(e) from e
+
+        if not onboarding.is_active:
+            raise CompleteOnboardingError(f"Onboarding session is currently {onboarding.state}.")  # noqa: TRY003
+
+        await onboarding.inactivate(db_conn, timestamp=datetime.now(UTC))
+
+    await log_metadata_update_context(
+        chat_id=ctx.deps.tg_chat_id,
+        session_id=ctx.deps.tg_session_id,
+        content="Stopped the user's onboarding without completing.",
+    )
+
+    return "Onboarding terminated successfully."
 
 
 @onboarding_agent.output_validator
