@@ -3,6 +3,7 @@ from dataclasses import dataclass
 import pydantic_ai
 
 from areyouok_telegram.llms.agent_anonymizer import anonymization_agent
+from areyouok_telegram.llms.exceptions import ResponseLengthError
 from areyouok_telegram.llms.models import Gemini25Flash
 from areyouok_telegram.llms.models import GPT5Mini
 from areyouok_telegram.llms.models import MultiModelConfig
@@ -47,12 +48,16 @@ with the assistant.
 The contextualized summary should be anonymous, taking care to exclude any personally identifiable information \
 about the user or assistant.
 
-Output the contextualized summary as a single paragraph, with no line breaks or special characters.
+Output the contextualized summary as a single paragraph, with no line breaks or special characters. Your output must \
+be in English, in less than 1,000 characters.
     """
 
 
 @feedback_context_agent.output_validator
-async def validate_output(ctx: pydantic_ai.RunContext, data: str) -> str:  # noqa: ARG001
+async def validate_output(ctx: pydantic_ai.RunContext, data: str) -> str:
+    if len(data) > 1000:
+        raise ResponseLengthError(length=len(data), max_length=1000)
+
     anon_text = await run_agent_with_tracking(
         anonymization_agent,
         chat_id=ctx.deps.tg_chat_id,
