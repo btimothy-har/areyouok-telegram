@@ -5,6 +5,7 @@ from datetime import UTC
 from datetime import datetime
 from urllib.parse import quote_plus
 
+import logfire
 import telegram
 from cachetools import TTLCache
 from telegram.constants import ReactionEmoji
@@ -96,7 +97,15 @@ async def on_feedback_command(update: telegram.Update, context: ContextTypes.DEF
             version=quote_plus(package_version()),
         )
 
-    short_url = await shorten_url(feedback_url)
+    try:
+        short_url = await shorten_url(feedback_url)
+    except Exception:
+        logfire.warning(
+            "Failed to shorten feedback URL, using full URL instead.",
+            url=feedback_url,
+            _exc_info=True,
+        )
+        short_url = feedback_url
 
     reply_markup = [
         [
