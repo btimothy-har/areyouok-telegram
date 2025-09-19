@@ -71,12 +71,14 @@ async def on_feedback_command(update: telegram.Update, context: ContextTypes.DEF
             context.bot.set_message_reaction,
             chat_id=update.effective_chat.id,
             message_id=update.message.message_id,
-            reaction=random.choice([
-                ReactionEmoji.THUMBS_UP,
-                ReactionEmoji.EYES,
-                ReactionEmoji.THINKING_FACE,
-                ReactionEmoji.SALUTING_FACE,
-            ]),
+            reaction=random.choice(
+                [
+                    ReactionEmoji.THUMBS_UP,
+                    ReactionEmoji.EYES,
+                    ReactionEmoji.THINKING_FACE,
+                    ReactionEmoji.SALUTING_FACE,
+                ]
+            ),
         )
 
         await telegram_call(

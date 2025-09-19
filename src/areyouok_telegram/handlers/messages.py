@@ -1,4 +1,5 @@
 import asyncio
+import random
 
 import telegram
 from telegram.ext import ContextTypes
@@ -35,12 +36,14 @@ async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_
         is_user=True,
     )
 
-    asyncio.create_task(
-        generate_feedback_context(
-            bot_id=str(context.bot.id),
-            session=active_session,
+    # Pre-generate / cache context at random
+    if random.random() < 1 / 3:
+        asyncio.create_task(
+            generate_feedback_context(
+                bot_id=str(context.bot.id),
+                session=active_session,
+            )
         )
-    )
 
 
 @traced(extract_args=["update"])

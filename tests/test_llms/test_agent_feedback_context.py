@@ -28,20 +28,14 @@ class TestFeedbackContextAgent:
 
     def test_context_agent_dependencies_structure(self):
         """Test that ContextAgentDependencies is properly structured."""
-        deps = ContextAgentDependencies(
-            tg_chat_id="test_chat_123",
-            tg_session_id="test_session_456"
-        )
+        deps = ContextAgentDependencies(tg_chat_id="test_chat_123", tg_session_id="test_session_456")
 
         assert deps.tg_chat_id == "test_chat_123"
         assert deps.tg_session_id == "test_session_456"
 
     def test_context_agent_dependencies_dataclass(self):
         """Test that ContextAgentDependencies behaves as expected dataclass."""
-        deps = ContextAgentDependencies(
-            tg_chat_id="chat_id",
-            tg_session_id="session_id"
-        )
+        deps = ContextAgentDependencies(tg_chat_id="chat_id", tg_session_id="session_id")
 
         # Test that we can access attributes
         assert hasattr(deps, "tg_chat_id")
