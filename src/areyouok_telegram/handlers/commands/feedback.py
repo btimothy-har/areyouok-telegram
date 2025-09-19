@@ -72,14 +72,12 @@ async def on_feedback_command(update: telegram.Update, context: ContextTypes.DEF
             context.bot.set_message_reaction,
             chat_id=update.effective_chat.id,
             message_id=update.message.message_id,
-            reaction=random.choice(
-                [
-                    ReactionEmoji.THUMBS_UP,
-                    ReactionEmoji.EYES,
-                    ReactionEmoji.THINKING_FACE,
-                    ReactionEmoji.SALUTING_FACE,
-                ]
-            ),
+            reaction=random.choice([
+                ReactionEmoji.THUMBS_UP,
+                ReactionEmoji.EYES,
+                ReactionEmoji.THINKING_FACE,
+                ReactionEmoji.SALUTING_FACE,
+            ]),
         )
 
         await telegram_call(
@@ -165,8 +163,7 @@ async def generate_feedback_context(bot_id: str, session: Sessions) -> str:
         if chat_context:
             context = [c for c in chat_context if c.type != ContextType.SESSION.value]
             [c.decrypt_content(chat_encryption_key=chat_obj.retrieve_key()) for c in context]
-
-        chat_events_for_feedback.extend([ChatEvent.from_context(c) for c in context])
+            chat_events_for_feedback.extend([ChatEvent.from_context(c) for c in context])
 
     chat_events_for_feedback.sort(key=lambda x: x.timestamp)
 
