@@ -1,9 +1,9 @@
 import pydantic_ai
 
-from areyouok_telegram.llms.models import GPT5Nano
+from areyouok_telegram.llms.models import GPT5Mini
 
 anonymization_agent = pydantic_ai.Agent(
-    model=GPT5Nano().model,
+    model=GPT5Mini().model,
     name="anonymization_agent",
     end_strategy="exhaustive",
 )

@@ -5,8 +5,6 @@ import pydantic_ai
 from areyouok_telegram.llms.agent_anonymizer import anonymization_agent
 from areyouok_telegram.llms.exceptions import ResponseLengthError
 from areyouok_telegram.llms.models import Gemini25Flash
-from areyouok_telegram.llms.models import GPT5Mini
-from areyouok_telegram.llms.models import MultiModelConfig
 from areyouok_telegram.llms.utils import run_agent_with_tracking
 
 
@@ -16,16 +14,11 @@ class ContextAgentDependencies:
     tg_session_id: str
 
 
-agent_model = MultiModelConfig(
-    models=[
-        Gemini25Flash(
-            model_settings=pydantic_ai.models.google.GoogleModelSettings(
-                temperature=0.0,
-                google_thinking_config={"thinking_budget": 0},
-            ),
-        ),
-        GPT5Mini(),
-    ]
+agent_model = Gemini25Flash(
+    model_settings=pydantic_ai.models.google.GoogleModelSettings(
+        temperature=0.0,
+        google_thinking_config={"thinking_budget": 0},
+    ),
 )
 
 feedback_context_agent = pydantic_ai.Agent(

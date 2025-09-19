@@ -2,6 +2,7 @@
 
 
 import anthropic
+import google
 import logfire
 import openai
 import pydantic_ai
@@ -38,6 +39,8 @@ def should_retry_llm_error(e: Exception) -> bool:
         return True
     if isinstance(e, openai.APIStatusError):
         return 500 <= e.http_status < 600
+    if isinstance(e, google.genai.errors.ServerError):
+        return True
 
 
 @retry(
