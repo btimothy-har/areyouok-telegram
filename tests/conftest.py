@@ -203,3 +203,96 @@ def mock_conversation_history(mock_chat_event_message, mock_chat_event_context):
         return events
 
     return _create
+
+
+@pytest.fixture
+def mock_active_session():
+    """Create a mock active session for testing."""
+    from areyouok_telegram.data.models.sessions import Sessions
+
+    session = MagicMock(spec=Sessions)
+    session.session_id = "test_session_123"
+    session.chat_id = "test_chat_456"
+    session.user_id = "test_user_789"
+    session.created_at = FROZEN_TIME
+    session.last_user_activity = FROZEN_TIME
+    session.last_bot_activity = FROZEN_TIME
+    session.is_active = True
+
+    # Mock the get_messages method
+    session.get_messages = AsyncMock(return_value=[])
+
+    return session
+
+
+@pytest.fixture
+def mock_chat_with_key():
+    """Create a mock chat with encryption key for testing."""
+    from areyouok_telegram.data.models.chats import Chats
+
+    chat = MagicMock(spec=Chats)
+    chat.chat_id = "test_chat_456"
+    chat.user_id = "test_user_789"
+    chat.created_at = FROZEN_TIME
+
+    # Mock encryption key methods
+    chat.retrieve_key = MagicMock(return_value=b"test_encryption_key")
+
+    return chat
+
+
+@pytest.fixture
+def mock_context_items():
+    """Create mock context items for testing."""
+    from areyouok_telegram.data.models.context import Context
+    from areyouok_telegram.data.models.context import ContextType
+
+    contexts = []
+    for i in range(3):
+        context = MagicMock(spec=Context)
+        context.session_id = "test_session_123"
+        context.type = ContextType.USER_PREFERENCE.value  # Not SESSION type
+        context.content = f"Context content {i}"
+        context.created_at = FROZEN_TIME
+        context.decrypt_content = MagicMock()
+        contexts.append(context)
+
+    return contexts
+
+
+@pytest.fixture
+def mock_media_files_list():
+    """Create a list of mock media files for testing."""
+    from areyouok_telegram.data.models.media import MediaFiles
+
+    media_files = []
+    for i in range(2):
+        media = MagicMock(spec=MediaFiles)
+        media.message_id = f"msg_{i}"
+        media.chat_id = "test_chat_456"
+        media.file_type = "image"
+        media.mime_type = "image/png"
+        media.decrypt_content = MagicMock()
+        media_files.append(media)
+
+    return media_files
+
+
+@pytest.fixture
+def mock_messages_list():
+    """Create a list of mock messages for testing."""
+    from areyouok_telegram.data.models.messages import Messages
+
+    messages = []
+    for i in range(15):  # Sufficient for feedback context (>10)
+        message = MagicMock(spec=Messages)
+        message.message_id = f"msg_{i}"
+        message.chat_id = "test_chat_456"
+        message.user_id = "test_user_789" if i % 2 == 0 else "bot_user"
+        message.message_type = "Message" if i % 2 == 0 else "MessageReactionUpdated"
+        message.content = f"Message content {i}"
+        message.created_at = FROZEN_TIME
+        message.decrypt = MagicMock()
+        messages.append(message)
+
+    return messages
