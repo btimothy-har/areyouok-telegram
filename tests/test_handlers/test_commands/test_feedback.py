@@ -7,6 +7,7 @@ from datetime import timedelta
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from unittest.mock import patch
+from urllib.parse import quote_plus
 
 import pytest
 import telegram
@@ -107,11 +108,11 @@ class TestOnFeedbackCommand:
 
             # Verify URL shortening
             expected_long_url = FEEDBACK_URL.format(
-                uuid=test_uuid,
-                session_id=mock_active_session.session_id,
-                context=test_feedback_context,
-                env="test",
-                version="1.0.0",
+                uuid=quote_plus(test_uuid),
+                session_id=quote_plus(mock_active_session.session_id),
+                context=quote_plus(test_feedback_context),
+                env=quote_plus("test"),
+                version=quote_plus("1.0.0"),
             )
             mock_shorten_url.assert_called_once_with(expected_long_url)
 
@@ -160,11 +161,11 @@ class TestOnFeedbackCommand:
 
             # Verify URL shortening with fallback values
             expected_long_url = FEEDBACK_URL.format(
-                uuid=test_uuid,
-                session_id="no_active_session",
-                context="No active session found.",
-                env="test",
-                version="1.0.0",
+                uuid=quote_plus(test_uuid),
+                session_id=quote_plus("no_active_session"),
+                context=quote_plus("No active session found."),
+                env=quote_plus("test"),
+                version=quote_plus("1.0.0"),
             )
             mock_shorten_url.assert_called_once_with(expected_long_url)
 
@@ -173,21 +174,21 @@ class TestOnFeedbackCommand:
 
     @pytest.mark.asyncio
     async def test_feedback_url_format(self):
-        """Test that feedback URL contains all expected parameters."""
+        """Test that feedback URL contains all expected parameters with URL encoding."""
         test_values = {
-            "uuid": "test-uuid-789",
-            "session_id": "session-123",
-            "context": "Test context",
-            "env": "test",
-            "version": "1.2.3",
+            "uuid": quote_plus("test-uuid-789"),
+            "session_id": quote_plus("session-123"),
+            "context": quote_plus("Test context"),
+            "env": quote_plus("test"),
+            "version": quote_plus("1.2.3"),
         }
 
         formatted_url = FEEDBACK_URL.format(**test_values)
 
-        # Check that all parameters are included in URL
+        # Check that all parameters are included in URL with proper URL encoding
         assert "entry.265305704=test-uuid-789" in formatted_url
         assert "entry.1140367297=session-123" in formatted_url
-        assert "entry.604567897=Test%20context" in formatted_url or "entry.604567897=Test context" in formatted_url
+        assert "entry.604567897=Test+context" in formatted_url  # Spaces encoded as +
         assert "entry.4225678=test" in formatted_url
         assert "entry.191939218=1.2.3" in formatted_url
 

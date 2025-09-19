@@ -3,6 +3,7 @@ import random
 import uuid
 from datetime import UTC
 from datetime import datetime
+from urllib.parse import quote_plus
 
 import telegram
 from cachetools import TTLCache
@@ -53,11 +54,11 @@ async def on_feedback_command(update: telegram.Update, context: ContextTypes.DEF
 
     if not active_session:
         feedback_url = FEEDBACK_URL.format(
-            uuid=feedback_uuid,
-            session_id="no_active_session",
-            context="No active session found.",
-            env=ENV,
-            version=package_version(),
+            uuid=quote_plus(feedback_uuid),
+            session_id=quote_plus("no_active_session"),
+            context=quote_plus("No active session found."),
+            env=quote_plus(ENV),
+            version=quote_plus(package_version()),
         )
     else:
         context_task = asyncio.create_task(
@@ -90,11 +91,11 @@ async def on_feedback_command(update: telegram.Update, context: ContextTypes.DEF
         feedback_context = await context_task
 
         feedback_url = FEEDBACK_URL.format(
-            uuid=feedback_uuid,
-            session_id=active_session.session_id,
-            context=feedback_context,
-            env=ENV,
-            version=package_version(),
+            uuid=quote_plus(feedback_uuid),
+            session_id=quote_plus(active_session.session_id),
+            context=quote_plus(feedback_context),
+            env=quote_plus(ENV),
+            version=quote_plus(package_version()),
         )
 
     short_url = await shorten_url(feedback_url)
