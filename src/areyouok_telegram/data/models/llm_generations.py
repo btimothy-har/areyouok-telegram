@@ -42,10 +42,6 @@ class LLMGenerations(Base):
     response_type = Column(String, nullable=False)  # TextResponse, ReactionResponse, etc.
     encrypted_payload = Column(Text, nullable=False)  # Full response object encrypted
 
-    # Metadata
-    created_at = Column(TIMESTAMP(timezone=True), nullable=False)
-    updated_at = Column(TIMESTAMP(timezone=True), nullable=False)
-
     @staticmethod
     def generate_generation_id(chat_id: str, session_id: str, timestamp: datetime, agent: str) -> str:
         """Generate a unique ID for a generation based on chat, session, timestamp, and agent."""
@@ -122,8 +118,6 @@ class LLMGenerations(Base):
             timestamp=now,
             response_type=response_type,
             encrypted_payload=encrypted_payload,
-            created_at=now,
-            updated_at=now,
         )
 
         await db_conn.execute(stmt)
@@ -137,8 +131,6 @@ class LLMGenerations(Base):
             timestamp=now,
             response_type=response_type,
             encrypted_payload=encrypted_payload,
-            created_at=now,
-            updated_at=now,
         )
 
         return generation
