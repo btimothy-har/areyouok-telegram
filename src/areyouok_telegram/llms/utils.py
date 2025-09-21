@@ -3,7 +3,7 @@
 import asyncio
 
 import anthropic
-import google.genai.errors
+import google
 import openai
 import pydantic_ai
 from tenacity import retry

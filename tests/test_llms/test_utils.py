@@ -26,8 +26,12 @@ class TestRunAgentWithTracking:
         mock_result.usage.return_value = {"tokens": 100}
         mock_agent.run.return_value = mock_result
 
-        # Mock asyncio.create_task
+        # Mock asyncio.create_task and properly close the coroutine
         with patch("areyouok_telegram.llms.utils.asyncio.create_task") as mock_create_task:
+            # Create a mock task that properly handles the coroutine
+            mock_task = AsyncMock()
+            mock_create_task.return_value = mock_task
+
             result = await run_agent_with_tracking(
                 agent=mock_agent, chat_id="123", session_id="session123", run_kwargs={"message_history": []}
             )
@@ -37,6 +41,10 @@ class TestRunAgentWithTracking:
 
             # Verify create_task was called with tracking function
             mock_create_task.assert_called_once()
+
+            # Close the coroutine that was passed to create_task to prevent warnings
+            coro = mock_create_task.call_args[0][0]
+            coro.close()
 
             # Verify result was returned
             assert result == mock_result
@@ -64,12 +72,20 @@ class TestRunAgentWithTracking:
 
         # Mock asyncio.create_task to verify it's called
         with patch("areyouok_telegram.llms.utils.asyncio.create_task") as mock_create_task:
+            # Create a mock task that properly handles the coroutine
+            mock_task = AsyncMock()
+            mock_create_task.return_value = mock_task
+
             result = await run_agent_with_tracking(
                 agent=mock_agent, chat_id="123", session_id="session123", run_kwargs={"user_prompt": "test"}
             )
 
             # Verify create_task was called
             mock_create_task.assert_called_once()
+
+            # Close the coroutine that was passed to create_task to prevent warnings
+            coro = mock_create_task.call_args[0][0]
+            coro.close()
 
             # Verify result was still returned
             assert result == mock_result

@@ -48,7 +48,7 @@ class TestOnNewMessage:
                 "areyouok_telegram.handlers.messages.data_operations.new_session_event", new=AsyncMock()
             ) as mock_new_event,
             patch("areyouok_telegram.handlers.messages.telegram_call", new=AsyncMock()) as mock_telegram_call,
-            patch("areyouok_telegram.handlers.messages.generate_feedback_context", new=AsyncMock()),
+            patch("areyouok_telegram.handlers.messages.generate_feedback_context", new=AsyncMock()) as mock_feedback,
             patch("asyncio.create_task") as mock_create_task,
             patch("random.random", return_value=0.2),  # Mock to be < 1/3 to trigger task creation
         ):
@@ -78,6 +78,10 @@ class TestOnNewMessage:
             # Verify feedback context generation task was created
             mock_create_task.assert_called_once()
             # The task should be a coroutine for generate_feedback_context
+
+            # Clean up the coroutine and AsyncMock to prevent warnings
+            task_coro = mock_create_task.call_args[0][0]
+            task_coro.close()
 
     @pytest.mark.asyncio
     async def test_on_new_message_without_message_raises_error(self):
@@ -134,6 +138,9 @@ class TestOnNewMessage:
             # The task should be for generate_feedback_context with correct parameters
             # This is an indirect test since we can't easily inspect the coroutine parameters
             assert task_coro is not None
+
+            # Close the coroutine to prevent warnings
+            task_coro.close()
 
     @pytest.mark.asyncio
     async def test_on_new_message_feedback_task_doesnt_block_main_flow(self, frozen_time, mock_telegram_user):
