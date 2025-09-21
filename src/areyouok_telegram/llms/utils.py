@@ -1,9 +1,9 @@
 # ruff: noqa: TRY003
 
+import asyncio
 
 import anthropic
-import google
-import logfire
+import google.genai.errors
 import openai
 import pydantic_ai
 from tenacity import retry
@@ -16,8 +16,8 @@ from tenacity import wait_random_exponential
 from areyouok_telegram.data import Chats
 from areyouok_telegram.data import Context
 from areyouok_telegram.data import ContextType
-from areyouok_telegram.data import LLMUsage
 from areyouok_telegram.data import async_database
+from areyouok_telegram.data import operations as data_operations
 
 
 def should_retry_llm_error(e: Exception) -> bool:
@@ -75,25 +75,15 @@ async def run_agent_with_tracking(
 
     result = await agent.run(**run_kwargs)
 
-    try:
-        # Always track llm usage in a separate async context
-        async with async_database() as db_conn:
-            await LLMUsage.track_pydantic_usage(
-                db_conn=db_conn,
-                chat_id=chat_id,
-                session_id=session_id,
-                agent=agent,
-                data=result.usage(),
-            )
-    except Exception as e:
-        # Log the error but don't raise it, as we want to return the result regardless
-        logfire.exception(
-            f"Failed to log LLM usage: {e}",
-            agent=agent.name,
+    # Track usage and generation in background - don't await
+    asyncio.create_task(
+        data_operations.track_llm_usage(
             chat_id=chat_id,
             session_id=session_id,
+            agent=agent,
+            result=result,
         )
-
+    )
     return result
 
 

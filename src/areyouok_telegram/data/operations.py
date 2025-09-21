@@ -1,6 +1,8 @@
 from datetime import UTC
 from datetime import datetime
 
+import logfire
+import pydantic_ai
 import telegram
 
 from areyouok_telegram.data.connection import async_database
@@ -9,6 +11,8 @@ from areyouok_telegram.data.models.chats import Chats
 from areyouok_telegram.data.models.command_usage import CommandUsage
 from areyouok_telegram.data.models.guided_sessions import GuidedSessions
 from areyouok_telegram.data.models.guided_sessions import GuidedSessionType
+from areyouok_telegram.data.models.llm_generations import LLMGenerations
+from areyouok_telegram.data.models.llm_usage import LLMUsage
 from areyouok_telegram.data.models.messages import Messages
 from areyouok_telegram.data.models.sessions import Sessions
 from areyouok_telegram.utils import db_retry
@@ -169,6 +173,41 @@ async def track_command_usage(
         await CommandUsage.track_command(
             db_conn,
             command=command,
+            chat_id=chat_id,
+            session_id=session_id,
+        )
+
+
+@db_retry()
+async def track_llm_usage(
+    *,
+    chat_id: str,
+    session_id: str,
+    agent: pydantic_ai.Agent,
+    result: pydantic_ai.agent.AgentRunResult,
+) -> None:
+    try:
+        async with async_database() as db_conn:
+            # Track usage data
+            await LLMUsage.track_pydantic_usage(
+                db_conn=db_conn,
+                chat_id=chat_id,
+                session_id=session_id,
+                agent=agent,
+                data=result.usage(),
+            )
+            await LLMGenerations.create(
+                db_conn=db_conn,
+                chat_id=chat_id,
+                session_id=session_id,
+                agent=agent.name,
+                response=result.output,
+            )
+    except Exception as e:
+        # Log the error but don't raise it
+        logfire.exception(
+            f"Failed to log LLM usage: {e}",
+            agent=agent.name,
             chat_id=chat_id,
             session_id=session_id,
         )

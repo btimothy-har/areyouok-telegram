@@ -9,6 +9,7 @@ from areyouok_telegram.data.models.context import Context
 from areyouok_telegram.data.models.context import ContextType
 from areyouok_telegram.data.models.guided_sessions import GuidedSessions
 from areyouok_telegram.data.models.guided_sessions import GuidedSessionType
+from areyouok_telegram.data.models.llm_generations import LLMGenerations
 from areyouok_telegram.data.models.llm_usage import LLMUsage
 from areyouok_telegram.data.models.media import MediaFiles
 from areyouok_telegram.data.models.messages import Messages
@@ -36,6 +37,7 @@ __all__ = [
     "GuidedSessionType",
     "Context",
     "ContextType",
+    "LLMGenerations",
     "LLMUsage",
     "CommandUsage",
     "ChatEvent",
