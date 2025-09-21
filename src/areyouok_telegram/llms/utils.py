@@ -1,6 +1,7 @@
 # ruff: noqa: TRY003
 
 import asyncio
+import time
 
 import anthropic
 import google
@@ -73,7 +74,12 @@ async def run_agent_with_tracking(
     if "user_prompt" not in run_kwargs and "message_history" not in run_kwargs:
         raise ValueError("Either 'user_prompt' or 'message_history' must be provided in run_kwargs")
 
+    # Track generation duration using high-resolution timer
+    start_time = time.perf_counter()
     result = await agent.run(**run_kwargs)
+    end_time = time.perf_counter()
+
+    generation_duration = end_time - start_time
 
     # Track usage and generation in background - don't await
     asyncio.create_task(
@@ -82,6 +88,8 @@ async def run_agent_with_tracking(
             session_id=session_id,
             agent=agent,
             result=result,
+            duration=generation_duration,
+            deps=run_kwargs.get("deps"),
         )
     )
     return result

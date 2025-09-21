@@ -1,5 +1,6 @@
 from datetime import UTC
 from datetime import datetime
+from typing import Any
 
 import logfire
 import pydantic_ai
@@ -185,6 +186,8 @@ async def track_llm_usage(
     session_id: str,
     agent: pydantic_ai.Agent,
     result: pydantic_ai.agent.AgentRunResult,
+    duration: float,
+    deps: Any = None,
 ) -> None:
     try:
         async with async_database() as db_conn:
@@ -202,6 +205,8 @@ async def track_llm_usage(
                 session_id=session_id,
                 agent=agent.name,
                 response=result.output,
+                duration=duration,
+                deps=deps,
             )
     except Exception as e:
         # Log the error but don't raise it

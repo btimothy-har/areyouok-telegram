@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import Column
+from sqlalchemy import Float
 from sqlalchemy import Integer
 from sqlalchemy import String
 from sqlalchemy import Text
@@ -41,12 +42,43 @@ class LLMGenerations(Base):
     # Response data
     response_type = Column(String, nullable=False)  # TextResponse, ReactionResponse, etc.
     encrypted_payload = Column(Text, nullable=False)  # Full response object encrypted
+    encrypted_deps = Column(Text, nullable=True)  # Run dependencies encrypted (optional)
+    duration = Column(Float, nullable=False)  # Generation duration in seconds
 
     @staticmethod
     def generate_generation_id(chat_id: str, session_id: str, timestamp: datetime, agent: str) -> str:
         """Generate a unique ID for a generation based on chat, session, timestamp, and agent."""
         timestamp_str = timestamp.isoformat()
         return hashlib.sha256(f"{chat_id}:{session_id}:{timestamp_str}:{agent}".encode()).hexdigest()
+
+    @staticmethod
+    def _serialize_object(obj: Any) -> str:
+        """Serialize an object to JSON string or string representation.
+
+        Args:
+            obj: Object to serialize
+
+        Returns:
+            Serialized string representation
+        """
+        if obj is None:
+            return ""
+
+        try:
+            # Try Pydantic model first
+            if hasattr(obj, "model_dump"):
+                return json.dumps(obj.model_dump())
+
+            # Try dataclass or object with __dict__
+            if hasattr(obj, "__dict__"):
+                return json.dumps(vars(obj))
+
+            # Try direct JSON serialization
+            return json.dumps(obj)
+
+        except (TypeError, ValueError):
+            # Fallback to string representation
+            return str(obj)
 
     @property
     def payload(self) -> Any:
@@ -67,6 +99,27 @@ class LLMGenerations(Base):
             # If JSON parsing fails, return the raw content
             return decrypted_content
 
+    @property
+    def deps(self) -> Any:
+        """Get the decrypted dependencies.
+
+        Returns:
+            The decrypted and deserialized dependencies if available, None otherwise.
+
+        Note:
+            This method decrypts the deps each time it's called.
+            Consider caching the result if accessed frequently.
+        """
+        if self.encrypted_deps is None:
+            return None
+
+        decrypted_content = decrypt_content(self.encrypted_deps)
+        try:
+            return json.loads(decrypted_content)
+        except (json.JSONDecodeError, TypeError):
+            # If JSON parsing fails, return the raw content
+            return decrypted_content
+
     @classmethod
     @traced(extract_args=["chat_id", "session_id", "agent"])
     async def create(
@@ -77,7 +130,9 @@ class LLMGenerations(Base):
         session_id: str,
         agent: str,
         response: Any,  # Any response object - we'll handle serialization
-    ) -> "LLMGenerations":
+        duration: float,  # Generation duration in seconds
+        deps: Any = None,  # Optional dependencies passed to agent.run()
+    ) -> None:
         """Create a new LLM generation record with encrypted payload.
 
         Args:
@@ -86,29 +141,28 @@ class LLMGenerations(Base):
             session_id: Session ID
             agent: Name of the agent that generated the response
             response: The response object to serialize and store
-
-        Returns:
-            The created LLMGenerations instance
+            duration: Generation duration in seconds
+            deps: Optional dependencies passed to agent.run()
         """
         now = datetime.now(UTC)
         generation_id = cls.generate_generation_id(chat_id, session_id, now, agent)
 
-        # Handle serialization based on response type
+        # Handle response serialization
         if hasattr(response, "model_dump"):
             # Structured response object (e.g., TextResponse, ReactionResponse)
             response_type = getattr(response, "response_type", response.__class__.__name__)
-            payload_content = json.dumps(response.model_dump())
         else:
             # All other types - strings, primitives, objects
             response_type = f"{response.__class__.__name__}Response"
-            try:
-                payload_content = json.dumps(response)
-            except (TypeError, ValueError):
-                # Fallback to string representation if serialization fails
-                payload_content = str(response)
 
-        # Encrypt the payload using application-level encryption
+        payload_content = cls._serialize_object(response)
         encrypted_payload = encrypt_content(payload_content)
+
+        # Handle optional deps serialization and encryption
+        encrypted_deps = None
+        if deps is not None:
+            deps_content = cls._serialize_object(deps)
+            encrypted_deps = encrypt_content(deps_content)
 
         stmt = pg_insert(cls).values(
             generation_id=generation_id,
@@ -118,20 +172,33 @@ class LLMGenerations(Base):
             timestamp=now,
             response_type=response_type,
             encrypted_payload=encrypted_payload,
+            encrypted_deps=encrypted_deps,
+            duration=duration,
         )
 
         await db_conn.execute(stmt)
 
-        # Return the instance
-        generation = cls(
-            generation_id=generation_id,
-            chat_id=chat_id,
-            session_id=session_id,
-            agent=agent,
-            timestamp=now,
-            response_type=response_type,
-            encrypted_payload=encrypted_payload,
-        )
+    @classmethod
+    @traced(extract_args=["generation_id"])
+    async def get_by_generation_id(
+        cls,
+        db_conn: AsyncSession,
+        *,
+        generation_id: str,
+    ) -> "LLMGenerations | None":
+        """Retrieve a generation by its generation_id.
+
+        Args:
+            db_conn: Database connection
+            generation_id: Generation ID to filter by
+
+        Returns:
+            LLMGenerations instance if found, None otherwise
+        """
+        stmt = select(cls).where(cls.generation_id == generation_id)
+
+        result = await db_conn.execute(stmt)
+        generation = result.scalar_one_or_none()
 
         return generation
 
