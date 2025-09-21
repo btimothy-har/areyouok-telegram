@@ -37,6 +37,7 @@ class LLMGenerations(Base):
     chat_id = Column(String, nullable=False)
     session_id = Column(String, nullable=False)
     agent = Column(String, nullable=False)  # Agent name that generated the response
+    model = Column(String, nullable=False)  # Model name used for generation
     timestamp = Column(TIMESTAMP(timezone=True), nullable=False)
 
     # Response data
@@ -121,14 +122,14 @@ class LLMGenerations(Base):
             return decrypted_content
 
     @classmethod
-    @traced(extract_args=["chat_id", "session_id", "agent"])
+    @traced(extract_args=["chat_id", "session_id"])
     async def create(
         cls,
         db_conn: AsyncSession,
         *,
         chat_id: str,
         session_id: str,
-        agent: str,
+        agent: Any,  # pydantic_ai.Agent object
         response: Any,  # Any response object - we'll handle serialization
         duration: float,  # Generation duration in seconds
         deps: Any = None,  # Optional dependencies passed to agent.run()
@@ -139,13 +140,29 @@ class LLMGenerations(Base):
             db_conn: Database connection
             chat_id: Chat ID
             session_id: Session ID
-            agent: Name of the agent that generated the response
+            agent: pydantic_ai.Agent object
             response: The response object to serialize and store
             duration: Generation duration in seconds
             deps: Optional dependencies passed to agent.run()
         """
         now = datetime.now(UTC)
-        generation_id = cls.generate_generation_id(chat_id, session_id, now, agent)
+
+        # Extract agent name and model name from agent object
+        agent_name = agent.name
+
+        # Extract model name using the same logic as LLMUsage
+        if agent.model.model_name.startswith("fallback:"):
+            model = agent.model.models[0]
+        else:
+            model = agent.model
+
+        if model.model_name.count("/") == 0:
+            # If the model name does not contain a provider prefix, prefix the system
+            model_name = f"{model.system}/{model.model_name}"
+        else:
+            model_name = model.model_name
+
+        generation_id = cls.generate_generation_id(chat_id, session_id, now, agent_name)
 
         # Handle response serialization
         if hasattr(response, "model_dump"):
@@ -168,7 +185,8 @@ class LLMGenerations(Base):
             generation_id=generation_id,
             chat_id=chat_id,
             session_id=session_id,
-            agent=agent,
+            agent=agent_name,
+            model=model_name,
             timestamp=now,
             response_type=response_type,
             encrypted_payload=encrypted_payload,

@@ -203,7 +203,7 @@ async def track_llm_usage(
                 db_conn=db_conn,
                 chat_id=chat_id,
                 session_id=session_id,
-                agent=agent.name,
+                agent=agent,
                 response=result.output,
                 duration=duration,
                 deps=deps,
