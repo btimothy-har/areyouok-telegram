@@ -7,7 +7,7 @@ import pydantic_ai
 import pytest
 from pydantic_ai.models.anthropic import AnthropicModel
 from pydantic_ai.models.fallback import FallbackModel
-from pydantic_ai.models.openai import OpenAIModel
+from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openrouter import OpenRouterProvider
 
 from areyouok_telegram.llms.exceptions import ModelConfigurationError
@@ -89,7 +89,7 @@ class TestBaseModelConfig:
 
     @patch("areyouok_telegram.llms.models.OPENAI_API_KEY", "test-openai-key")
     def test_primary_model_openai_with_api_key(self):
-        """Test primary_model returns OpenAIModel when provider is openai and API key exists."""
+        """Test primary_model returns OpenAIChatModel when provider is openai and API key exists."""
         model_settings = MagicMock(spec=pydantic_ai.settings.ModelSettings)
 
         config = BaseModelConfig(
@@ -98,8 +98,8 @@ class TestBaseModelConfig:
             model_settings=model_settings,
         )
 
-        with patch("areyouok_telegram.llms.models.OpenAIModel") as mock_openai:
-            mock_model = MagicMock(spec=OpenAIModel)
+        with patch("areyouok_telegram.llms.models.OpenAIChatModel") as mock_openai:
+            mock_model = MagicMock(spec=OpenAIChatModel)
             mock_openai.return_value = mock_model
 
             result = config.primary_model
@@ -136,7 +136,7 @@ class TestBaseModelConfig:
 
     @patch("areyouok_telegram.llms.models.OPENROUTER_API_KEY", "test-openrouter-key")
     def test_openrouter_model_with_api_key_and_id(self):
-        """Test openrouter_model returns OpenAIModel when openrouter_id and API key exist."""
+        """Test openrouter_model returns OpenAIChatModel when openrouter_id and API key exist."""
         model_settings = MagicMock(spec=pydantic_ai.settings.ModelSettings)
 
         config = BaseModelConfig(
@@ -147,10 +147,10 @@ class TestBaseModelConfig:
         )
 
         with (
-            patch("areyouok_telegram.llms.models.OpenAIModel") as mock_openai,
+            patch("areyouok_telegram.llms.models.OpenAIChatModel") as mock_openai,
             patch("areyouok_telegram.llms.models.OpenRouterProvider") as mock_provider,
         ):
-            mock_model = MagicMock(spec=OpenAIModel)
+            mock_model = MagicMock(spec=OpenAIChatModel)
             mock_openai.return_value = mock_model
             mock_provider_instance = MagicMock(spec=OpenRouterProvider)
             mock_provider.return_value = mock_provider_instance
@@ -205,7 +205,7 @@ class TestBaseModelConfig:
         mock_openrouter = MagicMock(spec=pydantic_ai.models.Model)
 
         with (
-            patch("areyouok_telegram.llms.models.OpenAIModel") as mock_openai_cls,
+            patch("areyouok_telegram.llms.models.OpenAIChatModel") as mock_openai_cls,
             patch("areyouok_telegram.llms.models.OpenRouterProvider") as mock_provider_cls,
             patch("areyouok_telegram.llms.models.FallbackModel") as mock_fallback,
             patch("areyouok_telegram.llms.models.should_retry_llm_error") as mock_retry_func,
@@ -246,7 +246,7 @@ class TestBaseModelConfig:
 
         mock_primary = MagicMock(spec=pydantic_ai.models.Model)
 
-        with patch("areyouok_telegram.llms.models.OpenAIModel") as mock_openai:
+        with patch("areyouok_telegram.llms.models.OpenAIChatModel") as mock_openai:
             mock_openai.return_value = mock_primary
 
             result = config.model
@@ -266,7 +266,7 @@ class TestBaseModelConfig:
         mock_openrouter = MagicMock(spec=pydantic_ai.models.Model)
 
         with (
-            patch("areyouok_telegram.llms.models.OpenAIModel") as mock_openai,
+            patch("areyouok_telegram.llms.models.OpenAIChatModel") as mock_openai,
             patch("areyouok_telegram.llms.models.OpenRouterProvider") as mock_provider,
         ):
             mock_openai.return_value = mock_openrouter

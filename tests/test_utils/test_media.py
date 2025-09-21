@@ -33,8 +33,8 @@ class TestTranscribeVoiceDataSync:
         mock_client = MagicMock()
         mock_transcription = MagicMock()
         mock_transcription.text = "This is a test transcription"
-        mock_transcription.usage.input_tokens = 10
-        mock_transcription.usage.output_tokens = 5
+        mock_transcription.usage.prompt_tokens = 10
+        mock_transcription.usage.completion_tokens = 5
         mock_client.audio.transcriptions.create.return_value = mock_transcription
 
         with (
@@ -180,8 +180,8 @@ class TestDownloadFile:
         # Create mock transcription objects
         mock_transcription = MagicMock()
         mock_transcription.text = "Hello world"
-        mock_transcription.usage.input_tokens = 10
-        mock_transcription.usage.output_tokens = 5
+        mock_transcription.usage.prompt_tokens = 10
+        mock_transcription.usage.completion_tokens = 5
         mock_transcriptions = [mock_transcription]
 
         chat_encryption_key = "test_encryption_key"

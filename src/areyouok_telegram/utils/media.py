@@ -231,8 +231,8 @@ async def _download_file(
                         usage_type="openai.voice_transcription",
                         model="openai/gpt-4o-transcribe",
                         provider="openai",
-                        input_tokens=sum(t.usage.input_tokens for t in transcriptions),
-                        output_tokens=sum(t.usage.output_tokens for t in transcriptions),
+                        input_tokens=sum(t.usage.prompt_tokens for t in transcriptions),
+                        output_tokens=sum(t.usage.completion_tokens for t in transcriptions),
                     )
 
                     # Store the transcription as a text file
