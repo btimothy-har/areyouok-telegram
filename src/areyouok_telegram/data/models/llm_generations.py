@@ -136,19 +136,17 @@ class LLMGenerations(Base):
         return generation
 
     @classmethod
-    @traced(extract_args=["chat_id", "session_id"])
+    @traced(extract_args=["session_id"])
     async def get_by_session(
         cls,
         db_conn: AsyncSession,
         *,
-        chat_id: str,
         session_id: str,
     ) -> list["LLMGenerations"]:
-        """Retrieve all generations for a specific chat and session.
+        """Retrieve all generations for a specific session.
 
         Args:
             db_conn: Database connection
-            chat_id: Chat ID to filter by
             session_id: Session ID to filter by
 
         Returns:
@@ -156,10 +154,7 @@ class LLMGenerations(Base):
         """
         stmt = (
             select(cls)
-            .where(
-                cls.chat_id == chat_id,
-                cls.session_id == session_id,
-            )
+            .where(cls.session_id == session_id)
             .order_by(cls.timestamp)
         )
 

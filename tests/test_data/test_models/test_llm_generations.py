@@ -164,7 +164,6 @@ class TestLLMGenerations:
 
         result = await LLMGenerations.get_by_session(
             db_conn=mock_db_conn,
-            chat_id="chat1",
             session_id="session1",
         )
 
