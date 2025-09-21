@@ -104,12 +104,14 @@ class TestAnonymizationAgent:
 
     async def test_anonymization_empty_input(self):
         """Test anonymization with empty input."""
-        test_model = TestModel(custom_output_text="")
+        # In pydantic-ai 1.0, TestModel doesn't allow empty strings as output
+        # Use a minimal placeholder response instead
+        test_model = TestModel(custom_output_text="[EMPTY]")
 
         with anonymization_agent.override(model=test_model):
             result = await anonymization_agent.run("")
 
-        assert not result.output
+        assert result.output == "[EMPTY]"
 
     async def test_anonymization_preserves_structure(self):
         """Test that anonymization preserves message structure."""

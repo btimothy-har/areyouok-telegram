@@ -7,7 +7,7 @@ from pydantic_ai.models.anthropic import AnthropicModel
 from pydantic_ai.models.fallback import FallbackModel
 from pydantic_ai.models.google import GoogleModel
 from pydantic_ai.models.google import GoogleModelSettings
-from pydantic_ai.models.openai import OpenAIModel
+from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.google import GoogleProvider
 from pydantic_ai.providers.openrouter import OpenRouterProvider
 
@@ -59,7 +59,7 @@ class BaseModelConfig:
                 settings=self.model_settings,
             )
         elif self.provider == "openai" and OPENAI_API_KEY:
-            return OpenAIModel(
+            return OpenAIChatModel(
                 model_name=self.model_id,
                 settings=self.model_settings,
             )
@@ -75,7 +75,7 @@ class BaseModelConfig:
     def openrouter_model(self) -> pydantic_ai.models.Model | None:
         """Return the OpenRouter model for this configuration."""
         if self.openrouter_id and OPENROUTER_API_KEY:
-            return OpenAIModel(
+            return OpenAIChatModel(
                 model_name=self.openrouter_id,
                 provider=OpenRouterProvider(api_key=OPENROUTER_API_KEY),
                 settings=self.model_settings,
