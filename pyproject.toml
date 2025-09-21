@@ -18,6 +18,7 @@ dependencies = [
     "logfire[sqlalchemy]",
     "logfire[system-metrics]",
     "pydantic-ai~=1.0.10",
+    "pydantic-evals[logfire]",
     "python-magic~=0.4.27",
     "openai~=1.107.0",
     "pydub~=0.25.1",
