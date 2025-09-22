@@ -79,13 +79,9 @@ class ChatEvent(pydantic.BaseModel):
 
             # Handle reactions, assuming only emoji reactions for simplicity
             # TODO: Handle custom and paid reactions
-            reaction_string = ", ".join(
-                [
-                    r.emoji
-                    for r in message.telegram_object.new_reaction
-                    if r.type == telegram.constants.ReactionType.EMOJI
-                ]
-            )
+            reaction_string = ", ".join([
+                r.emoji for r in message.telegram_object.new_reaction if r.type == telegram.constants.ReactionType.EMOJI
+            ])
             event_data = {
                 "emojis": reaction_string,
                 "to_message_id": str(message.message_id),
@@ -119,7 +115,7 @@ class ChatEvent(pydantic.BaseModel):
             user_id=context.chat_id if context.type == ContextType.ACTION.value else None,
         )
 
-    def to_model_message(self, bot_id: str, ts_reference: datetime) -> pydantic_ai.messages.ModelResponse:
+    def to_model_message(self, bot_id: str, ts_reference: datetime) -> pydantic_ai.messages.ModelMessage:
         """Convert the chat event to a model message for AI processing."""
 
         default_payload = {
