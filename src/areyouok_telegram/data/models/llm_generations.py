@@ -1,13 +1,15 @@
 """Model for tracking LLM generation outputs and metadata."""
 
+import dataclasses
 import hashlib
 import json
 from datetime import UTC
 from datetime import datetime
 from typing import Any
 
+import pydantic
+import pydantic_ai
 from sqlalchemy import Column
-from sqlalchemy import Float
 from sqlalchemy import Integer
 from sqlalchemy import String
 from sqlalchemy import Text
@@ -23,6 +25,36 @@ from areyouok_telegram.encryption.content import encrypt_content
 from areyouok_telegram.logging import traced
 
 
+def serialize_object(obj: Any) -> str:
+    """Serialize an object to JSON string or string representation.
+
+    Args:
+        obj: Object to serialize
+
+    Returns:
+        Serialized string representation
+    """
+    if obj is None:
+        return ""
+
+    try:
+        # Try Pydantic model first
+        if isinstance(obj, pydantic.BaseModel):
+            return json.dumps(obj.model_dump())
+
+        # Try object with __dict__
+        if dataclasses.is_dataclass(obj):
+            if hasattr(obj, "to_dict"):
+                return json.dumps(obj.to_dict())
+            else:
+                return json.dumps(dataclasses.asdict(obj))
+
+        return json.dumps(obj)
+
+    except (TypeError, ValueError):
+        return str(obj)
+
+
 class LLMGenerations(Base):
     """Track LLM generation outputs with encrypted payloads."""
 
@@ -36,15 +68,15 @@ class LLMGenerations(Base):
     # Core fields
     chat_id = Column(String, nullable=False)
     session_id = Column(String, nullable=False)
-    agent = Column(String, nullable=False)  # Agent name that generated the response
-    model = Column(String, nullable=False)  # Model name used for generation
+    agent = Column(String, nullable=False)
+    model = Column(String, nullable=False)
     timestamp = Column(TIMESTAMP(timezone=True), nullable=False)
 
     # Response data
-    response_type = Column(String, nullable=False)  # TextResponse, ReactionResponse, etc.
-    encrypted_payload = Column(Text, nullable=False)  # Full response object encrypted
-    encrypted_deps = Column(Text, nullable=True)  # Run dependencies encrypted (optional)
-    duration = Column(Float, nullable=False)  # Generation duration in seconds
+    response_type = Column(String, nullable=False)
+    encrypted_input = Column(Text, nullable=False)
+    encrypted_output = Column(Text, nullable=False)
+    encrypted_deps = Column(Text, nullable=True)
 
     @staticmethod
     def generate_generation_id(chat_id: str, session_id: str, timestamp: datetime, agent: str) -> str:
@@ -52,48 +84,17 @@ class LLMGenerations(Base):
         timestamp_str = timestamp.isoformat()
         return hashlib.sha256(f"{chat_id}:{session_id}:{timestamp_str}:{agent}".encode()).hexdigest()
 
-    @staticmethod
-    def _serialize_object(obj: Any) -> str:
-        """Serialize an object to JSON string or string representation.
-
-        Args:
-            obj: Object to serialize
-
-        Returns:
-            Serialized string representation
-        """
-        if obj is None:
-            return ""
-
+    @property
+    def run_input(self) -> Any:
+        decrypted_content = decrypt_content(self.encrypted_input)
         try:
-            # Try Pydantic model first
-            if hasattr(obj, "model_dump"):
-                return json.dumps(obj.model_dump())
-
-            # Try dataclass or object with __dict__
-            if hasattr(obj, "__dict__"):
-                return json.dumps(vars(obj))
-
-            # Try direct JSON serialization
-            return json.dumps(obj)
-
-        except (TypeError, ValueError):
-            # Fallback to string representation
-            return str(obj)
+            return json.loads(decrypted_content)
+        except (json.JSONDecodeError, TypeError):
+            return decrypted_content
 
     @property
-    def payload(self) -> Any:
-        """Get the decrypted payload.
-
-        Returns:
-            The decrypted and deserialized payload. For structured responses,
-            returns the original dict. For other types, returns the original value.
-
-        Note:
-            This method decrypts the payload each time it's called.
-            Consider caching the result if accessed frequently.
-        """
-        decrypted_content = decrypt_content(self.encrypted_payload)
+    def run_output(self) -> Any:
+        decrypted_content = decrypt_content(self.encrypted_output)
         try:
             return json.loads(decrypted_content)
         except (json.JSONDecodeError, TypeError):
@@ -101,16 +102,7 @@ class LLMGenerations(Base):
             return decrypted_content
 
     @property
-    def deps(self) -> Any:
-        """Get the decrypted dependencies.
-
-        Returns:
-            The decrypted and deserialized dependencies if available, None otherwise.
-
-        Note:
-            This method decrypts the deps each time it's called.
-            Consider caching the result if accessed frequently.
-        """
+    def run_deps(self) -> Any:
         if self.encrypted_deps is None:
             return None
 
@@ -129,10 +121,10 @@ class LLMGenerations(Base):
         *,
         chat_id: str,
         session_id: str,
-        agent: Any,  # pydantic_ai.Agent object
-        response: Any,  # Any response object - we'll handle serialization
-        duration: float,  # Generation duration in seconds
-        deps: Any = None,  # Optional dependencies passed to agent.run()
+        agent: pydantic_ai.Agent,
+        run_input: str | list[pydantic_ai.messages.ModelMessage],
+        run_result: pydantic_ai.agent.AgentRunResult,
+        run_deps: Any = None,
     ) -> None:
         """Create a new LLM generation record with encrypted payload.
 
@@ -145,9 +137,6 @@ class LLMGenerations(Base):
             duration: Generation duration in seconds
             deps: Optional dependencies passed to agent.run()
         """
-        now = datetime.now(UTC)
-
-        # Extract agent name and model name from agent object
         agent_name = agent.name
 
         # Extract model name using the same logic as LLMUsage
@@ -162,24 +151,14 @@ class LLMGenerations(Base):
         else:
             model_name = model.model_name
 
+        now = datetime.now(UTC)
+
         generation_id = cls.generate_generation_id(chat_id, session_id, now, agent_name)
 
-        # Handle response serialization
-        if hasattr(response, "model_dump"):
-            # Structured response object (e.g., TextResponse, ReactionResponse)
-            response_type = getattr(response, "response_type", response.__class__.__name__)
+        if isinstance(run_input, list):
+            run_input = pydantic_ai.messages.ModelMessagesTypeAdapter.dump_json(run_input).decode("utf-8")
         else:
-            # All other types - strings, primitives, objects
-            response_type = f"{response.__class__.__name__}Response"
-
-        payload_content = cls._serialize_object(response)
-        encrypted_payload = encrypt_content(payload_content)
-
-        # Handle optional deps serialization and encryption
-        encrypted_deps = None
-        if deps is not None:
-            deps_content = cls._serialize_object(deps)
-            encrypted_deps = encrypt_content(deps_content)
+            run_input = serialize_object(run_input)
 
         stmt = pg_insert(cls).values(
             generation_id=generation_id,
@@ -188,10 +167,10 @@ class LLMGenerations(Base):
             agent=agent_name,
             model=model_name,
             timestamp=now,
-            response_type=response_type,
-            encrypted_payload=encrypted_payload,
-            encrypted_deps=encrypted_deps,
-            duration=duration,
+            response_type=run_result.output.__class__.__name__,
+            encrypted_input=encrypt_content(run_input),
+            encrypted_output=encrypt_content(serialize_object(run_result.output)),
+            encrypted_deps=encrypt_content(serialize_object(run_deps)) if run_deps else None,
         )
 
         await db_conn.execute(stmt)
@@ -237,11 +216,7 @@ class LLMGenerations(Base):
         Returns:
             List of LLMGenerations instances
         """
-        stmt = (
-            select(cls)
-            .where(cls.session_id == session_id)
-            .order_by(cls.timestamp)
-        )
+        stmt = select(cls).where(cls.session_id == session_id).order_by(cls.timestamp)
 
         result = await db_conn.execute(stmt)
         generations = result.scalars().all()
