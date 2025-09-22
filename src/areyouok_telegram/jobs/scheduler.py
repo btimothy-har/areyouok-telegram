@@ -45,3 +45,30 @@ async def schedule_job(
         first=first,
         kwargs=job_kwargs,
     )
+
+
+async def run_job_once(
+    context: ContextTypes.DEFAULT_TYPE,
+    job: BaseJob,
+    when: datetime,
+    job_kwargs: dict = None,
+):
+    context.job_queue.run_once(
+        callback=job.run,
+        when=when,
+        name=job.name,
+        job_kwargs={
+            "id": job.id,
+            "coalesce": job_kwargs.get("coalesce", True) if job_kwargs else True,
+            "max_instances": job_kwargs.get("max_instances", 1) if job_kwargs else 1,
+            **(job_kwargs or {}),
+        },
+    )
+
+    logfire.info(
+        f"Scheduled one-time job {job.name} to run at {when.isoformat()}.",
+        job_class=job.__class__.__name__,
+        job_id=job.id,
+        when=when,
+        kwargs=job_kwargs,
+    )
