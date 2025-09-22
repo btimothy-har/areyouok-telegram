@@ -88,8 +88,8 @@ async def run_agent_with_tracking(
             session_id=session_id,
             agent=agent,
             result=result,
-            duration=generation_duration,
-            deps=run_kwargs.get("deps"),
+            runtime=generation_duration,
+            run_kwargs=run_kwargs,
         )
     )
     return result

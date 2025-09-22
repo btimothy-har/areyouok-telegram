@@ -1,6 +1,5 @@
 from datetime import UTC
 from datetime import datetime
-from typing import Any
 
 import logfire
 import pydantic_ai
@@ -186,8 +185,8 @@ async def track_llm_usage(
     session_id: str,
     agent: pydantic_ai.Agent,
     result: pydantic_ai.agent.AgentRunResult,
-    duration: float,
-    deps: Any = None,
+    runtime: float,
+    run_kwargs: dict,
 ) -> None:
     try:
         async with async_database() as db_conn:
@@ -198,16 +197,18 @@ async def track_llm_usage(
                 session_id=session_id,
                 agent=agent,
                 data=result.usage(),
+                runtime=runtime,
             )
             await LLMGenerations.create(
                 db_conn=db_conn,
                 chat_id=chat_id,
                 session_id=session_id,
                 agent=agent,
-                response=result.output,
-                duration=duration,
-                deps=deps,
+                run_input=run_kwargs.get("user_prompt") or run_kwargs.get("message_history"),
+                run_result=result,
+                run_deps=run_kwargs.get("deps"),
             )
+
     except Exception as e:
         # Log the error but don't raise it
         logfire.exception(
