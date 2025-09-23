@@ -108,6 +108,7 @@ class ConversationJob(BaseJob):
 
             if inactivity_duration > timedelta(minutes=CHAT_SESSION_TIMEOUT_MINS):
                 context = await self._get_session_context()
+                message_history = []  # Initialize message_history before conditional logic
                 if context:
                     logfire.warning(
                         "Context already exists for session, skipping compression.",
@@ -137,20 +138,22 @@ class ConversationJob(BaseJob):
                                 "nothing to compress."
                             )
 
-                    if len(message_history) > 5:
-                        await run_job_once(
-                            context=self._run_context,
-                            job=EvaluationsJob(
-                                chat_id=self.chat_id,
-                                session_id=self.active_session.session_id,
-                            ),
-                            when=datetime.now(UTC) + timedelta(seconds=10),
-                        )
+                # Check if we should run evaluations (only if we actually got message history)
+                if len(message_history) > 5:
+                    await run_job_once(
+                        context=self._run_context,
+                        job=EvaluationsJob(
+                            chat_id=self.chat_id,
+                            session_id=self.active_session.session_id,
+                        ),
+                        when=datetime.now(UTC) + timedelta(seconds=10),
+                    )
 
-                    await data_operations.close_chat_session(chat_session=self.active_session)
-                    logfire.info(f"Session {self.active_session.session_id} closed due to inactivity.")
+                # Always close session and stop job when inactive, regardless of context existence
+                await data_operations.close_chat_session(chat_session=self.active_session)
+                logfire.info(f"Session {self.active_session.session_id} closed due to inactivity.")
 
-                    await self.stop()
+                await self.stop()
 
         else:
             with logfire.span(
