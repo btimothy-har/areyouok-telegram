@@ -1,4 +1,3 @@
-import json
 from datetime import UTC
 from datetime import datetime
 
@@ -79,7 +78,7 @@ class LLMUsage(Base):
             input_tokens=data.request_tokens,
             output_tokens=data.response_tokens,
             runtime=runtime,
-            details=json.dumps(data.details) if data.details else None,
+            details=data.details if data.details else None,
         )
 
         result = await db_conn.execute(stmt)
