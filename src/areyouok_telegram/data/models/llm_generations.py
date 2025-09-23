@@ -74,8 +74,8 @@ class LLMGenerations(Base):
 
     # Response data
     response_type = Column(String, nullable=False)
-    encrypted_input = Column(Text, nullable=False)
     encrypted_output = Column(Text, nullable=False)
+    encrypted_messages = Column(Text, nullable=False)
     encrypted_deps = Column(Text, nullable=True)
 
     @staticmethod
@@ -85,10 +85,11 @@ class LLMGenerations(Base):
         return hashlib.sha256(f"{chat_id}:{session_id}:{timestamp_str}:{agent}".encode()).hexdigest()
 
     @property
-    def run_input(self) -> Any:
-        decrypted_content = decrypt_content(self.encrypted_input)
+    def run_messages(self) -> pydantic_ai.messages.ModelMessage:
+        decrypted_content = decrypt_content(self.encrypted_messages)
         try:
-            return json.loads(decrypted_content)
+            message_json = json.loads(decrypted_content)
+            return pydantic_ai.messages.ModelMessagesTypeAdapter.validate_python(message_json)
         except (json.JSONDecodeError, TypeError):
             return decrypted_content
 
@@ -122,7 +123,6 @@ class LLMGenerations(Base):
         chat_id: str,
         session_id: str,
         agent: pydantic_ai.Agent,
-        run_input: str | list[pydantic_ai.messages.ModelMessage],
         run_result: pydantic_ai.agent.AgentRunResult,
         run_deps: Any = None,
     ) -> None:
@@ -155,11 +155,6 @@ class LLMGenerations(Base):
 
         generation_id = cls.generate_generation_id(chat_id, session_id, now, agent_name)
 
-        if isinstance(run_input, list):
-            run_input = pydantic_ai.messages.ModelMessagesTypeAdapter.dump_json(run_input).decode("utf-8")
-        else:
-            run_input = serialize_object(run_input)
-
         stmt = pg_insert(cls).values(
             generation_id=generation_id,
             chat_id=chat_id,
@@ -168,8 +163,8 @@ class LLMGenerations(Base):
             model=model_name,
             timestamp=now,
             response_type=run_result.output.__class__.__name__,
-            encrypted_input=encrypt_content(run_input),
             encrypted_output=encrypt_content(serialize_object(run_result.output)),
+            encrypted_messages=encrypt_content(run_result.all_messages_json().decode("utf-8")),
             encrypted_deps=encrypt_content(serialize_object(run_deps)) if run_deps else None,
         )
 

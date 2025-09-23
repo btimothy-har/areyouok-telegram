@@ -204,7 +204,6 @@ async def track_llm_usage(
                 chat_id=chat_id,
                 session_id=session_id,
                 agent=agent,
-                run_input=run_kwargs.get("user_prompt") or run_kwargs.get("message_history"),
                 run_result=result,
                 run_deps=run_kwargs.get("deps"),
             )
