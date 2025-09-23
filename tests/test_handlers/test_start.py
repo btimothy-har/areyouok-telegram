@@ -8,7 +8,6 @@ import pytest
 import telegram
 from telegram.ext import ContextTypes
 
-from areyouok_telegram.data import SYSTEM_USER_ID
 from areyouok_telegram.data import GuidedSessionType
 from areyouok_telegram.handlers.commands.start import on_start_command
 
@@ -146,8 +145,6 @@ class TestOnStartCommand:
         # Create mock context
         mock_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
         mock_context.bot = AsyncMock()
-        mock_bot_message = MagicMock(spec=telegram.Message)
-        mock_context.bot.send_message.return_value = mock_bot_message
 
         # Create mock session and onboarding session
         mock_session = MagicMock()
@@ -185,22 +182,13 @@ class TestOnStartCommand:
                 chat_id=str(mock_telegram_chat.id), session=mock_session, stype=GuidedSessionType.ONBOARDING
             )
 
-            # Verify session events were logged
-            assert mock_new_session_event.call_count == 2
-
-            # First call: user message event
-            user_event_call = mock_new_session_event.call_args_list[0]
-            assert user_event_call[1]["session"] == mock_session
-            assert user_event_call[1]["message"] == mock_telegram_message
-            assert user_event_call[1]["user_id"] == str(mock_telegram_user.id)
-            assert user_event_call[1]["is_user"]
-
-            # Second call: bot greeting message event
-            bot_event_call = mock_new_session_event.call_args_list[1]
-            assert bot_event_call[1]["session"] == mock_session
-            assert bot_event_call[1]["message"] == mock_bot_message
-            assert bot_event_call[1]["user_id"] == SYSTEM_USER_ID
-            assert not bot_event_call[1]["is_user"]
+            # Verify session event was logged (only user message now)
+            mock_new_session_event.assert_called_once_with(
+                session=mock_session,
+                message=mock_telegram_message,
+                user_id=str(mock_telegram_user.id),
+                is_user=True,
+            )
 
             # Verify greeting message was sent
             mock_context.bot.send_message.assert_called_once_with(
