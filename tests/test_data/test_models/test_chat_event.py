@@ -377,3 +377,161 @@ class TestChatEvent:
 
         # System should still be treated as bot response
         assert_model_message_format(result, pydantic_ai.messages.ModelResponse)
+
+    def test_from_message_with_reply_keyboard_markup(self, mock_messages_sqlalchemy, mock_telegram_message):
+        """Test creating ChatEvent from message with ReplyKeyboardMarkup."""
+        # Create mock keyboard buttons
+        button1 = telegram.KeyboardButton("Option 1")
+        button2 = telegram.KeyboardButton("Option 2")
+        button3 = "Option 3"  # Non-KeyboardButton object
+
+        # Create keyboard markup with multiple rows
+        keyboard = [[button1, button2], [button3]]
+        reply_markup = telegram.ReplyKeyboardMarkup(keyboard)
+
+        mock_telegram_message.reply_markup = reply_markup
+        mock_messages_sqlalchemy.telegram_object = mock_telegram_message
+
+        result = ChatEvent.from_message(mock_messages_sqlalchemy, [])
+
+        assert result.event_type == "message"
+        assert "keyboard_options" in result.event_data
+        assert result.event_data["keyboard_options"] == ["Option 1", "Option 2", "Option 3"]
+
+    def test_from_message_with_reply_keyboard_markup_empty(self, mock_messages_sqlalchemy, mock_telegram_message):
+        """Test creating ChatEvent from message with empty ReplyKeyboardMarkup."""
+        # Create empty keyboard markup
+        keyboard = []
+        reply_markup = telegram.ReplyKeyboardMarkup(keyboard)
+
+        mock_telegram_message.reply_markup = reply_markup
+        mock_messages_sqlalchemy.telegram_object = mock_telegram_message
+
+        result = ChatEvent.from_message(mock_messages_sqlalchemy, [])
+
+        assert result.event_type == "message"
+        assert "keyboard_options" in result.event_data
+        assert result.event_data["keyboard_options"] == []
+
+    def test_from_message_with_reply_keyboard_markup_mixed_types(self, mock_messages_sqlalchemy, mock_telegram_message):
+        """Test creating ChatEvent from message with ReplyKeyboardMarkup containing mixed button types."""
+        # Create keyboard with KeyboardButton objects and other types
+        keyboard_button = telegram.KeyboardButton("Keyboard Button")
+        string_button = "String Button"
+        custom_button = type("CustomButton", (), {})()
+        custom_button.text = "Custom Button"  # Custom button with text attribute
+
+        keyboard = [[keyboard_button, string_button, custom_button]]
+        reply_markup = telegram.ReplyKeyboardMarkup(keyboard)
+
+        mock_telegram_message.reply_markup = reply_markup
+        mock_messages_sqlalchemy.telegram_object = mock_telegram_message
+
+        result = ChatEvent.from_message(mock_messages_sqlalchemy, [])
+
+        assert result.event_type == "message"
+        assert "keyboard_options" in result.event_data
+        # KeyboardButton should use .text, others should be str() converted
+        expected_options = ["Keyboard Button", "String Button", str(custom_button)]
+        assert result.event_data["keyboard_options"] == expected_options
+
+    def test_from_message_with_inline_keyboard_markup(self, mock_messages_sqlalchemy, mock_telegram_message):
+        """Test creating ChatEvent from message with InlineKeyboardMarkup."""
+        # Create mock inline keyboard buttons
+        button1 = telegram.InlineKeyboardButton(text="Button 1", callback_data="callback_1")
+        button2 = telegram.InlineKeyboardButton(text="Button 2", callback_data="callback_2")
+        button3 = telegram.InlineKeyboardButton(text="Button 3", callback_data="callback_3")
+
+        # Create inline keyboard markup with multiple rows
+        keyboard = [[button1, button2], [button3]]
+        inline_markup = telegram.InlineKeyboardMarkup(keyboard)
+
+        mock_telegram_message.reply_markup = inline_markup
+        mock_messages_sqlalchemy.telegram_object = mock_telegram_message
+
+        result = ChatEvent.from_message(mock_messages_sqlalchemy, [])
+
+        assert result.event_type == "message"
+        assert "message_buttons" in result.event_data
+        expected_buttons = [
+            {"text": "Button 1", "callback_data": "callback_1"},
+            {"text": "Button 2", "callback_data": "callback_2"},
+            {"text": "Button 3", "callback_data": "callback_3"},
+        ]
+        assert result.event_data["message_buttons"] == expected_buttons
+
+    def test_from_message_with_inline_keyboard_markup_empty(self, mock_messages_sqlalchemy, mock_telegram_message):
+        """Test creating ChatEvent from message with empty InlineKeyboardMarkup."""
+        # Create empty inline keyboard markup
+        keyboard = []
+        inline_markup = telegram.InlineKeyboardMarkup(keyboard)
+
+        mock_telegram_message.reply_markup = inline_markup
+        mock_messages_sqlalchemy.telegram_object = mock_telegram_message
+
+        result = ChatEvent.from_message(mock_messages_sqlalchemy, [])
+
+        assert result.event_type == "message"
+        assert "message_buttons" in result.event_data
+        assert result.event_data["message_buttons"] == []
+
+    def test_from_message_with_inline_keyboard_markup_no_callback_data(self, mock_messages_sqlalchemy, mock_telegram_message):
+        """Test creating ChatEvent from message with InlineKeyboardMarkup buttons without callback_data."""
+        # Create inline keyboard buttons with and without callback_data
+        button1 = telegram.InlineKeyboardButton(text="Button 1", callback_data="callback_1")
+        button2 = telegram.InlineKeyboardButton(text="Button 2", url="https://example.com")  # No callback_data
+        button3 = telegram.InlineKeyboardButton(text="Button 3", callback_data=None)  # Explicit None
+
+        keyboard = [[button1], [button2], [button3]]
+        inline_markup = telegram.InlineKeyboardMarkup(keyboard)
+
+        mock_telegram_message.reply_markup = inline_markup
+        mock_messages_sqlalchemy.telegram_object = mock_telegram_message
+
+        result = ChatEvent.from_message(mock_messages_sqlalchemy, [])
+
+        assert result.event_type == "message"
+        assert "message_buttons" in result.event_data
+        expected_buttons = [
+            {"text": "Button 1", "callback_data": "callback_1"},
+            {"text": "Button 2", "callback_data": None},  # url button has no callback_data
+            {"text": "Button 3", "callback_data": None},  # explicit None
+        ]
+        assert result.event_data["message_buttons"] == expected_buttons
+
+    def test_from_message_with_single_row_inline_keyboard(self, mock_messages_sqlalchemy, mock_telegram_message):
+        """Test creating ChatEvent from message with single row InlineKeyboardMarkup."""
+        # Create inline keyboard with single row
+        button1 = telegram.InlineKeyboardButton(text="Yes", callback_data="yes")
+        button2 = telegram.InlineKeyboardButton(text="No", callback_data="no")
+
+        keyboard = [[button1, button2]]  # Single row with two buttons
+        inline_markup = telegram.InlineKeyboardMarkup(keyboard)
+
+        mock_telegram_message.reply_markup = inline_markup
+        mock_messages_sqlalchemy.telegram_object = mock_telegram_message
+
+        result = ChatEvent.from_message(mock_messages_sqlalchemy, [])
+
+        assert result.event_type == "message"
+        assert "message_buttons" in result.event_data
+        expected_buttons = [
+            {"text": "Yes", "callback_data": "yes"},
+            {"text": "No", "callback_data": "no"},
+        ]
+        assert result.event_data["message_buttons"] == expected_buttons
+
+    def test_from_message_without_reply_markup(self, mock_messages_sqlalchemy, mock_telegram_message):
+        """Test creating ChatEvent from message without reply_markup (baseline test)."""
+        # Ensure no reply_markup is set
+        mock_telegram_message.reply_markup = None
+        mock_messages_sqlalchemy.telegram_object = mock_telegram_message
+
+        result = ChatEvent.from_message(mock_messages_sqlalchemy, [])
+
+        assert result.event_type == "message"
+        assert "keyboard_options" not in result.event_data
+        assert "message_buttons" not in result.event_data
+        # Should still have basic message data
+        assert "text" in result.event_data
+        assert "message_id" in result.event_data

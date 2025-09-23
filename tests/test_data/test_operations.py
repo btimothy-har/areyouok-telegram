@@ -356,6 +356,100 @@ class TestNewSessionEvent:
         mock_extract_media.assert_called_once()
         mock_handle_unsupported.assert_called_once_with(mock_db_conn, chat_id="chat456", message_id=123)
 
+    @pytest.mark.asyncio
+    async def test_message_edit_date_activity_tracking(self, frozen_time):
+        """Test that message edit_date triggers new_activity call."""
+        # Test line 110: Message edit_date activity tracking
+        mock_session = MagicMock()
+        mock_session.session_id = "session123"
+        mock_session.chat_id = "chat456"
+        mock_session.session_start = datetime(2024, 1, 1, tzinfo=UTC)
+        mock_session.new_message = AsyncMock()
+        mock_session.new_activity = AsyncMock()
+
+        mock_chat = MagicMock()
+        mock_chat.retrieve_key.return_value = "encryption_key"
+
+        # Create a mock message with both date and edit_date
+        mock_message = MagicMock(spec=telegram.Message)
+        mock_message.date = frozen_time
+        mock_message.edit_date = frozen_time  # This should trigger new_activity call
+        mock_message.message_id = 123
+
+        with patch("areyouok_telegram.data.operations.async_database") as mock_async_db:
+            mock_db_conn = AsyncMock()
+            mock_async_db.return_value.__aenter__.return_value = mock_db_conn
+
+            with (
+                patch(
+                    "areyouok_telegram.data.operations.Chats.get_by_id", new=AsyncMock(return_value=mock_chat)
+                ),
+                patch(
+                    "areyouok_telegram.data.operations.Messages.new_or_update", new=AsyncMock()
+                ),
+                patch(
+                    "areyouok_telegram.data.operations.extract_media_from_telegram_message",
+                    new=AsyncMock(return_value=0),
+                ),
+            ):
+                await data_operations.new_session_event(
+                    session=mock_session,
+                    message=mock_message,
+                    user_id="user789",
+                    is_user=True,
+                )
+
+        # Verify both new_message and new_activity were called
+        mock_session.new_message.assert_called_once_with(mock_db_conn, timestamp=frozen_time, is_user=True)
+        # This is the key assertion for line 110 - new_activity should be called with edit_date
+        mock_session.new_activity.assert_called_once_with(mock_db_conn, timestamp=frozen_time, is_user=True)
+
+    @pytest.mark.asyncio
+    async def test_message_without_edit_date_no_activity_tracking(self, frozen_time):
+        """Test that message without edit_date does not trigger new_activity call."""
+        mock_session = MagicMock()
+        mock_session.session_id = "session123"
+        mock_session.chat_id = "chat456"
+        mock_session.session_start = datetime(2024, 1, 1, tzinfo=UTC)
+        mock_session.new_message = AsyncMock()
+        mock_session.new_activity = AsyncMock()
+
+        mock_chat = MagicMock()
+        mock_chat.retrieve_key.return_value = "encryption_key"
+
+        # Create a mock message without edit_date
+        mock_message = MagicMock(spec=telegram.Message)
+        mock_message.date = frozen_time
+        mock_message.edit_date = None  # No edit_date
+        mock_message.message_id = 123
+
+        with patch("areyouok_telegram.data.operations.async_database") as mock_async_db:
+            mock_db_conn = AsyncMock()
+            mock_async_db.return_value.__aenter__.return_value = mock_db_conn
+
+            with (
+                patch(
+                    "areyouok_telegram.data.operations.Chats.get_by_id", new=AsyncMock(return_value=mock_chat)
+                ),
+                patch(
+                    "areyouok_telegram.data.operations.Messages.new_or_update", new=AsyncMock()
+                ),
+                patch(
+                    "areyouok_telegram.data.operations.extract_media_from_telegram_message",
+                    new=AsyncMock(return_value=0),
+                ),
+            ):
+                await data_operations.new_session_event(
+                    session=mock_session,
+                    message=mock_message,
+                    user_id="user789",
+                    is_user=True,
+                )
+
+        # Verify new_message was called but new_activity was NOT called
+        mock_session.new_message.assert_called_once_with(mock_db_conn, timestamp=frozen_time, is_user=True)
+        mock_session.new_activity.assert_not_called()
+
 
 class TestCloseChatSession:
     """Test the close_chat_session function."""
@@ -510,4 +604,294 @@ class TestTrackCommandUsage:
             command="test_command",
             chat_id="test_chat",
             session_id="test_session",
+        )
+
+
+class TestMissingGuidedSessionTypeError:
+    """Test the MissingGuidedSessionTypeError exception."""
+
+    def test_missing_guided_session_type_error_initialization(self):
+        """Test MissingGuidedSessionTypeError initialization with correct message."""
+        # Test lines 25-26: MissingGuidedSessionTypeError initialization
+        error = data_operations.MissingGuidedSessionTypeError()
+
+        # Verify the error message is correct
+        assert str(error) == "Guided Session Type must be provided."
+        assert isinstance(error, RuntimeError)
+
+    def test_missing_guided_session_type_error_inheritance(self):
+        """Test that MissingGuidedSessionTypeError inherits from RuntimeError."""
+        error = data_operations.MissingGuidedSessionTypeError()
+        assert isinstance(error, RuntimeError)
+        assert isinstance(error, Exception)
+
+    @pytest.mark.asyncio
+    async def test_missing_guided_session_type_error_raised_in_get_or_create(self):
+        """Test MissingGuidedSessionTypeError raised when stype is None."""
+        # Test line 64: MissingGuidedSessionTypeError raised when stype is None
+        mock_session = MagicMock()
+        mock_session.session_id = "session123"
+
+        with patch("areyouok_telegram.data.operations.async_database") as mock_async_db:
+            mock_db_conn = AsyncMock()
+            mock_async_db.return_value.__aenter__.return_value = mock_db_conn
+
+            with patch(
+                "areyouok_telegram.data.operations.GuidedSessions.get_by_chat_id", new=AsyncMock(return_value=[])
+            ):
+                # Call with create_if_not_exists=True and stype=None should raise the error
+                with pytest.raises(data_operations.MissingGuidedSessionTypeError) as exc_info:
+                    await data_operations.get_or_create_guided_session(
+                        chat_id="chat123", session=mock_session, stype=None, create_if_not_exists=True
+                    )
+
+                # Verify the error message
+                assert str(exc_info.value) == "Guided Session Type must be provided."
+
+
+class TestTrackLLMUsage:
+    """Test the track_llm_usage function."""
+
+    @pytest.mark.asyncio
+    async def test_track_llm_usage_success(self):
+        """Test successful LLM usage tracking."""
+        # Create mock objects for pydantic-ai components
+        mock_agent = MagicMock()
+        mock_agent.name = "test_agent"
+
+        mock_usage = MagicMock()
+        mock_run_result = MagicMock()
+        mock_run_result.usage.return_value = mock_usage
+
+        run_kwargs = {"deps": {"key": "value"}}
+
+        with patch("areyouok_telegram.data.operations.async_database") as mock_async_db:
+            mock_db_conn = AsyncMock()
+            mock_async_db.return_value.__aenter__.return_value = mock_db_conn
+
+            with (
+                patch(
+                    "areyouok_telegram.data.operations.LLMUsage.track_pydantic_usage",
+                    new=AsyncMock(),
+                ) as mock_track_usage,
+                patch(
+                    "areyouok_telegram.data.operations.LLMGenerations.create",
+                    new=AsyncMock(),
+                ) as mock_create_generation,
+            ):
+                # Should not raise any exception
+                await data_operations.track_llm_usage(
+                    chat_id="chat123",
+                    session_id="session456",
+                    agent=mock_agent,
+                    result=mock_run_result,
+                    runtime=1.23,
+                    run_kwargs=run_kwargs,
+                )
+
+        # Verify both tracking methods were called
+        mock_track_usage.assert_called_once_with(
+            db_conn=mock_db_conn,
+            chat_id="chat123",
+            session_id="session456",
+            agent=mock_agent,
+            data=mock_usage,
+            runtime=1.23,
+        )
+        mock_create_generation.assert_called_once_with(
+            db_conn=mock_db_conn,
+            chat_id="chat123",
+            session_id="session456",
+            agent=mock_agent,
+            run_result=mock_run_result,
+            run_deps={"key": "value"},
+        )
+
+    @pytest.mark.asyncio
+    async def test_track_llm_usage_exception_handling_track_usage_failure(self):
+        """Test exception handling when LLMUsage.track_pydantic_usage fails."""
+        # Test lines 191-213: track_llm_usage exception handling and logging
+        mock_agent = MagicMock()
+        mock_agent.name = "test_agent"
+
+        mock_usage = MagicMock()
+        mock_run_result = MagicMock()
+        mock_run_result.usage.return_value = mock_usage
+
+        run_kwargs = {"deps": {"key": "value"}}
+
+        # Mock an exception during LLMUsage.track_pydantic_usage
+        test_exception = Exception("Database connection failed")
+
+        with patch("areyouok_telegram.data.operations.async_database") as mock_async_db:
+            mock_db_conn = AsyncMock()
+            mock_async_db.return_value.__aenter__.return_value = mock_db_conn
+
+            with (
+                patch(
+                    "areyouok_telegram.data.operations.LLMUsage.track_pydantic_usage",
+                    new=AsyncMock(side_effect=test_exception),
+                ) as mock_track_usage,
+                patch(
+                    "areyouok_telegram.data.operations.LLMGenerations.create",
+                    new=AsyncMock(),
+                ) as mock_create_generation,
+                patch("areyouok_telegram.data.operations.logfire.exception") as mock_logfire_exception,
+            ):
+                # Should not raise the exception - it should be caught and logged
+                await data_operations.track_llm_usage(
+                    chat_id="chat123",
+                    session_id="session456",
+                    agent=mock_agent,
+                    result=mock_run_result,
+                    runtime=1.23,
+                    run_kwargs=run_kwargs,
+                )
+
+        # Verify the exception was logged via logfire.exception
+        mock_logfire_exception.assert_called_once_with(
+            f"Failed to log LLM usage: {test_exception}",
+            agent="test_agent",
+            chat_id="chat123",
+            session_id="session456",
+        )
+
+        # Verify that track_usage was called (and failed)
+        mock_track_usage.assert_called_once()
+        # LLMGenerations.create should not be called if track_usage fails first
+        mock_create_generation.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_track_llm_usage_exception_handling_create_generation_failure(self):
+        """Test exception handling when LLMGenerations.create fails."""
+        mock_agent = MagicMock()
+        mock_agent.name = "test_agent"
+
+        mock_usage = MagicMock()
+        mock_run_result = MagicMock()
+        mock_run_result.usage.return_value = mock_usage
+
+        run_kwargs = {"deps": {"key": "value"}}
+
+        # Mock an exception during LLMGenerations.create
+        test_exception = Exception("Generation creation failed")
+
+        with patch("areyouok_telegram.data.operations.async_database") as mock_async_db:
+            mock_db_conn = AsyncMock()
+            mock_async_db.return_value.__aenter__.return_value = mock_db_conn
+
+            with (
+                patch(
+                    "areyouok_telegram.data.operations.LLMUsage.track_pydantic_usage",
+                    new=AsyncMock(),
+                ) as mock_track_usage,
+                patch(
+                    "areyouok_telegram.data.operations.LLMGenerations.create",
+                    new=AsyncMock(side_effect=test_exception),
+                ) as mock_create_generation,
+                patch("areyouok_telegram.data.operations.logfire.exception") as mock_logfire_exception,
+            ):
+                # Should not raise the exception - it should be caught and logged
+                await data_operations.track_llm_usage(
+                    chat_id="chat123",
+                    session_id="session456",
+                    agent=mock_agent,
+                    result=mock_run_result,
+                    runtime=1.23,
+                    run_kwargs=run_kwargs,
+                )
+
+        # Verify the exception was logged via logfire.exception
+        mock_logfire_exception.assert_called_once_with(
+            f"Failed to log LLM usage: {test_exception}",
+            agent="test_agent",
+            chat_id="chat123",
+            session_id="session456",
+        )
+
+        # Verify both tracking methods were called
+        mock_track_usage.assert_called_once()
+        mock_create_generation.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_track_llm_usage_exception_handling_database_connection_failure(self):
+        """Test exception handling when database connection fails."""
+        mock_agent = MagicMock()
+        mock_agent.name = "test_agent"
+
+        mock_run_result = MagicMock()
+        run_kwargs = {"deps": {"key": "value"}}
+
+        # Mock an exception during database connection
+        test_exception = Exception("Database connection timeout")
+
+        with (
+            patch(
+                "areyouok_telegram.data.operations.async_database",
+                side_effect=test_exception,
+            ),
+            patch("areyouok_telegram.data.operations.logfire.exception") as mock_logfire_exception,
+        ):
+            # Should not raise the exception - it should be caught and logged
+            await data_operations.track_llm_usage(
+                chat_id="chat123",
+                session_id="session456",
+                agent=mock_agent,
+                result=mock_run_result,
+                runtime=1.23,
+                run_kwargs=run_kwargs,
+            )
+
+        # Verify the exception was logged via logfire.exception
+        mock_logfire_exception.assert_called_once_with(
+            f"Failed to log LLM usage: {test_exception}",
+            agent="test_agent",
+            chat_id="chat123",
+            session_id="session456",
+        )
+
+    @pytest.mark.asyncio
+    async def test_track_llm_usage_empty_run_kwargs_deps(self):
+        """Test track_llm_usage with empty deps in run_kwargs."""
+        mock_agent = MagicMock()
+        mock_agent.name = "test_agent"
+
+        mock_usage = MagicMock()
+        mock_run_result = MagicMock()
+        mock_run_result.usage.return_value = mock_usage
+
+        # run_kwargs without 'deps' key
+        run_kwargs = {}
+
+        with patch("areyouok_telegram.data.operations.async_database") as mock_async_db:
+            mock_db_conn = AsyncMock()
+            mock_async_db.return_value.__aenter__.return_value = mock_db_conn
+
+            with (
+                patch(
+                    "areyouok_telegram.data.operations.LLMUsage.track_pydantic_usage",
+                    new=AsyncMock(),
+                ) as mock_track_usage,
+                patch(
+                    "areyouok_telegram.data.operations.LLMGenerations.create",
+                    new=AsyncMock(),
+                ) as mock_create_generation,
+            ):
+                await data_operations.track_llm_usage(
+                    chat_id="chat123",
+                    session_id="session456",
+                    agent=mock_agent,
+                    result=mock_run_result,
+                    runtime=1.23,
+                    run_kwargs=run_kwargs,
+                )
+
+        # Verify create was called with None for run_deps
+        mock_create_generation.assert_called_once_with(
+            db_conn=mock_db_conn,
+            chat_id="chat123",
+            session_id="session456",
+            agent=mock_agent,
+            run_result=mock_run_result,
+            run_deps=None,  # Should be None when 'deps' key is missing
         )

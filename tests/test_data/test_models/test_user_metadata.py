@@ -798,3 +798,143 @@ class TestInvalidTimezoneError:
         error = InvalidTimezoneError("Invalid/Timezone")
         assert isinstance(error, InvalidFieldValueError)
         assert isinstance(error, Exception)
+
+
+class TestResponseWaitTime:
+    """Test response_wait_time property and edge cases."""
+
+    def setup_method(self):
+        """Clear cache before each test."""
+        UserMetadata._metadata_cache.clear()
+
+    def test_get_response_wait_time_with_none_response_speed_adj(self):
+        """Test get_response_wait_time() when response_speed_adj is None (lines 166-167)."""
+        metadata = UserMetadata()
+        metadata.user_key = "test_key"
+
+        # Pre-populate cache with response_speed but no response_speed_adj (None)
+        UserMetadata._metadata_cache[metadata.user_key] = {
+            "response_speed": "normal",
+            "response_speed_adj": None
+        }
+
+        result = metadata.response_wait_time
+
+        # Should use response_speed_adj = 0 when None, and normal = 2.0
+        # max(2.0 + 0, 0) = 2.0
+        assert result == 2.0
+
+    def test_get_response_wait_time_with_missing_response_speed_adj(self):
+        """Test get_response_wait_time() when response_speed_adj is missing from metadata."""
+        metadata = UserMetadata()
+        metadata.user_key = "test_key"
+
+        # Pre-populate cache with response_speed but no response_speed_adj key at all
+        UserMetadata._metadata_cache[metadata.user_key] = {
+            "response_speed": "fast"
+        }
+
+        result = metadata.response_wait_time
+
+        # Should use response_speed_adj = 0 when missing, and fast = 0.0
+        # max(0.0 + 0, 0) = 0.0
+        assert result == 0.0
+
+    def test_get_response_wait_time_with_response_speed_adj_present(self):
+        """Test get_response_wait_time() when response_speed_adj has a value."""
+        metadata = UserMetadata()
+        metadata.user_key = "test_key"
+
+        # Pre-populate cache with both values
+        UserMetadata._metadata_cache[metadata.user_key] = {
+            "response_speed": "slow",
+            "response_speed_adj": -2
+        }
+
+        result = metadata.response_wait_time
+
+        # Should use response_speed_adj = -2, and slow = 5.0
+        # max(5.0 + (-2), 0) = max(3.0, 0) = 3.0
+        assert result == 3.0
+
+
+class TestValidateFieldInvalidTypes:
+    """Test validate_field with invalid types for specific fields."""
+
+    def test_validate_field_country_with_invalid_type(self):
+        """Test validate_field for country with invalid type (line 285)."""
+        # Test with non-string type (integer)
+        with pytest.raises(InvalidFieldValueError) as exc_info:
+            UserMetadata.validate_field("country", 123)
+
+        assert exc_info.value.field == "country"
+        assert exc_info.value.value == 123
+        assert exc_info.value.expected == "a string or None"
+
+        # Test with another non-string type (list)
+        with pytest.raises(InvalidFieldValueError) as exc_info:
+            UserMetadata.validate_field("country", ["USA", "CAN"])
+
+        assert exc_info.value.field == "country"
+        assert exc_info.value.value == ["USA", "CAN"]
+        assert exc_info.value.expected == "a string or None"
+
+        # Test with boolean type
+        with pytest.raises(InvalidFieldValueError) as exc_info:
+            UserMetadata.validate_field("country", True)
+
+        assert exc_info.value.field == "country"
+        assert exc_info.value.value is True
+        assert exc_info.value.expected == "a string or None"
+
+    def test_validate_field_timezone_with_invalid_type(self):
+        """Test validate_field for timezone with invalid type (line 297)."""
+        # Test with non-string type (integer)
+        with pytest.raises(InvalidFieldValueError) as exc_info:
+            UserMetadata.validate_field("timezone", 123)
+
+        assert exc_info.value.field == "timezone"
+        assert exc_info.value.value == 123
+        assert exc_info.value.expected == "a string or None"
+
+        # Test with another non-string type (dict)
+        with pytest.raises(InvalidFieldValueError) as exc_info:
+            UserMetadata.validate_field("timezone", {"tz": "America/New_York"})
+
+        assert exc_info.value.field == "timezone"
+        assert exc_info.value.value == {"tz": "America/New_York"}
+        assert exc_info.value.expected == "a string or None"
+
+        # Test with float type
+        with pytest.raises(InvalidFieldValueError) as exc_info:
+            UserMetadata.validate_field("timezone", 12.5)
+
+        assert exc_info.value.field == "timezone"
+        assert exc_info.value.value == 12.5
+        assert exc_info.value.expected == "a string or None"
+
+    def test_validate_field_response_speed_with_invalid_type(self):
+        """Test validate_field for response_speed with invalid type (line 312)."""
+        # Test with non-string type (integer)
+        with pytest.raises(InvalidFieldValueError) as exc_info:
+            UserMetadata.validate_field("response_speed", 123)
+
+        assert exc_info.value.field == "response_speed"
+        assert exc_info.value.value == 123
+        assert exc_info.value.expected == "a string or None"
+
+        # Test with another non-string type (list)
+        with pytest.raises(InvalidFieldValueError) as exc_info:
+            UserMetadata.validate_field("response_speed", ["fast", "slow"])
+
+        assert exc_info.value.field == "response_speed"
+        assert exc_info.value.value == ["fast", "slow"]
+        assert exc_info.value.expected == "a string or None"
+
+        # Test with boolean type
+        with pytest.raises(InvalidFieldValueError) as exc_info:
+            UserMetadata.validate_field("response_speed", False)
+
+        assert exc_info.value.field == "response_speed"
+        assert exc_info.value.value is False
+        assert exc_info.value.expected == "a string or None"
