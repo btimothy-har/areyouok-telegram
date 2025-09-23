@@ -103,7 +103,7 @@ class TestConversationJob:
                             tg_context=job._run_context,
                             tg_chat_id="123",
                             tg_session_id="session123",
-                            personality="exploration",
+                            personality="companionship",
                             restricted_responses=set(),
                             notification=None,
                         ),
@@ -145,7 +145,7 @@ class TestConversationJob:
             tg_context=job._run_context,
             tg_chat_id="123",
             tg_session_id="session123",
-            personality="exploration",
+            personality="companionship",
             restricted_responses=set(),
             notification=None,
         )
@@ -179,7 +179,7 @@ class TestConversationJob:
             tg_context=job._run_context,
             tg_chat_id="123",
             tg_session_id="session123",
-            personality="exploration",
+            personality="companionship",
             restricted_responses=set(),
             notification=None,
         )
@@ -428,7 +428,7 @@ class TestConversationJob:
                             tg_context=job._run_context,
                             tg_chat_id="123",
                             tg_session_id="session123",
-                            personality="exploration",
+                            personality="companionship",
                             restricted_responses=set(),
                             notification=None,
                         ),
@@ -489,7 +489,7 @@ class TestConversationJob:
                             tg_context=job._run_context,
                             tg_chat_id="123",
                             tg_session_id="session123",
-                            personality="exploration",
+                            personality="companionship",
                             restricted_responses=set(),
                             notification=None,
                         ),
@@ -524,7 +524,7 @@ class TestConversationJob:
             tg_context=MagicMock(spec=ContextTypes.DEFAULT_TYPE),
             tg_chat_id="123",
             tg_session_id="session123",
-            personality="exploration",
+            personality="companionship",
             restricted_responses=set(),
             notification=None,
         )
@@ -551,7 +551,7 @@ class TestConversationJob:
             tg_context=MagicMock(spec=ContextTypes.DEFAULT_TYPE),
             tg_chat_id="123",
             tg_session_id="session123",
-            personality="exploration",
+            personality="companionship",
             restricted_responses=set(),
             notification=None,
         )
@@ -577,7 +577,7 @@ class TestConversationJob:
             tg_context=MagicMock(spec=ContextTypes.DEFAULT_TYPE),
             tg_chat_id="123",
             tg_session_id="session123",
-            personality="exploration",
+            personality="companionship",
             restricted_responses={"text"},
             notification=mock_notification,
         )
@@ -626,7 +626,7 @@ class TestConversationJob:
                                 tg_context=job._run_context,
                                 tg_chat_id="123",
                                 tg_session_id="session123",
-                                personality="exploration",
+                                personality="companionship",
                                 restricted_responses=set(),
                                 notification=None,
                             ),
@@ -859,7 +859,7 @@ class TestConversationJob:
 
         # Verify default personality is used when content is not a dict
         assert isinstance(deps, ChatAgentDependencies)
-        assert deps.personality == "exploration"
+        assert deps.personality == "companionship"
 
     @pytest.mark.asyncio
     async def test_prepare_conversation_input_default_personality(self, frozen_time):
@@ -890,7 +890,7 @@ class TestConversationJob:
 
         # Verify default personality is used
         assert isinstance(deps, ChatAgentDependencies)
-        assert deps.personality == "exploration"
+        assert deps.personality == "companionship"
 
     @pytest.mark.asyncio
     async def test_prepare_conversation_input_message_reaction_updated(self, frozen_time):
@@ -994,7 +994,7 @@ class TestConversationJob:
 
         # Verify ChatAgentDependencies was created (not OnboardingAgentDependencies)
         assert isinstance(deps, ChatAgentDependencies)
-        assert deps.personality == "exploration"
+        assert deps.personality == "companionship"
         assert not hasattr(deps, "onboarding_session_key")
 
     @pytest.mark.asyncio
@@ -1059,7 +1059,7 @@ class TestConversationJob:
             tg_context=job._run_context,
             tg_chat_id="123",
             tg_session_id="session123",
-            personality="exploration",
+            personality="companionship",
             restricted_responses=set(),
             notification=mock_notification,
         )
@@ -1110,7 +1110,7 @@ class TestConversationJob:
             tg_context=job._run_context,
             tg_chat_id="123",
             tg_session_id="session123",
-            personality="exploration",
+            personality="companionship",
             restricted_responses=set(),
             notification=mock_notification,
         )
@@ -1154,7 +1154,7 @@ class TestConversationJob:
             tg_context=MagicMock(spec=ContextTypes.DEFAULT_TYPE),
             tg_chat_id="123",
             tg_session_id="session123",
-            personality="exploration",
+            personality="companionship",
             restricted_responses=set(),
             notification=None,  # No notification
         )
@@ -1469,7 +1469,7 @@ class TestConversationJob:
                             tg_context=job._run_context,
                             tg_chat_id="123",
                             tg_session_id="session123",
-                            personality="exploration",
+                            personality="companionship",
                             restricted_responses=set(),
                             notification=None,
                         ),

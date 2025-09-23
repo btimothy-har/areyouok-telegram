@@ -2,6 +2,7 @@ from enum import Enum
 
 from areyouok_telegram.llms.chat.personalities.anchoring import ANCHORING_PERSONALITY
 from areyouok_telegram.llms.chat.personalities.celebration import CELEBRATION_PERSONALITY
+from areyouok_telegram.llms.chat.personalities.companionship import COMPANIONSHIP_PERSONALITY
 from areyouok_telegram.llms.chat.personalities.exploration import EXPLORATION_PERSONALITY
 from areyouok_telegram.llms.chat.personalities.witnessing import WITNESSING_PERSONALITY
 from areyouok_telegram.llms.exceptions import InvalidPersonalityError
@@ -12,6 +13,7 @@ class PersonalityTypes(Enum):
 
     ANCHORING = "anchoring"
     CELEBRATION = "celebration"
+    COMPANIONSHIP = "companionship"
     EXPLORATION = "exploration"
     WITNESSING = "witnessing"
 
@@ -33,6 +35,8 @@ class PersonalityTypes(Enum):
             return ANCHORING_PERSONALITY.as_prompt_string
         elif self == PersonalityTypes.CELEBRATION:
             return CELEBRATION_PERSONALITY.as_prompt_string
+        elif self == PersonalityTypes.COMPANIONSHIP:
+            return COMPANIONSHIP_PERSONALITY.as_prompt_string
         elif self == PersonalityTypes.EXPLORATION:
             return EXPLORATION_PERSONALITY.as_prompt_string
         elif self == PersonalityTypes.WITNESSING:
@@ -44,6 +48,7 @@ class PersonalityTypes(Enum):
 __all__ = [
     "ANCHORING_PERSONALITY",
     "CELEBRATION_PERSONALITY",
+    "COMPANIONSHIP_PERSONALITY",
     "EXPLORATION_PERSONALITY",
     "WITNESSING_PERSONALITY",
 ]

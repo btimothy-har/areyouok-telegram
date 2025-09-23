@@ -38,7 +38,7 @@ class TestChatAgentDependencies:
         assert deps.tg_context == tg_context
         assert deps.tg_chat_id == tg_chat_id
         assert deps.tg_session_id == tg_session_id
-        assert deps.personality == PersonalityTypes.EXPLORATION.value
+        assert deps.personality == PersonalityTypes.COMPANIONSHIP.value
         assert deps.restricted_responses == set()
         assert deps.notification is None
 
