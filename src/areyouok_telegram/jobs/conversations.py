@@ -281,12 +281,12 @@ class ConversationJob(BaseJob):
             if latest_personality_context:
                 latest_personality_context.decrypt_content(chat_encryption_key=self.chat_encryption_key)
                 chat_personality = (
-                    latest_personality_context.content.get("personality", "exploration")
+                    latest_personality_context.content.get("personality", "companionship")
                     if isinstance(latest_personality_context.content, dict)
-                    else "exploration"
+                    else "companionship"
                 )
             else:
-                chat_personality = "exploration"
+                chat_personality = "companionship"
 
             deps_data["personality"] = chat_personality
             deps = ChatAgentDependencies(**deps_data)

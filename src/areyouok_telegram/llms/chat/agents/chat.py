@@ -45,7 +45,7 @@ class ChatAgentDependencies:
     tg_context: ContextTypes.DEFAULT_TYPE
     tg_chat_id: str
     tg_session_id: str
-    personality: str = PersonalityTypes.EXPLORATION.value
+    personality: str = PersonalityTypes.COMPANIONSHIP.value
     restricted_responses: set[Literal["text", "reaction", "switch_personality"]] = field(default_factory=set)
     notification: Notifications | None = None
 

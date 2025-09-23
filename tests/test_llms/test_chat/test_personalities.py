@@ -16,10 +16,12 @@ class TestPersonalityTypes:
 
     def test_personality_choices(self, all_personality_types):
         """Test that choices() returns all personality values."""
-        expected_choices = ["anchoring", "celebration", "exploration", "witnessing"]
+        expected_choices = ["anchoring", "celebration", "companionship", "exploration", "witnessing"]
         assert all_personality_types == expected_choices
 
-    @pytest.mark.parametrize("personality_value", ["anchoring", "celebration", "exploration", "witnessing"])
+    @pytest.mark.parametrize(
+        "personality_value", ["anchoring", "celebration", "companionship", "exploration", "witnessing"]
+    )
     def test_get_by_value_valid(self, personality_value):
         """Test getting personality type by valid value."""
         result = PersonalityTypes.get_by_value(personality_value)
@@ -37,6 +39,7 @@ class TestPersonalityTypes:
         [
             (PersonalityTypes.ANCHORING, "anchoring"),
             (PersonalityTypes.CELEBRATION, "celebration"),
+            (PersonalityTypes.COMPANIONSHIP, "companionship"),
             (PersonalityTypes.EXPLORATION, "exploration"),
             (PersonalityTypes.WITNESSING, "witnessing"),
         ],
@@ -50,6 +53,7 @@ class TestPersonalityTypes:
         [
             PersonalityTypes.ANCHORING,
             PersonalityTypes.CELEBRATION,
+            PersonalityTypes.COMPANIONSHIP,
             PersonalityTypes.EXPLORATION,
             PersonalityTypes.WITNESSING,
         ],
@@ -78,9 +82,10 @@ class TestPersonalityTypes:
         """Test that we can iterate over all personality types."""
         personalities = list(PersonalityTypes)
 
-        assert len(personalities) == 4
+        assert len(personalities) == 5
         assert PersonalityTypes.ANCHORING in personalities
         assert PersonalityTypes.CELEBRATION in personalities
+        assert PersonalityTypes.COMPANIONSHIP in personalities
         assert PersonalityTypes.EXPLORATION in personalities
         assert PersonalityTypes.WITNESSING in personalities
 

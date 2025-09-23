@@ -117,7 +117,7 @@ class ReactionResponse(BaseAgentResponse):
 class SwitchPersonalityResponse(BaseAgentResponse):
     """Switch to a different personality for this conversation."""
 
-    personality: Literal["anchoring", "celebration", "exploration", "witnessing"] = pydantic.Field(
+    personality: Literal["anchoring", "celebration", "companionship", "exploration", "witnessing"] = pydantic.Field(
         description="The name of the personality to switch to."
     )
 
