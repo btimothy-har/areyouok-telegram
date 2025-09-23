@@ -1,8 +1,8 @@
 import pydantic_ai
 
-from areyouok_telegram.llms.models import GPT5Mini
+from areyouok_telegram.llms.models import GPT5Nano
 
-agent_model = GPT5Mini(
+agent_model = GPT5Nano(
     model_settings=pydantic_ai.models.openai.OpenAIChatModelSettings(openai_reasoning_effort="minimal")
 )
 
