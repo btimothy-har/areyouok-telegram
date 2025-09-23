@@ -14,15 +14,16 @@ class CountryTimezone(pydantic.BaseModel):
     has_multiple: bool = pydantic.Field(default=False, description="Whether this country has multiple timezones.")
 
 
-model = GPT5Nano(
-    model_settings=pydantic_ai.settings.ModelSettings(
+agent_model = GPT5Nano(
+    model_settings=pydantic_ai.models.openai.OpenAIChatModelSettings(
         temperature=0.0,
         parallel_tool_calls=True,
+        openai_reasoning_effort="minimal",
     )
 )
 
 country_timezone_agent = pydantic_ai.Agent(
-    model=model.model,
+    model=agent_model.model,
     output_type=CountryTimezone,
     name="country_timezone_agent",
     end_strategy="exhaustive",
