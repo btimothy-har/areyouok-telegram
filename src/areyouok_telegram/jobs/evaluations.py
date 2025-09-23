@@ -2,7 +2,9 @@ from dataclasses import dataclass
 
 import logfire
 import pydantic_evals
+from cachetools import TTLCache
 
+from areyouok_telegram.config import ENV
 from areyouok_telegram.data import LLMGenerations
 from areyouok_telegram.data import async_database
 from areyouok_telegram.jobs.base import BaseJob
@@ -13,24 +15,38 @@ from areyouok_telegram.llms.evaluators import personality_alignment_eval_agent
 from areyouok_telegram.llms.evaluators import reasoning_alignment_eval_agent
 from areyouok_telegram.llms.evaluators import sycophancy_eval_agent
 from areyouok_telegram.llms.utils import run_agent_with_tracking
+from areyouok_telegram.utils import db_retry
+
+GEN_CACHE = TTLCache(maxsize=1000, ttl=300)
+
+
+@db_retry()
+async def get_generation_by_id_cached(gen_id: str) -> LLMGenerations:
+    if gen_id in GEN_CACHE:
+        return GEN_CACHE[gen_id]
+
+    async with async_database() as db_conn:
+        generation = await LLMGenerations.get_by_generation_id(db_conn, generation_id=gen_id)
+        GEN_CACHE[gen_id] = generation
+        return generation
 
 
 @dataclass
 class ReasoningAlignmentEvaluator(pydantic_evals.evaluators.Evaluator):
     async def evaluate(self, ctx: pydantic_evals.evaluators.EvaluatorContext):
-        async with async_database() as db_conn:
-            generation = await LLMGenerations.get_by_generation_id(db_conn, generation_id=ctx.inputs)
+        generation = await get_generation_by_id_cached(ctx.inputs)
 
-        reasoning = generation.run_output.pop("reasoning", None)
+        run_output = generation.run_output.copy()
+        run_output.pop("reasoning", None)
 
         eval_output = await run_agent_with_tracking(
             agent=reasoning_alignment_eval_agent,
             chat_id="evaluations",
             session_id="evaluations",
             run_kwargs={
-                "user_prompt": f"Evaluate the following output: {generation.run_output}",
+                "user_prompt": f"Evaluate the following output: {run_output}",
                 "deps": ReasoningAlignmentDependencies(
-                    input_reasoning=reasoning,
+                    input_reasoning=generation.run_output.get("reasoning", None),
                 ),
             },
         )
@@ -47,8 +63,7 @@ class ReasoningAlignmentEvaluator(pydantic_evals.evaluators.Evaluator):
 @dataclass
 class PersonalityAlignmentEvaluator(pydantic_evals.evaluators.Evaluator):
     async def evaluate(self, ctx: pydantic_evals.evaluators.EvaluatorContext):
-        async with async_database() as db_conn:
-            generation = await LLMGenerations.get_by_generation_id(db_conn, generation_id=ctx.inputs)
+        generation = await get_generation_by_id_cached(ctx.inputs)
 
         personality = generation.run_deps.get("personality")
 
@@ -76,8 +91,7 @@ class PersonalityAlignmentEvaluator(pydantic_evals.evaluators.Evaluator):
 @dataclass
 class SycophancyEvaluator(pydantic_evals.evaluators.Evaluator):
     async def evaluate(self, ctx: pydantic_evals.evaluators.EvaluatorContext):
-        async with async_database() as db_conn:
-            generation = await LLMGenerations.get_by_generation_id(db_conn, generation_id=ctx.inputs)
+        generation = await get_generation_by_id_cached(ctx.inputs)
 
         eval_output = await run_agent_with_tracking(
             agent=sycophancy_eval_agent,
@@ -118,15 +132,14 @@ class SycophancyEvaluator(pydantic_evals.evaluators.Evaluator):
 
 
 async def eval_production_response(gen_id: str) -> dict:
-    async with async_database() as db_conn:
-        generation = await LLMGenerations.get_by_generation_id(db_conn, generation_id=gen_id)
+    generation = await get_generation_by_id_cached(gen_id)
 
-        return {
-            "model": generation.model,
-            "response_type": generation.response_type,
-            "reasoning": generation.run_output.get("reasoning"),
-            "personality": generation.run_deps.get("personality"),
-        }
+    return {
+        "model": generation.model,
+        "response_type": generation.response_type,
+        "reasoning": generation.run_output.get("reasoning"),
+        "personality": generation.run_deps.get("personality"),
+    }
 
 
 class EvaluationsJob(BaseJob):
@@ -151,18 +164,20 @@ class EvaluationsJob(BaseJob):
         return ["areyouok_chat_agent", "areyouok_onboarding_agent"]
 
     async def run_job(self) -> None:
-        async with async_database() as db_conn:
-            generations = await LLMGenerations.get_by_session(
-                db_conn,
-                session_id=self.session_id,
-            )
+        @db_retry()
+        async def _get_generation_by_session() -> list[LLMGenerations]:
+            async with async_database() as db_conn:
+                return await LLMGenerations.get_by_session(
+                    db_conn,
+                    session_id=self.session_id,
+                )
 
+        generations = await _get_generation_by_session()
         if not generations:
-            logfire.warning(f"No generations found for session {self.session_id}")
+            logfire.warning(f"No generations found for session {self.session_id}. Skipping evaluations.")
             return
 
         dataset_cases = []
-
         for gen in generations:
             if gen.agent not in self.evaluated_agents:
                 continue
@@ -187,10 +202,14 @@ class EvaluationsJob(BaseJob):
                 )
             )
 
-        session_dataset = pydantic_evals.Dataset(cases=dataset_cases, evaluators=[SycophancyEvaluator()])
+        session_dataset = pydantic_evals.Dataset(
+            cases=dataset_cases,
+            evaluators=[SycophancyEvaluator()],
+        )
 
         await session_dataset.evaluate(
             eval_production_response,
             name=self.session_id,
-            progress=True,
+            max_concurrency=1,
+            progress=True if ENV == "development" else False,
         )
