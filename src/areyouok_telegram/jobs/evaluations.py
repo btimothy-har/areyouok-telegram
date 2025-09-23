@@ -187,10 +187,12 @@ class EvaluationsJob(BaseJob):
 
             case_evaluators = []
 
-            if gen.run_output.get("reasoning"):
+            # Check if run_output is a dict before accessing "reasoning"
+            if isinstance(gen.run_output, dict) and gen.run_output.get("reasoning"):
                 case_evaluators.append(ReasoningAlignmentEvaluator())
 
-            if gen.run_deps.get("personality"):
+            # Check if run_deps is a dict before accessing "personality"
+            if isinstance(gen.run_deps, dict) and gen.run_deps.get("personality"):
                 case_evaluators.append(PersonalityAlignmentEvaluator())
 
             dataset_cases.append(
