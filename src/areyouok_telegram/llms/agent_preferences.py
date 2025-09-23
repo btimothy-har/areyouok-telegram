@@ -46,6 +46,7 @@ preferences_agent = pydantic_ai.Agent(
     output_type=PreferencesUpdateResponse,
     name="preferences_agent",
     end_strategy="exhaustive",
+    retries=3,
 )
 
 

@@ -63,7 +63,7 @@ class OnboardingAgentDependencies:
         }
 
 
-agent_model = Gemini25Pro(model_settings=pydantic_ai.models.google.GoogleModelSettings(temperature=0.1))
+agent_model = Gemini25Pro()
 
 
 onboarding_agent = pydantic_ai.Agent(

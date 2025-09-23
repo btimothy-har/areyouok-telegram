@@ -25,6 +25,7 @@ feedback_context_agent = pydantic_ai.Agent(
     model=agent_model.model,
     name="feedback_context_agent",
     end_strategy="exhaustive",
+    retries=3,
 )
 
 

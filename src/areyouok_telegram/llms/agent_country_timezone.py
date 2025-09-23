@@ -27,6 +27,7 @@ country_timezone_agent = pydantic_ai.Agent(
     output_type=CountryTimezone,
     name="country_timezone_agent",
     end_strategy="exhaustive",
+    retries=3,
 )
 
 
