@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import pydantic_ai
 
 from areyouok_telegram.llms.evaluators.evaluation_output import EvaluationResponse
-from areyouok_telegram.llms.models import GPT5Nano
+from areyouok_telegram.llms.models import GPT5Mini
 
 
 @dataclass
@@ -11,7 +11,12 @@ class ReasoningAlignmentDependencies:
     input_reasoning: str
 
 
-agent_model = GPT5Nano(model_settings=pydantic_ai.settings.ModelSettings(temperature=0.0))
+agent_model = GPT5Mini(
+    model_settings=pydantic_ai.models.openai.OpenAIChatModelSettings(
+        temperature=0.0,
+        openai_reasoning_effort="minimal",
+    )
+)
 
 reasoning_alignment_eval_agent = pydantic_ai.Agent(
     model=agent_model.model,

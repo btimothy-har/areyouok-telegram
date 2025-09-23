@@ -4,7 +4,7 @@ import pydantic_ai
 
 from areyouok_telegram.llms.chat.personalities import PersonalityTypes
 from areyouok_telegram.llms.evaluators.evaluation_output import EvaluationResponse
-from areyouok_telegram.llms.models import GPT5Nano
+from areyouok_telegram.llms.models import GPT5Mini
 
 
 @dataclass
@@ -12,7 +12,12 @@ class PersonalityAlignmentDependencies:
     input_personality: str
 
 
-agent_model = GPT5Nano(model_settings=pydantic_ai.settings.ModelSettings(temperature=0.0))
+agent_model = GPT5Mini(
+    model_settings=pydantic_ai.models.openai.OpenAIChatModelSettings(
+        temperature=0.0,
+        openai_reasoning_effort="minimal",
+    )
+)
 
 personality_alignment_eval_agent = pydantic_ai.Agent(
     model=agent_model.model,
