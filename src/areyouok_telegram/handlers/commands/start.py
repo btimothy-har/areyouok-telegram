@@ -1,7 +1,6 @@
 import telegram
 from telegram.ext import ContextTypes
 
-from areyouok_telegram.data import SYSTEM_USER_ID
 from areyouok_telegram.data import GuidedSessions
 from areyouok_telegram.data import GuidedSessionType
 from areyouok_telegram.data import Sessions
@@ -51,18 +50,11 @@ async def on_start_command(update: telegram.Update, context: ContextTypes.DEFAUL
     )
 
     if not active_session.last_bot_activity:
-        bot_message = await telegram_call(
+        await telegram_call(
             context.bot.send_message,
             chat_id=update.effective_chat.id,
             text=MD2_ONBOARDING_START_MESSAGE,
             parse_mode="MarkdownV2",
-        )
-
-        await data_operations.new_session_event(
-            session=active_session,
-            message=bot_message,
-            user_id=SYSTEM_USER_ID,
-            is_user=False,
         )
 
 
