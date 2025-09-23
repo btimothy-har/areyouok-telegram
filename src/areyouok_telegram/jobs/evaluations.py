@@ -27,6 +27,9 @@ async def get_generation_by_id_cached(gen_id: str) -> LLMGenerations:
 
     async with async_database() as db_conn:
         generation = await LLMGenerations.get_by_generation_id(db_conn, generation_id=gen_id)
+        if not generation:
+            raise ValueError(f"Generation with ID {gen_id} not found.")  # noqa: TRY003
+
         GEN_CACHE[gen_id] = generation
         return generation
 
@@ -65,7 +68,7 @@ class PersonalityAlignmentEvaluator(pydantic_evals.evaluators.Evaluator):
     async def evaluate(self, ctx: pydantic_evals.evaluators.EvaluatorContext):
         generation = await get_generation_by_id_cached(ctx.inputs)
 
-        personality = generation.run_deps.get("personality")
+        deps = generation.run_deps or {}
 
         eval_output = await run_agent_with_tracking(
             agent=personality_alignment_eval_agent,
@@ -74,7 +77,7 @@ class PersonalityAlignmentEvaluator(pydantic_evals.evaluators.Evaluator):
             run_kwargs={
                 "user_prompt": f"Evaluate the following output: {generation.run_output}",
                 "deps": PersonalityAlignmentDependencies(
-                    input_personality=personality,
+                    input_personality=deps.get("personality"),
                 ),
             },
         )
