@@ -260,3 +260,79 @@ class TestMediaFiles:
 
         # Verify execute was not called
         mock_db_session.execute.assert_not_called()
+
+    def test_is_openai_google_supported_transcription_files_excluded(self):
+        """Test that transcription files are excluded regardless of mime type."""
+        # Test with image mime type but transcription file_id
+        media = MediaFiles()
+        media.file_id = "image_file_123_transcription"
+        media.mime_type = "image/png"
+        assert media.is_openai_google_supported is False
+
+        # Test with PDF mime type but transcription file_id
+        media = MediaFiles()
+        media.file_id = "document_456_transcription"
+        media.mime_type = "application/pdf"
+        assert media.is_openai_google_supported is False
+
+        # Test with text mime type but transcription file_id
+        media = MediaFiles()
+        media.file_id = "text_789_transcription"
+        media.mime_type = "text/plain"
+        assert media.is_openai_google_supported is False
+
+        # Test with audio mime type but transcription file_id
+        media = MediaFiles()
+        media.file_id = "audio_012_transcription"
+        media.mime_type = "audio/mp3"
+        assert media.is_openai_google_supported is False
+
+    def test_is_openai_google_supported_image_files(self):
+        """Test that image files are supported."""
+        media = MediaFiles()
+        media.file_id = "image_file_123"
+        media.mime_type = "image/png"
+        assert media.is_openai_google_supported is True
+
+        media.mime_type = "image/jpeg"
+        assert media.is_openai_google_supported is True
+
+        media.mime_type = "image/gif"
+        assert media.is_openai_google_supported is True
+
+    def test_is_openai_google_supported_pdf_files(self):
+        """Test that PDF files are supported."""
+        media = MediaFiles()
+        media.file_id = "document_456"
+        media.mime_type = "application/pdf"
+        assert media.is_openai_google_supported is True
+
+    def test_is_openai_google_supported_text_files(self):
+        """Test that text files are supported."""
+        media = MediaFiles()
+        media.file_id = "text_789"
+        media.mime_type = "text/plain"
+        assert media.is_openai_google_supported is True
+
+        media.mime_type = "text/html"
+        assert media.is_openai_google_supported is True
+
+    def test_is_openai_google_supported_audio_files(self):
+        """Test that audio files are supported."""
+        media = MediaFiles()
+        media.file_id = "audio_012"
+        media.mime_type = "audio/mp3"
+        assert media.is_openai_google_supported is True
+
+        media.mime_type = "audio/wav"
+        assert media.is_openai_google_supported is True
+
+    def test_is_openai_google_supported_unsupported_files(self):
+        """Test that unsupported files return False."""
+        media = MediaFiles()
+        media.file_id = "video_345"
+        media.mime_type = "video/mp4"
+        assert media.is_openai_google_supported is False
+
+        media.mime_type = "application/zip"
+        assert media.is_openai_google_supported is False

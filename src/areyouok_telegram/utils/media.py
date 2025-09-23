@@ -1,4 +1,5 @@
 import asyncio
+import time
 from io import BytesIO
 
 import logfire
@@ -221,8 +222,13 @@ async def _download_file(
             ):
                 try:
                     # Transcribe the voice message in a separate thread
+
+                    start_time = time.perf_counter()
+
                     transcriptions = await asyncio.to_thread(transcribe_voice_data_sync, bytes(content_bytes))
                     transcription_text = "[Transcribed Audio] " + " ".join([t.text for t in transcriptions if t.text])
+
+                    end_time = time.perf_counter()
 
                     await LLMUsage.track_generic_usage(
                         db_conn,
@@ -233,6 +239,7 @@ async def _download_file(
                         provider="openai",
                         input_tokens=sum(t.usage.prompt_tokens for t in transcriptions),
                         output_tokens=sum(t.usage.completion_tokens for t in transcriptions),
+                        runtime=end_time - start_time,
                     )
 
                     # Store the transcription as a text file

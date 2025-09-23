@@ -1,7 +1,6 @@
 """Tests for LLMUsage model."""
 
 from unittest.mock import MagicMock
-from unittest.mock import patch
 
 import pydantic_ai
 import pytest
@@ -24,9 +23,10 @@ class TestLLMUsage:
         mock_agent.model = mock_model
 
         # Mock usage data
-        mock_usage = MagicMock(spec=pydantic_ai.usage.Usage)
+        mock_usage = MagicMock(spec=pydantic_ai.usage.RunUsage)
         mock_usage.request_tokens = 100
         mock_usage.response_tokens = 50
+        mock_usage.details = None
 
         # Mock execute result
         mock_result = MagicMock()
@@ -34,7 +34,7 @@ class TestLLMUsage:
         mock_db_session.execute.return_value = mock_result
 
         result = await LLMUsage.track_pydantic_usage(
-            mock_db_session, chat_id="123", session_id="session_456", agent=mock_agent, data=mock_usage
+            mock_db_session, chat_id="123", session_id="session_456", agent=mock_agent, data=mock_usage, runtime=100
         )
 
         assert result == 1
@@ -57,9 +57,10 @@ class TestLLMUsage:
         mock_agent.model = mock_model
 
         # Mock usage data
-        mock_usage = MagicMock(spec=pydantic_ai.usage.Usage)
+        mock_usage = MagicMock(spec=pydantic_ai.usage.RunUsage)
         mock_usage.request_tokens = 200
         mock_usage.response_tokens = 100
+        mock_usage.details = None
 
         # Mock execute result
         mock_result = MagicMock()
@@ -67,7 +68,7 @@ class TestLLMUsage:
         mock_db_session.execute.return_value = mock_result
 
         result = await LLMUsage.track_pydantic_usage(
-            mock_db_session, chat_id="456", session_id="session_789", agent=mock_agent, data=mock_usage
+            mock_db_session, chat_id="456", session_id="session_789", agent=mock_agent, data=mock_usage, runtime=100
         )
 
         assert result == 1
@@ -92,9 +93,10 @@ class TestLLMUsage:
         mock_agent.model = mock_fallback_model
 
         # Mock usage data
-        mock_usage = MagicMock(spec=pydantic_ai.usage.Usage)
+        mock_usage = MagicMock(spec=pydantic_ai.usage.RunUsage)
         mock_usage.request_tokens = 150
         mock_usage.response_tokens = 75
+        mock_usage.details = None
 
         # Mock execute result
         mock_result = MagicMock()
@@ -102,7 +104,7 @@ class TestLLMUsage:
         mock_db_session.execute.return_value = mock_result
 
         result = await LLMUsage.track_pydantic_usage(
-            mock_db_session, chat_id="789", session_id="session_012", agent=mock_agent, data=mock_usage
+            mock_db_session, chat_id="789", session_id="session_012", agent=mock_agent, data=mock_usage, runtime=100
         )
 
         assert result == 1
@@ -110,7 +112,7 @@ class TestLLMUsage:
 
     @pytest.mark.asyncio
     async def test_track_pydantic_usage_exception_handling(self, mock_db_session):
-        """Test exception handling during usage tracking."""
+        """Test exception propagation during usage tracking."""
         # Mock agent
         mock_agent = MagicMock(spec=pydantic_ai.Agent)
         mock_agent.name = "test_agent"
@@ -120,22 +122,19 @@ class TestLLMUsage:
         mock_agent.model = mock_model
 
         # Mock usage data
-        mock_usage = MagicMock(spec=pydantic_ai.usage.Usage)
+        mock_usage = MagicMock(spec=pydantic_ai.usage.RunUsage)
         mock_usage.request_tokens = 100
         mock_usage.response_tokens = 50
+        mock_usage.details = None
 
         # Mock execute to raise an exception
         mock_db_session.execute.side_effect = Exception("Database error")
 
-        # Mock logfire to verify exception logging
-        with patch("areyouok_telegram.data.models.llm_usage.logfire") as mock_logfire:
-            result = await LLMUsage.track_pydantic_usage(
-                mock_db_session, chat_id="999", session_id="session_999", agent=mock_agent, data=mock_usage
+        # The method should propagate exceptions
+        with pytest.raises(Exception, match="Database error"):
+            await LLMUsage.track_pydantic_usage(
+                mock_db_session, chat_id="999", session_id="session_999", agent=mock_agent, data=mock_usage, runtime=100
             )
-
-            assert result == 0
-            mock_logfire.exception.assert_called_once()
-            assert "Failed to insert pydantic usage record" in str(mock_logfire.exception.call_args)
 
     @pytest.mark.asyncio
     async def test_track_pydantic_usage_zero_tokens(self, mock_db_session):
@@ -149,9 +148,10 @@ class TestLLMUsage:
         mock_agent.model = mock_model
 
         # Mock usage data with zero tokens
-        mock_usage = MagicMock(spec=pydantic_ai.usage.Usage)
+        mock_usage = MagicMock(spec=pydantic_ai.usage.RunUsage)
         mock_usage.request_tokens = 0
         mock_usage.response_tokens = 0
+        mock_usage.details = None
 
         # Mock execute result
         mock_result = MagicMock()
@@ -159,7 +159,7 @@ class TestLLMUsage:
         mock_db_session.execute.return_value = mock_result
 
         result = await LLMUsage.track_pydantic_usage(
-            mock_db_session, chat_id="000", session_id="session_000", agent=mock_agent, data=mock_usage
+            mock_db_session, chat_id="000", session_id="session_000", agent=mock_agent, data=mock_usage, runtime=100
         )
 
         assert result == 1
@@ -244,13 +244,13 @@ class TestLLMUsage:
 
     @pytest.mark.asyncio
     async def test_track_generic_usage_exception_handling(self, mock_db_session):
-        """Test exception handling in track_generic_usage."""
+        """Test exception propagation in track_generic_usage."""
         # Mock execute to raise an exception
         mock_db_session.execute.side_effect = Exception("Database connection error")
 
-        # Mock logfire to verify exception logging
-        with patch("areyouok_telegram.data.models.llm_usage.logfire") as mock_logfire:
-            result = await LLMUsage.track_generic_usage(
+        # The method should propagate exceptions
+        with pytest.raises(Exception, match="Database connection error"):
+            await LLMUsage.track_generic_usage(
                 mock_db_session,
                 chat_id="error_test",
                 session_id="error_session",
@@ -260,10 +260,6 @@ class TestLLMUsage:
                 input_tokens=10,
                 output_tokens=5,
             )
-
-            assert result == 0
-            mock_logfire.exception.assert_called_once()
-            assert "Failed to insert usage record" in str(mock_logfire.exception.call_args)
 
     @pytest.mark.asyncio
     async def test_track_generic_usage_large_token_counts(self, mock_db_session):

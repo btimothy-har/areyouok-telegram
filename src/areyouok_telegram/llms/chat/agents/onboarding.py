@@ -53,6 +53,15 @@ class OnboardingAgentDependencies:
     restricted_responses: set[Literal["text", "reaction", "switch_personality"]] = field(default_factory=set)
     notification: Notifications | None = None
 
+    def to_dict(self) -> dict:
+        return {
+            "tg_chat_id": self.tg_chat_id,
+            "tg_session_id": self.tg_session_id,
+            "onboarding_session_key": self.onboarding_session_key,
+            "restricted_responses": list(self.restricted_responses),
+            "notification_content": self.notification.content if self.notification else None,
+        }
+
 
 agent_model = Gemini25Pro(model_settings=pydantic_ai.models.google.GoogleModelSettings(temperature=0.1))
 

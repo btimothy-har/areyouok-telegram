@@ -119,7 +119,7 @@ class ChatEvent(pydantic.BaseModel):
             user_id=context.chat_id if context.type == ContextType.ACTION.value else None,
         )
 
-    def to_model_message(self, bot_id: str, ts_reference: datetime) -> pydantic_ai.messages.ModelResponse:
+    def to_model_message(self, bot_id: str, ts_reference: datetime) -> pydantic_ai.messages.ModelMessage:
         """Convert the chat event to a model message for AI processing."""
 
         default_payload = {

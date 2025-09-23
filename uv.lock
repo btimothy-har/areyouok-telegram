@@ -156,6 +156,7 @@ dependencies = [
     { name = "pycountry" },
     { name = "pydantic" },
     { name = "pydantic-ai" },
+    { name = "pydantic-evals", extra = ["logfire"] },
     { name = "pydub" },
     { name = "python-dotenv" },
     { name = "python-magic" },
@@ -191,6 +192,7 @@ requires-dist = [
     { name = "pycountry", specifier = ">=24.6.1" },
     { name = "pydantic", specifier = "~=2.11.7" },
     { name = "pydantic-ai", specifier = "~=1.0.10" },
+    { name = "pydantic-evals", extras = ["logfire"] },
     { name = "pydub", specifier = "~=0.25.1" },
     { name = "python-dotenv", specifier = "==1.1.1" },
     { name = "python-magic", specifier = "~=0.4.27" },
@@ -1659,6 +1661,11 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/54/a6/2c3ced06c7164bf7bf7f4ec8ae232ed5adbaf05b309ca6755aa3b8b4e76e/pydantic_evals-1.0.10.tar.gz", hash = "sha256:341bfc105a3470373885ccbe70486064f783656c7c015c97152b2ba9351581e5", size = 45494, upload-time = "2025-09-20T00:16:23.428Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/28/ae/087d9a83dd7e91ad6c77e0d41d4ce25f24992cf0420412a19c045303568b/pydantic_evals-1.0.10-py3-none-any.whl", hash = "sha256:4146863594f851cdb606e7d9ddc445f298b53e40c9588d76a4794d792ba5b47a", size = 54608, upload-time = "2025-09-20T00:16:08.426Z" },
+]
+
+[package.optional-dependencies]
+logfire = [
+    { name = "logfire" },
 ]
 
 [[package]]

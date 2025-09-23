@@ -1,12 +1,13 @@
 from datetime import UTC
 from datetime import datetime
 
-import logfire
 import pydantic_ai
 from sqlalchemy import Column
+from sqlalchemy import Float
 from sqlalchemy import Index
 from sqlalchemy import Integer
 from sqlalchemy import String
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import TIMESTAMP
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,6 +36,8 @@ class LLMUsage(Base):
     provider = Column(String, nullable=False)
     input_tokens = Column(Integer, nullable=False, default=0)
     output_tokens = Column(Integer, nullable=False, default=0)
+    runtime = Column(Float, nullable=False)
+    details = Column(JSONB, nullable=True)
 
     id = Column(Integer, primary_key=True, autoincrement=True)
 
@@ -47,7 +50,8 @@ class LLMUsage(Base):
         chat_id: str,
         session_id: str,
         agent: pydantic_ai.Agent,
-        data: pydantic_ai.usage.Usage,
+        data: pydantic_ai.usage.RunUsage,
+        runtime: float,
     ) -> int:
         """Log usage data from pydantic in the database."""
 
@@ -62,28 +66,22 @@ class LLMUsage(Base):
         else:
             model_name = model.model_name
 
-        try:
-            now = datetime.now(UTC)
+        now = datetime.now(UTC)
 
-            stmt = pg_insert(cls).values(
-                chat_id=str(chat_id),
-                session_id=session_id,
-                timestamp=now,
-                usage_type=f"pydantic.{agent.name}",
-                model=model_name,
-                provider=model_name.split("/", 1)[0],
-                input_tokens=data.request_tokens,
-                output_tokens=data.response_tokens,
-            )
+        stmt = pg_insert(cls).values(
+            chat_id=str(chat_id),
+            session_id=session_id,
+            timestamp=now,
+            usage_type=f"pydantic.{agent.name}",
+            model=model_name,
+            provider=model_name.split("/", 1)[0],
+            input_tokens=data.request_tokens,
+            output_tokens=data.response_tokens,
+            runtime=runtime,
+            details=data.details if data.details else None,
+        )
 
-            result = await db_conn.execute(stmt)
-
-        # Catch exceptions here to avoid breaking application flow
-        # This is a best-effort logging, so we log the exception but don't raise it
-        except Exception as e:
-            logfire.exception(f"Failed to insert pydantic usage record: {e}")
-            return 0
-
+        result = await db_conn.execute(stmt)
         return result.rowcount
 
     @classmethod
@@ -99,29 +97,24 @@ class LLMUsage(Base):
         provider: str = None,
         input_tokens: int = 0,
         output_tokens: int = 0,
+        runtime: float = 0.0,
     ) -> int:
         """Log generic usage data in the database."""
 
-        try:
-            now = datetime.now(UTC)
+        now = datetime.now(UTC)
 
-            stmt = pg_insert(cls).values(
-                chat_id=str(chat_id),
-                session_id=session_id,
-                timestamp=now,
-                usage_type=usage_type,
-                model=model,
-                provider=provider,
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-            )
+        stmt = pg_insert(cls).values(
+            chat_id=str(chat_id),
+            session_id=session_id,
+            timestamp=now,
+            usage_type=usage_type,
+            model=model,
+            provider=provider,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            runtime=runtime,
+            details=None,
+        )
 
-            result = await db_conn.execute(stmt)
-
-        # Catch exceptions here to avoid breaking application flow
-        # This is a best-effort logging, so we log the exception but don't raise it
-        except Exception as e:
-            logfire.exception(f"Failed to insert usage record: {e}")
-            return 0
-
+        result = await db_conn.execute(stmt)
         return result.rowcount

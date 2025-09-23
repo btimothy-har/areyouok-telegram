@@ -25,8 +25,8 @@ from areyouok_telegram.llms.chat import ReactionResponse
 from areyouok_telegram.llms.chat import SwitchPersonalityResponse
 from areyouok_telegram.llms.chat import TextResponse
 from areyouok_telegram.llms.chat import TextWithButtonsResponse
-from areyouok_telegram.llms.chat.responses import _KeyboardButton
-from areyouok_telegram.llms.chat.responses import _MessageButton
+from areyouok_telegram.llms.chat.responses import _KeyboardButton  # noqa: PLC2701
+from areyouok_telegram.llms.chat.responses import _MessageButton  # noqa: PLC2701
 
 
 class TestConversationJob:
@@ -1620,3 +1620,571 @@ class TestConversationJob:
         reply_markup = call_args.kwargs["reply_markup"]
         assert reply_markup is not None
         assert isinstance(reply_markup, telegram.ReplyKeyboardRemove)
+
+    # Missing method tests
+
+    @pytest.mark.asyncio
+    async def test_apply_response_delay_with_user_metadata(self):
+        """Test apply_response_delay with user metadata."""
+        job = ConversationJob("123")
+
+        mock_user_metadata = MagicMock()
+        mock_user_metadata.response_wait_time = 3
+
+        with (
+            patch.object(job, "_get_user_metadata", new=AsyncMock(return_value=mock_user_metadata)),
+            patch("areyouok_telegram.jobs.conversations.asyncio.sleep", new=AsyncMock()) as mock_sleep,
+        ):
+            await job.apply_response_delay()
+
+        mock_sleep.assert_called_once_with(3)
+
+    @pytest.mark.asyncio
+    async def test_apply_response_delay_default(self):
+        """Test apply_response_delay with default delay when no user metadata."""
+        job = ConversationJob("123")
+
+        with (
+            patch.object(job, "_get_user_metadata", new=AsyncMock(return_value=None)),
+            patch("areyouok_telegram.jobs.conversations.asyncio.sleep", new=AsyncMock()) as mock_sleep,
+        ):
+            await job.apply_response_delay()
+
+        mock_sleep.assert_called_once_with(2)
+
+    @pytest.mark.asyncio
+    async def test_apply_response_delay_zero_delay(self):
+        """Test apply_response_delay with zero delay."""
+        job = ConversationJob("123")
+
+        mock_user_metadata = MagicMock()
+        mock_user_metadata.response_wait_time = 0
+
+        with (
+            patch.object(job, "_get_user_metadata", new=AsyncMock(return_value=mock_user_metadata)),
+            patch("areyouok_telegram.jobs.conversations.asyncio.sleep", new=AsyncMock()) as mock_sleep,
+        ):
+            await job.apply_response_delay()
+
+        mock_sleep.assert_not_called()
+
+    @pytest.mark.asyncio
+    @pytest.mark.usefixtures("mock_db_session")
+    async def test_get_user_metadata_success(self):
+        """Test _get_user_metadata returns user metadata."""
+        job = ConversationJob("123")
+
+        mock_user_metadata = MagicMock()
+
+        with patch(
+            "areyouok_telegram.jobs.conversations.UserMetadata.get_by_user_id",
+            new=AsyncMock(return_value=mock_user_metadata),
+        ):
+            result = await job._get_user_metadata()
+
+        assert result == mock_user_metadata
+
+    @pytest.mark.asyncio
+    @pytest.mark.usefixtures("mock_db_session")
+    async def test_get_user_metadata_not_found(self):
+        """Test _get_user_metadata returns None when no metadata found."""
+        job = ConversationJob("123")
+
+        with patch(
+            "areyouok_telegram.jobs.conversations.UserMetadata.get_by_user_id", new=AsyncMock(return_value=None)
+        ):
+            result = await job._get_user_metadata()
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    @pytest.mark.usefixtures("mock_db_session")
+    async def test_get_chat_encryption_key_success(self):
+        """Test _get_chat_encryption_key returns encryption key."""
+        job = ConversationJob("123")
+
+        mock_chat = MagicMock()
+        mock_chat.retrieve_key.return_value = "test_encryption_key"
+
+        with patch("areyouok_telegram.jobs.conversations.Chats.get_by_id", new=AsyncMock(return_value=mock_chat)):
+            result = await job._get_chat_encryption_key()
+
+        assert result == "test_encryption_key"
+
+    @pytest.mark.asyncio
+    @pytest.mark.usefixtures("mock_db_session")
+    async def test_get_chat_encryption_key_not_found(self):
+        """Test _get_chat_encryption_key raises UserNotFoundForChatError when no chat found."""
+        job = ConversationJob("123")
+
+        with patch("areyouok_telegram.jobs.conversations.Chats.get_by_id", new=AsyncMock(return_value=None)):
+            with pytest.raises(UserNotFoundForChatError):
+                await job._get_chat_encryption_key()
+
+    @pytest.mark.asyncio
+    async def test_get_chat_context_filtering_and_sorting(self, frozen_time):
+        """Test _get_chat_context filtering and sorting logic."""
+        job = ConversationJob("123")
+        job._run_timestamp = frozen_time
+        job.chat_encryption_key = "test_encryption_key"
+        job.active_session = MagicMock()
+        job.active_session.session_id = "session123"
+
+        # Create mock context items with different types and timestamps
+        mock_session_context_old = MagicMock()
+        mock_session_context_old.type = ContextType.SESSION.value
+        mock_session_context_old.created_at = frozen_time - timedelta(days=2)  # Too old, should be filtered
+        mock_session_context_old.decrypt_content = MagicMock()
+
+        mock_session_context_recent = MagicMock()
+        mock_session_context_recent.type = ContextType.SESSION.value
+        mock_session_context_recent.created_at = frozen_time - timedelta(hours=12)  # Recent, should be included
+        mock_session_context_recent.session_id = "other_session"
+        mock_session_context_recent.decrypt_content = MagicMock()
+
+        mock_personality_context = MagicMock()
+        mock_personality_context.type = ContextType.PERSONALITY.value
+        mock_personality_context.created_at = frozen_time - timedelta(hours=6)  # Recent, should be included
+        mock_personality_context.session_id = "session123"  # Same session, should be included
+        mock_personality_context.decrypt_content = MagicMock()
+
+        context_items = [mock_session_context_old, mock_session_context_recent, mock_personality_context]
+
+        with patch(
+            "areyouok_telegram.jobs.conversations.Context.retrieve_context_by_chat",
+            new=AsyncMock(return_value=context_items),
+        ):
+            result = await job._get_chat_context()
+
+        # Should include recent session context and current session personality context
+        assert len(result) == 2
+        assert mock_session_context_recent in result
+        assert mock_personality_context in result
+        assert mock_session_context_old not in result
+
+    @pytest.mark.asyncio
+    @pytest.mark.usefixtures("mock_db_session")
+    async def test_get_chat_context_no_context_items(self):
+        """Test _get_chat_context when no context items exist."""
+        job = ConversationJob("123")
+        job.chat_encryption_key = "test_encryption_key"
+
+        with patch(
+            "areyouok_telegram.jobs.conversations.Context.retrieve_context_by_chat", new=AsyncMock(return_value=None)
+        ):
+            result = await job._get_chat_context()
+
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_get_chat_history_message_filtering(self, frozen_time):
+        """Test _get_chat_history filters messages by timestamp."""
+        job = ConversationJob("123")
+        job._run_timestamp = frozen_time
+        job.chat_encryption_key = "test_encryption_key"
+        job.active_session = MagicMock()
+
+        # Create mock messages with different timestamps
+        mock_message_before = MagicMock()
+        mock_message_before.created_at = frozen_time - timedelta(minutes=10)  # Before run timestamp
+        mock_message_before.message_type = "Message"
+        mock_message_before.message_id = "msg1"
+        mock_message_before.decrypt = MagicMock()
+
+        mock_message_after = MagicMock()
+        mock_message_after.created_at = frozen_time + timedelta(minutes=10)  # After run timestamp, should be filtered
+        mock_message_after.message_type = "Message"
+        mock_message_after.message_id = "msg2"
+        mock_message_after.decrypt = MagicMock()
+
+        raw_messages = [mock_message_before, mock_message_after]
+        job.active_session.get_messages = AsyncMock(return_value=raw_messages)
+
+        mock_chat_event = MagicMock()
+
+        with (
+            patch("areyouok_telegram.jobs.conversations.MediaFiles.get_by_message_id", new=AsyncMock(return_value=[])),
+            patch("areyouok_telegram.jobs.conversations.ChatEvent.from_message", return_value=mock_chat_event),
+        ):
+            result = await job._get_chat_history()
+
+        # Should only include message before run timestamp
+        assert len(result) == 1
+        assert result[0] == mock_chat_event
+
+    @pytest.mark.asyncio
+    async def test_get_chat_history_with_media_files(self, frozen_time):
+        """Test _get_chat_history handles media files properly."""
+        job = ConversationJob("123")
+        job._run_timestamp = frozen_time
+        job.chat_encryption_key = "test_encryption_key"
+        job.active_session = MagicMock()
+
+        mock_message = MagicMock()
+        mock_message.created_at = frozen_time - timedelta(minutes=10)
+        mock_message.message_type = "Message"
+        mock_message.message_id = "msg1"
+        mock_message.decrypt = MagicMock()
+
+        mock_media_file = MagicMock()
+        mock_media_file.decrypt_content = MagicMock()
+        media_files = [mock_media_file]
+
+        job.active_session.get_messages = AsyncMock(return_value=[mock_message])
+
+        mock_chat_event = MagicMock()
+
+        with (
+            patch(
+                "areyouok_telegram.jobs.conversations.MediaFiles.get_by_message_id",
+                new=AsyncMock(return_value=media_files),
+            ),
+            patch("areyouok_telegram.jobs.conversations.ChatEvent.from_message", return_value=mock_chat_event),
+        ):
+            result = await job._get_chat_history()
+
+        # Verify media file was decrypted
+        mock_media_file.decrypt_content.assert_called_once_with(chat_encryption_key="test_encryption_key")
+        assert len(result) == 1
+        assert result[0] == mock_chat_event
+
+    @pytest.mark.asyncio
+    async def test_get_chat_history_message_reaction_updated(self, frozen_time):
+        """Test _get_chat_history handles MessageReactionUpdated messages."""
+        job = ConversationJob("123")
+        job._run_timestamp = frozen_time
+        job.chat_encryption_key = "test_encryption_key"
+        job.active_session = MagicMock()
+
+        mock_message = MagicMock()
+        mock_message.created_at = frozen_time - timedelta(minutes=10)
+        mock_message.message_type = "MessageReactionUpdated"
+        mock_message.message_id = "msg1"
+        mock_message.decrypt = MagicMock()
+
+        job.active_session.get_messages = AsyncMock(return_value=[mock_message])
+
+        mock_chat_event = MagicMock()
+
+        with patch("areyouok_telegram.jobs.conversations.ChatEvent.from_message", return_value=mock_chat_event):
+            result = await job._get_chat_history()
+
+        # MessageReactionUpdated should have empty media list
+        assert len(result) == 1
+        assert result[0] == mock_chat_event
+
+    @pytest.mark.asyncio
+    async def test_get_chat_history_unknown_message_type(self, frozen_time):
+        """Test _get_chat_history skips unknown message types."""
+        job = ConversationJob("123")
+        job._run_timestamp = frozen_time
+        job.chat_encryption_key = "test_encryption_key"
+        job.active_session = MagicMock()
+
+        mock_message_known = MagicMock()
+        mock_message_known.created_at = frozen_time - timedelta(minutes=10)
+        mock_message_known.message_type = "Message"
+        mock_message_known.message_id = "msg1"
+        mock_message_known.decrypt = MagicMock()
+
+        mock_message_unknown = MagicMock()
+        mock_message_unknown.created_at = frozen_time - timedelta(minutes=5)
+        mock_message_unknown.message_type = "UnknownType"
+        mock_message_unknown.message_id = "msg2"
+        mock_message_unknown.decrypt = MagicMock()
+
+        job.active_session.get_messages = AsyncMock(return_value=[mock_message_known, mock_message_unknown])
+
+        mock_chat_event = MagicMock()
+
+        with (
+            patch("areyouok_telegram.jobs.conversations.MediaFiles.get_by_message_id", new=AsyncMock(return_value=[])),
+            patch("areyouok_telegram.jobs.conversations.ChatEvent.from_message", return_value=mock_chat_event),
+        ):
+            result = await job._get_chat_history()
+
+        # Should only include known message type
+        assert len(result) == 1
+        assert result[0] == mock_chat_event
+
+    @pytest.mark.asyncio
+    @pytest.mark.usefixtures("mock_db_session")
+    async def test_get_next_notification_success(self):
+        """Test _get_next_notification returns notification."""
+        job = ConversationJob("123")
+
+        mock_notification = MagicMock()
+
+        with patch(
+            "areyouok_telegram.jobs.conversations.Notifications.get_next_pending",
+            new=AsyncMock(return_value=mock_notification),
+        ):
+            result = await job._get_next_notification()
+
+        assert result == mock_notification
+
+    @pytest.mark.asyncio
+    @pytest.mark.usefixtures("mock_db_session")
+    async def test_get_next_notification_none(self):
+        """Test _get_next_notification returns None when no notifications."""
+        job = ConversationJob("123")
+
+        with patch(
+            "areyouok_telegram.jobs.conversations.Notifications.get_next_pending", new=AsyncMock(return_value=None)
+        ):
+            result = await job._get_next_notification()
+
+        assert result is None
+
+    # Branch coverage tests
+
+    @pytest.mark.asyncio
+    async def test_run_job_session_compression_with_existing_context(self, frozen_time):
+        """Test run_job session compression when context already exists."""
+        job = ConversationJob("123")
+        job._run_timestamp = frozen_time
+        job.chat_encryption_key = "test_encryption_key"
+
+        mock_session = MagicMock()
+        mock_session.has_bot_responded = True
+        mock_session.last_user_activity = frozen_time - timedelta(hours=2)  # Inactive session
+        mock_session.session_id = "session123"
+
+        mock_context = MagicMock()  # Existing context
+
+        with (
+            patch.object(job, "_get_chat_encryption_key", new=AsyncMock(return_value="test_encryption_key")),
+            patch(
+                "areyouok_telegram.data.operations.get_or_create_active_session",
+                new=AsyncMock(return_value=mock_session),
+            ),
+            patch.object(job, "_get_session_context", new=AsyncMock(return_value=mock_context)),
+            patch.object(job, "stop", new=AsyncMock()) as mock_stop,
+            patch("areyouok_telegram.jobs.conversations.logfire.warning") as mock_warning,
+            patch("areyouok_telegram.data.operations.close_chat_session", new=AsyncMock()),
+        ):
+            await job.run_job()
+
+        mock_warning.assert_called_once_with(
+            "Context already exists for session, skipping compression.", session_id="session123"
+        )
+        mock_stop.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_run_job_session_compression_with_empty_message_history(self, frozen_time):
+        """Test run_job session compression with empty message history."""
+        job = ConversationJob("123")
+        job._run_timestamp = frozen_time
+        job.chat_encryption_key = "test_encryption_key"
+
+        mock_session = MagicMock()
+        mock_session.has_bot_responded = True
+        mock_session.last_user_activity = frozen_time - timedelta(hours=2)  # Inactive session
+        mock_session.session_id = "session123"
+
+        with (
+            patch.object(job, "_get_chat_encryption_key", new=AsyncMock(return_value="test_encryption_key")),
+            patch(
+                "areyouok_telegram.data.operations.get_or_create_active_session",
+                new=AsyncMock(return_value=mock_session),
+            ),
+            patch.object(job, "_get_session_context", new=AsyncMock(return_value=None)),
+            patch.object(job, "_get_chat_history", new=AsyncMock(return_value=[])),  # Empty history
+            patch.object(job, "stop", new=AsyncMock()) as mock_stop,
+            patch("areyouok_telegram.jobs.conversations.logfire.warning") as mock_warning,
+            patch("areyouok_telegram.data.operations.close_chat_session", new=AsyncMock()),
+        ):
+            await job.run_job()
+
+        mock_warning.assert_called_once()
+        assert "No messages found" in str(mock_warning.call_args[0][0])
+        mock_stop.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_run_job_evaluation_scheduling(self, frozen_time):
+        """Test run_job schedules evaluation when message history is substantial."""
+        job = ConversationJob("123")
+        job._run_timestamp = frozen_time
+        job.chat_encryption_key = "test_encryption_key"
+        job._run_context = MagicMock()
+
+        mock_session = MagicMock()
+        mock_session.has_bot_responded = True
+        mock_session.last_user_activity = frozen_time - timedelta(hours=2)  # Inactive session
+        mock_session.session_id = "session123"
+
+        # Create message history with more than 5 messages
+        message_history = [MagicMock() for _ in range(7)]
+
+        with (
+            patch.object(job, "_get_chat_encryption_key", new=AsyncMock(return_value="test_encryption_key")),
+            patch(
+                "areyouok_telegram.data.operations.get_or_create_active_session",
+                new=AsyncMock(return_value=mock_session),
+            ),
+            patch.object(job, "_get_session_context", new=AsyncMock(return_value=None)),
+            patch.object(job, "_get_chat_history", new=AsyncMock(return_value=message_history)),
+            patch.object(job, "compress_session_context", new=AsyncMock()),
+            patch.object(job, "_save_session_context", new=AsyncMock()),
+            patch("areyouok_telegram.jobs.conversations.run_job_once", new=AsyncMock()) as mock_run_job_once,
+            patch.object(job, "stop", new=AsyncMock()),
+            patch("areyouok_telegram.data.operations.close_chat_session", new=AsyncMock()),
+        ):
+            await job.run_job()
+
+        # Verify evaluation job was scheduled
+        mock_run_job_once.assert_called_once()
+        call_args = mock_run_job_once.call_args[1]
+        assert call_args["context"] == job._run_context
+        assert call_args["job"].__class__.__name__ == "EvaluationsJob"
+
+    @pytest.mark.asyncio
+    async def test_run_job_message_iteration_logic(self, frozen_time):
+        """Test run_job while loop with message timestamp updates."""
+        job = ConversationJob("123")
+        job._run_timestamp = frozen_time
+        job._bot_id = "bot123"
+        job._run_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
+        job._run_context.bot.send_chat_action = AsyncMock()
+
+        mock_session = MagicMock()
+        mock_session.has_bot_responded = False
+        mock_session.session_id = "session123"
+        mock_session.last_user_message = frozen_time + timedelta(seconds=30)  # Updated after start
+
+        updated_session = MagicMock()
+        updated_session.has_bot_responded = False
+        updated_session.session_id = "session123"
+        updated_session.last_user_message = frozen_time + timedelta(seconds=30)
+
+        mock_response = TextResponse(reasoning="Test reasoning", message_text="Hello!", reply_to_message_id=None)
+        mock_message = MagicMock(spec=telegram.Message)
+
+        # Create a proper mock dependencies object with notification set to None
+        mock_dependencies = MagicMock()
+        mock_dependencies.notification = None
+
+        call_count = 0
+
+        def side_effect_get_session(*_args, **_kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count <= 1:
+                return mock_session
+            else:
+                return updated_session
+
+        with (
+            patch.object(job, "_get_chat_encryption_key", new=AsyncMock(return_value="test_encryption_key")),
+            patch(
+                "areyouok_telegram.data.operations.get_or_create_active_session", side_effect=side_effect_get_session
+            ),
+            patch.object(job, "prepare_conversation_input", new=AsyncMock(return_value=([], mock_dependencies))),
+            patch.object(job, "generate_response", new=AsyncMock(return_value=mock_response)),
+            patch.object(job, "execute_response", new=AsyncMock(return_value=mock_message)),
+            patch.object(job, "apply_response_delay", new=AsyncMock()) as mock_apply_delay,
+            patch.object(job, "_log_bot_activity", new=AsyncMock()),
+            patch.object(job, "_get_user_metadata", new=AsyncMock(return_value=None)),
+            patch("areyouok_telegram.data.operations.new_session_event", new=AsyncMock()),
+            patch("areyouok_telegram.jobs.conversations.logfire.span"),
+        ):
+            await job.run_job()
+
+        # Verify apply_response_delay was called twice (once in iteration, once at end)
+        assert mock_apply_delay.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_prepare_conversation_input_without_context(self, frozen_time):
+        """Test prepare_conversation_input with include_context=False."""
+        job = ConversationJob("123")
+        job._run_timestamp = frozen_time
+        job.chat_encryption_key = "test_encryption_key"
+        job._run_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
+
+        mock_session = MagicMock()
+        mock_session.session_id = "session123"
+        job.active_session = mock_session
+
+        mock_onboarding_session = MagicMock()
+        mock_onboarding_session.is_active = False
+
+        with (
+            patch(
+                "areyouok_telegram.data.operations.get_or_create_guided_session",
+                new=AsyncMock(return_value=mock_onboarding_session),
+            ),
+            patch.object(job, "_get_chat_context", new=AsyncMock()) as mock_get_context,
+            patch.object(job, "_get_chat_history", new=AsyncMock(return_value=[])),
+            patch.object(job, "_get_next_notification", new=AsyncMock(return_value=None)),
+        ):
+            message_history, deps = await job.prepare_conversation_input(include_context=False)
+
+        # Verify _get_chat_context was NOT called
+        mock_get_context.assert_not_called()
+        assert len(message_history) == 0
+
+    # Exception handling tests
+
+    @pytest.mark.asyncio
+    @pytest.mark.usefixtures("mock_db_session")
+    async def test_database_connection_failure_retry_decorated_methods(self):
+        """Test that @db_retry decorated methods handle database failures."""
+        job = ConversationJob("123")
+
+        # Test a few representative @db_retry methods
+        with patch("areyouok_telegram.jobs.conversations.async_database", side_effect=Exception("Database error")):
+            with pytest.raises(Exception, match="Database error"):
+                await job._get_user_metadata()
+
+            with pytest.raises(Exception, match="Database error"):
+                await job._get_chat_encryption_key()
+
+            with pytest.raises(Exception, match="Database error"):
+                await job._get_next_notification()
+
+    @pytest.mark.asyncio
+    async def test_telegram_api_failure_handling(self):
+        """Test handling of Telegram API failures."""
+        job = ConversationJob("123")
+        job._run_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
+        job._run_context.bot.send_message = AsyncMock(side_effect=Exception("Telegram API error"))
+
+        response = TextResponse(reasoning="Test reasoning", message_text="Test message", reply_to_message_id=None)
+
+        with pytest.raises(Exception, match="Telegram API error"):
+            await job._execute_text_response(response)
+
+    @pytest.mark.asyncio
+    async def test_agent_execution_failure_in_generate_response(self):
+        """Test agent execution failure in generate_response."""
+        job = ConversationJob("123")
+        job.active_session = MagicMock()
+        job.active_session.session_id = "session123"
+
+        mock_deps = MagicMock()
+
+        with patch(
+            "areyouok_telegram.jobs.conversations.run_agent_with_tracking",
+            new=AsyncMock(side_effect=Exception("Agent error")),
+        ):
+            with pytest.raises(Exception, match="Agent error"):
+                await job.generate_response(conversation_history=[], dependencies=mock_deps)
+
+    @pytest.mark.asyncio
+    async def test_agent_execution_failure_in_compress_session_context(self):
+        """Test agent execution failure in compress_session_context."""
+        job = ConversationJob("123")
+        job.active_session = MagicMock()
+        job.active_session.session_id = "session123"
+        job._bot_id = "bot123"
+
+        mock_chat_event = MagicMock()
+        mock_chat_event.timestamp = datetime.now(UTC)
+        mock_chat_event.to_model_message = MagicMock()
+
+        with patch(
+            "areyouok_telegram.jobs.conversations.run_agent_with_tracking",
+            new=AsyncMock(side_effect=Exception("Context compression error")),
+        ):
+            with pytest.raises(Exception, match="Context compression error"):
+                await job.compress_session_context([mock_chat_event])

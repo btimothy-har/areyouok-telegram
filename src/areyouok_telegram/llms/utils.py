@@ -1,9 +1,10 @@
 # ruff: noqa: TRY003
 
+import asyncio
+import time
 
 import anthropic
 import google
-import logfire
 import openai
 import pydantic_ai
 from tenacity import retry
@@ -16,8 +17,8 @@ from tenacity import wait_random_exponential
 from areyouok_telegram.data import Chats
 from areyouok_telegram.data import Context
 from areyouok_telegram.data import ContextType
-from areyouok_telegram.data import LLMUsage
 from areyouok_telegram.data import async_database
+from areyouok_telegram.data import operations as data_operations
 
 
 def should_retry_llm_error(e: Exception) -> bool:
@@ -73,27 +74,24 @@ async def run_agent_with_tracking(
     if "user_prompt" not in run_kwargs and "message_history" not in run_kwargs:
         raise ValueError("Either 'user_prompt' or 'message_history' must be provided in run_kwargs")
 
+    # Track generation duration using high-resolution timer
+    start_time = time.perf_counter()
     result = await agent.run(**run_kwargs)
+    end_time = time.perf_counter()
 
-    try:
-        # Always track llm usage in a separate async context
-        async with async_database() as db_conn:
-            await LLMUsage.track_pydantic_usage(
-                db_conn=db_conn,
-                chat_id=chat_id,
-                session_id=session_id,
-                agent=agent,
-                data=result.usage(),
-            )
-    except Exception as e:
-        # Log the error but don't raise it, as we want to return the result regardless
-        logfire.exception(
-            f"Failed to log LLM usage: {e}",
-            agent=agent.name,
+    generation_duration = end_time - start_time
+
+    # Track usage and generation in background - don't await
+    asyncio.create_task(
+        data_operations.track_llm_usage(
             chat_id=chat_id,
             session_id=session_id,
+            agent=agent,
+            result=result,
+            runtime=generation_duration,
+            run_kwargs=run_kwargs,
         )
-
+    )
     return result
 
 

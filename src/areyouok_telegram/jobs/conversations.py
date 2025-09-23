@@ -22,7 +22,9 @@ from areyouok_telegram.data import UserMetadata
 from areyouok_telegram.data import async_database
 from areyouok_telegram.data import operations as data_operations
 from areyouok_telegram.jobs.base import BaseJob
+from areyouok_telegram.jobs.evaluations import EvaluationsJob
 from areyouok_telegram.jobs.exceptions import UserNotFoundForChatError
+from areyouok_telegram.jobs.scheduler import run_job_once
 from areyouok_telegram.llms import run_agent_with_tracking
 from areyouok_telegram.llms.chat import AgentResponse
 from areyouok_telegram.llms.chat import ChatAgentDependencies
@@ -67,7 +69,7 @@ class ConversationJob(BaseJob):
         """Generate a consistent job name for this chat."""
         return f"conversation:{self.chat_id}"
 
-    async def run_job(self) -> None:  # noqa: ARG002
+    async def run_job(self) -> None:
         """Process conversation for this chat."""
 
         # Get user encryption key - this will fail for non-private chats
@@ -105,18 +107,20 @@ class ConversationJob(BaseJob):
             inactivity_duration = self._run_timestamp - reference_ts
 
             if inactivity_duration > timedelta(minutes=CHAT_SESSION_TIMEOUT_MINS):
-                with logfire.span(
-                    f"Closing chat session {self.active_session.session_id} due to inactivity.",
-                    _span_name="ConversationJob._run.close_session",
-                    chat_id=self.chat_id,
-                ):
-                    context = await self._get_session_context()
-                    if context:
-                        logfire.warning(
-                            "Context already exists for session, skipping compression.",
-                            session_id=self.active_session.session_id,
-                        )
-                    else:
+                context = await self._get_session_context()
+                message_history = []  # Initialize message_history before conditional logic
+                if context:
+                    logfire.warning(
+                        "Context already exists for session, skipping compression.",
+                        session_id=self.active_session.session_id,
+                    )
+                else:
+                    with logfire.span(
+                        f"Compressing conversation history for session {self.active_session.session_id}.",
+                        _span_name="ConversationJob._run.compress_context",
+                        chat_id=self.chat_id,
+                        session_id=self.active_session.session_id,
+                    ):
                         message_history = await self._get_chat_history()
 
                         if len(message_history) > 0:
@@ -134,10 +138,22 @@ class ConversationJob(BaseJob):
                                 "nothing to compress."
                             )
 
-                    await data_operations.close_chat_session(chat_session=self.active_session)
-                    logfire.info(f"Session {self.active_session.session_id} closed due to inactivity.")
+                # Check if we should run evaluations (only if we actually got message history)
+                if len(message_history) > 5:
+                    await run_job_once(
+                        context=self._run_context,
+                        job=EvaluationsJob(
+                            chat_id=self.chat_id,
+                            session_id=self.active_session.session_id,
+                        ),
+                        when=datetime.now(UTC) + timedelta(seconds=10),
+                    )
 
-                    await self.stop()
+                # Always close session and stop job when inactive, regardless of context existence
+                await data_operations.close_chat_session(chat_session=self.active_session)
+                logfire.info(f"Session {self.active_session.session_id} closed due to inactivity.")
+
+                await self.stop()
 
         else:
             with logfire.span(
