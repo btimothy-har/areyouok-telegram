@@ -54,7 +54,8 @@ class TestGetGenerationByIdCached:
             mock_get.assert_called_once_with(mock_db_session, generation_id="new_gen_id")
 
     @pytest.mark.asyncio
-    async def test_cache_miss_none_result(self, _mock_db_session):
+    @pytest.mark.usefixtures("mock_db_session")
+    async def test_cache_miss_none_result(self):
         """Test cache miss with None result from database."""
         with patch("areyouok_telegram.jobs.evaluations.LLMGenerations.get_by_generation_id") as mock_get:
             mock_get.return_value = None
@@ -407,7 +408,8 @@ class TestEvaluationsJob:
         mock_warning.assert_called_once_with("No generations found for session session456. Skipping evaluations.")
 
     @pytest.mark.asyncio
-    async def test_run_job_with_generations_reasoning_only(self, _mock_db_session):
+    @pytest.mark.usefixtures("mock_db_session")
+    async def test_run_job_with_generations_reasoning_only(self):
         """Test run_job with generations that have reasoning but no personality."""
         job = EvaluationsJob("chat123", "session456")
 
@@ -437,7 +439,8 @@ class TestEvaluationsJob:
         assert call_args[1]["progress"] is True  # development environment
 
     @pytest.mark.asyncio
-    async def test_run_job_with_generations_personality_only(self, _mock_db_session):
+    @pytest.mark.usefixtures("mock_db_session")
+    async def test_run_job_with_generations_personality_only(self):
         """Test run_job with generations that have personality but no reasoning."""
         job = EvaluationsJob("chat123", "session456")
 
@@ -464,7 +467,8 @@ class TestEvaluationsJob:
         assert call_args[1]["progress"] is False  # production environment
 
     @pytest.mark.asyncio
-    async def test_run_job_with_generations_both_reasoning_and_personality(self, _mock_db_session):
+    @pytest.mark.usefixtures("mock_db_session")
+    async def test_run_job_with_generations_both_reasoning_and_personality(self):
         """Test run_job with generations that have both reasoning and personality."""
         job = EvaluationsJob("chat123", "session456")
 
@@ -488,7 +492,8 @@ class TestEvaluationsJob:
         mock_dataset.evaluate.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_run_job_filters_non_evaluated_agents(self, _mock_db_session):
+    @pytest.mark.usefixtures("mock_db_session")
+    async def test_run_job_filters_non_evaluated_agents(self):
         """Test run_job filters out agents not in evaluated_agents list."""
         job = EvaluationsJob("chat123", "session456")
 
@@ -519,7 +524,8 @@ class TestEvaluationsJob:
         mock_dataset.evaluate.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_run_job_creates_cases_with_correct_metadata(self, _mock_db_session):
+    @pytest.mark.usefixtures("mock_db_session")
+    async def test_run_job_creates_cases_with_correct_metadata(self):
         """Test run_job creates evaluation cases with correct metadata."""
         job = EvaluationsJob("chat123", "session456")
 
