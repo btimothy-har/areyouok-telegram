@@ -1669,7 +1669,7 @@ class TestConversationJob:
         mock_sleep.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_get_user_metadata_success(self, mock_db_session):
+    async def test_get_user_metadata_success(self, _mock_db_session):
         """Test _get_user_metadata returns user metadata."""
         job = ConversationJob("123")
 
@@ -1684,7 +1684,7 @@ class TestConversationJob:
         assert result == mock_user_metadata
 
     @pytest.mark.asyncio
-    async def test_get_user_metadata_not_found(self, mock_db_session):
+    async def test_get_user_metadata_not_found(self, _mock_db_session):
         """Test _get_user_metadata returns None when no metadata found."""
         job = ConversationJob("123")
 
@@ -1696,7 +1696,7 @@ class TestConversationJob:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_get_chat_encryption_key_success(self, mock_db_session):
+    async def test_get_chat_encryption_key_success(self, _mock_db_session):
         """Test _get_chat_encryption_key returns encryption key."""
         job = ConversationJob("123")
 
@@ -1709,7 +1709,7 @@ class TestConversationJob:
         assert result == "test_encryption_key"
 
     @pytest.mark.asyncio
-    async def test_get_chat_encryption_key_not_found(self, mock_db_session):
+    async def test_get_chat_encryption_key_not_found(self, _mock_db_session):
         """Test _get_chat_encryption_key raises UserNotFoundForChatError when no chat found."""
         job = ConversationJob("123")
 
@@ -1759,7 +1759,7 @@ class TestConversationJob:
         assert mock_session_context_old not in result
 
     @pytest.mark.asyncio
-    async def test_get_chat_context_no_context_items(self, mock_db_session):
+    async def test_get_chat_context_no_context_items(self, _mock_db_session):
         """Test _get_chat_context when no context items exist."""
         job = ConversationJob("123")
         job.chat_encryption_key = "test_encryption_key"
@@ -1903,7 +1903,7 @@ class TestConversationJob:
         assert result[0] == mock_chat_event
 
     @pytest.mark.asyncio
-    async def test_get_next_notification_success(self, mock_db_session):
+    async def test_get_next_notification_success(self, _mock_db_session):
         """Test _get_next_notification returns notification."""
         job = ConversationJob("123")
 
@@ -1918,7 +1918,7 @@ class TestConversationJob:
         assert result == mock_notification
 
     @pytest.mark.asyncio
-    async def test_get_next_notification_none(self, mock_db_session):
+    async def test_get_next_notification_none(self, _mock_db_session):
         """Test _get_next_notification returns None when no notifications."""
         job = ConversationJob("123")
 
@@ -2059,7 +2059,7 @@ class TestConversationJob:
 
         call_count = 0
 
-        def side_effect_get_session(*args, **kwargs):
+        def side_effect_get_session(*_args, **_kwargs):
             nonlocal call_count
             call_count += 1
             if call_count <= 1:
@@ -2119,7 +2119,7 @@ class TestConversationJob:
     # Exception handling tests
 
     @pytest.mark.asyncio
-    async def test_database_connection_failure_retry_decorated_methods(self, mock_db_session):
+    async def test_database_connection_failure_retry_decorated_methods(self, _mock_db_session):
         """Test that @db_retry decorated methods handle database failures."""
         job = ConversationJob("123")
 

@@ -381,12 +381,8 @@ class TestNewSessionEvent:
             mock_async_db.return_value.__aenter__.return_value = mock_db_conn
 
             with (
-                patch(
-                    "areyouok_telegram.data.operations.Chats.get_by_id", new=AsyncMock(return_value=mock_chat)
-                ),
-                patch(
-                    "areyouok_telegram.data.operations.Messages.new_or_update", new=AsyncMock()
-                ),
+                patch("areyouok_telegram.data.operations.Chats.get_by_id", new=AsyncMock(return_value=mock_chat)),
+                patch("areyouok_telegram.data.operations.Messages.new_or_update", new=AsyncMock()),
                 patch(
                     "areyouok_telegram.data.operations.extract_media_from_telegram_message",
                     new=AsyncMock(return_value=0),
@@ -428,12 +424,8 @@ class TestNewSessionEvent:
             mock_async_db.return_value.__aenter__.return_value = mock_db_conn
 
             with (
-                patch(
-                    "areyouok_telegram.data.operations.Chats.get_by_id", new=AsyncMock(return_value=mock_chat)
-                ),
-                patch(
-                    "areyouok_telegram.data.operations.Messages.new_or_update", new=AsyncMock()
-                ),
+                patch("areyouok_telegram.data.operations.Chats.get_by_id", new=AsyncMock(return_value=mock_chat)),
+                patch("areyouok_telegram.data.operations.Messages.new_or_update", new=AsyncMock()),
                 patch(
                     "areyouok_telegram.data.operations.extract_media_from_telegram_message",
                     new=AsyncMock(return_value=0),
@@ -871,7 +863,7 @@ class TestTrackLLMUsage:
                 patch(
                     "areyouok_telegram.data.operations.LLMUsage.track_pydantic_usage",
                     new=AsyncMock(),
-                ) as mock_track_usage,
+                ) as _,  # Not used in this test
                 patch(
                     "areyouok_telegram.data.operations.LLMGenerations.create",
                     new=AsyncMock(),

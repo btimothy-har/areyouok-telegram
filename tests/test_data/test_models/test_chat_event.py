@@ -475,7 +475,9 @@ class TestChatEvent:
         assert "message_buttons" in result.event_data
         assert result.event_data["message_buttons"] == []
 
-    def test_from_message_with_inline_keyboard_markup_no_callback_data(self, mock_messages_sqlalchemy, mock_telegram_message):
+    def test_from_message_with_inline_keyboard_markup_no_callback_data(
+        self, mock_messages_sqlalchemy, mock_telegram_message
+    ):
         """Test creating ChatEvent from message with InlineKeyboardMarkup buttons without callback_data."""
         # Create inline keyboard buttons with and without callback_data
         button1 = telegram.InlineKeyboardButton(text="Button 1", callback_data="callback_1")

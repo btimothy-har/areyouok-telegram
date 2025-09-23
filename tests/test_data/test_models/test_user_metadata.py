@@ -813,10 +813,7 @@ class TestResponseWaitTime:
         metadata.user_key = "test_key"
 
         # Pre-populate cache with response_speed but no response_speed_adj (None)
-        UserMetadata._metadata_cache[metadata.user_key] = {
-            "response_speed": "normal",
-            "response_speed_adj": None
-        }
+        UserMetadata._metadata_cache[metadata.user_key] = {"response_speed": "normal", "response_speed_adj": None}
 
         result = metadata.response_wait_time
 
@@ -830,9 +827,7 @@ class TestResponseWaitTime:
         metadata.user_key = "test_key"
 
         # Pre-populate cache with response_speed but no response_speed_adj key at all
-        UserMetadata._metadata_cache[metadata.user_key] = {
-            "response_speed": "fast"
-        }
+        UserMetadata._metadata_cache[metadata.user_key] = {"response_speed": "fast"}
 
         result = metadata.response_wait_time
 
@@ -846,10 +841,7 @@ class TestResponseWaitTime:
         metadata.user_key = "test_key"
 
         # Pre-populate cache with both values
-        UserMetadata._metadata_cache[metadata.user_key] = {
-            "response_speed": "slow",
-            "response_speed_adj": -2
-        }
+        UserMetadata._metadata_cache[metadata.user_key] = {"response_speed": "slow", "response_speed_adj": -2}
 
         result = metadata.response_wait_time
 
@@ -881,7 +873,7 @@ class TestValidateFieldInvalidTypes:
 
         # Test with boolean type
         with pytest.raises(InvalidFieldValueError) as exc_info:
-            UserMetadata.validate_field("country", True)
+            UserMetadata.validate_field("country", value=True)
 
         assert exc_info.value.field == "country"
         assert exc_info.value.value is True
@@ -933,7 +925,7 @@ class TestValidateFieldInvalidTypes:
 
         # Test with boolean type
         with pytest.raises(InvalidFieldValueError) as exc_info:
-            UserMetadata.validate_field("response_speed", False)
+            UserMetadata.validate_field("response_speed", value=False)
 
         assert exc_info.value.field == "response_speed"
         assert exc_info.value.value is False

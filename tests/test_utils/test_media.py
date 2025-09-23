@@ -230,6 +230,7 @@ class TestDownloadFile:
                 provider="openai",
                 input_tokens=10,
                 output_tokens=5,
+                runtime=0.0,
             )
 
             # Verify logging

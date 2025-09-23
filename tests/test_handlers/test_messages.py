@@ -48,7 +48,7 @@ class TestOnNewMessage:
                 "areyouok_telegram.handlers.messages.data_operations.new_session_event", new=AsyncMock()
             ) as mock_new_event,
             patch("areyouok_telegram.handlers.messages.telegram_call", new=AsyncMock()) as mock_telegram_call,
-            patch("areyouok_telegram.handlers.messages.generate_feedback_context", new=AsyncMock()) as mock_feedback,
+            patch("areyouok_telegram.handlers.messages.generate_feedback_context", new=AsyncMock()) as _,
             patch("asyncio.create_task") as mock_create_task,
             patch("random.random", return_value=0.2),  # Mock to be < 1/3 to trigger task creation
         ):

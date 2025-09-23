@@ -98,7 +98,9 @@ class TestLLMGenerations:
         # Create mock output and run result
         output_obj = create_mock_output("TextResponse", {"message_text": "Hello", "reasoning": "Test reasoning"})
         mock_agent = create_mock_agent()
-        mock_run_result = create_mock_agent_run_result(output_obj, '{"messages": [{"role": "user", "content": "test"}]}')
+        mock_run_result = create_mock_agent_run_result(
+            output_obj, '{"messages": [{"role": "user", "content": "test"}]}'
+        )
 
         await LLMGenerations.create(
             db_conn=mock_db_conn,
@@ -278,7 +280,7 @@ class TestLLMGenerations:
                 model="test/model",
                 response_type="TestResponse",
                 encrypted_output="encrypted_output",
-                encrypted_messages="encrypted_messages"
+                encrypted_messages="encrypted_messages",
             ),
             LLMGenerations(
                 generation_id="gen2",
@@ -288,7 +290,7 @@ class TestLLMGenerations:
                 model="test/model",
                 response_type="TestResponse",
                 encrypted_output="encrypted_output",
-                encrypted_messages="encrypted_messages"
+                encrypted_messages="encrypted_messages",
             ),
         ]
         mock_scalars.all.return_value = mock_generations
@@ -318,7 +320,7 @@ class TestLLMGenerations:
             model="test/model",
             response_type="TestResponse",
             encrypted_output="encrypted_output",
-            encrypted_messages="encrypted_messages"
+            encrypted_messages="encrypted_messages",
         )
         mock_result.scalar_one_or_none.return_value = mock_generation
         mock_db_conn.execute.return_value = mock_result
@@ -362,7 +364,7 @@ class TestLLMGenerations:
             model="test/model",
             agent="test-agent",
             chat_id="test_chat",
-            session_id="test_session"
+            session_id="test_session",
         )
 
         output = generation.run_output
@@ -382,7 +384,7 @@ class TestLLMGenerations:
             model="test/model",
             agent="test-agent",
             chat_id="test_chat",
-            session_id="test_session"
+            session_id="test_session",
         )
 
         output = generation.run_output
@@ -402,7 +404,7 @@ class TestLLMGenerations:
             model="test/model",
             agent="test-agent",
             chat_id="test_chat",
-            session_id="test_session"
+            session_id="test_session",
         )
 
         output = generation.run_output
@@ -422,14 +424,14 @@ class TestLLMGenerations:
             model="test/model",
             agent="test-agent",
             chat_id="test_chat",
-            session_id="test_session"
+            session_id="test_session",
         )
 
         # Since we're mocking the decrypt and not the actual Pydantic validation,
         # we expect it to try to validate and potentially fall back
         with patch("pydantic_ai.messages.ModelMessagesTypeAdapter.validate_python") as mock_validate:
             mock_validate.return_value = [{"role": "user", "content": "Hello"}]
-            messages = generation.run_messages
+            _ = generation.run_messages  # Trigger the property access
             mock_validate.assert_called_once_with([{"role": "user", "content": "Hello"}])
 
     @patch("areyouok_telegram.data.models.llm_generations.decrypt_content")
@@ -445,7 +447,7 @@ class TestLLMGenerations:
             model="test/model",
             agent="test-agent",
             chat_id="test_chat",
-            session_id="test_session"
+            session_id="test_session",
         )
 
         messages = generation.run_messages
@@ -466,7 +468,7 @@ class TestLLMGenerations:
             model="test/model",
             agent="test-agent",
             chat_id="test_chat",
-            session_id="test_session"
+            session_id="test_session",
         )
 
         deps = generation.run_deps
@@ -485,7 +487,7 @@ class TestLLMGenerations:
             model="test/model",
             agent="test-agent",
             chat_id="test_chat",
-            session_id="test_session"
+            session_id="test_session",
         )
 
         deps = generation.run_deps
@@ -506,7 +508,7 @@ class TestLLMGenerations:
             model="test/model",
             agent="test-agent",
             chat_id="test_chat",
-            session_id="test_session"
+            session_id="test_session",
         )
 
         deps = generation.run_deps
@@ -524,6 +526,7 @@ class TestSerializeObject:
 
     def test_serialize_object_pydantic_model(self):
         """Test serialize_object with Pydantic model."""
+
         class TestModel(pydantic.BaseModel):
             name: str
             value: int
@@ -537,6 +540,7 @@ class TestSerializeObject:
 
     def test_serialize_object_dataclass_with_to_dict(self):
         """Test serialize_object with dataclass that has to_dict method."""
+
         @dataclasses.dataclass
         class TestDataclass:
             name: str
@@ -554,6 +558,7 @@ class TestSerializeObject:
 
     def test_serialize_object_dataclass_without_to_dict(self):
         """Test serialize_object with dataclass without to_dict method."""
+
         @dataclasses.dataclass
         class TestDataclass:
             name: str
@@ -568,6 +573,7 @@ class TestSerializeObject:
 
     def test_serialize_object_empty_dataclass(self):
         """Test serialize_object with empty dataclass."""
+
         @dataclasses.dataclass
         class EmptyDataclass:
             pass
@@ -612,6 +618,7 @@ class TestSerializeObject:
 
     def test_serialize_object_complex_nested_dataclass(self):
         """Test serialize_object with nested dataclass structures."""
+
         @dataclasses.dataclass
         class NestedClass:
             inner_value: str
@@ -627,16 +634,13 @@ class TestSerializeObject:
         result = serialize_object(obj)
 
         # Should handle nested structures via dataclasses.asdict()
-        expected_dict = {
-            "name": "complex",
-            "nested": {"inner_value": "nested"},
-            "numbers": [1, 2, 3]
-        }
+        expected_dict = {"name": "complex", "nested": {"inner_value": "nested"}, "numbers": [1, 2, 3]}
         expected = json.dumps(expected_dict)
         assert result == expected
 
     def test_serialize_object_exception_handling_type_error(self):
         """Test serialize_object exception handling for TypeError during JSON serialization."""
+
         class NonSerializableClass:
             def __init__(self):
                 self.func = lambda x: x  # Functions are not JSON serializable
@@ -652,6 +656,7 @@ class TestSerializeObject:
 
     def test_serialize_object_exception_handling_value_error(self):
         """Test serialize_object exception handling for ValueError during JSON serialization."""
+
         class CircularRefClass:
             def __init__(self):
                 self.self_ref = self
@@ -671,6 +676,7 @@ class TestSerializeObject:
 
     def test_serialize_object_dataclass_with_complex_to_dict(self):
         """Test serialize_object with dataclass that has complex to_dict logic."""
+
         @dataclasses.dataclass
         class ComplexToDict:
             values: list[str]
@@ -681,24 +687,18 @@ class TestSerializeObject:
                 return {
                     "processed_values": [v.upper() for v in self.values],
                     "meta_count": len(self.metadata),
-                    "has_data": bool(self.values)
+                    "has_data": bool(self.values),
                 }
 
-        obj = ComplexToDict(
-            values=["hello", "world"],
-            metadata={"key1": "value1", "key2": "value2"}
-        )
+        obj = ComplexToDict(values=["hello", "world"], metadata={"key1": "value1", "key2": "value2"})
         result = serialize_object(obj)
 
-        expected = json.dumps({
-            "processed_values": ["HELLO", "WORLD"],
-            "meta_count": 2,
-            "has_data": True
-        })
+        expected = json.dumps({"processed_values": ["HELLO", "WORLD"], "meta_count": 2, "has_data": True})
         assert result == expected
 
     def test_serialize_object_object_with_non_json_serializable_in_to_dict(self):
         """Test serialize_object when to_dict returns non-serializable data."""
+
         @dataclasses.dataclass
         class BadToDict:
             name: str
