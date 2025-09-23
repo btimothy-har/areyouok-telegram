@@ -8,7 +8,7 @@ from pydantic_ai import RunContext
 from areyouok_telegram.data import UserMetadata
 from areyouok_telegram.data import async_database
 from areyouok_telegram.llms.exceptions import MetadataFieldUpdateError
-from areyouok_telegram.llms.models import ClaudeSonnet4
+from areyouok_telegram.llms.models import GPT5Mini
 from areyouok_telegram.llms.utils import log_metadata_update_context
 
 
@@ -37,7 +37,9 @@ class PreferencesUpdateResponse(pydantic.BaseModel):
     )
 
 
-agent_model = ClaudeSonnet4(model_settings=pydantic_ai.settings.ModelSettings(temperature=0.0))
+agent_model = GPT5Mini(
+    model_settings=pydantic_ai.models.openai.OpenAIChatModelSettings(openai_reasoning_effort="minimal")
+)
 
 preferences_agent = pydantic_ai.Agent(
     model=agent_model.model,
@@ -106,7 +108,7 @@ async def update_country(
     ctx: RunContext[PreferencesAgentDependencies],
     new_value: str,
 ) -> str:
-    """Update the user's country."""
+    """Update the user's country. The country should be a valid ISO 3166-1 alpha-3 country code."""
 
     async with async_database() as db_conn:
         try:

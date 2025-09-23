@@ -1,9 +1,13 @@
 import pydantic_ai
 
-from areyouok_telegram.llms.models import GPT5Mini
+from areyouok_telegram.llms.models import GPT5Nano
+
+agent_model = GPT5Nano(
+    model_settings=pydantic_ai.models.openai.OpenAIChatModelSettings(openai_reasoning_effort="minimal")
+)
 
 anonymization_agent = pydantic_ai.Agent(
-    model=GPT5Mini().model,
+    model=agent_model.model,
     name="anonymization_agent",
     end_strategy="exhaustive",
 )
