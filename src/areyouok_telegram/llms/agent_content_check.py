@@ -33,6 +33,7 @@ content_check_agent = pydantic_ai.Agent(
     output_type=ContentCheckResponse,
     name="content_check_agent",
     end_strategy="exhaustive",
+    retries=3,
 )
 
 

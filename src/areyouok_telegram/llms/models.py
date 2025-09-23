@@ -87,7 +87,7 @@ class ClaudeOpus41(BaseModelConfig):
     """Model configuration for Claude Opus 4.1."""
 
     DEFAULT_SETTINGS = pydantic_ai.settings.ModelSettings(
-        temperature=0.6,
+        temperature=0.0,
     )
 
     def __init__(self, model_settings: pydantic_ai.settings.ModelSettings | None = None):
@@ -103,7 +103,7 @@ class ClaudeSonnet4(BaseModelConfig):
     """Model configuration for Claude Sonnet 4."""
 
     DEFAULT_SETTINGS = pydantic_ai.settings.ModelSettings(
-        temperature=0.6,
+        temperature=0.0,
     )
 
     def __init__(self, model_settings: pydantic_ai.settings.ModelSettings | None = None):
@@ -167,7 +167,7 @@ class Gemini25Pro(BaseModelConfig):
     """Model configuration for Google Gemini 2.5 Pro."""
 
     DEFAULT_SETTINGS = GoogleModelSettings(
-        temperature=0.6,
+        temperature=0.0,
         google_thinking_config={"thinking_budget": -1},
         google_safety_settings=[
             {
@@ -206,7 +206,7 @@ class Gemini25Flash(BaseModelConfig):
     """Model configuration for Google Gemini 2.5 Flash."""
 
     DEFAULT_SETTINGS = GoogleModelSettings(
-        temperature=0.6,
+        temperature=0.0,
         google_thinking_config={"thinking_budget": -1},
         google_safety_settings=[
             {

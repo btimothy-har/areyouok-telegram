@@ -59,7 +59,7 @@ class ChatAgentDependencies:
         }
 
 
-agent_model = Gemini25Pro(model_settings=pydantic_ai.models.google.GoogleModelSettings(temperature=0.5))
+agent_model = Gemini25Pro()
 
 chat_agent = pydantic_ai.Agent(
     model=agent_model.model,

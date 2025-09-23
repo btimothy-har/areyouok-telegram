@@ -10,6 +10,7 @@ anonymization_agent = pydantic_ai.Agent(
     model=agent_model.model,
     name="anonymization_agent",
     end_strategy="exhaustive",
+    retries=3,
 )
 
 
