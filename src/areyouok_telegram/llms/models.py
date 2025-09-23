@@ -88,7 +88,6 @@ class ClaudeOpus41(BaseModelConfig):
 
     DEFAULT_SETTINGS = pydantic_ai.settings.ModelSettings(
         temperature=0.6,
-        parallel_tool_calls=False,
     )
 
     def __init__(self, model_settings: pydantic_ai.settings.ModelSettings | None = None):
@@ -105,7 +104,6 @@ class ClaudeSonnet4(BaseModelConfig):
 
     DEFAULT_SETTINGS = pydantic_ai.settings.ModelSettings(
         temperature=0.6,
-        parallel_tool_calls=False,
     )
 
     def __init__(self, model_settings: pydantic_ai.settings.ModelSettings | None = None):
@@ -122,7 +120,6 @@ class GPT5(BaseModelConfig):
 
     DEFAULT_SETTINGS = pydantic_ai.settings.ModelSettings(
         temperature=0.0,
-        parallel_tool_calls=False,
     )
 
     def __init__(self, model_settings: pydantic_ai.settings.ModelSettings | None = None):
@@ -139,7 +136,6 @@ class GPT5Mini(BaseModelConfig):
 
     DEFAULT_SETTINGS = pydantic_ai.settings.ModelSettings(
         temperature=0.0,
-        parallel_tool_calls=False,
     )
 
     def __init__(self, model_settings: pydantic_ai.settings.ModelSettings | None = None):
@@ -156,7 +152,6 @@ class GPT5Nano(BaseModelConfig):
 
     DEFAULT_SETTINGS = pydantic_ai.settings.ModelSettings(
         temperature=0.0,
-        parallel_tool_calls=False,
     )
 
     def __init__(self, model_settings: pydantic_ai.settings.ModelSettings | None = None):

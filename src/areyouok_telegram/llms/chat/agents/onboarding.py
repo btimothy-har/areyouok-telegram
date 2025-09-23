@@ -54,7 +54,7 @@ class OnboardingAgentDependencies:
     notification: Notifications | None = None
 
 
-agent_model = Gemini25Pro(model_settings=pydantic_ai.models.google.GoogleModelSettings(temperature=0.25))
+agent_model = Gemini25Pro(model_settings=pydantic_ai.models.google.GoogleModelSettings(temperature=0.1))
 
 
 onboarding_agent = pydantic_ai.Agent(
