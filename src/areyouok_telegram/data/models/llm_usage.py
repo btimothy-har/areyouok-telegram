@@ -4,6 +4,7 @@ from datetime import datetime
 
 import pydantic_ai
 from sqlalchemy import Column
+from sqlalchemy import Float
 from sqlalchemy import Index
 from sqlalchemy import Integer
 from sqlalchemy import String
@@ -36,7 +37,7 @@ class LLMUsage(Base):
     provider = Column(String, nullable=False)
     input_tokens = Column(Integer, nullable=False, default=0)
     output_tokens = Column(Integer, nullable=False, default=0)
-    runtime = Column(Integer, nullable=False)
+    runtime = Column(Float, nullable=False)
     details = Column(JSONB, nullable=True)
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -51,7 +52,7 @@ class LLMUsage(Base):
         session_id: str,
         agent: pydantic_ai.Agent,
         data: pydantic_ai.usage.RunUsage,
-        runtime: int,
+        runtime: float,
     ) -> int:
         """Log usage data from pydantic in the database."""
 
@@ -97,7 +98,7 @@ class LLMUsage(Base):
         provider: str = None,
         input_tokens: int = 0,
         output_tokens: int = 0,
-        runtime: int = 0,
+        runtime: float = 0.0,
     ) -> int:
         """Log generic usage data in the database."""
 
