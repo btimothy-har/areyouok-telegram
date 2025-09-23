@@ -9,9 +9,8 @@ class EvaluationResponse(pydantic.BaseModel):
     )
     reasoning: str = pydantic.Field(
         description=(
-            "Reasoning behind the evaluation score, explaining why the score was given. "
+            "A brief reasoning, no more than 500 characters, explaining the evaluation score. "
             "Do not include the original message or response, whether in part or full. "
-            "300 character limit."
         ),
-        max_length=300,
+        max_length=500,
     )
