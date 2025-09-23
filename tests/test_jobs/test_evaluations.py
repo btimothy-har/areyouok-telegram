@@ -56,14 +56,15 @@ class TestGetGenerationByIdCached:
     @pytest.mark.asyncio
     @pytest.mark.usefixtures("mock_db_session")
     async def test_cache_miss_none_result(self):
-        """Test cache miss with None result from database."""
+        """Test cache miss with None result from database raises ValueError."""
         with patch("areyouok_telegram.jobs.evaluations.LLMGenerations.get_by_generation_id") as mock_get:
             mock_get.return_value = None
 
-            result = await get_generation_by_id_cached("nonexistent_gen_id")
+            with pytest.raises(ValueError, match="Generation with ID nonexistent_gen_id not found"):
+                await get_generation_by_id_cached("nonexistent_gen_id")
 
-            assert result is None
-            assert GEN_CACHE["nonexistent_gen_id"] is None
+            # Cache should not contain the failed lookup
+            assert "nonexistent_gen_id" not in GEN_CACHE
 
 
 class TestReasoningAlignmentEvaluator:
