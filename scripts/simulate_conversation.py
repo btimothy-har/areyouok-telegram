@@ -179,7 +179,8 @@ class ConversationSimulator:
 
         # Load persona from file
         self.user_persona = self._load_persona(user_persona_file)
-        self.conversation_history: list[ConversationMessage] = []
+        self.conversation_history: dict[int, dict[str, ConversationMessage]] = {}
+        self.current_turn = 0
         self.message_counter = 0
 
     def _load_persona(self, persona_filename: str) -> str:
@@ -199,6 +200,20 @@ class ConversationSimulator:
         self.message_counter += 1
         return self.message_counter
 
+    @property
+    def chronological_messages(self) -> list[ConversationMessage]:
+        """Convert turn-based conversation history to chronological message list."""
+        messages = []
+        for turn_num in sorted(self.conversation_history.keys()):
+            turn_data = self.conversation_history[turn_num]
+            # Add user message first if it exists
+            if "user" in turn_data:
+                messages.append(turn_data["user"])
+            # Add bot message second if it exists
+            if "bot" in turn_data:
+                messages.append(turn_data["bot"])
+        return messages
+
     async def generate_user_message(self) -> str:
         run_kwargs = {"deps": UserAgentDependencies(persona=self.user_persona)}
 
@@ -207,7 +222,7 @@ class ConversationSimulator:
         else:
             timestamp = datetime.now(UTC)
             run_kwargs["message_history"] = [
-                msg.to_model_message(timestamp, perspective="user") for msg in self.conversation_history
+                msg.to_model_message(timestamp, perspective="user") for msg in self.chronological_messages
             ]
 
         result = await user_agent.run(**run_kwargs)
@@ -215,7 +230,7 @@ class ConversationSimulator:
 
     async def get_bot_response(self, *, allow_personality: bool = True) -> AgentResponse:
         timestamp = datetime.now(UTC)
-        model_messages = [msg.to_model_message(timestamp, perspective="bot") for msg in self.conversation_history]
+        model_messages = [msg.to_model_message(timestamp, perspective="bot") for msg in self.chronological_messages]
 
         restricted_responses = {"reaction", "keyboard"}
         if not allow_personality:
@@ -248,14 +263,18 @@ class ConversationSimulator:
         for turn in range(num_turns):
             console.print(f"\n[bold yellow]📍 Turn {turn + 1}/{num_turns}[/bold yellow]")
 
+            # Initialize new turn
+            self.current_turn += 1
+            self.conversation_history[self.current_turn] = {}
+
             user_text = await self.generate_user_message()
 
-            # Add user message to history
+            # Add user message to current turn
             user_msg = ConversationMessage(
                 message_id=self.get_next_message_id(), role="user", timestamp=datetime.now(UTC), text=user_text
             )
             console.print(f"[blue]👤 User:[/blue] {user_msg.text}")
-            self.conversation_history.append(user_msg)
+            self.conversation_history[self.current_turn]["user"] = user_msg
 
             while True:
                 allow_personality = True
@@ -268,7 +287,7 @@ class ConversationSimulator:
                     continue
                 break
 
-            # Add bot response to history
+            # Add bot response to current turn
             bot_msg = ConversationMessage(
                 message_id=self.get_next_message_id(),
                 role="bot",
@@ -277,13 +296,15 @@ class ConversationSimulator:
                 reasoning=bot_response.reasoning,
             )
             console.print(f"[green]🤖 Bot:[/green] {bot_msg.text}")
-            self.conversation_history.append(bot_msg)
+            self.conversation_history[self.current_turn]["bot"] = bot_msg
 
             # Small delay between turns
             await asyncio.sleep(1)
 
         console.print(
-            f"\n[bold green]✅ Simulation complete! Total messages: {len(self.conversation_history)}[/bold green]"
+            f"\n[bold green]✅ Simulation complete! "
+            f"Total turns: {len(self.conversation_history)}, "
+            f"Total messages: {len(self.chronological_messages)}[/bold green]"
         )
 
 
