@@ -68,19 +68,14 @@ class LLMUsage(Base):
         else:
             model = agent.model
 
-        if model.model_name.count("/") == 0:
-            # If the model name does not contain a provider prefix, prefix the system
-            model_name = f"{model.system}/{model.model_name}"
-        else:
-            model_name = model.model_name
+        model_name = model.model_name.split("/", 1)[-1]
 
-        provider = model_name.split("/", 1)[0]
         now = datetime.now(UTC)
 
         # Calculate costs using genai-prices
         input_cost, output_cost, total_cost = cls._calculate_costs(
-            model_name=model_name.split("/", 1)[1] if "/" in model_name else model_name,
-            provider=provider,
+            model_name=model_name,
+            provider=model.system,
             input_tokens=data.request_tokens,
             output_tokens=data.response_tokens,
         )
@@ -91,7 +86,7 @@ class LLMUsage(Base):
             timestamp=now,
             usage_type=f"pydantic.{agent.name}",
             model=model_name,
-            provider=provider,
+            provider=model.system,
             input_tokens=data.request_tokens,
             output_tokens=data.response_tokens,
             runtime=runtime,

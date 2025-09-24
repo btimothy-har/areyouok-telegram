@@ -4,6 +4,7 @@
 import asyncio
 import sys
 import uuid
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC
 from datetime import datetime
@@ -84,25 +85,17 @@ class ConversationSimulator:
         self.current_turn = 0
         self.message_counter = 0
 
-        # Token usage and cost tracking
-        self.token_usage: dict[str, dict[str, int | float]] = {
-            "user_agent": {
+        # Token usage and cost tracking - grouped by model name
+        self.token_usage = defaultdict(
+            lambda: {
                 "input": 0,
                 "output": 0,
                 "requests": 0,
                 "input_cost": 0.0,
                 "output_cost": 0.0,
                 "total_cost": 0.0,
-            },
-            "chat_agent": {
-                "input": 0,
-                "output": 0,
-                "requests": 0,
-                "input_cost": 0.0,
-                "output_cost": 0.0,
-                "total_cost": 0.0,
-            },
-        }
+            }
+        )
 
     def _load_persona(self, persona_filename: str) -> str:
         """Load persona content from markdown file in sim_personas directory."""
@@ -132,19 +125,9 @@ class ConversationSimulator:
         else:
             model = agent_model
 
-        if model.model_name.count("/") == 0:
-            # If the model name does not contain a provider prefix, prefix the system
-            model_name_with_provider = f"{model.system}/{model.model_name}"
-        else:
-            model_name_with_provider = model.model_name
+        model_name = model.model_name.split("/", 1)[-1]
 
-        provider = model_name_with_provider.split("/", 1)[0]
-        if "/" in model_name_with_provider:
-            model_name = model_name_with_provider.split("/", 1)[1]
-        else:
-            model_name = model_name_with_provider
-
-        return model_name, provider
+        return model_name, model.system
 
     def _calculate_costs(
         self,
@@ -199,26 +182,29 @@ class ConversationSimulator:
 
         result = await user_agent.run(**run_kwargs)
 
-        # Track token usage
+        # Track token usage and costs by model name
         usage = result.usage()
         input_tokens = usage.input_tokens or 0
         output_tokens = usage.output_tokens or 0
 
-        self.token_usage["user_agent"]["input"] += input_tokens
-        self.token_usage["user_agent"]["output"] += output_tokens
-        self.token_usage["user_agent"]["requests"] += usage.requests or 0
-
-        # Track cost usage for user agent - derive model and provider from agent
+        # Get model info
         model_name, provider = self._extract_model_info(user_agent.model)
+
+        # Track token usage
+        self.token_usage[model_name]["input"] += input_tokens
+        self.token_usage[model_name]["output"] += output_tokens
+        self.token_usage[model_name]["requests"] += usage.requests or 0
+
+        # Track cost usage
         input_cost, output_cost, total_cost = self._calculate_costs(
             model_name=model_name,
             provider=provider,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
         )
-        self.token_usage["user_agent"]["input_cost"] += input_cost
-        self.token_usage["user_agent"]["output_cost"] += output_cost
-        self.token_usage["user_agent"]["total_cost"] += total_cost
+        self.token_usage[model_name]["input_cost"] += input_cost
+        self.token_usage[model_name]["output_cost"] += output_cost
+        self.token_usage[model_name]["total_cost"] += total_cost
 
         return result.output
 
@@ -247,26 +233,29 @@ class ConversationSimulator:
             toolsets=[],  # Empty toolset to disable all tools
         )
 
-        # Track token usage
+        # Track token usage and costs by model name
         usage = result.usage()
         input_tokens = usage.input_tokens or 0
         output_tokens = usage.output_tokens or 0
 
-        self.token_usage["chat_agent"]["input"] += input_tokens
-        self.token_usage["chat_agent"]["output"] += output_tokens
-        self.token_usage["chat_agent"]["requests"] += usage.requests or 0
-
-        # Track cost usage for chat agent - derive model and provider from agent
+        # Get model info
         model_name, provider = self._extract_model_info(chat_agent.model)
+
+        # Track token usage
+        self.token_usage[model_name]["input"] += input_tokens
+        self.token_usage[model_name]["output"] += output_tokens
+        self.token_usage[model_name]["requests"] += usage.requests or 0
+
+        # Track cost usage
         input_cost, output_cost, total_cost = self._calculate_costs(
             model_name=model_name,
             provider=provider,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
         )
-        self.token_usage["chat_agent"]["input_cost"] += input_cost
-        self.token_usage["chat_agent"]["output_cost"] += output_cost
-        self.token_usage["chat_agent"]["total_cost"] += total_cost
+        self.token_usage[model_name]["input_cost"] += input_cost
+        self.token_usage[model_name]["output_cost"] += output_cost
+        self.token_usage[model_name]["total_cost"] += total_cost
 
         return result.output
 
@@ -318,28 +307,31 @@ class ConversationSimulator:
             await asyncio.sleep(1)
 
     def print_token_summary(self) -> None:
-        """Print token usage and cost summary."""
-        console.print("\n[bold cyan]🎯 Token Usage & Cost Summary[/bold cyan]")
+        """Print token usage and cost summary grouped by model."""
+        console.print("\n[bold cyan]🎯 Token Usage & Cost Summary by Model[/bold cyan]")
         console.print("-" * 60)
 
         total_tokens = 0
         total_cost = 0.0
 
-        for agent_name, usage in self.token_usage.items():
-            agent_total_tokens = usage["input"] + usage["output"]
-            agent_total_cost = usage["total_cost"]
-            total_tokens += agent_total_tokens
-            total_cost += agent_total_cost
+        # Sort models by total cost (descending) for better readability
+        sorted_models = sorted(self.token_usage.items(), key=lambda x: x[1]["total_cost"], reverse=True)
+
+        for model_name, usage in sorted_models:
+            model_total_tokens = usage["input"] + usage["output"]
+            model_total_cost = usage["total_cost"]
+            total_tokens += model_total_tokens
+            total_cost += model_total_cost
 
             console.print(
-                f"[yellow]{agent_name.replace('_', ' ').title()}:[/yellow] "
+                f"[yellow]{model_name}:[/yellow] "
                 f"Input: {usage['input']:,}, Output: {usage['output']:,}, "
-                f"Total: {agent_total_tokens:,} tokens ({usage['requests']} requests)"
+                f"Total: {model_total_tokens:,} tokens ({usage['requests']} requests)"
             )
             console.print(
                 f"  [cyan]💰 Costs:[/cyan] "
                 f"Input: ${usage['input_cost']:.6f}, Output: ${usage['output_cost']:.6f}, "
-                f"Total: ${agent_total_cost:.6f}"
+                f"Total: ${model_total_cost:.6f}"
             )
             console.print()  # Empty line for readability
 
