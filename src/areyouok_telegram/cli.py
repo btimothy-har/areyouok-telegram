@@ -12,14 +12,11 @@ SCRIPTS_PATH = Path(__file__).parent.parent.parent / "scripts"
 # Validate scripts directory exists (development environment check)
 if not SCRIPTS_PATH.exists():
     click.echo(
-        click.style("❌ Error: ", fg="red", bold=True) +
-        "Scripts directory not found. CLI commands are only available in development environment.",
-        err=True
+        click.style("❌ Error: ", fg="red", bold=True)
+        + "Scripts directory not found. CLI commands are only available in development environment.",
+        err=True,
     )
-    click.echo(
-        click.style("Expected path: ", fg="yellow") + str(SCRIPTS_PATH),
-        err=True
-    )
+    click.echo(click.style("Expected path: ", fg="yellow") + str(SCRIPTS_PATH), err=True)
     sys.exit(1)
 
 sys.path.insert(0, str(SCRIPTS_PATH))
