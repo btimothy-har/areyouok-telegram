@@ -15,7 +15,6 @@ from areyouok_telegram.jobs.evaluations import ReasoningAlignmentEvaluator
 from areyouok_telegram.jobs.evaluations import SycophancyEvaluator
 from areyouok_telegram.jobs.evaluations import eval_production_response
 from areyouok_telegram.jobs.evaluations import get_generation_by_id_cached
-from areyouok_telegram.llms.evaluators import SycophantEvaluationResponse
 
 
 class TestGetGenerationByIdCached:
@@ -82,16 +81,19 @@ class TestReasoningAlignmentEvaluator:
             "other_data": "test",
         }
 
-        mock_eval_result = MagicMock()
-        mock_eval_result.output.score = 0.9
-        mock_eval_result.output.reasoning = "Good reasoning alignment"
+        mock_eval_return = {
+            "ReasoningAlignmentTest": True,
+            "ReasoningAlignment": MagicMock(value=0.9, reason="Good reasoning alignment"),
+        }
 
         ctx = MagicMock(spec=pydantic_evals.evaluators.EvaluatorContext)
         ctx.inputs = "test_gen_id"
 
         with (
             patch("areyouok_telegram.jobs.evaluations.get_generation_by_id_cached", return_value=mock_generation),
-            patch("areyouok_telegram.jobs.evaluations.run_agent_with_tracking", return_value=mock_eval_result),
+            patch(
+                "areyouok_telegram.jobs.evaluations.run_reasoning_alignment_evaluation", return_value=mock_eval_return
+            ),
         ):
             result = await evaluator.evaluate(ctx)
 
@@ -107,16 +109,19 @@ class TestReasoningAlignmentEvaluator:
         mock_generation = MagicMock(spec=LLMGenerations)
         mock_generation.run_output = {"reasoning": "poor reasoning", "message_text": "test message"}
 
-        mock_eval_result = MagicMock()
-        mock_eval_result.output.score = 0.6
-        mock_eval_result.output.reasoning = "Poor reasoning alignment"
+        mock_eval_return = {
+            "ReasoningAlignmentTest": False,
+            "ReasoningAlignment": MagicMock(value=0.6, reason="Poor reasoning alignment"),
+        }
 
         ctx = MagicMock(spec=pydantic_evals.evaluators.EvaluatorContext)
         ctx.inputs = "test_gen_id"
 
         with (
             patch("areyouok_telegram.jobs.evaluations.get_generation_by_id_cached", return_value=mock_generation),
-            patch("areyouok_telegram.jobs.evaluations.run_agent_with_tracking", return_value=mock_eval_result),
+            patch(
+                "areyouok_telegram.jobs.evaluations.run_reasoning_alignment_evaluation", return_value=mock_eval_return
+            ),
         ):
             result = await evaluator.evaluate(ctx)
 
@@ -132,9 +137,10 @@ class TestReasoningAlignmentEvaluator:
         original_output = {"reasoning": "test reasoning", "message_text": "test message", "other_data": "test"}
         mock_generation.run_output.copy.return_value = original_output.copy()
 
-        mock_eval_result = MagicMock()
-        mock_eval_result.output.score = 0.9
-        mock_eval_result.output.reasoning = "Good reasoning alignment"
+        mock_eval_return = {
+            "ReasoningAlignmentTest": True,
+            "ReasoningAlignment": MagicMock(value=0.9, reason="Good reasoning alignment"),
+        }
 
         ctx = MagicMock(spec=pydantic_evals.evaluators.EvaluatorContext)
         ctx.inputs = "test_gen_id"
@@ -142,14 +148,16 @@ class TestReasoningAlignmentEvaluator:
         with (
             patch("areyouok_telegram.jobs.evaluations.get_generation_by_id_cached", return_value=mock_generation),
             patch(
-                "areyouok_telegram.jobs.evaluations.run_agent_with_tracking", return_value=mock_eval_result
+                "areyouok_telegram.jobs.evaluations.run_reasoning_alignment_evaluation",
+                return_value=mock_eval_return,
             ) as mock_run,
         ):
             await evaluator.evaluate(ctx)
 
-        # Check that reasoning was removed from the output passed to agent
-        call_args = mock_run.call_args[1]["run_kwargs"]
-        assert "reasoning" not in str(call_args["user_prompt"])
+        # Check that reasoning was removed from the output passed to the evaluation function
+        call_args = mock_run.call_args[1]
+        output_arg = call_args["output"]
+        assert "reasoning" not in output_arg
 
 
 class TestPersonalityAlignmentEvaluator:
@@ -165,16 +173,19 @@ class TestPersonalityAlignmentEvaluator:
         mock_generation.run_deps = MagicMock()
         mock_generation.run_deps.get.return_value = "exploration"
 
-        mock_eval_result = MagicMock()
-        mock_eval_result.output.score = 0.95
-        mock_eval_result.output.reasoning = "Excellent personality alignment"
+        mock_eval_return = {
+            "PersonalityAlignmentTest": True,
+            "PersonalityAlignment": MagicMock(value=0.95, reason="Excellent personality alignment"),
+        }
 
         ctx = MagicMock(spec=pydantic_evals.evaluators.EvaluatorContext)
         ctx.inputs = "test_gen_id"
 
         with (
             patch("areyouok_telegram.jobs.evaluations.get_generation_by_id_cached", return_value=mock_generation),
-            patch("areyouok_telegram.jobs.evaluations.run_agent_with_tracking", return_value=mock_eval_result),
+            patch(
+                "areyouok_telegram.jobs.evaluations.run_personality_alignment_evaluation", return_value=mock_eval_return
+            ),
         ):
             result = await evaluator.evaluate(ctx)
 
@@ -192,21 +203,25 @@ class TestPersonalityAlignmentEvaluator:
         mock_generation.run_deps = MagicMock()
         mock_generation.run_deps.get.return_value = "anchoring"
 
-        mock_eval_result = MagicMock()
-        mock_eval_result.output.score = 0.7
-        mock_eval_result.output.reasoning = "Poor personality alignment"
+        mock_eval_return = {
+            "PersonalityAlignmentTest": False,
+            "PersonalityAlignment": MagicMock(value=0.7, reason="Poor personality alignment"),
+        }
 
         ctx = MagicMock(spec=pydantic_evals.evaluators.EvaluatorContext)
         ctx.inputs = "test_gen_id"
 
         with (
             patch("areyouok_telegram.jobs.evaluations.get_generation_by_id_cached", return_value=mock_generation),
-            patch("areyouok_telegram.jobs.evaluations.run_agent_with_tracking", return_value=mock_eval_result),
+            patch(
+                "areyouok_telegram.jobs.evaluations.run_personality_alignment_evaluation", return_value=mock_eval_return
+            ),
         ):
             result = await evaluator.evaluate(ctx)
 
         assert result["PersonalityAlignmentTest"] is False
         assert result["PersonalityAlignment"].value == 0.7
+        assert result["PersonalityAlignment"].reason == "Poor personality alignment"
 
     @pytest.mark.asyncio
     async def test_evaluate_missing_personality(self):
@@ -218,16 +233,19 @@ class TestPersonalityAlignmentEvaluator:
         mock_generation.run_deps = MagicMock()
         mock_generation.run_deps.get.return_value = None
 
-        mock_eval_result = MagicMock()
-        mock_eval_result.output.score = 0.5
-        mock_eval_result.output.reasoning = "No personality alignment possible"
+        mock_eval_return = {
+            "PersonalityAlignmentTest": False,
+            "PersonalityAlignment": MagicMock(value=0.5, reason="No personality alignment possible"),
+        }
 
         ctx = MagicMock(spec=pydantic_evals.evaluators.EvaluatorContext)
         ctx.inputs = "test_gen_id"
 
         with (
             patch("areyouok_telegram.jobs.evaluations.get_generation_by_id_cached", return_value=mock_generation),
-            patch("areyouok_telegram.jobs.evaluations.run_agent_with_tracking", return_value=mock_eval_result),
+            patch(
+                "areyouok_telegram.jobs.evaluations.run_personality_alignment_evaluation", return_value=mock_eval_return
+            ),
         ):
             result = await evaluator.evaluate(ctx)
 
@@ -245,35 +263,24 @@ class TestSycophancyEvaluator:
         mock_generation = MagicMock(spec=LLMGenerations)
         mock_generation.run_messages = [{"role": "user", "content": "test"}]
 
-        mock_eval_result = MagicMock()
-        mock_eval_result.output.overall_score = 0.2
-        mock_eval_result.output.reasoning = "Low sycophancy detected"
-        mock_eval_result.output.agreement_strength = 0.3
-        mock_eval_result.output.critical_engagement = 0.8
-        mock_eval_result.output.deference_level = 0.1
-        mock_eval_result.output.mimicry_level = 0.2
-        mock_eval_result.output.presupposition_alignment = 0.4
+        mock_eval_return = {
+            "SycophancyTest": True,
+            "Sycophancy": MagicMock(value=0.2, reason="Low sycophancy detected"),
+            "SycoAgreement": MagicMock(value=0.3, reason="Agreement strength description"),
+            "SycoCritical": MagicMock(value=0.8, reason="Critical engagement description"),
+            "SycoDeference": MagicMock(value=0.1, reason="Deference level description"),
+            "SycoMimicry": MagicMock(value=0.2, reason="Mimicry level description"),
+            "SycoPresupposition": MagicMock(value=0.4, reason="Presupposition alignment description"),
+        }
 
-        # Mock the field descriptions
-        with patch.object(
-            SycophantEvaluationResponse,
-            "model_fields",
-            {
-                "agreement_strength": MagicMock(description="Agreement strength description"),
-                "critical_engagement": MagicMock(description="Critical engagement description"),
-                "deference_level": MagicMock(description="Deference level description"),
-                "mimicry_level": MagicMock(description="Mimicry level description"),
-                "presupposition_alignment": MagicMock(description="Presupposition alignment description"),
-            },
+        ctx = MagicMock(spec=pydantic_evals.evaluators.EvaluatorContext)
+        ctx.inputs = "test_gen_id"
+
+        with (
+            patch("areyouok_telegram.jobs.evaluations.get_generation_by_id_cached", return_value=mock_generation),
+            patch("areyouok_telegram.jobs.evaluations.run_sycophancy_evaluation", return_value=mock_eval_return),
         ):
-            ctx = MagicMock(spec=pydantic_evals.evaluators.EvaluatorContext)
-            ctx.inputs = "test_gen_id"
-
-            with (
-                patch("areyouok_telegram.jobs.evaluations.get_generation_by_id_cached", return_value=mock_generation),
-                patch("areyouok_telegram.jobs.evaluations.run_agent_with_tracking", return_value=mock_eval_result),
-            ):
-                result = await evaluator.evaluate(ctx)
+            result = await evaluator.evaluate(ctx)
 
         assert result["SycophancyTest"] is True  # < 0.25 threshold
         assert result["Sycophancy"].value == 0.2
@@ -292,38 +299,33 @@ class TestSycophancyEvaluator:
         mock_generation = MagicMock(spec=LLMGenerations)
         mock_generation.run_messages = [{"role": "user", "content": "test"}]
 
-        mock_eval_result = MagicMock()
-        mock_eval_result.output.overall_score = 0.8
-        mock_eval_result.output.reasoning = "High sycophancy detected"
-        mock_eval_result.output.agreement_strength = 0.9
-        mock_eval_result.output.critical_engagement = 0.1
-        mock_eval_result.output.deference_level = 0.8
-        mock_eval_result.output.mimicry_level = 0.7
-        mock_eval_result.output.presupposition_alignment = 0.9
+        mock_eval_return = {
+            "SycophancyTest": False,
+            "Sycophancy": MagicMock(value=0.8, reason="High sycophancy detected"),
+            "SycoAgreement": MagicMock(value=0.9, reason="Agreement strength description"),
+            "SycoCritical": MagicMock(value=0.1, reason="Critical engagement description"),
+            "SycoDeference": MagicMock(value=0.8, reason="Deference level description"),
+            "SycoMimicry": MagicMock(value=0.7, reason="Mimicry level description"),
+            "SycoPresupposition": MagicMock(value=0.9, reason="Presupposition alignment description"),
+        }
 
-        # Mock the field descriptions
-        with patch.object(
-            SycophantEvaluationResponse,
-            "model_fields",
-            {
-                "agreement_strength": MagicMock(description="Agreement strength description"),
-                "critical_engagement": MagicMock(description="Critical engagement description"),
-                "deference_level": MagicMock(description="Deference level description"),
-                "mimicry_level": MagicMock(description="Mimicry level description"),
-                "presupposition_alignment": MagicMock(description="Presupposition alignment description"),
-            },
+        ctx = MagicMock(spec=pydantic_evals.evaluators.EvaluatorContext)
+        ctx.inputs = "test_gen_id"
+
+        with (
+            patch("areyouok_telegram.jobs.evaluations.get_generation_by_id_cached", return_value=mock_generation),
+            patch("areyouok_telegram.jobs.evaluations.run_sycophancy_evaluation", return_value=mock_eval_return),
         ):
-            ctx = MagicMock(spec=pydantic_evals.evaluators.EvaluatorContext)
-            ctx.inputs = "test_gen_id"
-
-            with (
-                patch("areyouok_telegram.jobs.evaluations.get_generation_by_id_cached", return_value=mock_generation),
-                patch("areyouok_telegram.jobs.evaluations.run_agent_with_tracking", return_value=mock_eval_result),
-            ):
-                result = await evaluator.evaluate(ctx)
+            result = await evaluator.evaluate(ctx)
 
         assert result["SycophancyTest"] is False  # >= 0.25 threshold
         assert result["Sycophancy"].value == 0.8
+        assert result["Sycophancy"].reason == "High sycophancy detected"
+        assert result["SycoAgreement"].value == 0.9
+        assert result["SycoCritical"].value == 0.1
+        assert result["SycoDeference"].value == 0.8
+        assert result["SycoMimicry"].value == 0.7
+        assert result["SycoPresupposition"].value == 0.9
 
 
 class TestEvalProductionResponse:
