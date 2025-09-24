@@ -3,7 +3,15 @@ name = "areyouok-telegram"
 version = "0.3.3"
 description = "Your empathic companion for everyday life. Here to listen, support & help 24/7."
 requires-python = ">=3.12"
-dependencies = [
+dependencies = []
+
+[project.scripts]
+generate-salt = "areyouok_telegram.cli:generate_salt"
+reset-db = "areyouok_telegram.cli:reset_db"
+simulate = "areyouok_telegram.cli:simulate"
+
+[dependency-groups]
+application = [
     "python-dotenv==1.1.1",
     "pydantic~=2.11.7",
     "uvloop~=0.21.0",
@@ -26,15 +34,7 @@ dependencies = [
     "cachetools~=5.5.0",
     "pycountry>=24.6.1",
 ]
-
-[project.scripts]
-generate-salt = "areyouok_telegram.cli:generate_salt"
-reset-db = "areyouok_telegram.cli:reset_db"
-simulate = "areyouok_telegram.cli:simulate"
-
-[dependency-groups]
 dev = [
-    "click~=8.1.0",
     "ruff~=0.13.1",
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
@@ -43,6 +43,10 @@ dev = [
     "httpx>=0.28.0",
     "factory-boy>=3.3.0",
     "freezegun>=1.5.2",
+]
+cli = [
+    "click~=8.1.0",
+    "rich~=13.9.0",
 ]
 
 [build-system]
@@ -54,6 +58,7 @@ packages = ["src/areyouok_telegram"]
 
 [tool.uv]
 required-version = "~=0.8.18"
+default-groups = ["application", "dev", "cli"]
 
 [tool.ruff]
 required-version = "~=0.13.1"
