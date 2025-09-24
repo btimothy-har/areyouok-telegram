@@ -46,7 +46,3 @@ def main():
     console.print("2. Use the [bold]same salt[/bold] across all instances of your application")
     console.print("3. [bold red]Changing the salt will make existing encrypted data unreadable[/bold red]")
     console.print("4. Store this salt securely (e.g., in a secrets manager for production)\n")
-
-
-if __name__ == "__main__":
-    main()
