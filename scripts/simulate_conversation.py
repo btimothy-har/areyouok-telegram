@@ -27,7 +27,7 @@ from areyouok_telegram.llms.chat import AgentResponse
 from areyouok_telegram.llms.chat import ChatAgentDependencies
 from areyouok_telegram.llms.chat import SwitchPersonalityResponse
 from areyouok_telegram.llms.chat import chat_agent
-from areyouok_telegram.llms.models import Gemini25Flash
+from areyouok_telegram.llms.models import ClaudeSonnet4
 
 console = Console()
 
@@ -137,11 +137,16 @@ class UserAgentDependencies:
     persona: str
 
 
-user_model = Gemini25Flash()
+class UserResponse(pydantic.BaseModel):
+    text: str
+
+
+user_model = ClaudeSonnet4(model_settings=pydantic_ai.settings.ModelSettings(temperature=0.25))
 
 user_agent = pydantic_ai.Agent(
     model=user_model.model,
     deps_type=UserAgentDependencies,
+    output_type=UserResponse,
     name="simulation_user_agent",
     retries=3,
 )
@@ -205,7 +210,7 @@ class ConversationSimulator:
             ]
 
         result = await user_agent.run(**run_kwargs)
-        return result.output
+        return result.output.text
 
     async def get_bot_response(self, *, allow_personality: bool = True) -> AgentResponse:
         timestamp = datetime.now(UTC)
