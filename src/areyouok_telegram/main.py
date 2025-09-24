@@ -8,6 +8,7 @@ from typing import Any
 import logfire
 import telegram
 import uvloop
+from genai_prices import UpdatePrices
 
 from areyouok_telegram.app import create_application
 from areyouok_telegram.config import CONTROLLED_ENV
@@ -95,6 +96,9 @@ if __name__ == "__main__":
     # Initialize infrastructure
     with logfire.span("Application is starting."):
         database_setup()
-        application = create_application()
+
+        # Update pricing data for LLM cost tracking
+        with UpdatePrices():
+            application = create_application()
 
     application.run_polling(allowed_updates=telegram.Update.ALL_TYPES, drop_pending_updates=True)

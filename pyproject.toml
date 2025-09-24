@@ -33,6 +33,7 @@ application = [
     "cryptography~=44.0.0",
     "cachetools~=5.5.0",
     "pycountry>=24.6.1",
+    "genai-prices~=0.0.27",
 ]
 dev = [
     "ruff~=0.13.1",
