@@ -1,27 +1,31 @@
 #!/usr/bin/env python3
-"""
-Simplified conversation simulation script.
-Simulates text-only conversations between a user agent and the chat agent.
-"""
+# ruff: noqa: E402, TRY003
 
-# Enable simulation mode to skip database dependencies
 import os
 
 os.environ["SIMULATION_MODE"] = "true"
 
 import argparse
 import asyncio
-import json
+import sys
 import uuid
 from dataclasses import dataclass
 from datetime import UTC
 from datetime import datetime
 from pathlib import Path
-from typing import Literal
 
-import pydantic
+# Add scripts directory to Python path for simulator imports
+script_dir = Path(__file__).parent
+scripts_dir = script_dir.parent
+sys.path.insert(0, str(scripts_dir))
+
 import pydantic_ai
+import pydantic_evals
 from rich.console import Console
+from simulator.evaluators import ConversationPersonalityAlignmentEvaluator
+from simulator.evaluators import ConversationReasoningAlignmentEvaluator
+from simulator.evaluators import ConversationSycophancyEvaluator
+from simulator.messages import ConversationMessage
 
 from areyouok_telegram.llms.chat import AgentResponse
 from areyouok_telegram.llms.chat import ChatAgentDependencies
@@ -40,15 +44,15 @@ def parse_args():
     )
 
     parser.add_argument(
-        "-p",
-        "--persona",
+        "-s",
+        "--simulation",
         type=str,
         required=True,
-        help="Name of the persona file (without .md extension) in scripts/sim_personas/",
+        help="Name of the simulation file (without .md extension) in scripts/sim_personas/",
     )
 
     parser.add_argument(
-        "-P",
+        "-p",
         "--personality",
         type=str,
         default="companionship",
@@ -64,73 +68,14 @@ def parse_args():
         help="Number of conversation turns to simulate",
     )
 
+    parser.add_argument(
+        "--no-switch",
+        action="store_true",
+        default=False,
+        help="Disable the bot from switching personalities during conversation",
+    )
+
     return parser.parse_args()
-
-
-class ConversationMessage(pydantic.BaseModel):
-    """Simple message model for conversation tracking."""
-
-    message_id: int
-    role: Literal["user", "bot"]
-    timestamp: datetime
-    text: str
-    reasoning: str | None = None
-
-    def to_model_message(
-        self, current_time: datetime, perspective: Literal["user", "bot"]
-    ) -> pydantic_ai.messages.ModelMessage:
-        """Convert to pydantic_ai ModelMessage format from given perspective.
-
-        Args:
-            current_time: Reference time for calculating relative timestamps
-            perspective: Which agent's perspective to use ("user" or "bot")
-                - From bot's perspective: user messages are requests, bot messages are responses
-                - From user's perspective: user messages are responses, bot messages are requests
-        """
-        # From user's perspective, only show clean text without metadata
-        if perspective == "user":
-            content = self.text
-        else:
-            # From bot's perspective, include full metadata structure
-            seconds_ago = int((current_time - self.timestamp).total_seconds())
-            content_dict = {
-                "timestamp": f"{seconds_ago} seconds ago",
-                "event_type": "message",
-                "text": self.text,
-                "message_id": str(self.message_id),
-            }
-
-            # Include reasoning for bot responses when viewed from bot's perspective
-            if self.role == "bot" and perspective == "bot" and self.reasoning:
-                content_dict["reasoning"] = self.reasoning
-
-            content = json.dumps(content_dict)
-
-        # Determine if this message should be a request or response from the given perspective
-        if perspective == "bot":
-            # From bot's perspective: user messages are requests, bot messages are responses
-            is_request = self.role == "user"
-        else:  # perspective == "user"
-            # From user's perspective: user messages are responses, bot messages are requests
-            is_request = self.role == "bot"
-
-        if is_request:
-            return pydantic_ai.messages.ModelRequest(
-                parts=[
-                    pydantic_ai.messages.UserPromptPart(
-                        content=content,
-                        timestamp=self.timestamp,
-                        part_kind="user-prompt",
-                    )
-                ],
-                kind="request",
-            )
-        else:
-            return pydantic_ai.messages.ModelResponse(
-                parts=[pydantic_ai.messages.TextPart(content=content, part_kind="text")],
-                timestamp=self.timestamp,
-                kind="response",
-            )
 
 
 @dataclass
@@ -171,11 +116,12 @@ The assistant is to always adopt the following persona, making assumptions as ne
 class ConversationSimulator:
     """Orchestrates text-only conversations between user and chat agents."""
 
-    def __init__(self, user_persona_file: str, personality: str = "companionship"):
+    def __init__(self, user_persona_file: str, personality: str = "companionship", *, no_switch: bool = False):
         self.bot_id = "sim_bot_123"
         self.chat_id = "sim_user_456"
         self.session_id = str(uuid.uuid4())  # UUID session ID
         self.personality = personality
+        self.no_switch = no_switch
 
         # Load persona from file
         self.user_persona = self._load_persona(user_persona_file)
@@ -277,7 +223,7 @@ class ConversationSimulator:
             self.conversation_history[self.current_turn]["user"] = user_msg
 
             while True:
-                allow_personality = True
+                allow_personality = not self.no_switch
 
                 bot_response = await self.get_bot_response(allow_personality=allow_personality)
                 if isinstance(bot_response, SwitchPersonalityResponse):
@@ -294,6 +240,7 @@ class ConversationSimulator:
                 timestamp=datetime.now(UTC),
                 text=bot_response.message_text,
                 reasoning=bot_response.reasoning,
+                personality=self.personality,  # Capture personality used for this message
             )
             console.print(f"[green]🤖 Bot:[/green] {bot_msg.text}")
             self.conversation_history[self.current_turn]["bot"] = bot_msg
@@ -301,10 +248,127 @@ class ConversationSimulator:
             # Small delay between turns
             await asyncio.sleep(1)
 
-        console.print(
-            f"\n[bold green]✅ Simulation complete! "
-            f"Total turns: {len(self.conversation_history)}, "
-            f"Total messages: {len(self.chronological_messages)}[/bold green]"
+
+class ConversationEvaluator:
+    """Evaluates conversations from ConversationSimulator using pydantic-evals framework."""
+
+    def __init__(self, conversation_simulator: ConversationSimulator):
+        """
+        Initialize evaluator with a conversation simulator.
+
+        Args:
+            conversation_simulator: The ConversationSimulator instance to evaluate
+        """
+        self.conversation_simulator = conversation_simulator
+
+    async def get_turn_data(self, turn_num: int) -> dict:
+        """
+        Get conversation data for a specific turn.
+
+        This method is called by pydantic-evals during evaluation to provide turn-specific data.
+
+        Args:
+            turn_num: The turn number to get data for
+
+        Returns:
+            Dictionary containing turn data for evaluation
+
+        Raises:
+            ValueError: If turn not found or missing required data
+        """
+        if turn_num not in self.conversation_simulator.conversation_history:
+            raise ValueError(f"Turn {turn_num} not found in conversation history")
+
+        turn_data = self.conversation_simulator.conversation_history[turn_num]
+        user_msg = turn_data.get("user")
+        bot_msg = turn_data.get("bot")
+
+        # Validate required data exists
+        if not user_msg:
+            raise ValueError(f"Turn {turn_num} missing user message")
+        if not bot_msg:
+            raise ValueError(f"Turn {turn_num} missing bot message")
+        if not bot_msg.reasoning:
+            raise ValueError(f"Turn {turn_num} bot message missing reasoning")
+        if not bot_msg.personality:
+            raise ValueError(f"Turn {turn_num} bot message missing personality")
+
+        # Get conversation history up to this turn for context
+        conversation_history = []
+        for msg in self.conversation_simulator.chronological_messages:
+            conversation_history.append(msg)
+            # Stop after including the bot message for this turn
+            if bot_msg and msg.message_id == bot_msg.message_id:
+                break
+
+        return {
+            "turn_number": turn_num,
+            "user_message": user_msg.text,
+            "bot_message": bot_msg.text,
+            "bot_reasoning": bot_msg.reasoning,
+            "personality": bot_msg.personality,  # Use personality from this specific message
+            "timestamp": bot_msg.timestamp,
+            "conversation_history": conversation_history,
+            "total_turns": len(self.conversation_simulator.conversation_history),
+        }
+
+    async def evaluate_conversation(self, name: str | None = None, max_concurrency: int = 1) -> None:
+        """
+        Evaluate all turns in the conversation.
+
+        Args:
+            name: Name for the evaluation run (defaults to session_id)
+            max_concurrency: Maximum concurrent evaluations to run
+        """
+        if not self.conversation_simulator.conversation_history:
+            raise ValueError("No conversation history to evaluate")
+
+        # Create evaluation cases for each completed turn
+        cases = []
+        for turn_num in sorted(self.conversation_simulator.conversation_history.keys()):
+            turn_data = self.conversation_simulator.conversation_history[turn_num]
+
+            # Only evaluate turns with both user and bot messages
+            if "user" not in turn_data or "bot" not in turn_data:
+                continue
+
+            case_evaluators = []
+
+            # Add reasoning evaluator if bot message has reasoning
+            if turn_data["bot"].reasoning:
+                case_evaluators.append(ConversationReasoningAlignmentEvaluator())
+
+            # Always add personality evaluator
+            case_evaluators.append(ConversationPersonalityAlignmentEvaluator())
+
+            cases.append(
+                pydantic_evals.Case(
+                    name=f"turn_{turn_num}",
+                    inputs=turn_num,  # Turn number as input
+                    metadata={
+                        "personality": turn_data["bot"].personality,  # Use bot message's personality
+                        "total_turns": len(self.conversation_simulator.conversation_history),
+                        "session_id": self.conversation_simulator.session_id,
+                    },
+                    evaluators=case_evaluators,
+                )
+            )
+
+        if not cases:
+            raise ValueError("No complete turns found to evaluate")
+
+        # Create dataset with per-case and global evaluators
+        dataset = pydantic_evals.Dataset(
+            cases=cases,
+            evaluators=[ConversationSycophancyEvaluator()],  # Global evaluator for all turns
+        )
+
+        # Run evaluation
+        evaluation_name = name or f"conversation_{self.conversation_simulator.session_id}"
+        return await dataset.evaluate(
+            self.get_turn_data,
+            name=evaluation_name,
+            max_concurrency=max_concurrency,
         )
 
 
@@ -314,24 +378,38 @@ async def main():
 
     console.print("\n[bold magenta]🎭 Conversation Simulation Script[/bold magenta]")
     console.print("=" * 50)
-    console.print(f"[yellow]Persona:[/yellow] {args.persona}")
+    console.print(f"[yellow]Simulation:[/yellow] {args.simulation}")
     console.print(f"[yellow]Personality:[/yellow] {args.personality}")
     console.print(f"[yellow]Turns:[/yellow] {args.turns}")
+    console.print(f"[yellow]Personality Switching:[/yellow] {'Disabled' if args.no_switch else 'Enabled'}")
 
     try:
         # Create simulator with specified parameters
         simulator = ConversationSimulator(
-            user_persona_file=args.persona,
+            user_persona_file=args.simulation,
             personality=args.personality,
+            no_switch=args.no_switch,
         )
 
         await simulator.simulate_conversation(num_turns=args.turns)
+
+        console.print(
+            f"\n[bold green]✅ Simulation complete! "
+            f"Total turns: {len(simulator.conversation_history)}, "
+            f"Total messages: {len(simulator.chronological_messages)}[/bold green]"
+            "\n"
+        )
+
+        evaluator = ConversationEvaluator(simulator)
+        evaluation = await evaluator.evaluate_conversation(name="test_evaluation")
+
+        evaluation.print()
 
         console.print("\n[bold green]🎉 Test complete![/bold green]")
 
     except FileNotFoundError as e:
         console.print(f"\n[bold red]❌ Error:[/bold red] {e}")
-        console.print("[yellow]Available personas in scripts/sim_personas/:[/yellow]")
+        console.print("[yellow]Available simulations in scripts/sim_personas/:[/yellow]")
 
         # List available persona files
         script_dir = Path(__file__).parent
