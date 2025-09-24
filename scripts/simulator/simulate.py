@@ -16,6 +16,8 @@ sys.path.insert(0, str(scripts_dir))
 
 import pydantic_ai
 import pydantic_evals
+from genai_prices import Usage
+from genai_prices import calc_price
 from rich.console import Console
 from simulator.evaluators import ConversationPersonalityAlignmentEvaluator
 from simulator.evaluators import ConversationReasoningAlignmentEvaluator
@@ -82,10 +84,24 @@ class ConversationSimulator:
         self.current_turn = 0
         self.message_counter = 0
 
-        # Token usage tracking
-        self.token_usage: dict[str, dict[str, int]] = {
-            "user_agent": {"input": 0, "output": 0, "requests": 0},
-            "chat_agent": {"input": 0, "output": 0, "requests": 0},
+        # Token usage and cost tracking
+        self.token_usage: dict[str, dict[str, int | float]] = {
+            "user_agent": {
+                "input": 0,
+                "output": 0,
+                "requests": 0,
+                "input_cost": 0.0,
+                "output_cost": 0.0,
+                "total_cost": 0.0,
+            },
+            "chat_agent": {
+                "input": 0,
+                "output": 0,
+                "requests": 0,
+                "input_cost": 0.0,
+                "output_cost": 0.0,
+                "total_cost": 0.0,
+            },
         }
 
     def _load_persona(self, persona_filename: str) -> str:
@@ -104,6 +120,59 @@ class ConversationSimulator:
         """Get the next message ID in sequence."""
         self.message_counter += 1
         return self.message_counter
+
+    def _extract_model_info(self, agent_model) -> tuple[str, str]:
+        """Extract model name and provider from agent model, following llm_usage.py logic.
+
+        Returns:
+            Tuple of (model_name, provider) for use in cost calculation.
+        """
+        if hasattr(agent_model, "model_name") and agent_model.model_name.startswith("fallback:"):
+            model = agent_model.models[0]
+        else:
+            model = agent_model
+
+        if model.model_name.count("/") == 0:
+            # If the model name does not contain a provider prefix, prefix the system
+            model_name_with_provider = f"{model.system}/{model.model_name}"
+        else:
+            model_name_with_provider = model.model_name
+
+        provider = model_name_with_provider.split("/", 1)[0]
+        if "/" in model_name_with_provider:
+            model_name = model_name_with_provider.split("/", 1)[1]
+        else:
+            model_name = model_name_with_provider
+
+        return model_name, provider
+
+    def _calculate_costs(
+        self,
+        *,
+        model_name: str,
+        provider: str,
+        input_tokens: int,
+        output_tokens: int,
+    ) -> tuple[float, float, float]:
+        """Calculate input, output, and total costs using genai-prices.
+
+        Returns:
+            Tuple of (input_cost, output_cost, total_cost) in USD, or (0.0, 0.0, 0.0) if calculation fails.
+        """
+        try:
+            # Create Usage object for genai-prices
+            usage = Usage(input_tokens=input_tokens, output_tokens=output_tokens)
+
+            # Calculate price using genai-prices
+            price_data = calc_price(usage, model_ref=model_name, provider_id=provider)
+
+            if price_data:
+                return float(price_data.input_price), float(price_data.output_price), float(price_data.total_price)
+
+        except Exception as e:
+            console.print(f"[yellow]Warning: Failed to calculate costs for model {model_name}: {e}[/yellow]")
+
+        return 0.0, 0.0, 0.0
 
     @property
     def chronological_messages(self) -> list[ConversationMessage]:
@@ -134,9 +203,24 @@ class ConversationSimulator:
 
         # Track token usage
         usage = result.usage()
-        self.token_usage["user_agent"]["input"] += usage.input_tokens or 0
-        self.token_usage["user_agent"]["output"] += usage.output_tokens or 0
+        input_tokens = usage.input_tokens or 0
+        output_tokens = usage.output_tokens or 0
+
+        self.token_usage["user_agent"]["input"] += input_tokens
+        self.token_usage["user_agent"]["output"] += output_tokens
         self.token_usage["user_agent"]["requests"] += usage.requests or 0
+
+        # Track cost usage for user agent - derive model and provider from agent
+        model_name, provider = self._extract_model_info(user_agent.model)
+        input_cost, output_cost, total_cost = self._calculate_costs(
+            model_name=model_name,
+            provider=provider,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+        )
+        self.token_usage["user_agent"]["input_cost"] += input_cost
+        self.token_usage["user_agent"]["output_cost"] += output_cost
+        self.token_usage["user_agent"]["total_cost"] += total_cost
 
         return result.output
 
@@ -167,9 +251,24 @@ class ConversationSimulator:
 
         # Track token usage
         usage = result.usage()
-        self.token_usage["chat_agent"]["input"] += usage.input_tokens or 0
-        self.token_usage["chat_agent"]["output"] += usage.output_tokens or 0
+        input_tokens = usage.input_tokens or 0
+        output_tokens = usage.output_tokens or 0
+
+        self.token_usage["chat_agent"]["input"] += input_tokens
+        self.token_usage["chat_agent"]["output"] += output_tokens
         self.token_usage["chat_agent"]["requests"] += usage.requests or 0
+
+        # Track cost usage for chat agent - derive model and provider from agent
+        model_name, provider = self._extract_model_info(chat_agent.model)
+        input_cost, output_cost, total_cost = self._calculate_costs(
+            model_name=model_name,
+            provider=provider,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+        )
+        self.token_usage["chat_agent"]["input_cost"] += input_cost
+        self.token_usage["chat_agent"]["output_cost"] += output_cost
+        self.token_usage["chat_agent"]["total_cost"] += total_cost
 
         return result.output
 
@@ -221,21 +320,33 @@ class ConversationSimulator:
             await asyncio.sleep(1)
 
     def print_token_summary(self) -> None:
-        """Print simple token usage summary."""
-        console.print("\n[bold cyan]🎯 Token Usage Summary[/bold cyan]")
-        console.print("-" * 40)
+        """Print token usage and cost summary."""
+        console.print("\n[bold cyan]🎯 Token Usage & Cost Summary[/bold cyan]")
+        console.print("-" * 60)
 
         total_tokens = 0
+        total_cost = 0.0
+
         for agent_name, usage in self.token_usage.items():
-            agent_total = usage["input"] + usage["output"]
-            total_tokens += agent_total
+            agent_total_tokens = usage["input"] + usage["output"]
+            agent_total_cost = usage["total_cost"]
+            total_tokens += agent_total_tokens
+            total_cost += agent_total_cost
+
             console.print(
                 f"[yellow]{agent_name.replace('_', ' ').title()}:[/yellow] "
                 f"Input: {usage['input']:,}, Output: {usage['output']:,}, "
-                f"Total: {agent_total:,} tokens ({usage['requests']} requests)"
+                f"Total: {agent_total_tokens:,} tokens ({usage['requests']} requests)"
             )
+            console.print(
+                f"  [cyan]💰 Costs:[/cyan] "
+                f"Input: ${usage['input_cost']:.6f}, Output: ${usage['output_cost']:.6f}, "
+                f"Total: ${agent_total_cost:.6f}"
+            )
+            console.print()  # Empty line for readability
 
-        console.print(f"[bold green]Grand Total: {total_tokens:,} tokens[/bold green]")
+        console.print(f"[bold green]🔢 Grand Total: {total_tokens:,} tokens[/bold green]")
+        console.print(f"[bold green]💵 Total Cost: ${total_cost:.6f} USD[/bold green]")
 
 
 class ConversationEvaluator:

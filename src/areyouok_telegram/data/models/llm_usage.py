@@ -164,8 +164,8 @@ class LLMUsage(Base):
             price_data = calc_price(usage, model_ref=model_name, provider_id=provider)
 
             if price_data:
-                # Store costs directly from genai-prices
-                return price_data.input_price, price_data.output_price, price_data.total_price
+                # Store costs directly from genai-prices, converting Decimals to floats
+                return float(price_data.input_price), float(price_data.output_price), float(price_data.total_price)
 
         except Exception as e:
             # Log the error but don't raise - we want to continue tracking usage even if pricing fails
