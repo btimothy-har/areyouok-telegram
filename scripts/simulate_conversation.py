@@ -4,6 +4,11 @@ Simplified conversation simulation script.
 Simulates text-only conversations between a user agent and the chat agent.
 """
 
+# Enable simulation mode to skip database dependencies
+import os
+
+os.environ["SIMULATION_MODE"] = "true"
+
 import argparse
 import asyncio
 import json
@@ -220,7 +225,12 @@ class ConversationSimulator:
             notification=None,
         )
 
-        result = await chat_agent.run(message_history=model_messages, deps=deps)
+        # In simulation mode, disable all tools to avoid database dependencies
+        result = await chat_agent.run(
+            message_history=model_messages,
+            deps=deps,
+            toolsets=[],  # Empty toolset to disable all tools
+        )
 
         return result.output
 

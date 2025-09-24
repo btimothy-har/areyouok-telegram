@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfoNotFoundError
 import pydantic_ai
 from pydantic_ai import RunContext
 
+from areyouok_telegram.config import SIMULATION_MODE
 from areyouok_telegram.data import Notifications
 from areyouok_telegram.data import UserMetadata
 from areyouok_telegram.data import async_database
@@ -77,8 +78,11 @@ chat_agent = pydantic_ai.Agent(
 
 @chat_agent.instructions
 async def instructions_with_personality_switch(ctx: pydantic_ai.RunContext[ChatAgentDependencies]) -> str:
-    async with async_database() as db_conn:
-        user_metadata = await UserMetadata.get_by_user_id(db_conn, user_id=ctx.deps.tg_chat_id)
+    if SIMULATION_MODE:
+        user_metadata = None
+    else:
+        async with async_database() as db_conn:
+            user_metadata = await UserMetadata.get_by_user_id(db_conn, user_id=ctx.deps.tg_chat_id)
 
     personality = PersonalityTypes.get_by_value(ctx.deps.personality)
     personality_text = personality.prompt_text()
@@ -135,6 +139,10 @@ async def validate_agent_response(
         response=data,
         restricted=ctx.deps.restricted_responses,
     )
+
+    if SIMULATION_MODE:
+        # In simulation mode, skip database-dependent validations
+        return data
 
     await validate_response_data(
         response=data,

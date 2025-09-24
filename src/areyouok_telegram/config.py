@@ -30,3 +30,6 @@ DEVELOPER_CHAT_ID = os.getenv("DEVELOPER_CHAT_ID")
 DEVELOPER_THREAD_ID = os.getenv("DEVELOPER_THREAD_ID")
 CHAT_SESSION_TIMEOUT_MINS = int(os.getenv("CHAT_SESSION_TIMEOUT_MINS", "60"))  # Default to 60 minutes
 LOG_CHAT_MESSAGES = os.getenv("LOG_CHAT_MESSAGES", "false").lower() in ("true", "1", "yes")
+
+# Simulation mode - when enabled, disables database dependencies
+SIMULATION_MODE = os.getenv("SIMULATION_MODE", "false").lower() in ("true", "1", "yes")
