@@ -85,19 +85,57 @@ This project uses a simplified mono-project src-layout structure:
 
 ### Dev Commands
 
+#### Makefile Commands
 Dev commands are defined in the Makefile:
 
 - `make test`: Runs the entire test suite with coverage included.
 - `make lint`: Lints the codebase, flagging errors without fixing issues.
 - `make fix`: Applies any linting autofixes, if any.
 - `make run`: Runs the Telegram bot locally.
-- `make reset-db`: Resets the connected database instance (clears all existing data and re-creates all tables).
+
+#### CLI Utilities
+Development utilities are available as CLI entrypoints:
+
+- `uv run reset-db`: Resets the connected database instance (clears all existing data and re-creates all tables).
+- `uv run generate-salt`: Generates a cryptographically secure encryption salt for the `USER_ENCRYPTION_SALT` environment variable.
+- `uv run simulate -s <persona> -p <personality> -t <turns>`: Runs conversation simulation and evaluation with specified parameters.
+
+Use `uv run <command> -h` for detailed help on each utility.
+
+### Response Simulations
+
+The project includes a conversation simulation system for testing and evaluating the chat agent's behavior. This allows you to run automated conversations with different user personas and measure the agent's performance across multiple quality dimensions.
+
+**Basic Usage:**
+```bash
+# Run a simulation (replace <persona> with available persona file names)
+uv run simulate -s <persona>
+
+# Customize bot personality and conversation length
+uv run simulate -s <persona> -p exploration -t 10
+
+# Disable personality switching during conversation
+uv run simulate -s <persona> -p companionship --no-switch
+```
+
+**Key Features:**
+- **User Personas**: Detailed character profiles that drive realistic conversation patterns (stored in `scripts/simulator/sim_personas/`)
+- **Bot Personalities**: Test different response modes: `anchoring`, `celebration`, `companionship`, `exploration`, `witnessing`
+- **Automated Evaluation**: Measures reasoning alignment, personality consistency, and sycophancy detection
+- **Performance Metrics**: Token usage tracking and conversation quality assessment
+
+**What You'll See:**
+- Live conversation display with user and bot exchanges
+- Personality switches highlighted during conversation
+- Token usage breakdown for both agents
+- Detailed evaluation scores with specific feedback on conversation quality
+
+This system helps ensure the chat agent responds appropriately across different user contexts and personality modes.
 
 ---
 
 ## AI Development
-
-We primarily use [Claude Code](https://www.anthropic.com/claude-code) as our local AI development tool.
+AI development tool.
 
 We **don't** require you to use Claude Code, but we actively maintain project tooling for Claude, so you will benefit from it.
 

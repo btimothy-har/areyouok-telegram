@@ -1,11 +1,6 @@
 #!/usr/bin/env python3
 # ruff: noqa: E402, TRY003
 
-import os
-
-os.environ["SIMULATION_MODE"] = "true"
-
-import argparse
 import asyncio
 import sys
 import uuid
@@ -34,48 +29,6 @@ from areyouok_telegram.llms.chat import chat_agent
 from areyouok_telegram.llms.models import Gemini25Flash
 
 console = Console()
-
-
-def parse_args():
-    """Parse command line arguments."""
-    parser = argparse.ArgumentParser(
-        description="Simulate text-only conversations between a user agent and the chat agent",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-
-    parser.add_argument(
-        "-s",
-        "--simulation",
-        type=str,
-        required=True,
-        help="Name of the simulation file (without .md extension) in scripts/sim_personas/",
-    )
-
-    parser.add_argument(
-        "-p",
-        "--personality",
-        type=str,
-        default="companionship",
-        choices=["anchoring", "celebration", "companionship", "exploration", "witnessing"],
-        help="Bot personality to use for the simulation",
-    )
-
-    parser.add_argument(
-        "-t",
-        "--turns",
-        type=int,
-        default=5,
-        help="Number of conversation turns to simulate",
-    )
-
-    parser.add_argument(
-        "--no-switch",
-        action="store_true",
-        default=False,
-        help="Disable the bot from switching personalities during conversation",
-    )
-
-    return parser.parse_args()
 
 
 @dataclass
@@ -406,62 +359,3 @@ class ConversationEvaluator:
             name=evaluation_name,
             max_concurrency=max_concurrency,
         )
-
-
-async def main():
-    """Main entry point for conversation simulation."""
-    args = parse_args()
-
-    console.print("\n[bold magenta]🎭 Conversation Simulation Script[/bold magenta]")
-    console.print("=" * 50)
-    console.print(f"[yellow]Simulation:[/yellow] {args.simulation}")
-    console.print(f"[yellow]Personality:[/yellow] {args.personality}")
-    console.print(f"[yellow]Turns:[/yellow] {args.turns}")
-    console.print(f"[yellow]Personality Switching:[/yellow] {'Disabled' if args.no_switch else 'Enabled'}")
-
-    try:
-        # Create simulator with specified parameters
-        simulator = ConversationSimulator(
-            user_persona_file=args.simulation,
-            personality=args.personality,
-            no_switch=args.no_switch,
-        )
-
-        await simulator.simulate_conversation(num_turns=args.turns)
-
-        console.print(
-            f"\n[bold green]✅ Simulation complete! "
-            f"Total turns: {len(simulator.conversation_history)}, "
-            f"Total messages: {len(simulator.chronological_messages)}[/bold green]"
-            "\n"
-        )
-
-        # Print token usage summary
-        simulator.print_token_summary()
-
-        evaluator = ConversationEvaluator(simulator)
-        evaluation = await evaluator.evaluate_conversation(name="test_evaluation")
-
-        evaluation.print()
-
-        console.print("\n[bold green]🎉 Test complete![/bold green]")
-
-    except FileNotFoundError as e:
-        console.print(f"\n[bold red]❌ Error:[/bold red] {e}")
-        console.print("[yellow]Available simulations in scripts/sim_personas/:[/yellow]")
-
-        # List available persona files
-        script_dir = Path(__file__).parent
-        persona_dir = script_dir / "sim_personas"
-        if persona_dir.exists():
-            for persona_file in persona_dir.glob("*.md"):
-                console.print(f"  • {persona_file.stem}")
-        else:
-            console.print("  [red]No sim_personas directory found[/red]")
-
-    except Exception as e:
-        console.print(f"\n[bold red]❌ Unexpected error:[/bold red] {e}")
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
