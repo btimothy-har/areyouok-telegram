@@ -1,7 +1,10 @@
 from datetime import UTC
 from datetime import datetime
 
+import logfire
 import pydantic_ai
+from genai_prices import Usage
+from genai_prices import calc_price
 from sqlalchemy import Column
 from sqlalchemy import Float
 from sqlalchemy import Index
@@ -39,6 +42,11 @@ class LLMUsage(Base):
     runtime = Column(Float, nullable=False)
     details = Column(JSONB, nullable=True)
 
+    # Cost tracking columns (in USD)
+    input_cost = Column(Float, nullable=True)
+    output_cost = Column(Float, nullable=True)
+    total_cost = Column(Float, nullable=True)
+
     id = Column(Integer, primary_key=True, autoincrement=True)
 
     @classmethod
@@ -60,13 +68,17 @@ class LLMUsage(Base):
         else:
             model = agent.model
 
-        if model.model_name.count("/") == 0:
-            # If the model name does not contain a provider prefix, prefix the system
-            model_name = f"{model.system}/{model.model_name}"
-        else:
-            model_name = model.model_name
+        model_name = model.model_name.split("/", 1)[-1]
 
         now = datetime.now(UTC)
+
+        # Calculate costs using genai-prices
+        input_cost, output_cost, total_cost = cls._calculate_costs(
+            model_name=model_name,
+            provider=model.system,
+            input_tokens=data.request_tokens,
+            output_tokens=data.response_tokens,
+        )
 
         stmt = pg_insert(cls).values(
             chat_id=str(chat_id),
@@ -74,11 +86,14 @@ class LLMUsage(Base):
             timestamp=now,
             usage_type=f"pydantic.{agent.name}",
             model=model_name,
-            provider=model_name.split("/", 1)[0],
+            provider=model.system,
             input_tokens=data.request_tokens,
             output_tokens=data.response_tokens,
             runtime=runtime,
             details=data.details if data.details else None,
+            input_cost=input_cost,
+            output_cost=output_cost,
+            total_cost=total_cost,
         )
 
         result = await db_conn.execute(stmt)
@@ -114,7 +129,40 @@ class LLMUsage(Base):
             output_tokens=output_tokens,
             runtime=runtime,
             details=None,
+            input_cost=None,
+            output_cost=None,
+            total_cost=None,
         )
 
         result = await db_conn.execute(stmt)
         return result.rowcount
+
+    @classmethod
+    def _calculate_costs(
+        cls,
+        *,
+        model_name: str,
+        provider: str,
+        input_tokens: int,
+        output_tokens: int,
+    ) -> tuple[float | None, float | None, float | None]:
+        """Calculate input, output, and total costs using genai-prices.
+
+        Returns:
+            Tuple of (input_cost, output_cost, total_cost) in USD, or (None, None, None) if calculation fails.
+        """
+        try:
+            # Create Usage object for genai-prices
+            usage = Usage(input_tokens=input_tokens, output_tokens=output_tokens)
+
+            # Calculate price using genai-prices
+            price_data = calc_price(usage, model_ref=model_name, provider_id=provider)
+
+            # Store costs directly from genai-prices, converting Decimals to floats
+            return float(price_data.input_price), float(price_data.output_price), float(price_data.total_price)
+
+        except Exception as e:
+            # Log the error but don't raise - we want to continue tracking usage even if pricing fails
+            logfire.warn(f"Failed to calculate costs for model {model_name}: {e}")
+
+        return None, None, None
