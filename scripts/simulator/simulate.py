@@ -129,6 +129,12 @@ class ConversationSimulator:
         self.current_turn = 0
         self.message_counter = 0
 
+        # Token usage tracking
+        self.token_usage: dict[str, dict[str, int]] = {
+            "user_agent": {"input": 0, "output": 0, "requests": 0},
+            "chat_agent": {"input": 0, "output": 0, "requests": 0},
+        }
+
     def _load_persona(self, persona_filename: str) -> str:
         """Load persona content from markdown file in sim_personas directory."""
         # Get the directory of the current script
@@ -172,6 +178,13 @@ class ConversationSimulator:
             ]
 
         result = await user_agent.run(**run_kwargs)
+
+        # Track token usage
+        usage = result.usage()
+        self.token_usage["user_agent"]["input"] += usage.input_tokens or 0
+        self.token_usage["user_agent"]["output"] += usage.output_tokens or 0
+        self.token_usage["user_agent"]["requests"] += usage.requests or 0
+
         return result.output
 
     async def get_bot_response(self, *, allow_personality: bool = True) -> AgentResponse:
@@ -198,6 +211,12 @@ class ConversationSimulator:
             deps=deps,
             toolsets=[],  # Empty toolset to disable all tools
         )
+
+        # Track token usage
+        usage = result.usage()
+        self.token_usage["chat_agent"]["input"] += usage.input_tokens or 0
+        self.token_usage["chat_agent"]["output"] += usage.output_tokens or 0
+        self.token_usage["chat_agent"]["requests"] += usage.requests or 0
 
         return result.output
 
@@ -247,6 +266,21 @@ class ConversationSimulator:
 
             # Small delay between turns
             await asyncio.sleep(1)
+
+    def print_token_summary(self) -> None:
+        """Print simple token usage summary."""
+        console.print("\n[bold cyan]🎯 Token Usage Summary[/bold cyan]")
+        console.print("-" * 40)
+
+        total_tokens = 0
+        for agent_name, usage in self.token_usage.items():
+            agent_total = usage["input"] + usage["output"]
+            total_tokens += agent_total
+            console.print(f"[yellow]{agent_name.replace('_', ' ').title()}:[/yellow] "
+                         f"Input: {usage['input']:,}, Output: {usage['output']:,}, "
+                         f"Total: {agent_total:,} tokens ({usage['requests']} requests)")
+
+        console.print(f"[bold green]Grand Total: {total_tokens:,} tokens[/bold green]")
 
 
 class ConversationEvaluator:
@@ -399,6 +433,9 @@ async def main():
             f"Total messages: {len(simulator.chronological_messages)}[/bold green]"
             "\n"
         )
+
+        # Print token usage summary
+        simulator.print_token_summary()
 
         evaluator = ConversationEvaluator(simulator)
         evaluation = await evaluator.evaluate_conversation(name="test_evaluation")
