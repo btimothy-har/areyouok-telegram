@@ -102,6 +102,36 @@ Development utilities are available as CLI entrypoints:
 
 Use `uv run <command> -h` for detailed help on each utility.
 
+### Response Simulations
+
+The project includes a conversation simulation system for testing and evaluating the chat agent's behavior. This allows you to run automated conversations with different user personas and measure the agent's performance across multiple quality dimensions.
+
+**Basic Usage:**
+```bash
+# Run a simulation (replace <persona> with available persona file names)
+uv run simulate -s <persona>
+
+# Customize bot personality and conversation length
+uv run simulate -s <persona> -p exploration -t 10
+
+# Disable personality switching during conversation
+uv run simulate -s <persona> -p companionship --no-switch
+```
+
+**Key Features:**
+- **User Personas**: Detailed character profiles that drive realistic conversation patterns (stored in `scripts/simulator/sim_personas/`)
+- **Bot Personalities**: Test different response modes: `anchoring`, `celebration`, `companionship`, `exploration`, `witnessing`
+- **Automated Evaluation**: Measures reasoning alignment, personality consistency, and sycophancy detection
+- **Performance Metrics**: Token usage tracking and conversation quality assessment
+
+**What You'll See:**
+- Live conversation display with user and bot exchanges
+- Personality switches highlighted during conversation
+- Token usage breakdown for both agents
+- Detailed evaluation scores with specific feedback on conversation quality
+
+This system helps ensure the chat agent responds appropriately across different user contexts and personality modes.
+
 ---
 
 ## AI Development
