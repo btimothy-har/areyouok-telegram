@@ -27,7 +27,7 @@ from areyouok_telegram.llms.chat import AgentResponse
 from areyouok_telegram.llms.chat import ChatAgentDependencies
 from areyouok_telegram.llms.chat import SwitchPersonalityResponse
 from areyouok_telegram.llms.chat import chat_agent
-from areyouok_telegram.llms.models import ClaudeSonnet4
+from areyouok_telegram.llms.models import Gemini25Flash
 
 console = Console()
 
@@ -87,21 +87,24 @@ class ConversationMessage(pydantic.BaseModel):
                 - From bot's perspective: user messages are requests, bot messages are responses
                 - From user's perspective: user messages are responses, bot messages are requests
         """
-        seconds_ago = int((current_time - self.timestamp).total_seconds())
+        # From user's perspective, only show clean text without metadata
+        if perspective == "user":
+            content = self.text
+        else:
+            # From bot's perspective, include full metadata structure
+            seconds_ago = int((current_time - self.timestamp).total_seconds())
+            content_dict = {
+                "timestamp": f"{seconds_ago} seconds ago",
+                "event_type": "message",
+                "text": self.text,
+                "message_id": str(self.message_id),
+            }
 
-        # Build content dictionary
-        content_dict = {
-            "timestamp": f"{seconds_ago} seconds ago",
-            "event_type": "message",
-            "text": self.text,
-            "message_id": str(self.message_id),
-        }
+            # Include reasoning for bot responses when viewed from bot's perspective
+            if self.role == "bot" and perspective == "bot" and self.reasoning:
+                content_dict["reasoning"] = self.reasoning
 
-        # Include reasoning for bot responses when viewed from bot's perspective
-        if self.role == "bot" and perspective == "bot" and self.reasoning:
-            content_dict["reasoning"] = self.reasoning
-
-        content = json.dumps(content_dict)
+            content = json.dumps(content_dict)
 
         # Determine if this message should be a request or response from the given perspective
         if perspective == "bot":
@@ -137,16 +140,11 @@ class UserAgentDependencies:
     persona: str
 
 
-class UserResponse(pydantic.BaseModel):
-    text: str
-
-
-user_model = ClaudeSonnet4(model_settings=pydantic_ai.settings.ModelSettings(temperature=0.25))
+user_model = Gemini25Flash(model_settings=pydantic_ai.models.google.GoogleModelSettings(temperature=0.25))
 
 user_agent = pydantic_ai.Agent(
     model=user_model.model,
     deps_type=UserAgentDependencies,
-    output_type=UserResponse,
     name="simulation_user_agent",
     retries=3,
 )
@@ -156,10 +154,13 @@ user_agent = pydantic_ai.Agent(
 async def user_instructions(ctx: pydantic_ai.RunContext[UserAgentDependencies]) -> str:
     return f"""The assistant is a role playing agent tasked with simulating a human user.
 
-The assistant should:
-- Be natural and conversational, keeping the conversation going
-- Keep messages brief (1-2 sentences typically)
-- Vary between different types of messages: questions, statements, reactions, topic changes
+The assistant should be natural and conversational, keeping the conversation going. \
+Leverage different types of messages: questions, statements, reactions, topic changes to keep the conversation engaging.
+
+The assistant's responses should be TEXT ONLY, without any special formatting, markup, or metadata.
+The assistant's messages should be brief and concise, suitable for a text chat interface.\
+Ideally no more than 2-3 sentences.
+The assistant refrains from using multiple paragraphs or long monologues.
 
 The assistant is to always adopt the following persona, making assumptions as needed:
 
@@ -210,7 +211,7 @@ class ConversationSimulator:
             ]
 
         result = await user_agent.run(**run_kwargs)
-        return result.output.text
+        return result.output
 
     async def get_bot_response(self, *, allow_personality: bool = True) -> AgentResponse:
         timestamp = datetime.now(UTC)
