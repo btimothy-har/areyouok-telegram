@@ -85,19 +85,27 @@ This project uses a simplified mono-project src-layout structure:
 
 ### Dev Commands
 
+#### Makefile Commands
 Dev commands are defined in the Makefile:
 
 - `make test`: Runs the entire test suite with coverage included.
 - `make lint`: Lints the codebase, flagging errors without fixing issues.
 - `make fix`: Applies any linting autofixes, if any.
 - `make run`: Runs the Telegram bot locally.
-- `make reset-db`: Resets the connected database instance (clears all existing data and re-creates all tables).
+
+#### CLI Utilities
+Development utilities are available as CLI entrypoints:
+
+- `uv run reset-db`: Resets the connected database instance (clears all existing data and re-creates all tables).
+- `uv run generate-salt`: Generates a cryptographically secure encryption salt for the `USER_ENCRYPTION_SALT` environment variable.
+- `uv run simulate -s <persona> -p <personality> -t <turns>`: Runs conversation simulation and evaluation with specified parameters.
+
+Use `uv run <command> -h` for detailed help on each utility.
 
 ---
 
 ## AI Development
-
-We primarily use [Claude Code](https://www.anthropic.com/claude-code) as our local AI development tool.
+AI development tool.
 
 We **don't** require you to use Claude Code, but we actively maintain project tooling for Claude, so you will benefit from it.
 

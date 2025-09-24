@@ -13,12 +13,6 @@ fix:
 run:
 	uv run -m areyouok_telegram.main
 
-reset-db:
-	uv run scripts/reset_database.py
-
-generate-salt:
-	uv run scripts/generate_encryption_salt.py
-
 build:
 	podman build --progress=plain -t areyouok-telegram:latest .
 
