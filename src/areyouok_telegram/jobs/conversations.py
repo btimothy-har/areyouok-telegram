@@ -267,7 +267,7 @@ class ConversationJob(BaseJob):
         notification = await self._get_next_notification()
 
         deps_data = {
-            "tg_context": self._run_context,
+            "tg_bot_id": str(self._bot_id),
             "tg_chat_id": self.chat_id,
             "tg_session_id": self.active_session.session_id,
             "notification": notification,

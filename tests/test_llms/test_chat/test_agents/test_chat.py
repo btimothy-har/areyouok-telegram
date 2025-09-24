@@ -7,7 +7,6 @@ from unittest.mock import patch
 
 import pytest
 from freezegun import freeze_time
-from telegram.ext import ContextTypes
 
 from areyouok_telegram.data.models.notifications import Notifications
 from areyouok_telegram.data.models.user_metadata import UserMetadata
@@ -25,17 +24,16 @@ class TestChatAgentDependencies:
 
     def test_dependencies_creation_with_defaults(self):
         """Test ChatAgentDependencies creation with default values."""
-        tg_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
         tg_chat_id = "123456"
         tg_session_id = "session_123"
 
         deps = ChatAgentDependencies(
-            tg_context=tg_context,
+            tg_bot_id="bot123",
             tg_chat_id=tg_chat_id,
             tg_session_id=tg_session_id,
         )
 
-        assert deps.tg_context == tg_context
+        assert deps.tg_bot_id == "bot123"
         assert deps.tg_chat_id == tg_chat_id
         assert deps.tg_session_id == tg_session_id
         assert deps.personality == PersonalityTypes.COMPANIONSHIP.value
@@ -44,7 +42,6 @@ class TestChatAgentDependencies:
 
     def test_dependencies_creation_with_custom_values(self):
         """Test ChatAgentDependencies creation with custom values."""
-        tg_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
         tg_chat_id = "123456"
         tg_session_id = "session_123"
         personality = PersonalityTypes.ANCHORING.value
@@ -53,7 +50,7 @@ class TestChatAgentDependencies:
         mock_notification.content = "Special instruction"
 
         deps = ChatAgentDependencies(
-            tg_context=tg_context,
+            tg_bot_id="bot123",
             tg_chat_id=tg_chat_id,
             tg_session_id=tg_session_id,
             personality=personality,
