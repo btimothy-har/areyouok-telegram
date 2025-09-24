@@ -46,7 +46,7 @@ def parse_args():
         "-P",
         "--personality",
         type=str,
-        required=True,
+        default="companionship",
         choices=["anchoring", "celebration", "companionship", "exploration", "witnessing"],
         help="Bot personality to use for the simulation",
     )
