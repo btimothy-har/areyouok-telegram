@@ -165,9 +165,7 @@ class ConversationSimulator:
 
             # Calculate price using genai-prices
             price_data = calc_price(usage, model_ref=model_name, provider_id=provider)
-
-            if price_data:
-                return float(price_data.input_price), float(price_data.output_price), float(price_data.total_price)
+            return float(price_data.input_price), float(price_data.output_price), float(price_data.total_price)
 
         except Exception as e:
             console.print(f"[yellow]Warning: Failed to calculate costs for model {model_name}: {e}[/yellow]")
