@@ -276,9 +276,11 @@ class ConversationSimulator:
         for agent_name, usage in self.token_usage.items():
             agent_total = usage["input"] + usage["output"]
             total_tokens += agent_total
-            console.print(f"[yellow]{agent_name.replace('_', ' ').title()}:[/yellow] "
-                         f"Input: {usage['input']:,}, Output: {usage['output']:,}, "
-                         f"Total: {agent_total:,} tokens ({usage['requests']} requests)")
+            console.print(
+                f"[yellow]{agent_name.replace('_', ' ').title()}:[/yellow] "
+                f"Input: {usage['input']:,}, Output: {usage['output']:,}, "
+                f"Total: {agent_total:,} tokens ({usage['requests']} requests)"
+            )
 
         console.print(f"[bold green]Grand Total: {total_tokens:,} tokens[/bold green]")
 
