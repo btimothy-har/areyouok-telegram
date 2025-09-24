@@ -9,7 +9,6 @@ from typing import Literal
 
 import pydantic_ai
 from pydantic_ai import RunContext
-from telegram.ext import ContextTypes
 
 from areyouok_telegram.data import GuidedSessions
 from areyouok_telegram.data import Notifications
@@ -46,7 +45,7 @@ AgentResponse = TextResponse | ReactionResponse | DoNothingResponse | KeyboardRe
 class OnboardingAgentDependencies:
     """Dependencies for the onboarding agent."""
 
-    tg_context: ContextTypes.DEFAULT_TYPE
+    tg_bot_id: str
     tg_chat_id: str
     tg_session_id: str
     onboarding_session_key: str
@@ -55,6 +54,7 @@ class OnboardingAgentDependencies:
 
     def to_dict(self) -> dict:
         return {
+            "tg_bot_id": self.tg_bot_id,
             "tg_chat_id": self.tg_chat_id,
             "tg_session_id": self.tg_session_id,
             "onboarding_session_key": self.onboarding_session_key,
@@ -256,7 +256,7 @@ async def validate_agent_response(
     await validate_response_data(
         response=data,
         chat_id=ctx.deps.tg_chat_id,
-        bot_id=str(ctx.deps.tg_context.bot.id),
+        bot_id=ctx.deps.tg_bot_id,
     )
 
     if ctx.deps.notification:

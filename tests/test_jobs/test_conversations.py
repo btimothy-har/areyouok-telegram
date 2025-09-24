@@ -100,7 +100,7 @@ class TestConversationJob:
                     return_value=(
                         [],
                         ChatAgentDependencies(
-                            tg_context=job._run_context,
+                            tg_bot_id="bot123",
                             tg_chat_id="123",
                             tg_session_id="session123",
                             personality="companionship",
@@ -142,7 +142,7 @@ class TestConversationJob:
         mock_payload.output = mock_response
 
         mock_deps = ChatAgentDependencies(
-            tg_context=job._run_context,
+            tg_bot_id="bot123",
             tg_chat_id="123",
             tg_session_id="session123",
             personality="companionship",
@@ -176,7 +176,7 @@ class TestConversationJob:
         job._bot_id = "bot123"
 
         mock_deps = ChatAgentDependencies(
-            tg_context=job._run_context,
+            tg_bot_id="bot123",
             tg_chat_id="123",
             tg_session_id="session123",
             personality="companionship",
@@ -425,7 +425,7 @@ class TestConversationJob:
                     return_value=(
                         [],
                         ChatAgentDependencies(
-                            tg_context=job._run_context,
+                            tg_bot_id="bot123",
                             tg_chat_id="123",
                             tg_session_id="session123",
                             personality="companionship",
@@ -486,7 +486,7 @@ class TestConversationJob:
                     return_value=(
                         [],
                         ChatAgentDependencies(
-                            tg_context=job._run_context,
+                            tg_bot_id="bot123",
                             tg_chat_id="123",
                             tg_session_id="session123",
                             personality="companionship",
@@ -521,7 +521,7 @@ class TestConversationJob:
         conversation_history = [mock_chat_event]
 
         mock_deps = ChatAgentDependencies(
-            tg_context=MagicMock(spec=ContextTypes.DEFAULT_TYPE),
+            tg_bot_id="bot123",
             tg_chat_id="123",
             tg_session_id="session123",
             personality="companionship",
@@ -548,7 +548,7 @@ class TestConversationJob:
         conversation_history = [mock_chat_event]
 
         mock_deps = ChatAgentDependencies(
-            tg_context=MagicMock(spec=ContextTypes.DEFAULT_TYPE),
+            tg_bot_id="bot123",
             tg_chat_id="123",
             tg_session_id="session123",
             personality="companionship",
@@ -574,7 +574,7 @@ class TestConversationJob:
 
         # Start with text in restricted responses and a notification
         mock_deps = ChatAgentDependencies(
-            tg_context=MagicMock(spec=ContextTypes.DEFAULT_TYPE),
+            tg_bot_id="bot123",
             tg_chat_id="123",
             tg_session_id="session123",
             personality="companionship",
@@ -623,7 +623,7 @@ class TestConversationJob:
                         (
                             [],
                             ChatAgentDependencies(
-                                tg_context=job._run_context,
+                                tg_bot_id="bot123",
                                 tg_chat_id="123",
                                 tg_session_id="session123",
                                 personality="companionship",
@@ -635,7 +635,7 @@ class TestConversationJob:
                         (
                             [],
                             ChatAgentDependencies(
-                                tg_context=job._run_context,
+                                tg_bot_id="bot123",
                                 tg_chat_id="123",
                                 tg_session_id="session123",
                                 personality="celebration",
@@ -1056,7 +1056,7 @@ class TestConversationJob:
         mock_notification.content = "Test notification content"
 
         mock_deps = ChatAgentDependencies(
-            tg_context=job._run_context,
+            tg_bot_id="bot123",
             tg_chat_id="123",
             tg_session_id="session123",
             personality="companionship",
@@ -1107,7 +1107,7 @@ class TestConversationJob:
         mock_notification.content = "Test notification content"
 
         mock_deps = ChatAgentDependencies(
-            tg_context=job._run_context,
+            tg_bot_id="bot123",
             tg_chat_id="123",
             tg_session_id="session123",
             personality="companionship",
@@ -1151,7 +1151,7 @@ class TestConversationJob:
 
         # Dependencies without notification
         mock_deps = ChatAgentDependencies(
-            tg_context=MagicMock(spec=ContextTypes.DEFAULT_TYPE),
+            tg_bot_id="bot123",
             tg_chat_id="123",
             tg_session_id="session123",
             personality="companionship",
@@ -1466,7 +1466,7 @@ class TestConversationJob:
                     return_value=(
                         [],
                         ChatAgentDependencies(
-                            tg_context=job._run_context,
+                            tg_bot_id="bot123",
                             tg_chat_id="123",
                             tg_session_id="session123",
                             personality="companionship",

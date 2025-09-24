@@ -7,7 +7,6 @@ from zoneinfo import ZoneInfoNotFoundError
 
 import pydantic_ai
 from pydantic_ai import RunContext
-from telegram.ext import ContextTypes
 
 from areyouok_telegram.data import Notifications
 from areyouok_telegram.data import UserMetadata
@@ -42,7 +41,7 @@ AgentResponse = TextResponse | ReactionResponse | SwitchPersonalityResponse | Do
 class ChatAgentDependencies:
     """Context data passed to the LLM agent for making decisions."""
 
-    tg_context: ContextTypes.DEFAULT_TYPE
+    tg_bot_id: str
     tg_chat_id: str
     tg_session_id: str
     personality: str = PersonalityTypes.COMPANIONSHIP.value
@@ -51,6 +50,7 @@ class ChatAgentDependencies:
 
     def to_dict(self) -> dict:
         return {
+            "tg_bot_id": self.tg_bot_id,
             "tg_chat_id": self.tg_chat_id,
             "tg_session_id": self.tg_session_id,
             "personality": self.personality,
@@ -127,7 +127,7 @@ async def validate_agent_response(
     await validate_response_data(
         response=data,
         chat_id=ctx.deps.tg_chat_id,
-        bot_id=str(ctx.deps.tg_context.bot.id),
+        bot_id=ctx.deps.tg_bot_id,
     )
 
     if ctx.deps.notification:
