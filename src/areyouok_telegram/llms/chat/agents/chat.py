@@ -16,7 +16,9 @@ from areyouok_telegram.llms.chat.constants import MESSAGE_FOR_USER_PROMPT
 from areyouok_telegram.llms.chat.constants import PERSONALITY_PROMPT
 from areyouok_telegram.llms.chat.constants import PERSONALITY_SWITCH_INSTRUCTIONS
 from areyouok_telegram.llms.chat.constants import RESPONSE_PROMPT
+from areyouok_telegram.llms.chat.constants import RESTRICT_KEYBOARD_RESPONSE
 from areyouok_telegram.llms.chat.constants import RESTRICT_PERSONALITY_SWITCH
+from areyouok_telegram.llms.chat.constants import RESTRICT_REACTION_RESPONSE
 from areyouok_telegram.llms.chat.constants import RESTRICT_TEXT_RESPONSE
 from areyouok_telegram.llms.chat.constants import USER_PREFERENCES
 from areyouok_telegram.llms.chat.personalities import PersonalityTypes
@@ -45,7 +47,9 @@ class ChatAgentDependencies:
     tg_chat_id: str
     tg_session_id: str
     personality: str = PersonalityTypes.COMPANIONSHIP.value
-    restricted_responses: set[Literal["text", "reaction", "switch_personality"]] = field(default_factory=set)
+    restricted_responses: set[Literal["text", "keyboard", "reaction", "switch_personality"]] = field(
+        default_factory=set
+    )
     notification: Notifications | None = None
 
     def to_dict(self) -> dict:
@@ -83,6 +87,14 @@ async def instructions_with_personality_switch(ctx: pydantic_ai.RunContext[ChatA
 
     if "text" in ctx.deps.restricted_responses:
         restrict_response_text += RESTRICT_TEXT_RESPONSE
+        restrict_response_text += "\n"
+
+    if "keyboard" in ctx.deps.restricted_responses:
+        restrict_response_text += RESTRICT_KEYBOARD_RESPONSE
+        restrict_response_text += "\n"
+
+    if "reaction" in ctx.deps.restricted_responses:
+        restrict_response_text += RESTRICT_REACTION_RESPONSE
         restrict_response_text += "\n"
 
     if "switch_personality" in ctx.deps.restricted_responses:

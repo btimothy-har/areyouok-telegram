@@ -103,6 +103,14 @@ RESTRICT_TEXT_RESPONSE = """
 The assistant recently responded via a text response and cannot do so again immediately. Attempting to do so will result in an error.
 """
 
+RESTRICT_KEYBOARD_RESPONSE = """
+The user's platform does not support keyboard responses. The assistant must not use the KeyboardResponse format. Attempting to do so will result in an error.
+"""
+
+RESTRICT_REACTION_RESPONSE = """
+The user's platform does not support reaction responses. The assistant must not use the ReactionResponse format. Attempting to do so will result in an error.
+"""
+
 USER_PREFERENCES = """
 The following are known attributes/preferences about the user that the assistant should use to personalize interactions:
 
