@@ -27,6 +27,12 @@ def check_restricted_responses(*, response: AgentResponse, restricted: set[str])
     ):
         raise ResponseRestrictedError(response.response_type)
 
+    if "keyboard" in restricted and response.response_type == "KeyboardResponse":
+        raise ResponseRestrictedError(response.response_type)
+
+    if "reaction" in restricted and response.response_type == "ReactionResponse":
+        raise ResponseRestrictedError(response.response_type)
+
     if "switch_personality" in restricted and response.response_type == "SwitchPersonalityResponse":
         raise ResponseRestrictedError(response.response_type)
 

@@ -22,7 +22,8 @@ def main():
     # Show current environment
     console.print(f"\n[bold yellow]Current environment:[/bold yellow] [cyan]{ENV}[/cyan]")
     console.print(
-        f"[bold yellow]Database:[/bold yellow] [cyan]{PG_CONNECTION_STRING.split('@')[1] if '@' in PG_CONNECTION_STRING else 'local'}[/cyan]\n"
+        f"[bold yellow]Database:[/bold yellow] "
+        f"[cyan]{PG_CONNECTION_STRING.split('@')[1] if '@' in PG_CONNECTION_STRING else 'local'}[/cyan]\n"
     )
 
     # Create engine

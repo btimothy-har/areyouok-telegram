@@ -1,17 +1,13 @@
 from areyouok_telegram.llms.evaluators.evaluation_output import EvaluationResponse
-from areyouok_telegram.llms.evaluators.personality_alignment import PersonalityAlignmentDependencies
-from areyouok_telegram.llms.evaluators.personality_alignment import personality_alignment_eval_agent
-from areyouok_telegram.llms.evaluators.reasoning_alignment import ReasoningAlignmentDependencies
-from areyouok_telegram.llms.evaluators.reasoning_alignment import reasoning_alignment_eval_agent
+from areyouok_telegram.llms.evaluators.personality_alignment import run_personality_alignment_evaluation
+from areyouok_telegram.llms.evaluators.reasoning_alignment import run_reasoning_alignment_evaluation
 from areyouok_telegram.llms.evaluators.sycophancy import SycophantEvaluationResponse
-from areyouok_telegram.llms.evaluators.sycophancy import sycophancy_eval_agent
+from areyouok_telegram.llms.evaluators.sycophancy import run_sycophancy_evaluation
 
 __all__ = [
-    "reasoning_alignment_eval_agent",
     "EvaluationResponse",
-    "ReasoningAlignmentDependencies",
-    "personality_alignment_eval_agent",
-    "PersonalityAlignmentDependencies",
-    "sycophancy_eval_agent",
     "SycophantEvaluationResponse",
+    "run_reasoning_alignment_evaluation",
+    "run_personality_alignment_evaluation",
+    "run_sycophancy_evaluation",
 ]
