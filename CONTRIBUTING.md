@@ -98,28 +98,28 @@ Development utilities are available as CLI entrypoints:
 
 - `uv run reset-db`: Resets the connected database instance (clears all existing data and re-creates all tables).
 - `uv run generate-salt`: Generates a cryptographically secure encryption salt for the `USER_ENCRYPTION_SALT` environment variable.
-- `uv run simulate -s <persona> -p <personality> -t <turns>`: Runs conversation simulation and evaluation with specified parameters.
+- `uv run simulate -c <character> -p <personality> -t <turns>`: Runs conversation simulation and evaluation with specified parameters.
 
 Use `uv run <command> -h` for detailed help on each utility.
 
 ### Response Simulations
 
-The project includes a conversation simulation system for testing and evaluating the chat agent's behavior. This allows you to run automated conversations with different user personas and measure the agent's performance across multiple quality dimensions.
+The project includes a conversation simulation system for testing and evaluating the chat agent's behavior. This allows you to run automated conversations with different user characters and measure the agent's performance across multiple quality dimensions.
 
 **Basic Usage:**
 ```bash
-# Run a simulation (replace <persona> with available persona file names)
-uv run simulate -s <persona>
+# Run a simulation (replace <character> with available character file names)
+uv run simulate -c <character>
 
 # Customize bot personality and conversation length
-uv run simulate -s <persona> -p exploration -t 10
+uv run simulate -c <character> -p exploration -t 10
 
 # Disable personality switching during conversation
-uv run simulate -s <persona> -p companionship --no-switch
+uv run simulate -c <character> -p companionship --no-switch
 ```
 
 **Key Features:**
-- **User Personas**: Detailed character profiles that drive realistic conversation patterns (stored in `scripts/simulator/sim_personas/`)
+- **User Characters**: Detailed character profiles that drive realistic conversation patterns (stored in `scripts/simulator/sim_characters/`)
 - **Bot Personalities**: Test different response modes: `anchoring`, `celebration`, `companionship`, `exploration`, `witnessing`
 - **Automated Evaluation**: Measures reasoning alignment, personality consistency, and sycophancy detection
 - **Performance Metrics**: Token usage tracking and conversation quality assessment
