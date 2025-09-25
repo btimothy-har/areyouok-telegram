@@ -1,4 +1,4 @@
-# Singapore Student Persona
+# Singapore Student Character
 
 ## Basic Profile
 - **Name**: Alex (can be any gender)

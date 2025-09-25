@@ -38,7 +38,7 @@ console = Console()
 class UserAgentDependencies:
     """Dependencies for the user agent."""
 
-    persona: str
+    character: str
 
 
 user_model = Gemini25Flash(model_settings=pydantic_ai.models.google.GoogleModelSettings(temperature=0.25))
@@ -46,7 +46,7 @@ user_model = Gemini25Flash(model_settings=pydantic_ai.models.google.GoogleModelS
 user_agent = pydantic_ai.Agent(
     model=user_model.model,
     deps_type=UserAgentDependencies,
-    name="simulation_user_agent",
+    name="character_user_agent",
     retries=3,
 )
 
@@ -63,24 +63,24 @@ The assistant's messages should be brief and concise, suitable for a text chat i
 Ideally no more than 2-3 sentences.
 The assistant refrains from using multiple paragraphs or long monologues.
 
-The assistant is to always adopt the following persona, making assumptions as needed:
+The assistant is to always adopt the following character, making assumptions as needed:
 
-{ctx.deps.persona}
+{ctx.deps.character}
 """
 
 
 class ConversationSimulator:
     """Orchestrates text-only conversations between user and chat agents."""
 
-    def __init__(self, user_persona_file: str, personality: str = "companionship", *, no_switch: bool = False):
+    def __init__(self, user_character_file: str, personality: str = "companionship", *, no_switch: bool = False):
         self.bot_id = "sim_bot_123"
         self.chat_id = "sim_user_456"
         self.session_id = str(uuid.uuid4())  # UUID session ID
         self.personality = personality
         self.no_switch = no_switch
 
-        # Load persona from file
-        self.user_persona = self._load_persona(user_persona_file)
+        # Load character from file
+        self.user_character = self._load_character(user_character_file)
         self.conversation_history: dict[int, dict[str, ConversationMessage]] = {}
         self.current_turn = 0
         self.message_counter = 0
@@ -97,16 +97,16 @@ class ConversationSimulator:
             }
         )
 
-    def _load_persona(self, persona_filename: str) -> str:
-        """Load persona content from markdown file in sim_personas directory."""
+    def _load_character(self, character_filename: str) -> str:
+        """Load character content from markdown file in sim_characters directory."""
         # Get the directory of the current script
         script_dir = Path(__file__).parent
-        persona_path = script_dir / "sim_personas" / f"{persona_filename}.md"
+        character_path = script_dir / "sim_characters" / f"{character_filename}.md"
 
-        if not persona_path.exists():
-            raise FileNotFoundError(f"Persona file not found: {persona_path}")  # noqa: TRY003
+        if not character_path.exists():
+            raise FileNotFoundError(f"Character file not found: {character_path}")  # noqa: TRY003
 
-        with open(persona_path, encoding="utf-8") as f:
+        with open(character_path, encoding="utf-8") as f:
             return f.read()
 
     def get_next_message_id(self) -> int:
@@ -170,7 +170,7 @@ class ConversationSimulator:
         return messages
 
     async def generate_user_message(self) -> str:
-        run_kwargs = {"deps": UserAgentDependencies(persona=self.user_persona)}
+        run_kwargs = {"deps": UserAgentDependencies(character=self.user_character)}
 
         if not self.conversation_history:
             run_kwargs["user_prompt"] = "Start a friendly conversation"

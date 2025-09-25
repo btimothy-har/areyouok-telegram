@@ -40,10 +40,10 @@ def reset_db():
 
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.option(
-    "-s",
-    "--simulation",
+    "-c",
+    "--character",
     required=True,
-    help="Name of the simulation file (without .md extension) in scripts/sim_personas/",
+    help="Name of the character file (without .md extension) in scripts/sim_characters/",
 )
 @click.option(
     "-p",
@@ -56,7 +56,7 @@ def reset_db():
 @click.option(
     "--no-switch", is_flag=True, default=False, help="Disable the bot from switching personalities during conversation"
 )
-def simulate(simulation, personality, turns, no_switch):
+def simulate(character, personality, turns, no_switch):
     """Run conversation simulation and evaluation."""
     # Set simulation mode environment variable
     import os
@@ -73,7 +73,7 @@ def simulate(simulation, personality, turns, no_switch):
     async def run_simulation():
         console.print("\n[bold magenta]🎭 Conversation Simulation Script[/bold magenta]")
         console.print("=" * 50)
-        console.print(f"[yellow]Simulation:[/yellow] {simulation}")
+        console.print(f"[yellow]Character:[/yellow] {character}")
         console.print(f"[yellow]Personality:[/yellow] {personality}")
         console.print(f"[yellow]Turns:[/yellow] {turns}")
         console.print(f"[yellow]Personality Switching:[/yellow] {'Disabled' if no_switch else 'Enabled'}")
@@ -81,7 +81,7 @@ def simulate(simulation, personality, turns, no_switch):
         try:
             # Create simulator with specified parameters
             simulator = ConversationSimulator(
-                user_persona_file=simulation,
+                user_character_file=character,
                 personality=personality,
                 no_switch=no_switch,
             )
@@ -107,16 +107,16 @@ def simulate(simulation, personality, turns, no_switch):
 
         except FileNotFoundError as e:
             console.print(f"\n[bold red]❌ Error:[/bold red] {e}")
-            console.print("[yellow]Available simulations in scripts/sim_personas/:[/yellow]")
+            console.print("[yellow]Available characters in scripts/sim_characters/:[/yellow]")
 
-            # List available persona files
+            # List available character files
             script_dir = SCRIPTS_PATH / "simulator"
-            persona_dir = script_dir / "sim_personas"
-            if persona_dir.exists():
-                for persona_file in persona_dir.glob("*.md"):
-                    console.print(f"  • {persona_file.stem}")
+            character_dir = script_dir / "sim_characters"
+            if character_dir.exists():
+                for character_file in character_dir.glob("*.md"):
+                    console.print(f"  • {character_file.stem}")
             else:
-                console.print("  [red]No sim_personas directory found[/red]")
+                console.print("  [red]No sim_characters directory found[/red]")
             return 1
 
         except Exception as e:
