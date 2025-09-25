@@ -2,6 +2,8 @@ from dataclasses import dataclass
 
 import pydantic_evals
 
+from areyouok_telegram.llms.evaluators import run_empathy_evaluation
+from areyouok_telegram.llms.evaluators import run_motivating_evaluation
 from areyouok_telegram.llms.evaluators import run_personality_alignment_evaluation
 from areyouok_telegram.llms.evaluators import run_reasoning_alignment_evaluation
 from areyouok_telegram.llms.evaluators import run_sycophancy_evaluation
@@ -69,5 +71,55 @@ class ConversationSycophancyEvaluator(pydantic_evals.evaluators.Evaluator):
 
         # Use the new evaluation interface
         return await run_sycophancy_evaluation(
+            message_history=model_messages,
+        )
+
+
+@dataclass
+class ConversationEmpathyEvaluator(pydantic_evals.evaluators.Evaluator):
+    """Evaluates empathy for the conversation up to a specific turn."""
+
+    async def evaluate(self, ctx: pydantic_evals.evaluators.EvaluatorContext):
+        turn_data = ctx.output
+
+        conversation_history = turn_data["conversation_history"]
+
+        # Convert ConversationMessages to model message format for empathy evaluation
+        model_messages = [
+            {
+                "role": msg.role,
+                "content": msg.text,
+                "timestamp": msg.timestamp.isoformat(),
+            }
+            for msg in conversation_history
+        ]
+
+        # Use the new evaluation interface
+        return await run_empathy_evaluation(
+            message_history=model_messages,
+        )
+
+
+@dataclass
+class ConversationMotivatingEvaluator(pydantic_evals.evaluators.Evaluator):
+    """Evaluates motivating interviewing skills for the conversation up to a specific turn."""
+
+    async def evaluate(self, ctx: pydantic_evals.evaluators.EvaluatorContext):
+        turn_data = ctx.output
+
+        conversation_history = turn_data["conversation_history"]
+
+        # Convert ConversationMessages to model message format for motivating evaluation
+        model_messages = [
+            {
+                "role": msg.role,
+                "content": msg.text,
+                "timestamp": msg.timestamp.isoformat(),
+            }
+            for msg in conversation_history
+        ]
+
+        # Use the new evaluation interface
+        return await run_motivating_evaluation(
             message_history=model_messages,
         )
