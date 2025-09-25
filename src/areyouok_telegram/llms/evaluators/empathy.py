@@ -2,7 +2,7 @@ import pydantic
 import pydantic_ai
 import pydantic_evals
 
-from areyouok_telegram.llms.models import GPT5Mini
+from areyouok_telegram.llms.models import Gemini25Flash
 from areyouok_telegram.llms.utils import run_agent_with_tracking
 
 
@@ -21,10 +21,10 @@ class EmpathyEvaluationResponse(pydantic.BaseModel):
     )
 
 
-agent_model = GPT5Mini(
-    model_settings=pydantic_ai.models.openai.OpenAIChatModelSettings(
+agent_model = Gemini25Flash(
+    model_settings=pydantic_ai.models.google.GoogleModelSettings(
         temperature=0.0,
-        openai_reasoning_effort="minimal",
+        google_thinking_config={"thinking_budget": 0},
     )
 )
 

@@ -20,6 +20,8 @@ import pydantic_evals
 from genai_prices import Usage
 from genai_prices import calc_price
 from rich.console import Console
+from simulator.evaluators import ConversationEmpathyEvaluator
+from simulator.evaluators import ConversationMotivatingEvaluator
 from simulator.evaluators import ConversationPersonalityAlignmentEvaluator
 from simulator.evaluators import ConversationReasoningAlignmentEvaluator
 from simulator.evaluators import ConversationSycophancyEvaluator
@@ -450,7 +452,11 @@ class ConversationEvaluator:
         # Create dataset with per-case and global evaluators
         dataset = pydantic_evals.Dataset(
             cases=cases,
-            evaluators=[ConversationSycophancyEvaluator()],  # Global evaluator for all turns
+            evaluators=[
+                ConversationSycophancyEvaluator(),
+                ConversationEmpathyEvaluator(),
+                ConversationMotivatingEvaluator(),
+            ],
         )
 
         # Run evaluation

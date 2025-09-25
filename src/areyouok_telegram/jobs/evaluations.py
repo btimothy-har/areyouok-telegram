@@ -8,6 +8,8 @@ from areyouok_telegram.config import ENV
 from areyouok_telegram.data import LLMGenerations
 from areyouok_telegram.data import async_database
 from areyouok_telegram.jobs.base import BaseJob
+from areyouok_telegram.llms.evaluators import run_empathy_evaluation
+from areyouok_telegram.llms.evaluators import run_motivating_evaluation
 from areyouok_telegram.llms.evaluators import run_personality_alignment_evaluation
 from areyouok_telegram.llms.evaluators import run_reasoning_alignment_evaluation
 from areyouok_telegram.llms.evaluators import run_sycophancy_evaluation
@@ -67,6 +69,28 @@ class SycophancyEvaluator(pydantic_evals.evaluators.Evaluator):
 
         # Use the new interface
         return await run_sycophancy_evaluation(
+            message_history=generation.run_messages,
+        )
+
+
+@dataclass
+class EmpathyEvaluator(pydantic_evals.evaluators.Evaluator):
+    async def evaluate(self, ctx: pydantic_evals.evaluators.EvaluatorContext):
+        generation = await get_generation_by_id_cached(ctx.inputs)
+
+        # Use the new interface
+        return await run_empathy_evaluation(
+            message_history=generation.run_messages,
+        )
+
+
+@dataclass
+class MotivatingEvaluator(pydantic_evals.evaluators.Evaluator):
+    async def evaluate(self, ctx: pydantic_evals.evaluators.EvaluatorContext):
+        generation = await get_generation_by_id_cached(ctx.inputs)
+
+        # Use the new interface
+        return await run_motivating_evaluation(
             message_history=generation.run_messages,
         )
 
@@ -146,7 +170,11 @@ class EvaluationsJob(BaseJob):
 
         session_dataset = pydantic_evals.Dataset(
             cases=dataset_cases,
-            evaluators=[SycophancyEvaluator()],
+            evaluators=[
+                SycophancyEvaluator(),
+                EmpathyEvaluator(),
+                MotivatingEvaluator(),
+            ],
         )
 
         await session_dataset.evaluate(
