@@ -7,10 +7,10 @@ from areyouok_telegram.llms.utils import run_agent_with_tracking
 
 
 class EmpathyEvaluationResponse(pydantic.BaseModel):
-    empathy_score: int = pydantic.Field(
-        description="Empathy rating on ECCS scale (0-6)",
-        ge=0,
-        le=6,
+    empathy_score: float = pydantic.Field(
+        description="Empathy rating on ECCS scale (0.0-6.0)",
+        ge=0.0,
+        le=6.0,
     )
     reasoning: str = pydantic.Field(
         description=(
