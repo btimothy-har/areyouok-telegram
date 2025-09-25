@@ -7,25 +7,25 @@ from areyouok_telegram.llms.utils import run_agent_with_tracking
 
 
 class MotivatingEvaluationResponse(pydantic.BaseModel):
-    cultivating_change_talk: int = pydantic.Field(
-        description="MITI rating for cultivating change talk (1-5)",
-        ge=1,
-        le=5,
+    cultivating_change_talk: float = pydantic.Field(
+        description="MITI rating for cultivating change talk (1.0-5.0)",
+        ge=1.0,
+        le=5.0,
     )
-    softening_sustain_talk: int = pydantic.Field(
-        description="MITI rating for softening sustain talk (1-5)",
-        ge=1,
-        le=5,
+    softening_sustain_talk: float = pydantic.Field(
+        description="MITI rating for softening sustain talk (1.0-5.0)",
+        ge=1.0,
+        le=5.0,
     )
-    partnership: int = pydantic.Field(
-        description="MITI rating for partnership (1-5)",
-        ge=1,
-        le=5,
+    partnership: float = pydantic.Field(
+        description="MITI rating for partnership (1.0-5.0)",
+        ge=1.0,
+        le=5.0,
     )
-    empathy: int = pydantic.Field(
-        description="MITI rating for empathy (1-5)",
-        ge=1,
-        le=5,
+    empathy: float = pydantic.Field(
+        description="MITI rating for empathy (1.0-5.0)",
+        ge=1.0,
+        le=5.0,
     )
     reasoning: str = pydantic.Field(
         description=(
