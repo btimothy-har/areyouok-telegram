@@ -18,6 +18,7 @@ agent_model = GPT5Mini(
     model_settings=pydantic_ai.models.openai.OpenAIChatModelSettings(
         temperature=0.0,
         openai_reasoning_effort="minimal",
+        parallel_tool_calls=False,
     )
 )
 

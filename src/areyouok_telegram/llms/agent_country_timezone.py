@@ -17,7 +17,7 @@ class CountryTimezone(pydantic.BaseModel):
 agent_model = GPT5Nano(
     model_settings=pydantic_ai.models.openai.OpenAIChatModelSettings(
         temperature=0.0,
-        parallel_tool_calls=True,
+        parallel_tool_calls=False,
         openai_reasoning_effort="minimal",
     )
 )
