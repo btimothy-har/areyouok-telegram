@@ -38,7 +38,9 @@ class PreferencesUpdateResponse(pydantic.BaseModel):
 
 
 agent_model = GPT5Mini(
-    model_settings=pydantic_ai.models.openai.OpenAIChatModelSettings(openai_reasoning_effort="minimal")
+    model_settings=pydantic_ai.models.openai.OpenAIChatModelSettings(
+        openai_reasoning_effort="minimal", parallel_tool_calls=False
+    )
 )
 
 preferences_agent = pydantic_ai.Agent(
