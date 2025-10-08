@@ -4,10 +4,15 @@ from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
+import anthropic
+import google.genai.errors
+import httpx
+import openai
 import pydantic_ai
 import pytest
 
 from areyouok_telegram.llms.utils import run_agent_with_tracking
+from areyouok_telegram.llms.utils import should_retry_llm_error
 
 
 class TestRunAgentWithTracking:
@@ -89,3 +94,105 @@ class TestRunAgentWithTracking:
 
             # Verify result was still returned
             assert result == mock_result
+
+
+class TestShouldRetryLLMError:
+    """Test the should_retry_llm_error function."""
+
+    def test_httpx_network_error_should_retry(self):
+        """Test that httpx.NetworkError triggers retry."""
+        error = httpx.NetworkError("Connection failed")
+        assert should_retry_llm_error(error) is True
+
+    def test_httpx_connect_error_should_retry(self):
+        """Test that httpx.ConnectError (subclass of NetworkError) triggers retry."""
+        error = httpx.ConnectError("DNS resolution failed")
+        assert should_retry_llm_error(error) is True
+
+    def test_httpx_timeout_exception_should_retry(self):
+        """Test that httpx.TimeoutException triggers retry."""
+        error = httpx.TimeoutException("Request timed out")
+        assert should_retry_llm_error(error) is True
+
+    def test_httpx_connect_timeout_should_retry(self):
+        """Test that httpx.ConnectTimeout (subclass of TimeoutException) triggers retry."""
+        error = httpx.ConnectTimeout("Connection timeout")
+        assert should_retry_llm_error(error) is True
+
+    def test_httpx_read_timeout_should_retry(self):
+        """Test that httpx.ReadTimeout (subclass of TimeoutException) triggers retry."""
+        error = httpx.ReadTimeout("Read timeout")
+        assert should_retry_llm_error(error) is True
+
+    def test_httpx_write_timeout_should_retry(self):
+        """Test that httpx.WriteTimeout (subclass of TimeoutException) triggers retry."""
+        error = httpx.WriteTimeout("Write timeout")
+        assert should_retry_llm_error(error) is True
+
+    def test_httpx_read_error_should_retry(self):
+        """Test that httpx.ReadError (subclass of NetworkError) triggers retry."""
+        error = httpx.ReadError("Read error")
+        assert should_retry_llm_error(error) is True
+
+    def test_httpx_write_error_should_retry(self):
+        """Test that httpx.WriteError (subclass of NetworkError) triggers retry."""
+        error = httpx.WriteError("Write error")
+        assert should_retry_llm_error(error) is True
+
+    def test_anthropic_timeout_error_should_retry(self):
+        """Test that Anthropic API timeout errors trigger retry."""
+        error = anthropic.APITimeoutError(request=MagicMock())
+        assert should_retry_llm_error(error) is True
+
+    def test_anthropic_5xx_error_should_retry(self):
+        """Test that Anthropic 5xx errors trigger retry."""
+        error = anthropic.APIStatusError(message="Server error", response=MagicMock(), body={"error": "Server error"})
+        error.status_code = 500
+        assert should_retry_llm_error(error) is True
+
+    def test_anthropic_4xx_error_should_not_retry(self):
+        """Test that Anthropic 4xx errors do not trigger retry."""
+        error = anthropic.APIStatusError(message="Client error", response=MagicMock(), body={"error": "Client error"})
+        error.status_code = 400
+        assert should_retry_llm_error(error) is False
+
+    def test_openai_timeout_error_should_retry(self):
+        """Test that OpenAI API timeout errors trigger retry."""
+        error = openai.APITimeoutError(request=MagicMock())
+        assert should_retry_llm_error(error) is True
+
+    def test_openai_5xx_error_should_retry(self):
+        """Test that OpenAI 5xx errors trigger retry."""
+        response = MagicMock()
+        response.status_code = 500
+        response.request = MagicMock()
+        error = openai.APIStatusError(message="Server error", response=response, body={"error": "Server error"})
+        assert should_retry_llm_error(error) is True
+
+    def test_openai_4xx_error_should_not_retry(self):
+        """Test that OpenAI 4xx errors do not trigger retry."""
+        response = MagicMock()
+        response.status_code = 400
+        response.request = MagicMock()
+        error = openai.APIStatusError(message="Client error", response=response, body={"error": "Client error"})
+        assert should_retry_llm_error(error) is False
+
+    def test_google_server_error_should_retry(self):
+        """Test that Google GenAI server errors trigger retry."""
+        error = google.genai.errors.ServerError("Server error", response_json={})
+        assert should_retry_llm_error(error) is True
+
+    def test_non_retryable_error_should_not_retry(self):
+        """Test that non-retryable errors do not trigger retry."""
+        error = ValueError("Invalid input")
+        assert should_retry_llm_error(error) is False
+
+    def test_httpx_protocol_error_should_not_retry(self):
+        """Test that httpx.ProtocolError does not trigger retry (not transient)."""
+        error = httpx.ProtocolError("Protocol violation")
+        assert should_retry_llm_error(error) is False
+
+    def test_httpx_proxy_error_should_not_retry(self):
+        """Test that httpx.ProxyError does not trigger retry (configuration issue)."""
+        error = httpx.ProxyError("Proxy configuration error")
+        assert should_retry_llm_error(error) is False
