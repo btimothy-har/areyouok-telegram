@@ -41,6 +41,13 @@ async def get_or_create_active_session(
         if create_if_not_exists and not active_session:
             active_session = await Sessions.create_session(db_conn, chat_id=chat_id, timestamp=timestamp)
 
+        # Eagerly load critical attributes to prevent DetachedInstanceError
+        # when the session object is used outside this database context
+        if active_session:
+            _ = active_session.chat_id
+            _ = active_session.session_id
+            _ = active_session.session_start
+
     return active_session if active_session else None
 
 
