@@ -32,7 +32,6 @@ class MotivatingEvaluationResponse(pydantic.BaseModel):
             "A brief reasoning, no more than 500 characters, explaining the MITI ratings. "
             "Do not include the original message or response, whether in part or full. "
         ),
-        max_length=500,
     )
 
     @property

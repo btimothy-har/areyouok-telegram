@@ -5,6 +5,7 @@ import time
 
 import anthropic
 import google
+import httpx
 import openai
 import pydantic_ai
 from tenacity import retry
@@ -31,6 +32,11 @@ def should_retry_llm_error(e: Exception) -> bool:
     Returns:
         True if the exception is retryable, False otherwise
     """
+    # Network-level transient errors (DNS, connection, timeouts)
+    if isinstance(e, httpx.TimeoutException | httpx.NetworkError):
+        return True
+
+    # Provider-specific errors
     if isinstance(e, anthropic.APITimeoutError):
         return True
     if isinstance(e, anthropic.APIStatusError):
@@ -39,9 +45,11 @@ def should_retry_llm_error(e: Exception) -> bool:
     if isinstance(e, openai.APITimeoutError):
         return True
     if isinstance(e, openai.APIStatusError):
-        return 500 <= e.http_status < 600
+        return 500 <= e.status_code < 600
     if isinstance(e, google.genai.errors.ServerError):
         return True
+
+    return False
 
 
 @retry(
