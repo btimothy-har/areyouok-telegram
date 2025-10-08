@@ -135,9 +135,9 @@ This system helps ensure the chat agent responds appropriately across different 
 ---
 
 ## AI Development
-AI development tool.
+Cursor is our primary AI development tool.
 
-We **don't** require you to use Claude Code, but we actively maintain project tooling for Claude, so you will benefit from it.
+We **don't** require you to use Cursor, but we actively maintain project tooling for Cursor, so you will benefit from it.
 
 In an attempt to limit codebase bloat, we will **not** accept PRs to write tooling for other AI development tools.
 
