@@ -131,7 +131,7 @@ async def new_session_event(
                 await handle_unsupported_media(
                     db_conn,
                     chat_id=session.chat_id,
-                    message_id=message.message_id,
+                    message_id=str(message.message_id),
                 )
 
 
