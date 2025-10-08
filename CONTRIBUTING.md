@@ -135,15 +135,9 @@ This system helps ensure the chat agent responds appropriately across different 
 ---
 
 ## AI Development
-AI development tool.
+Cursor is our primary AI development tool.
 
-We **don't** require you to use Claude Code, but we actively maintain project tooling for Claude, so you will benefit from it.
+We **don't** require you to use Cursor, but we actively maintain project tooling for Cursor, so you will benefit from it.
 
 In an attempt to limit codebase bloat, we will **not** accept PRs to write tooling for other AI development tools.
 
-### AI in GitHub
-CodeRabbit is installed on this repo.
-
-All PRs are automatically reviewed by CodeRabbit. Reviews are **non‑blocking** and advisory; however, please address relevant CodeRabbit comments in the PR thread like any other review.
-
-If you have a paid plan with CodeRabbit, you may leverage additional features (e.g., agentic chat) in GitHub directly.
