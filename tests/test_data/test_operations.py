@@ -354,7 +354,7 @@ class TestNewSessionEvent:
                 )
 
         mock_extract_media.assert_called_once()
-        mock_handle_unsupported.assert_called_once_with(mock_db_conn, chat_id="chat456", message_id=123)
+        mock_handle_unsupported.assert_called_once_with(mock_db_conn, chat_id="chat456", message_id="123")
 
     @pytest.mark.asyncio
     async def test_message_edit_date_activity_tracking(self, frozen_time):
