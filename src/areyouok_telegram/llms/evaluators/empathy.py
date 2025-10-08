@@ -17,7 +17,6 @@ class EmpathyEvaluationResponse(pydantic.BaseModel):
             "A brief reasoning, no more than 500 characters, explaining the ECCS empathy score. "
             "Do not include the original message or response, whether in part or full. "
         ),
-        max_length=500,
     )
 
 
