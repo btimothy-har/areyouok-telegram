@@ -1,6 +1,8 @@
 from areyouok_telegram.data.connection import Base
 from areyouok_telegram.data.connection import async_database
 from areyouok_telegram.data.connection import async_engine
+from areyouok_telegram.data.embeddings import context_vector_index
+from areyouok_telegram.data.embeddings import context_vector_store
 from areyouok_telegram.data.models.chat_event import SYSTEM_USER_ID
 from areyouok_telegram.data.models.chat_event import ChatEvent
 from areyouok_telegram.data.models.chats import Chats
@@ -23,6 +25,8 @@ from areyouok_telegram.data.models.users import Users
 __all__ = [
     "async_database",
     "async_engine",
+    "context_vector_store",
+    "context_vector_index",
     "Base",
     "Messages",
     "MessageTypes",

@@ -33,3 +33,7 @@ LOG_CHAT_MESSAGES = os.getenv("LOG_CHAT_MESSAGES", "false").lower() in ("true", 
 
 # Simulation mode - when enabled, disables database dependencies
 SIMULATION_MODE = os.getenv("SIMULATION_MODE", "false").lower() in ("true", "1", "yes")
+
+# RAG Configuration
+OPENAI_EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
+RAG_ENABLE_SEMANTIC_SEARCH = os.getenv("RAG_ENABLE_SEMANTIC_SEARCH", "false").lower() in ("true", "1", "yes")
