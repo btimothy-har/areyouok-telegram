@@ -60,7 +60,7 @@ async def on_dynamic_response_callback(update: telegram.Update, context: Context
             )
             chat_obj = await Chats.get_by_id(db_conn, chat_id=chat_id)
 
-            await Context.new_or_update(
+            await Context.new(
                 db_conn,
                 chat_encryption_key=chat_obj.retrieve_key(),
                 chat_id=str(update.effective_chat.id),

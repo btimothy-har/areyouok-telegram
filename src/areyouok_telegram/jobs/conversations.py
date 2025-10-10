@@ -548,7 +548,7 @@ class ConversationJob(BaseJob):
         If no session exists, create a new one.
         """
         async with async_database() as db_conn:
-            await Context.new_or_update(
+            await Context.new(
                 db_conn,
                 chat_encryption_key=self.chat_encryption_key,
                 chat_id=self.chat_id,
@@ -558,7 +558,7 @@ class ConversationJob(BaseJob):
             )
 
     @db_retry()
-    async def _get_session_context(self) -> Context | None:
+    async def _get_session_context(self) -> list[Context] | None:
         async with async_database() as db_conn:
             context = await Context.get_by_session_id(
                 db_conn,

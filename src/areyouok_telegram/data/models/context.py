@@ -105,7 +105,7 @@ class Context(Base):
 
     @classmethod
     @traced(extract_args=["chat_id", "session_id", "ctype"])
-    async def new_or_update(
+    async def new(
         cls,
         db_conn: AsyncSession,
         *,
@@ -114,8 +114,15 @@ class Context(Base):
         session_id: str,
         ctype: str,
         content: str,
-    ):
-        """Insert or update a context item in the database with encrypted content."""
+    ) -> int:
+        """Insert a new context item in the database with encrypted content.
+
+        Note: This always creates a new record. The context_key is unique per content,
+        so identical content will be rejected by the database constraint.
+
+        Returns:
+            The ID of the inserted context record
+        """
         now = datetime.now(UTC)
 
         if ctype not in VALID_CONTEXT_TYPES:
@@ -127,8 +134,10 @@ class Context(Base):
             chat_encryption_key=chat_encryption_key,
         )
 
+        context_key = cls.generate_context_key(chat_id, ctype, encrypted_content)
+
         stmt = pg_insert(cls).values(
-            context_key=cls.generate_context_key(chat_id, ctype, encrypted_content),
+            context_key=context_key,
             chat_id=str(chat_id),
             session_id=session_id,
             type=ctype,
@@ -136,16 +145,13 @@ class Context(Base):
             created_at=now,
         )
 
-        stmt = stmt.on_conflict_do_update(
-            index_elements=["context_key"],
-            set_={
-                "session_id": stmt.excluded.session_id,
-                "encrypted_content": stmt.excluded.encrypted_content,
-                "created_at": stmt.excluded.created_at,
-            },
-        )
+        # Return the ID for triggering indexing job
+        stmt = stmt.returning(cls.id)
 
-        await db_conn.execute(stmt)
+        result = await db_conn.execute(stmt)
+        context_id = result.scalar_one()
+
+        return context_id
 
     @classmethod
     @traced(extract_args=["session_id"])
@@ -220,3 +226,27 @@ class Context(Base):
         contexts = result.scalars().all()
 
         return contexts if contexts else None
+
+    @classmethod
+    @traced(extract_args=["ids"])
+    async def get_by_ids(
+        cls,
+        db_conn: AsyncSession,
+        *,
+        ids: list[int],
+    ) -> list["Context"]:
+        """Retrieve contexts by list of IDs.
+
+        Args:
+            db_conn: Database session
+            ids: List of Context IDs to retrieve
+
+        Returns:
+            List of Context objects (may be empty if no matches)
+        """
+        if not ids:
+            return []
+
+        stmt = select(cls).where(cls.id.in_(ids))
+        result = await db_conn.execute(stmt)
+        return list(result.scalars().all())

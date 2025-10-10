@@ -26,13 +26,13 @@ class TestContext:
         assert Context.generate_context_key(chat_id, ctype, encrypted_content) == expected
 
     @pytest.mark.asyncio
-    async def test_new_or_update_valid_type(self, mock_db_session):
+    async def test_new_valid_type(self, mock_db_session):
         """Test inserting a new context with valid type."""
         mock_result = AsyncMock()
         mock_db_session.execute.return_value = mock_result
         user_key = Fernet.generate_key().decode("utf-8")
 
-        await Context.new_or_update(
+        await Context.new(
             mock_db_session,
             chat_encryption_key=user_key,
             chat_id="123",
@@ -50,12 +50,12 @@ class TestContext:
         assert call_args.table.name == "context"
 
     @pytest.mark.asyncio
-    async def test_new_or_update_invalid_type(self, mock_db_session):
+    async def test_new_invalid_type(self, mock_db_session):
         """Test inserting a context with invalid type raises error."""
         user_key = Fernet.generate_key().decode("utf-8")
 
         with pytest.raises(InvalidContextTypeError) as exc_info:
-            await Context.new_or_update(
+            await Context.new(
                 mock_db_session,
                 chat_encryption_key=user_key,
                 chat_id="123",
