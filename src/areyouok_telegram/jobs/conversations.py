@@ -1,4 +1,5 @@
 import asyncio
+import random
 from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
@@ -286,7 +287,7 @@ class ConversationJob(BaseJob):
                     else "companionship"
                 )
             else:
-                chat_personality = "companionship"
+                chat_personality = random.choices(["companionship", "exploration"], weights=[0.4, 0.6], k=1)[0]
 
             deps_data["personality"] = chat_personality
             deps = ChatAgentDependencies(**deps_data)

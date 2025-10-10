@@ -885,12 +885,45 @@ class TestConversationJob:
             patch.object(job, "_get_chat_context", new=AsyncMock(return_value=[])),
             patch.object(job, "_get_chat_history", new=AsyncMock(return_value=[])),
             patch.object(job, "_get_next_notification", new=AsyncMock(return_value=None)),
+            patch("areyouok_telegram.jobs.conversations.random.choices", return_value=["companionship"]),
         ):
             message_history, deps = await job.prepare_conversation_input(include_context=True)
 
-        # Verify default personality is used
+        # Verify default personality is randomly selected (mocked to companionship)
         assert isinstance(deps, ChatAgentDependencies)
         assert deps.personality == "companionship"
+
+    @pytest.mark.asyncio
+    async def test_prepare_conversation_input_default_personality_exploration(self, frozen_time):
+        """Test prepare_conversation_input with exploration as randomly selected default personality."""
+        job = ConversationJob("123")
+        job._run_timestamp = frozen_time
+        job.chat_encryption_key = "test_encryption_key"
+        job._run_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
+
+        mock_session = MagicMock()
+        mock_session.session_id = "session123"
+        job.active_session = mock_session
+
+        # Mock onboarding session as inactive
+        mock_onboarding_session = MagicMock()
+        mock_onboarding_session.is_active = False
+
+        with (
+            patch(
+                "areyouok_telegram.data.operations.get_or_create_guided_session",
+                new=AsyncMock(return_value=mock_onboarding_session),
+            ),
+            patch.object(job, "_get_chat_context", new=AsyncMock(return_value=[])),
+            patch.object(job, "_get_chat_history", new=AsyncMock(return_value=[])),
+            patch.object(job, "_get_next_notification", new=AsyncMock(return_value=None)),
+            patch("areyouok_telegram.jobs.conversations.random.choices", return_value=["exploration"]),
+        ):
+            message_history, deps = await job.prepare_conversation_input(include_context=True)
+
+        # Verify exploration personality can be randomly selected
+        assert isinstance(deps, ChatAgentDependencies)
+        assert deps.personality == "exploration"
 
     @pytest.mark.asyncio
     async def test_prepare_conversation_input_message_reaction_updated(self, frozen_time):
@@ -989,6 +1022,7 @@ class TestConversationJob:
             patch.object(job, "_get_chat_context", new=AsyncMock(return_value=[])),
             patch.object(job, "_get_chat_history", new=AsyncMock(return_value=[])),
             patch.object(job, "_get_next_notification", new=AsyncMock(return_value=None)),
+            patch("areyouok_telegram.jobs.conversations.random.choices", return_value=["companionship"]),
         ):
             message_history, deps = await job.prepare_conversation_input(include_context=True)
 
