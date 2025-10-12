@@ -11,6 +11,7 @@ from areyouok_telegram.data.models.context import Context
 from areyouok_telegram.data.models.context import ContextType
 from areyouok_telegram.data.models.media import MediaFiles
 from areyouok_telegram.data.models.messages import Messages
+from areyouok_telegram.utils.text import format_relative_time
 
 CONTEXT_TYPE_MAP = {
     ContextType.SESSION.value: "prior_conversation_summary",
@@ -79,13 +80,9 @@ class ChatEvent(pydantic.BaseModel):
 
             # Handle reactions, assuming only emoji reactions for simplicity
             # TODO: Handle custom and paid reactions
-            reaction_string = ", ".join(
-                [
-                    r.emoji
-                    for r in message.telegram_object.new_reaction
-                    if r.type == telegram.constants.ReactionType.EMOJI
-                ]
-            )
+            reaction_string = ", ".join([
+                r.emoji for r in message.telegram_object.new_reaction if r.type == telegram.constants.ReactionType.EMOJI
+            ])
             event_data = {
                 "emojis": reaction_string,
                 "to_message_id": str(message.message_id),
@@ -123,7 +120,7 @@ class ChatEvent(pydantic.BaseModel):
         """Convert the chat event to a model message for AI processing."""
 
         default_payload = {
-            "timestamp": (f"{(ts_reference - self.timestamp).total_seconds()} seconds ago"),
+            "timestamp": format_relative_time(self.timestamp, reference_time=ts_reference),
             "event_type": self.event_type,
             **self.event_data,  # Unpack the event data directly into the payload
         }

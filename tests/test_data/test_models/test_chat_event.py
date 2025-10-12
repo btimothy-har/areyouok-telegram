@@ -112,7 +112,7 @@ class TestChatEvent:
 
         assert content_dict["event_type"] == "message"
         assert content_dict["text"] == "User input"
-        assert "seconds ago" in content_dict["timestamp"]
+        assert content_dict["timestamp"] == "just now"  # Same timestamp as reference = "just now"
 
     def test_to_model_message_bot(self, mock_chat_event_message, frozen_time):
         """Test converting bot ChatEvent to model message."""
