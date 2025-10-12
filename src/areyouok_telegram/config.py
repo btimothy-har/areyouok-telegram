@@ -35,5 +35,7 @@ LOG_CHAT_MESSAGES = os.getenv("LOG_CHAT_MESSAGES", "false").lower() in ("true", 
 SIMULATION_MODE = os.getenv("SIMULATION_MODE", "false").lower() in ("true", "1", "yes")
 
 # RAG Configuration
-OPENAI_EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
-RAG_ENABLE_SEMANTIC_SEARCH = os.getenv("RAG_ENABLE_SEMANTIC_SEARCH", "false").lower() in ("true", "1", "yes")
+RAG_EMBEDDING_MODEL = os.getenv("RAG_EMBEDDING_MODEL", "text-embedding-3-large")
+RAG_EMBEDDING_DIMENSIONS = int(os.getenv("RAG_EMBEDDING_DIMENSIONS", "3072"))
+RAG_BATCH_SIZE = int(os.getenv("RAG_BATCH_SIZE", "100"))
+RAG_JOB_INTERVAL_SECS = int(os.getenv("RAG_JOB_INTERVAL_SECS", "300"))

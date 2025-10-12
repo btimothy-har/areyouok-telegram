@@ -250,3 +250,31 @@ class Context(Base):
         stmt = select(cls).where(cls.id.in_(ids))
         result = await db_conn.execute(stmt)
         return list(result.scalars().all())
+
+    @classmethod
+    @traced(extract_args=["from_timestamp", "to_timestamp"])
+    async def get_by_created_timestamp(
+        cls,
+        db_conn: AsyncSession,
+        *,
+        from_timestamp: datetime,
+        to_timestamp: datetime,
+    ) -> list["Context"]:
+        """Retrieve contexts created after given timestamp.
+
+        Args:
+            db_conn: Database session
+            from_timestamp: Datetime to query from (contexts created after this time)
+            to_timestamp: Datetime to query to (contexts created before this time)
+
+        Returns:
+            List of Context objects ordered by created_at (oldest first)
+        """
+        stmt = (
+            select(cls)
+            .where(cls.created_at >= from_timestamp)
+            .where(cls.created_at < to_timestamp)
+            .order_by(cls.created_at.asc())
+        )
+        result = await db_conn.execute(stmt)
+        return list(result.scalars().all())

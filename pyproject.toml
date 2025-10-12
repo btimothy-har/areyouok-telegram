@@ -37,6 +37,7 @@ application = [
     "llama-index-core~=0.14.4",
     "llama-index-vector-stores-postgres",
     "llama-index-embeddings-openai",
+    "llama-index-storage-docstore-postgres",
     "aiolimiter~=1.2.0",
 ]
 dev = [

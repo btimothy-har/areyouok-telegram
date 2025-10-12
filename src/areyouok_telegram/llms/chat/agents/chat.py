@@ -8,9 +8,7 @@ from zoneinfo import ZoneInfoNotFoundError
 import pydantic_ai
 from pydantic_ai import RunContext
 
-from areyouok_telegram.config import RAG_ENABLE_SEMANTIC_SEARCH
 from areyouok_telegram.config import SIMULATION_MODE
-from areyouok_telegram.data import Chats
 from areyouok_telegram.data import Notifications
 from areyouok_telegram.data import UserMetadata
 from areyouok_telegram.data import async_database
@@ -267,81 +265,3 @@ async def update_response_speed(
     )
 
     return f"Made response speed {response_speed_adjustment}."
-
-
-@chat_agent.tool
-async def search_past_conversations(
-    ctx: RunContext[ChatAgentDependencies],
-    search_query: str,
-    limit: int = 5,
-) -> str:
-    """
-    Search past conversations for relevant context using semantic search.
-
-    Use this when you need to recall specific topics, emotions, events, or patterns
-    from previous conversations with this user. This helps maintain continuity and
-    shows the user you remember important details from your relationship.
-
-    Args:
-        search_query: Natural language query describing what to search for
-                     (e.g., "times user felt anxious about work", "user's goals")
-        limit: Maximum number of relevant contexts to retrieve (default: 5, max: 10)
-
-    Returns:
-        A formatted string with relevant past conversation excerpts, or an error message
-    """
-    if not RAG_ENABLE_SEMANTIC_SEARCH:
-        return "Semantic search is currently disabled."
-
-    if limit > 10:
-        limit = 10
-
-    try:
-        from areyouok_telegram.llms.rag import context_index  # noqa: PLC0415
-        from areyouok_telegram.llms.rag.utils import fetch_contexts_by_ids  # noqa: PLC0415
-
-        # Get chat encryption key
-        async with async_database() as db_conn:
-            chat = await Chats.get_by_id(db_conn, chat_id=ctx.deps.tg_chat_id)
-
-        if not chat:
-            return "Unable to retrieve past conversations (chat not found)."
-
-        chat_key = chat.retrieve_key()
-
-        # Use LlamaIndex retriever with metadata filtering
-        retriever = context_index.as_retriever(
-            similarity_top_k=limit,
-            filters={"chat_id": ctx.deps.tg_chat_id},
-        )
-
-        # Retrieve nodes (contains metadata only)
-        nodes = await retriever.aretrieve(search_query)
-
-        if not nodes:
-            return f"No relevant past conversations found for: {search_query}"
-
-        # Extract context IDs from metadata
-        context_ids = [int(node.metadata["context_id"]) for node in nodes]
-
-        # Fetch and decrypt actual content
-        contexts = await fetch_contexts_by_ids(
-            context_ids=context_ids,
-            chat_encryption_key=chat_key,
-        )
-
-        if not contexts:
-            return "No relevant past conversations found."
-
-        # Format results
-        results = []
-        for i, context in enumerate(contexts[:limit], 1):
-            content = str(context.content) if context.content else ""
-            timestamp = context.created_at.strftime("%Y-%m-%d")
-            results.append(f"{i}. [{timestamp}] {content}")
-
-        formatted = "\n\n".join(results)
-    except Exception as e:
-        return f"Error searching past conversations: {str(e)}"
-    else:
-        return f"Relevant past conversations:\n\n{formatted}"

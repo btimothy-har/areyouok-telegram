@@ -6,8 +6,10 @@ import logfire
 from telegram.ext import Application
 from telegram.ext import ContextTypes
 
+from areyouok_telegram.config import RAG_JOB_INTERVAL_SECS
 from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database
+from areyouok_telegram.jobs import ContextEmbeddingJob
 from areyouok_telegram.jobs import ConversationJob
 from areyouok_telegram.jobs import DataLogWarningJob
 from areyouok_telegram.jobs import PingJob
@@ -33,6 +35,16 @@ async def restore_active_sessions(ctx: Application | ContextTypes.DEFAULT_TYPE):
             )
 
     logfire.info(f"Restored {len(active_sessions)} active sessions.")
+
+
+async def start_context_embedding_job(ctx: Application | ContextTypes.DEFAULT_TYPE):
+    """Start the context embedding job."""
+    await schedule_job(
+        context=ctx,
+        job=ContextEmbeddingJob(),
+        interval=timedelta(seconds=RAG_JOB_INTERVAL_SECS),
+        first=datetime.now(UTC) + timedelta(seconds=60),
+    )
 
 
 async def start_data_warning_job(ctx: Application | ContextTypes.DEFAULT_TYPE):
