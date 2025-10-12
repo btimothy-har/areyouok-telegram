@@ -13,7 +13,7 @@ from areyouok_telegram.llms.evaluators import run_motivating_evaluation
 from areyouok_telegram.llms.evaluators import run_personality_alignment_evaluation
 from areyouok_telegram.llms.evaluators import run_reasoning_alignment_evaluation
 from areyouok_telegram.llms.evaluators import run_sycophancy_evaluation
-from areyouok_telegram.utils import db_retry
+from areyouok_telegram.utils.retry import db_retry
 
 GEN_CACHE = TTLCache(maxsize=1000, ttl=300)
 

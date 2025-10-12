@@ -9,7 +9,7 @@ from areyouok_telegram.data import Context
 from areyouok_telegram.data import async_database
 from areyouok_telegram.data import context_vector_index
 from areyouok_telegram.logging import traced
-from areyouok_telegram.utils import db_retry
+from areyouok_telegram.utils.retry import db_retry
 
 
 @traced(extract_args=["chat_id"])

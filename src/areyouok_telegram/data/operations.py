@@ -15,9 +15,9 @@ from areyouok_telegram.data.models.llm_generations import LLMGenerations
 from areyouok_telegram.data.models.llm_usage import LLMUsage
 from areyouok_telegram.data.models.messages import Messages
 from areyouok_telegram.data.models.sessions import Sessions
-from areyouok_telegram.utils import db_retry
-from areyouok_telegram.utils import extract_media_from_telegram_message
-from areyouok_telegram.utils import handle_unsupported_media
+from areyouok_telegram.utils.media import extract_media_from_telegram_message
+from areyouok_telegram.utils.media import handle_unsupported_media
+from areyouok_telegram.utils.retry import db_retry
 
 
 class MissingGuidedSessionTypeError(RuntimeError):

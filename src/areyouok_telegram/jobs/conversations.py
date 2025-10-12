@@ -38,8 +38,8 @@ from areyouok_telegram.llms.chat import onboarding_agent
 from areyouok_telegram.llms.context_compression import ContextTemplate
 from areyouok_telegram.llms.context_compression import context_compression_agent
 from areyouok_telegram.logging import traced
-from areyouok_telegram.utils import db_retry
-from areyouok_telegram.utils import telegram_call
+from areyouok_telegram.utils.retry import db_retry
+from areyouok_telegram.utils.retry import telegram_call
 
 
 class ConversationJob(BaseJob):

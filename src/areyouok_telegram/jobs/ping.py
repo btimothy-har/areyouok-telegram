@@ -5,7 +5,7 @@ import logfire
 
 from areyouok_telegram.config import ENV
 from areyouok_telegram.jobs.base import BaseJob
-from areyouok_telegram.utils import telegram_call
+from areyouok_telegram.utils.retry import telegram_call
 
 
 class PingJob(BaseJob):

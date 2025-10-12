@@ -21,7 +21,7 @@ from areyouok_telegram.data import context_doc_store
 from areyouok_telegram.data import context_vector_store
 from areyouok_telegram.jobs.base import BaseJob
 from areyouok_telegram.logging import traced
-from areyouok_telegram.utils import db_retry
+from areyouok_telegram.utils.retry import db_retry
 
 CONTEXT_TYPES_TO_EMBED = [
     ContextType.SESSION.value,

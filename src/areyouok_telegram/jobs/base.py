@@ -12,7 +12,7 @@ from telegram.ext import ContextTypes
 from areyouok_telegram.data import JobState
 from areyouok_telegram.data import async_database
 from areyouok_telegram.logging import traced
-from areyouok_telegram.utils import db_retry
+from areyouok_telegram.utils.retry import db_retry
 
 JOB_LOCK = defaultdict(asyncio.Lock)
 
