@@ -30,7 +30,7 @@ class TestContext:
     @pytest.mark.asyncio
     async def test_new_valid_type(self, mock_db_session):
         """Test inserting a new context with valid type."""
-        mock_result = AsyncMock()
+        mock_result = MagicMock()
         mock_db_session.execute.return_value = mock_result
         user_key = Fernet.generate_key().decode("utf-8")
 
