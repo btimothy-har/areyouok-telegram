@@ -206,7 +206,9 @@ class ProfileGenerationJob(BaseJob):
             previous_profile = await Context.get_latest_profile(db_conn, chat_id=chat_id)
             if previous_profile:
                 try:
-                    prev_content = previous_profile.decrypt_content(chat_encryption_key=encryption_key)
+                    previous_profile.decrypt_content(chat_encryption_key=encryption_key)
+                    if previous_profile.content:
+                        prev_content = previous_profile.content
                 except Exception:
                     logfire.exception("Failed to decrypt previous profile")
 

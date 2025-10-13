@@ -79,7 +79,7 @@ class TestInstructionsWithPersonalitySwitch:
         return metadata
 
     @pytest.fixture
-    def mock_run_context(self, mock_user_metadata):
+    def mock_run_context(self):
         """Create mock pydantic_ai run context."""
         context = MagicMock()
         context.deps = MagicMock(spec=ChatAgentDependencies)
@@ -87,75 +87,78 @@ class TestInstructionsWithPersonalitySwitch:
         context.deps.personality = PersonalityTypes.EXPLORATION.value
         context.deps.restricted_responses = set()
         context.deps.instruction = None
-
-        # Use the conftest autouse mock_db_session fixture instead of patching async_database
-        with patch.object(UserMetadata, "get_by_user_id", new=AsyncMock(return_value=mock_user_metadata)):
-            yield context
+        return context
 
     @pytest.mark.asyncio
     async def test_instructions_with_default_settings(self, mock_run_context, mock_user_metadata):  # noqa: ARG002
         """Test instructions generation with default settings."""
-        result = await instructions_with_personality_switch(mock_run_context)
+        with patch.object(UserMetadata, "get_by_user_id", new=AsyncMock(return_value=mock_user_metadata)):
+            result = await instructions_with_personality_switch(mock_run_context)
 
-        assert isinstance(result, str)
+            assert isinstance(result, str)
 
-        # Verify user preferences are included
-        assert "<user_preferences>" in result
-        assert "Alice" in result
-        assert "America/New_York" in result
-        assert "casual and friendly" in result
+            # Verify user preferences are included
+            assert "<user_preferences>" in result
+            assert "Alice" in result
+            assert "America/New_York" in result
+            assert "casual and friendly" in result
 
     @pytest.mark.asyncio
-    async def test_instructions_with_restricted_text_response(self, mock_run_context):
+    async def test_instructions_with_restricted_text_response(self, mock_run_context, mock_user_metadata):
         """Test instructions generation with restricted text responses."""
         mock_run_context.deps.restricted_responses = {"text"}
 
-        result = await instructions_with_personality_switch(mock_run_context)
+        with patch.object(UserMetadata, "get_by_user_id", new=AsyncMock(return_value=mock_user_metadata)):
+            result = await instructions_with_personality_switch(mock_run_context)
 
-        assert "recently responded via a text response" in result
-        assert "cannot do so again immediately" in result
+            assert "recently responded via a text response" in result
+            assert "cannot do so again immediately" in result
 
     @pytest.mark.asyncio
-    async def test_instructions_with_restricted_personality_switch(self, mock_run_context):
+    async def test_instructions_with_restricted_personality_switch(self, mock_run_context, mock_user_metadata):
         """Test instructions generation with restricted personality switches."""
         mock_run_context.deps.restricted_responses = {"switch_personality"}
 
-        result = await instructions_with_personality_switch(mock_run_context)
+        with patch.object(UserMetadata, "get_by_user_id", new=AsyncMock(return_value=mock_user_metadata)):
+            result = await instructions_with_personality_switch(mock_run_context)
 
-        assert "will not be allowed to switch personalities" in result
+            assert "will not be allowed to switch personalities" in result
 
     @pytest.mark.asyncio
-    async def test_instructions_with_multiple_restrictions(self, mock_run_context):
+    async def test_instructions_with_multiple_restrictions(self, mock_run_context, mock_user_metadata):
         """Test instructions generation with multiple restrictions."""
         mock_run_context.deps.restricted_responses = {"text", "switch_personality"}
 
-        result = await instructions_with_personality_switch(mock_run_context)
+        with patch.object(UserMetadata, "get_by_user_id", new=AsyncMock(return_value=mock_user_metadata)):
+            result = await instructions_with_personality_switch(mock_run_context)
 
-        assert "recently responded via a text response" in result
-        assert "will not be allowed to switch personalities" in result
+            assert "recently responded via a text response" in result
+            assert "will not be allowed to switch personalities" in result
 
     @pytest.mark.asyncio
-    async def test_instructions_with_custom_instruction(self, mock_run_context):
+    async def test_instructions_with_custom_instruction(self, mock_run_context, mock_user_metadata):
         """Test instructions generation with custom notification message."""
         notification_message = "Please acknowledge this important message"
         mock_notification = MagicMock(spec=Notifications)
         mock_notification.content = notification_message
         mock_run_context.deps.notification = mock_notification
 
-        result = await instructions_with_personality_switch(mock_run_context)
+        with patch.object(UserMetadata, "get_by_user_id", new=AsyncMock(return_value=mock_user_metadata)):
+            result = await instructions_with_personality_switch(mock_run_context)
 
-        assert notification_message in result
-        assert "<message>" in result
+            assert notification_message in result
+            assert "<message>" in result
 
     @pytest.mark.asyncio
-    async def test_instructions_with_different_personality(self, mock_run_context):
+    async def test_instructions_with_different_personality(self, mock_run_context, mock_user_metadata):
         """Test instructions generation with different personality."""
         mock_run_context.deps.personality = PersonalityTypes.ANCHORING.value
 
-        result = await instructions_with_personality_switch(mock_run_context)
+        with patch.object(UserMetadata, "get_by_user_id", new=AsyncMock(return_value=mock_user_metadata)):
+            result = await instructions_with_personality_switch(mock_run_context)
 
-        # Should contain anchoring personality characteristics
-        assert "Grounding presence" in result or "emotional stability" in result
+            # Should contain anchoring personality characteristics
+            assert "Grounding presence" in result or "emotional stability" in result
 
     @pytest.mark.asyncio
     async def test_instructions_user_metadata_called_correctly(self, mock_run_context):
