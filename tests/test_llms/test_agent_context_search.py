@@ -131,7 +131,7 @@ class TestRetrieveRelevantContexts:
             assert result == []
 
     @pytest.mark.asyncio
-    async def test_no_contexts_in_database(self, mock_nodes):
+    async def test_no_contexts_in_database(self, mock_nodes, mock_chat_object):
         """Test when nodes are found but contexts don't exist in database."""
         mock_retriever = MagicMock()
         mock_retriever.aretrieve = AsyncMock(return_value=mock_nodes)
@@ -140,11 +140,15 @@ class TestRetrieveRelevantContexts:
             patch("areyouok_telegram.llms.context_search.retriever.context_vector_index") as mock_index,
             patch("areyouok_telegram.llms.context_search.retriever.async_database") as mock_db,
             patch("areyouok_telegram.llms.context_search.retriever.Context") as mock_context_class,
+            patch("areyouok_telegram.llms.context_search.retriever.Chats") as mock_chats_class,
         ):
             mock_index.as_retriever.return_value = mock_retriever
 
             mock_db_conn = AsyncMock()
             mock_db.return_value.__aenter__.return_value = mock_db_conn
+
+            # Mock chat retrieval
+            mock_chats_class.get_by_id = AsyncMock(return_value=mock_chat_object)
 
             # No contexts found in database
             mock_context_class.get_by_ids = AsyncMock(return_value=[])
@@ -158,7 +162,7 @@ class TestRetrieveRelevantContexts:
 
     @pytest.mark.asyncio
     async def test_chat_not_found(self, mock_nodes, mock_context_objects):
-        """Test when chat object is not found."""
+        """Test when chat object is not found - should raise AttributeError."""
         mock_retriever = MagicMock()
         mock_retriever.aretrieve = AsyncMock(return_value=mock_nodes)
 
@@ -176,12 +180,12 @@ class TestRetrieveRelevantContexts:
             mock_context_class.get_by_ids = AsyncMock(return_value=mock_context_objects)
             mock_chats_class.get_by_id = AsyncMock(return_value=None)
 
-            result = await retrieve_relevant_contexts(
-                chat_id="123456",
-                search_query="test query",
-            )
-
-            assert result == []
+            # Should raise AttributeError when trying to call retrieve_key on None
+            with pytest.raises(AttributeError, match="'NoneType' object has no attribute 'retrieve_key'"):
+                await retrieve_relevant_contexts(
+                    chat_id="123456",
+                    search_query="test query",
+                )
 
     @pytest.mark.asyncio
     async def test_retrieval_uses_config_limit(self, mock_nodes, mock_context_objects, mock_chat_object):

@@ -281,8 +281,9 @@ async def search_history(
     shows the user you remember important details from your relationship.
 
     Args:
-        search_query: Natural language query describing what to search for
-                     (e.g., "times user felt anxious about work", "user's goals")
+        search_query: Natural language query describing what to search for. The query should be
+        phrased from a 3rd-party perspective and pronoun-neutral.
+                    (e.g., "times user felt anxious about work", "user's goals")
 
     Returns:
         A formatted response with direct answer and context summary, or error message

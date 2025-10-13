@@ -2,6 +2,8 @@
 
 import hashlib
 import json
+from datetime import UTC
+from datetime import datetime
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 
@@ -331,9 +333,6 @@ class TestContext:
     @pytest.mark.asyncio
     async def test_get_by_created_timestamp(self, mock_db_session):
         """Test get_by_created_timestamp retrieves contexts in time range (lines 273-280)."""
-        from datetime import UTC
-        from datetime import datetime
-
         mock_context1 = MagicMock(spec=Context)
         mock_context2 = MagicMock(spec=Context)
 
