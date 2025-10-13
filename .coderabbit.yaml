@@ -1,5 +1,5 @@
 language: en-US
-tone_instructions: Provide guidance and explain your feedback to the developer.
+tone_instructions: Be critical about your feedback, and always explain your feedback to the developer. Provide guidance and learning opportunities.
 early_access: false
 enable_free_tier: true
 reviews:
@@ -28,7 +28,7 @@ reviews:
   labeling_instructions: []
   path_filters:
     - '!tests/**'
-    - '!.claude/**'
+    - '!.cursor/**'
     - '!.github/**'
     - '!.vscode/**'
   path_instructions: []
