@@ -125,6 +125,10 @@ async def instructions_with_personality_switch(ctx: pydantic_ai.RunContext[ChatA
     if not SIMULATION_MODE:
         try:
             user_profile = await data_operations.get_latest_profile(chat_id=ctx.deps.tg_chat_id)
+            if user_profile:
+                encryption_key = await data_operations.get_chat_encryption_key(chat_id=ctx.deps.tg_chat_id)
+                user_profile.decrypt_content(chat_encryption_key=encryption_key)
+
         except Exception as e:
             # If profile fetch fails, just continue without it
             logfire.warning(

@@ -214,8 +214,6 @@ async def get_latest_profile(*, chat_id: str) -> Context | None:
     async with async_database() as db_conn:
         profile_context = await Context.get_latest_profile(db_conn, chat_id=chat_id)
         if profile_context:
-            encryption_key = await get_chat_encryption_key(chat_id=chat_id)
-            profile_context.decrypt_content(chat_encryption_key=encryption_key)
             return profile_context
 
     return None
