@@ -204,12 +204,12 @@ class ProfileGenerationJob(BaseJob):
         )
 
         result = await run_agent_with_tracking(
-            agent=profile_generation_agent,
-            user_prompt=user_prompt,
-            agent_deps=None,
+            profile_generation_agent,
+            chat_id=chat_id,
+            run_kwargs={"user_prompt": user_prompt},
         )
 
-        profile: ProfileTemplate = result.data
+        profile: ProfileTemplate = result.output
 
         # Save result as PROFILE context type (session_id is None since profiles are cross-session)
         async with async_database() as db_conn:
