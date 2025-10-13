@@ -316,7 +316,7 @@ class TestSearchPastConversations:
 
     @pytest.mark.asyncio
     async def test_search_formats_contexts_correctly(self, mock_context_objects):
-        """Test that contexts are formatted with relative timestamps correctly."""
+        """Test that contexts are formatted with structured template and relative timestamps correctly."""
         mock_agent_output = ContextSearchResponse(
             answer="Test answer",
             summary="Test summary",
@@ -344,10 +344,15 @@ class TestSearchPastConversations:
             agent_call_args = mock_run_agent.call_args
             prompt = agent_call_args[1]["run_kwargs"]["user_prompt"]
 
-            # Verify formatted contexts include relative timestamps
-            assert "Context 1 [8 days ago]:" in prompt
-            assert "Context 2 [7 days ago]:" in prompt
-            assert "Context 3 [6 days ago]:" in prompt
+            # Verify structured format with XML-like tags
+            assert "<item>" in prompt
+            assert "<timestamp>8 days ago</timestamp>" in prompt
+            assert "<timestamp>7 days ago</timestamp>" in prompt
+            assert "<timestamp>6 days ago</timestamp>" in prompt
+            assert "<type>prior_conversation_summary</type>" in prompt
+            assert "<content>" in prompt
+            assert "</content>" in prompt
+            assert "</item>" in prompt
 
             # Verify content is formatted
             assert "Test life situation 0" in prompt

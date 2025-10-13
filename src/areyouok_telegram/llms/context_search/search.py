@@ -1,11 +1,20 @@
 """Utility functions for context search and retrieval."""
 
+from areyouok_telegram.data.models.chat_event import CONTEXT_TYPE_MAP
 from areyouok_telegram.llms.context_search.agent import ContextSearchResponse
 from areyouok_telegram.llms.context_search.agent import context_search_agent
 from areyouok_telegram.llms.context_search.retriever import retrieve_relevant_contexts
 from areyouok_telegram.llms.utils import run_agent_with_tracking
 from areyouok_telegram.logging import traced
 from areyouok_telegram.utils.text import format_relative_time
+
+FORMATTED_CONTEXT_TEMPLATE = """
+<item>
+<timestamp>{timestamp}</timestamp>
+<type>{type}</type>
+<content>{content}</content>
+</item>
+"""
 
 
 @traced(extract_args=["chat_id", "session_id"])
@@ -42,11 +51,14 @@ async def search_chat_context(
             return f"No relevant past conversations found for: {search_query}"
 
         # Format contexts with relative timestamps for the agent
-        formatted_contexts = []
-        for i, context in enumerate(contexts, 1):
-            content = str(context.content) if context.content else ""
-            timestamp = format_relative_time(context.created_at)
-            formatted_contexts.append(f"Context {i} [{timestamp}]:\n{content}")
+        formatted_contexts = [
+            FORMATTED_CONTEXT_TEMPLATE.format(
+                timestamp=format_relative_time(context.created_at),
+                type=CONTEXT_TYPE_MAP[context.type],
+                content=str(context.content) if context.content else "",
+            )
+            for context in contexts
+        ]
 
         contexts_text = "\n\n".join(formatted_contexts)
 
