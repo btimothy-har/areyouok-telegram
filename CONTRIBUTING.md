@@ -141,7 +141,7 @@ We **don't** require you to use Cursor, but we actively maintain project tooling
 
 In an attempt to limit codebase bloat, we will **not** accept PRs to write tooling for other AI development tools.
 
-### AI in GitHub
+### Automated Reviews
 CodeRabbit is installed on this repo.
 
 All PRs are automatically reviewed by CodeRabbit. Reviews are **non‑blocking** and advisory; however, please address relevant CodeRabbit comments in the PR thread like any other review.
