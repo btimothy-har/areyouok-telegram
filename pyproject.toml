@@ -114,6 +114,10 @@ addopts = [
 ]
 asyncio_mode = "auto"
 pythonpath = ["src"]
+filterwarnings = [
+    # Suppress pydub's audioop deprecation - will be fixed by library before Python 3.13
+    "ignore::DeprecationWarning:pydub.*:",
+]
 
 [tool.coverage.run]
 source = ["src/areyouok_telegram"]
