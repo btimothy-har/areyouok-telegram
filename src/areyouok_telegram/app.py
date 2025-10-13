@@ -1,35 +1,41 @@
 """Application factory for the Telegram bot."""
 
 import telegram
-from telegram.ext import Application
-from telegram.ext import ApplicationBuilder
-from telegram.ext import CallbackQueryHandler
-from telegram.ext import CommandHandler
-from telegram.ext import MessageHandler
-from telegram.ext import MessageReactionHandler
-from telegram.ext import TypeHandler
-from telegram.ext import filters
+from telegram.ext import (
+    Application,
+    ApplicationBuilder,
+    CallbackQueryHandler,
+    CommandHandler,
+    MessageHandler,
+    MessageReactionHandler,
+    TypeHandler,
+    filters,
+)
 
 from areyouok_telegram.config import TELEGRAM_BOT_TOKEN
-from areyouok_telegram.handlers import on_dynamic_response_callback
-from areyouok_telegram.handlers import on_edit_message
-from areyouok_telegram.handlers import on_error_event
-from areyouok_telegram.handlers import on_feedback_command
-from areyouok_telegram.handlers import on_message_react
-from areyouok_telegram.handlers import on_new_message
-from areyouok_telegram.handlers import on_new_update
-from areyouok_telegram.handlers import on_preferences_command
-from areyouok_telegram.handlers import on_start_command
+from areyouok_telegram.handlers import (
+    on_dynamic_response_callback,
+    on_edit_message,
+    on_error_event,
+    on_feedback_command,
+    on_message_react,
+    on_new_message,
+    on_new_update,
+    on_preferences_command,
+    on_start_command,
+)
 from areyouok_telegram.logging import traced
-from areyouok_telegram.setup import restore_active_sessions
-from areyouok_telegram.setup import setup_bot_commands
-from areyouok_telegram.setup import setup_bot_description
-from areyouok_telegram.setup import setup_bot_name
-from areyouok_telegram.setup import setup_bot_short_description
-from areyouok_telegram.setup import start_context_embedding_job
-from areyouok_telegram.setup import start_data_warning_job
-from areyouok_telegram.setup import start_ping_job
-from areyouok_telegram.setup import start_profile_generation_job
+from areyouok_telegram.setup import (
+    restore_active_sessions,
+    setup_bot_commands,
+    setup_bot_description,
+    setup_bot_name,
+    setup_bot_short_description,
+    start_context_embedding_job,
+    start_data_warning_job,
+    start_ping_job,
+    start_profile_generation_job,
+)
 
 
 async def application_post_init(application: Application):

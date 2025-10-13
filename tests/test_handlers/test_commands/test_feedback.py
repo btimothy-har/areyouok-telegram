@@ -1,12 +1,8 @@
 """Tests for handlers/commands/feedback.py."""
 
 import uuid
-from datetime import UTC
-from datetime import datetime
-from datetime import timedelta
-from unittest.mock import AsyncMock
-from unittest.mock import MagicMock
-from unittest.mock import patch
+from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock, MagicMock, patch
 from urllib.parse import quote_plus
 
 import pytest
@@ -14,10 +10,12 @@ import telegram
 from telegram.constants import ReactionEmoji
 from telegram.ext import ContextTypes
 
-from areyouok_telegram.handlers.commands.feedback import FEEDBACK_CACHE
-from areyouok_telegram.handlers.commands.feedback import FEEDBACK_URL
-from areyouok_telegram.handlers.commands.feedback import generate_feedback_context
-from areyouok_telegram.handlers.commands.feedback import on_feedback_command
+from areyouok_telegram.handlers.commands.feedback import (
+    FEEDBACK_CACHE,
+    FEEDBACK_URL,
+    generate_feedback_context,
+    on_feedback_command,
+)
 
 
 class TestOnFeedbackCommand:

@@ -1,8 +1,7 @@
 """Utility functions for context search and retrieval."""
 
 from areyouok_telegram.data.models.chat_event import CONTEXT_TYPE_MAP
-from areyouok_telegram.llms.context_search.agent import ContextSearchResponse
-from areyouok_telegram.llms.context_search.agent import context_search_agent
+from areyouok_telegram.llms.context_search.agent import ContextSearchResponse, context_search_agent
 from areyouok_telegram.llms.context_search.retriever import retrieve_relevant_contexts
 from areyouok_telegram.llms.utils import run_agent_with_tracking
 from areyouok_telegram.logging import traced

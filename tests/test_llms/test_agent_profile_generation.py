@@ -4,8 +4,7 @@ import pytest
 from pydantic_ai import models
 from pydantic_ai.models.test import TestModel
 
-from areyouok_telegram.llms.profile_generation import ProfileTemplate
-from areyouok_telegram.llms.profile_generation import profile_generation_agent
+from areyouok_telegram.llms.profile_generation import ProfileTemplate, profile_generation_agent
 
 # Block real model requests in tests
 models.ALLOW_MODEL_REQUESTS = False

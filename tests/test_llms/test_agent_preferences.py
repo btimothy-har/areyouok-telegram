@@ -1,19 +1,19 @@
 """Tests for llms/agent_preferences.py using pydantic_ai testing."""
 
-from unittest.mock import AsyncMock
-from unittest.mock import MagicMock
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pydantic_ai
 import pytest
 from pydantic_ai import models
 
-from areyouok_telegram.llms.agent_preferences import FeedbackMissingError
-from areyouok_telegram.llms.agent_preferences import PreferencesAgentDependencies
-from areyouok_telegram.llms.agent_preferences import PreferencesUpdateResponse
-from areyouok_telegram.llms.agent_preferences import preferences_agent
-from areyouok_telegram.llms.agent_preferences import update_preferred_name
-from areyouok_telegram.llms.agent_preferences import validate_preferences_agent_output
+from areyouok_telegram.llms.agent_preferences import (
+    FeedbackMissingError,
+    PreferencesAgentDependencies,
+    PreferencesUpdateResponse,
+    preferences_agent,
+    update_preferred_name,
+    validate_preferences_agent_output,
+)
 from areyouok_telegram.llms.exceptions import MetadataFieldUpdateError
 
 # Block real model requests in tests

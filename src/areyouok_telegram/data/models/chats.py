@@ -1,23 +1,16 @@
 import hashlib
-from datetime import UTC
-from datetime import datetime
+from datetime import UTC, datetime
 
 import telegram
 from cachetools import TTLCache
-from sqlalchemy import BOOLEAN
-from sqlalchemy import Column
-from sqlalchemy import Integer
-from sqlalchemy import String
-from sqlalchemy.dialects.postgresql import TIMESTAMP
-from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy import BOOLEAN, Column, Integer, String
+from sqlalchemy.dialects.postgresql import TIMESTAMP, insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import select
 
 from areyouok_telegram.config import ENV
 from areyouok_telegram.data import Base
-from areyouok_telegram.encryption import decrypt_chat_key
-from areyouok_telegram.encryption import encrypt_chat_key
-from areyouok_telegram.encryption import generate_chat_key
+from areyouok_telegram.encryption import decrypt_chat_key, encrypt_chat_key, generate_chat_key
 from areyouok_telegram.logging import traced
 
 

@@ -1,10 +1,7 @@
 """Tests for jobs/ping.py."""
 
-from datetime import UTC
-from datetime import datetime
-from datetime import timedelta
-from unittest.mock import AsyncMock
-from unittest.mock import MagicMock
+from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from freezegun import freeze_time

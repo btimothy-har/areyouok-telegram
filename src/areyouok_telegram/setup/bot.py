@@ -4,14 +4,11 @@ from datetime import timedelta
 
 import logfire
 import telegram
-from telegram.ext import Application
-from telegram.ext import ContextTypes
+from telegram.ext import Application, ContextTypes
 
 from areyouok_telegram.config import ENV
 from areyouok_telegram.logging import traced
-from areyouok_telegram.setup.exceptions import BotCommandsSetupError
-from areyouok_telegram.setup.exceptions import BotDescriptionSetupError
-from areyouok_telegram.setup.exceptions import BotNameSetupError
+from areyouok_telegram.setup.exceptions import BotCommandsSetupError, BotDescriptionSetupError, BotNameSetupError
 from areyouok_telegram.utils.retry import telegram_retry
 from areyouok_telegram.utils.text import package_version
 

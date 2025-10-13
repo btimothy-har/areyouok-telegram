@@ -1,18 +1,13 @@
 import hashlib
 import json
-from datetime import UTC
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
 from cachetools import TTLCache
 from cryptography.fernet import Fernet
-from sqlalchemy import Column
-from sqlalchemy import Integer
-from sqlalchemy import String
-from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import TIMESTAMP
-from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy import Column, Integer, String, select
+from sqlalchemy.dialects.postgresql import TIMESTAMP, insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from areyouok_telegram.config import ENV

@@ -2,17 +2,17 @@
 
 import hashlib
 from datetime import UTC
-from unittest.mock import AsyncMock
-from unittest.mock import MagicMock
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from areyouok_telegram.data.models.user_metadata import InvalidCountryCodeError
-from areyouok_telegram.data.models.user_metadata import InvalidFieldError
-from areyouok_telegram.data.models.user_metadata import InvalidFieldValueError
-from areyouok_telegram.data.models.user_metadata import InvalidTimezoneError
-from areyouok_telegram.data.models.user_metadata import UserMetadata
+from areyouok_telegram.data.models.user_metadata import (
+    InvalidCountryCodeError,
+    InvalidFieldError,
+    InvalidFieldValueError,
+    InvalidTimezoneError,
+    UserMetadata,
+)
 
 
 class TestUserMetadata:

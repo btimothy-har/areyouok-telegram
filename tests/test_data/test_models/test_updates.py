@@ -1,8 +1,7 @@
 """Tests for Updates model."""
 
 import hashlib
-from unittest.mock import AsyncMock
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import telegram

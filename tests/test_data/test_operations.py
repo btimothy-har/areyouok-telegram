@@ -1,10 +1,7 @@
 """Tests for data/operations.py."""
 
-from datetime import UTC
-from datetime import datetime
-from unittest.mock import AsyncMock
-from unittest.mock import MagicMock
-from unittest.mock import patch
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import telegram
@@ -12,8 +9,7 @@ import telegram
 from areyouok_telegram.data import operations as data_operations
 from areyouok_telegram.data.models.chat_event import SYSTEM_USER_ID
 from areyouok_telegram.data.models.guided_sessions import GuidedSessionType
-from areyouok_telegram.data.operations import InvalidChatError
-from areyouok_telegram.data.operations import get_chat_encryption_key
+from areyouok_telegram.data.operations import InvalidChatError, get_chat_encryption_key
 
 
 class TestGetOrCreateActiveSession:

@@ -1,15 +1,16 @@
 """Tests for onboarding agent components (unit tests only)."""
 
-from unittest.mock import MagicMock
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from areyouok_telegram.data.models.notifications import Notifications
-from areyouok_telegram.llms.chat.agents.onboarding import OnboardingAgentDependencies
-from areyouok_telegram.llms.chat.agents.onboarding import onboarding_agent
-from areyouok_telegram.llms.chat.agents.onboarding import search_history
-from areyouok_telegram.llms.chat.agents.onboarding import update_memory
+from areyouok_telegram.llms.chat.agents.onboarding import (
+    OnboardingAgentDependencies,
+    onboarding_agent,
+    search_history,
+    update_memory,
+)
 
 
 class TestOnboardingAgentDependencies:

@@ -1,18 +1,18 @@
 """Tests for utils/media.py."""
 
 # ruff: noqa: PLC2701
-from unittest.mock import AsyncMock
-from unittest.mock import MagicMock
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import telegram
 from pydub import AudioSegment
 
-from areyouok_telegram.utils.media import VoiceNotProcessableError
-from areyouok_telegram.utils.media import _download_file
-from areyouok_telegram.utils.media import extract_media_from_telegram_message
-from areyouok_telegram.utils.media import transcribe_voice_data_sync
+from areyouok_telegram.utils.media import (
+    VoiceNotProcessableError,
+    _download_file,
+    extract_media_from_telegram_message,
+    transcribe_voice_data_sync,
+)
 
 
 class TestTranscribeVoiceDataSync:

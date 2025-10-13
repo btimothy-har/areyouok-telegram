@@ -2,14 +2,16 @@ import pydantic
 import pydantic_ai
 
 from areyouok_telegram.llms.models import GPT5
-from areyouok_telegram.llms.profile_generation.constants import AGENT_INSTRUCTIONS
-from areyouok_telegram.llms.profile_generation.constants import CHANGE_LOG_DESC
-from areyouok_telegram.llms.profile_generation.constants import EMOTIONAL_PATTERNS_DESC
-from areyouok_telegram.llms.profile_generation.constants import GOALS_OUTCOMES_DESC
-from areyouok_telegram.llms.profile_generation.constants import IDENTITY_MARKERS_DESC
-from areyouok_telegram.llms.profile_generation.constants import PROFILE_TEMPLATE
-from areyouok_telegram.llms.profile_generation.constants import SAFETY_PLAN_DESC
-from areyouok_telegram.llms.profile_generation.constants import STRENGTHS_VALUES_DESC
+from areyouok_telegram.llms.profile_generation.constants import (
+    AGENT_INSTRUCTIONS,
+    CHANGE_LOG_DESC,
+    EMOTIONAL_PATTERNS_DESC,
+    GOALS_OUTCOMES_DESC,
+    IDENTITY_MARKERS_DESC,
+    PROFILE_TEMPLATE,
+    SAFETY_PLAN_DESC,
+    STRENGTHS_VALUES_DESC,
+)
 
 
 class ProfileTemplate(pydantic.BaseModel):

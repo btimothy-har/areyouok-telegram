@@ -1,9 +1,7 @@
 """Tests for context embedding batch job."""
 
-from datetime import UTC
-from datetime import datetime
-from unittest.mock import AsyncMock
-from unittest.mock import MagicMock
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from freezegun import freeze_time

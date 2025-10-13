@@ -5,12 +5,9 @@ import telegram
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
-from areyouok_telegram.config import DEVELOPER_CHAT_ID
-from areyouok_telegram.config import DEVELOPER_THREAD_ID
-from areyouok_telegram.data import Updates
-from areyouok_telegram.data import async_database
-from areyouok_telegram.utils.retry import db_retry
-from areyouok_telegram.utils.retry import telegram_call
+from areyouok_telegram.config import DEVELOPER_CHAT_ID, DEVELOPER_THREAD_ID
+from areyouok_telegram.data import Updates, async_database
+from areyouok_telegram.utils.retry import db_retry, telegram_call
 from areyouok_telegram.utils.text import split_long_message
 
 

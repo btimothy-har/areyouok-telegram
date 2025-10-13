@@ -2,17 +2,13 @@
 
 import asyncio
 import hashlib
-from datetime import UTC
-from datetime import datetime
-from unittest.mock import AsyncMock
-from unittest.mock import MagicMock
-from unittest.mock import patch
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from telegram.ext import ContextTypes
 
-from areyouok_telegram.jobs.base import JOB_LOCK
-from areyouok_telegram.jobs.base import BaseJob
+from areyouok_telegram.jobs.base import JOB_LOCK, BaseJob
 
 
 class ConcreteJob(BaseJob):

@@ -98,7 +98,6 @@ select = [
 
 [tool.ruff.lint.isort]
 combine-as-imports = true
-force-single-line = true
 detect-same-package = true
 
 [tool.logfire]

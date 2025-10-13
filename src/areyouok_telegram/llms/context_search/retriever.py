@@ -1,13 +1,9 @@
 """Utility functions for context search and retrieval."""
 
-from llama_index.core.vector_stores import ExactMatchFilter
-from llama_index.core.vector_stores import MetadataFilters
+from llama_index.core.vector_stores import ExactMatchFilter, MetadataFilters
 
 from areyouok_telegram.config import RAG_TOP_K
-from areyouok_telegram.data import Chats
-from areyouok_telegram.data import Context
-from areyouok_telegram.data import async_database
-from areyouok_telegram.data import context_vector_index
+from areyouok_telegram.data import Chats, Context, async_database, context_vector_index
 from areyouok_telegram.logging import traced
 from areyouok_telegram.utils.retry import db_retry
 

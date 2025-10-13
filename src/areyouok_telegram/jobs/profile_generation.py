@@ -1,22 +1,14 @@
 """Background job for generating user profile summaries from context data."""
 
-from datetime import UTC
-from datetime import datetime
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
 import logfire
 from sqlalchemy import select
 
-from areyouok_telegram.data import Chats
-from areyouok_telegram.data import Context
-from areyouok_telegram.data import ContextType
-from areyouok_telegram.data import Sessions
-from areyouok_telegram.data import async_database
-from areyouok_telegram.data import operations as data_operations
+from areyouok_telegram.data import Chats, Context, ContextType, Sessions, async_database, operations as data_operations
 from areyouok_telegram.jobs.base import BaseJob
 from areyouok_telegram.llms import run_agent_with_tracking
-from areyouok_telegram.llms.profile_generation import ProfileTemplate
-from areyouok_telegram.llms.profile_generation import profile_generation_agent
+from areyouok_telegram.llms.profile_generation import ProfileTemplate, profile_generation_agent
 from areyouok_telegram.logging import traced
 from areyouok_telegram.utils.retry import db_retry
 from areyouok_telegram.utils.text import format_relative_time

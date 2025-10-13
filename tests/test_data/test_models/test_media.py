@@ -2,13 +2,10 @@
 
 import base64
 import hashlib
-from unittest.mock import AsyncMock
-from unittest.mock import MagicMock
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from cryptography.fernet import Fernet
-from cryptography.fernet import InvalidToken
+from cryptography.fernet import Fernet, InvalidToken
 
 from areyouok_telegram.data.models.media import MediaFiles
 from areyouok_telegram.encryption.exceptions import ContentNotDecryptedError

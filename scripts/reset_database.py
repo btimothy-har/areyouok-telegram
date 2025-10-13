@@ -4,13 +4,10 @@ import sys
 
 from rich.console import Console
 from rich.prompt import Confirm
-from sqlalchemy import create_engine
-from sqlalchemy import inspect
-from sqlalchemy.schema import CreateSchema
-from sqlalchemy.schema import DropSchema
+from sqlalchemy import create_engine, inspect
+from sqlalchemy.schema import CreateSchema, DropSchema
 
-from areyouok_telegram.config import ENV
-from areyouok_telegram.config import PG_CONNECTION_STRING
+from areyouok_telegram.config import ENV, PG_CONNECTION_STRING
 from areyouok_telegram.data import Base
 
 console = Console()

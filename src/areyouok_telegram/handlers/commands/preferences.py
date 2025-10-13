@@ -2,17 +2,16 @@ import pycountry
 import telegram
 from telegram.ext import ContextTypes
 
-from areyouok_telegram.data import UserMetadata
-from areyouok_telegram.data import async_database
-from areyouok_telegram.data import operations as data_operations
+from areyouok_telegram.data import UserMetadata, async_database, operations as data_operations
 from areyouok_telegram.handlers.constants import MD2_PREFERENCES_DISPLAY_TEMPLATE
 from areyouok_telegram.llms import run_agent_with_tracking
-from areyouok_telegram.llms.agent_preferences import PreferencesAgentDependencies
-from areyouok_telegram.llms.agent_preferences import PreferencesUpdateResponse
-from areyouok_telegram.llms.agent_preferences import preferences_agent
+from areyouok_telegram.llms.agent_preferences import (
+    PreferencesAgentDependencies,
+    PreferencesUpdateResponse,
+    preferences_agent,
+)
 from areyouok_telegram.logging import traced
-from areyouok_telegram.utils.retry import db_retry
-from areyouok_telegram.utils.retry import telegram_call
+from areyouok_telegram.utils.retry import db_retry, telegram_call
 from areyouok_telegram.utils.text import escape_markdown_v2
 
 

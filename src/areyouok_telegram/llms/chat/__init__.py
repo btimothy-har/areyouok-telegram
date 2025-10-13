@@ -1,15 +1,21 @@
-from areyouok_telegram.llms.chat.agents.chat import AgentResponse as ChatAgentResponse
-from areyouok_telegram.llms.chat.agents.chat import ChatAgentDependencies
-from areyouok_telegram.llms.chat.agents.chat import chat_agent
-from areyouok_telegram.llms.chat.agents.onboarding import AgentResponse as OnboardingAgentResponse
-from areyouok_telegram.llms.chat.agents.onboarding import OnboardingAgentDependencies
-from areyouok_telegram.llms.chat.agents.onboarding import onboarding_agent
-from areyouok_telegram.llms.chat.responses import DoNothingResponse
-from areyouok_telegram.llms.chat.responses import KeyboardResponse
-from areyouok_telegram.llms.chat.responses import ReactionResponse
-from areyouok_telegram.llms.chat.responses import SwitchPersonalityResponse
-from areyouok_telegram.llms.chat.responses import TextResponse
-from areyouok_telegram.llms.chat.responses import TextWithButtonsResponse
+from areyouok_telegram.llms.chat.agents.chat import (
+    AgentResponse as ChatAgentResponse,
+    ChatAgentDependencies,
+    chat_agent,
+)
+from areyouok_telegram.llms.chat.agents.onboarding import (
+    AgentResponse as OnboardingAgentResponse,
+    OnboardingAgentDependencies,
+    onboarding_agent,
+)
+from areyouok_telegram.llms.chat.responses import (
+    DoNothingResponse,
+    KeyboardResponse,
+    ReactionResponse,
+    SwitchPersonalityResponse,
+    TextResponse,
+    TextWithButtonsResponse,
+)
 
 AgentResponse = ChatAgentResponse | OnboardingAgentResponse
 

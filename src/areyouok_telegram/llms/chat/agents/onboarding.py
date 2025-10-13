@@ -1,45 +1,38 @@
 """Onboarding agent for new user initialization."""
 
-from dataclasses import dataclass
-from dataclasses import field
-from datetime import UTC
-from datetime import datetime
-from typing import Any
-from typing import Literal
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from typing import Any, Literal
 
 import pydantic_ai
 from pydantic_ai import RunContext
 
-from areyouok_telegram.data import GuidedSessions
-from areyouok_telegram.data import Notifications
-from areyouok_telegram.data import UserMetadata
-from areyouok_telegram.data import async_database
-from areyouok_telegram.llms.agent_country_timezone import CountryTimezone
-from areyouok_telegram.llms.agent_country_timezone import country_timezone_agent
-from areyouok_telegram.llms.agent_preferences import PreferencesAgentDependencies
-from areyouok_telegram.llms.agent_preferences import PreferencesUpdateResponse
-from areyouok_telegram.llms.agent_preferences import preferences_agent
-from areyouok_telegram.llms.chat.agents.tools import search_history_impl
-from areyouok_telegram.llms.chat.agents.tools import update_memory_impl
-from areyouok_telegram.llms.chat.constants import MESSAGE_FOR_USER_PROMPT
-from areyouok_telegram.llms.chat.constants import ONBOARDING_FIELDS
-from areyouok_telegram.llms.chat.constants import ONBOARDING_OBJECTIVES
-from areyouok_telegram.llms.chat.constants import RESPONSE_PROMPT
-from areyouok_telegram.llms.chat.constants import RESTRICT_TEXT_RESPONSE
+from areyouok_telegram.data import GuidedSessions, Notifications, UserMetadata, async_database
+from areyouok_telegram.llms.agent_country_timezone import CountryTimezone, country_timezone_agent
+from areyouok_telegram.llms.agent_preferences import (
+    PreferencesAgentDependencies,
+    PreferencesUpdateResponse,
+    preferences_agent,
+)
+from areyouok_telegram.llms.chat.agents.tools import search_history_impl, update_memory_impl
+from areyouok_telegram.llms.chat.constants import (
+    MESSAGE_FOR_USER_PROMPT,
+    ONBOARDING_FIELDS,
+    ONBOARDING_OBJECTIVES,
+    RESPONSE_PROMPT,
+    RESTRICT_TEXT_RESPONSE,
+)
 from areyouok_telegram.llms.chat.prompt import BaseChatPromptTemplate
-from areyouok_telegram.llms.chat.responses import DoNothingResponse
-from areyouok_telegram.llms.chat.responses import KeyboardResponse
-from areyouok_telegram.llms.chat.responses import ReactionResponse
-from areyouok_telegram.llms.chat.responses import TextResponse
-from areyouok_telegram.llms.chat.utils import check_restricted_responses
-from areyouok_telegram.llms.chat.utils import check_special_instructions
-from areyouok_telegram.llms.chat.utils import validate_response_data
+from areyouok_telegram.llms.chat.responses import DoNothingResponse, KeyboardResponse, ReactionResponse, TextResponse
+from areyouok_telegram.llms.chat.utils import (
+    check_restricted_responses,
+    check_special_instructions,
+    validate_response_data,
+)
 from areyouok_telegram.llms.context_search import search_chat_context
-from areyouok_telegram.llms.exceptions import CompleteOnboardingError
-from areyouok_telegram.llms.exceptions import MetadataFieldUpdateError
+from areyouok_telegram.llms.exceptions import CompleteOnboardingError, MetadataFieldUpdateError
 from areyouok_telegram.llms.models import Gemini25Pro
-from areyouok_telegram.llms.utils import log_metadata_update_context
-from areyouok_telegram.llms.utils import run_agent_with_tracking
+from areyouok_telegram.llms.utils import log_metadata_update_context, run_agent_with_tracking
 
 AgentResponse = TextResponse | ReactionResponse | DoNothingResponse | KeyboardResponse
 

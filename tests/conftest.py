@@ -2,11 +2,8 @@
 # ruff: noqa: PLC0415
 
 import os
-from datetime import UTC
-from datetime import datetime
-from unittest.mock import AsyncMock
-from unittest.mock import MagicMock
-from unittest.mock import patch
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import telegram
@@ -105,8 +102,7 @@ def mock_messages_sqlalchemy():
 @pytest.fixture
 def mock_context_sqlalchemy():
     """Create a mock Context SQLAlchemy object."""
-    from areyouok_telegram.data.models.context import Context
-    from areyouok_telegram.data.models.context import ContextType
+    from areyouok_telegram.data.models.context import Context, ContextType
 
     mock_context = MagicMock(spec=Context)
     mock_context.type = ContextType.SESSION.value
@@ -244,8 +240,7 @@ def mock_chat_with_key():
 @pytest.fixture
 def mock_context_items():
     """Create mock context items for testing."""
-    from areyouok_telegram.data.models.context import Context
-    from areyouok_telegram.data.models.context import ContextType
+    from areyouok_telegram.data.models.context import Context, ContextType
 
     contexts = []
     for i in range(3):

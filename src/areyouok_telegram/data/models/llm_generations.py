@@ -3,25 +3,18 @@
 import dataclasses
 import hashlib
 import json
-from datetime import UTC
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import pydantic
 import pydantic_ai
-from sqlalchemy import Column
-from sqlalchemy import Integer
-from sqlalchemy import String
-from sqlalchemy import Text
-from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import TIMESTAMP
-from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy import Column, Integer, String, Text, select
+from sqlalchemy.dialects.postgresql import TIMESTAMP, insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from areyouok_telegram.config import ENV
 from areyouok_telegram.data import Base
-from areyouok_telegram.encryption.content import decrypt_content
-from areyouok_telegram.encryption.content import encrypt_content
+from areyouok_telegram.encryption.content import decrypt_content, encrypt_content
 from areyouok_telegram.logging import traced
 
 

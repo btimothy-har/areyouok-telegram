@@ -1,46 +1,45 @@
-from dataclasses import dataclass
-from dataclasses import field
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Literal
-from zoneinfo import ZoneInfo
-from zoneinfo import ZoneInfoNotFoundError
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import logfire
 import pydantic_ai
 from pydantic_ai import RunContext
 
 from areyouok_telegram.config import SIMULATION_MODE
-from areyouok_telegram.data import Notifications
-from areyouok_telegram.data import UserMetadata
-from areyouok_telegram.data import async_database
-from areyouok_telegram.data import operations as data_operations
+from areyouok_telegram.data import Notifications, UserMetadata, async_database, operations as data_operations
 from areyouok_telegram.llms.agent_anonymizer import anonymization_agent
-from areyouok_telegram.llms.chat.agents.tools import search_history_impl
-from areyouok_telegram.llms.chat.agents.tools import update_memory_impl
-from areyouok_telegram.llms.chat.constants import MESSAGE_FOR_USER_PROMPT
-from areyouok_telegram.llms.chat.constants import PERSONALITY_PROMPT
-from areyouok_telegram.llms.chat.constants import PERSONALITY_SWITCH_INSTRUCTIONS
-from areyouok_telegram.llms.chat.constants import RESPONSE_PROMPT
-from areyouok_telegram.llms.chat.constants import RESTRICT_KEYBOARD_RESPONSE
-from areyouok_telegram.llms.chat.constants import RESTRICT_PERSONALITY_SWITCH
-from areyouok_telegram.llms.chat.constants import RESTRICT_REACTION_RESPONSE
-from areyouok_telegram.llms.chat.constants import RESTRICT_TEXT_RESPONSE
-from areyouok_telegram.llms.chat.constants import USER_PREFERENCES
-from areyouok_telegram.llms.chat.constants import USER_PROFILE
+from areyouok_telegram.llms.chat.agents.tools import search_history_impl, update_memory_impl
+from areyouok_telegram.llms.chat.constants import (
+    MESSAGE_FOR_USER_PROMPT,
+    PERSONALITY_PROMPT,
+    PERSONALITY_SWITCH_INSTRUCTIONS,
+    RESPONSE_PROMPT,
+    RESTRICT_KEYBOARD_RESPONSE,
+    RESTRICT_PERSONALITY_SWITCH,
+    RESTRICT_REACTION_RESPONSE,
+    RESTRICT_TEXT_RESPONSE,
+    USER_PREFERENCES,
+    USER_PROFILE,
+)
 from areyouok_telegram.llms.chat.personalities import PersonalityTypes
 from areyouok_telegram.llms.chat.prompt import BaseChatPromptTemplate
-from areyouok_telegram.llms.chat.responses import DoNothingResponse
-from areyouok_telegram.llms.chat.responses import KeyboardResponse
-from areyouok_telegram.llms.chat.responses import ReactionResponse
-from areyouok_telegram.llms.chat.responses import SwitchPersonalityResponse
-from areyouok_telegram.llms.chat.responses import TextResponse
-from areyouok_telegram.llms.chat.utils import check_restricted_responses
-from areyouok_telegram.llms.chat.utils import check_special_instructions
-from areyouok_telegram.llms.chat.utils import validate_response_data
+from areyouok_telegram.llms.chat.responses import (
+    DoNothingResponse,
+    KeyboardResponse,
+    ReactionResponse,
+    SwitchPersonalityResponse,
+    TextResponse,
+)
+from areyouok_telegram.llms.chat.utils import (
+    check_restricted_responses,
+    check_special_instructions,
+    validate_response_data,
+)
 from areyouok_telegram.llms.exceptions import MetadataFieldUpdateError
 from areyouok_telegram.llms.models import Gemini25Pro
-from areyouok_telegram.llms.utils import log_metadata_update_context
-from areyouok_telegram.llms.utils import run_agent_with_tracking
+from areyouok_telegram.llms.utils import log_metadata_update_context, run_agent_with_tracking
 
 AgentResponse = TextResponse | ReactionResponse | SwitchPersonalityResponse | DoNothingResponse | KeyboardResponse
 

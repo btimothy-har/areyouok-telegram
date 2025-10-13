@@ -1,11 +1,7 @@
 """Tests for jobs/conversations.py."""
 
-from datetime import UTC
-from datetime import datetime
-from datetime import timedelta
-from unittest.mock import AsyncMock
-from unittest.mock import MagicMock
-from unittest.mock import patch
+from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import telegram
@@ -17,16 +13,20 @@ from areyouok_telegram.data.models.context import ContextType
 from areyouok_telegram.data.models.notifications import Notifications
 from areyouok_telegram.data.operations import InvalidChatError
 from areyouok_telegram.jobs.conversations import ConversationJob
-from areyouok_telegram.llms.chat import ChatAgentDependencies
-from areyouok_telegram.llms.chat import DoNothingResponse
-from areyouok_telegram.llms.chat import KeyboardResponse
-from areyouok_telegram.llms.chat import OnboardingAgentDependencies
-from areyouok_telegram.llms.chat import ReactionResponse
-from areyouok_telegram.llms.chat import SwitchPersonalityResponse
-from areyouok_telegram.llms.chat import TextResponse
-from areyouok_telegram.llms.chat import TextWithButtonsResponse
-from areyouok_telegram.llms.chat.responses import _KeyboardButton  # noqa: PLC2701
-from areyouok_telegram.llms.chat.responses import _MessageButton  # noqa: PLC2701
+from areyouok_telegram.llms.chat import (
+    ChatAgentDependencies,
+    DoNothingResponse,
+    KeyboardResponse,
+    OnboardingAgentDependencies,
+    ReactionResponse,
+    SwitchPersonalityResponse,
+    TextResponse,
+    TextWithButtonsResponse,
+)
+from areyouok_telegram.llms.chat.responses import (
+    _KeyboardButton,  # noqa: PLC2701
+    _MessageButton,  # noqa: PLC2701
+)
 
 
 class TestConversationJob:

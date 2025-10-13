@@ -1,19 +1,12 @@
 import base64
 import hashlib
-from datetime import UTC
-from datetime import datetime
+from datetime import UTC, datetime
 
 import magic
 from cachetools import TTLCache
 from cryptography.fernet import Fernet
-from sqlalchemy import Column
-from sqlalchemy import Integer
-from sqlalchemy import String
-from sqlalchemy import Text
-from sqlalchemy import select
-from sqlalchemy import update
-from sqlalchemy.dialects.postgresql import TIMESTAMP
-from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy import Column, Integer, String, Text, select, update
+from sqlalchemy.dialects.postgresql import TIMESTAMP, insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from areyouok_telegram.config import ENV

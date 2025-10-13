@@ -9,14 +9,12 @@ import pydantic_ai
 import pytest
 import telegram
 
-from areyouok_telegram.data.models.chat_event import SYSTEM_USER_ID
-from areyouok_telegram.data.models.chat_event import ChatEvent
+from areyouok_telegram.data.models.chat_event import SYSTEM_USER_ID, ChatEvent
 from areyouok_telegram.data.models.context import ContextType
 from areyouok_telegram.data.models.media import MediaFiles
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
-from helpers.chat_helpers import assert_json_content_structure
-from helpers.chat_helpers import assert_model_message_format
+from helpers.chat_helpers import assert_json_content_structure, assert_model_message_format
 
 
 class TestChatEvent:

@@ -1,7 +1,6 @@
 """Background job for indexing Context records into LlamaIndex vector store."""
 
-from datetime import UTC
-from datetime import datetime
+from datetime import UTC, datetime
 
 import logfire
 from llama_index.core import Document
@@ -9,16 +8,8 @@ from llama_index.core.ingestion import IngestionPipeline
 from llama_index.core.schema import TransformComponent
 from llama_index.embeddings.openai import OpenAIEmbedding
 
-from areyouok_telegram.config import OPENAI_API_KEY
-from areyouok_telegram.config import RAG_BATCH_SIZE
-from areyouok_telegram.config import RAG_EMBEDDING_DIMENSIONS
-from areyouok_telegram.config import RAG_EMBEDDING_MODEL
-from areyouok_telegram.data import Chats
-from areyouok_telegram.data import Context
-from areyouok_telegram.data import ContextType
-from areyouok_telegram.data import async_database
-from areyouok_telegram.data import context_doc_store
-from areyouok_telegram.data import context_vector_store
+from areyouok_telegram.config import OPENAI_API_KEY, RAG_BATCH_SIZE, RAG_EMBEDDING_DIMENSIONS, RAG_EMBEDDING_MODEL
+from areyouok_telegram.data import Chats, Context, ContextType, async_database, context_doc_store, context_vector_store
 from areyouok_telegram.jobs.base import BaseJob
 from areyouok_telegram.logging import traced
 from areyouok_telegram.utils.retry import db_retry

@@ -1,20 +1,14 @@
 """Tests for handlers/messages.py."""
 
 import asyncio
-from unittest.mock import AsyncMock
-from unittest.mock import MagicMock
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import telegram
 from telegram.ext import ContextTypes
 
-from areyouok_telegram.handlers.exceptions import NoEditedMessageError
-from areyouok_telegram.handlers.exceptions import NoMessageError
-from areyouok_telegram.handlers.exceptions import NoMessageReactionError
-from areyouok_telegram.handlers.messages import on_edit_message
-from areyouok_telegram.handlers.messages import on_message_react
-from areyouok_telegram.handlers.messages import on_new_message
+from areyouok_telegram.handlers.exceptions import NoEditedMessageError, NoMessageError, NoMessageReactionError
+from areyouok_telegram.handlers.messages import on_edit_message, on_message_react, on_new_message
 
 
 class TestOnNewMessage:

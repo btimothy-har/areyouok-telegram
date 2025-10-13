@@ -1,20 +1,20 @@
 """Tests for jobs/evaluations.py."""
 
-from unittest.mock import AsyncMock
-from unittest.mock import MagicMock
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pydantic_evals
 import pytest
 
 from areyouok_telegram.data.models.llm_generations import LLMGenerations
-from areyouok_telegram.jobs.evaluations import GEN_CACHE
-from areyouok_telegram.jobs.evaluations import EvaluationsJob
-from areyouok_telegram.jobs.evaluations import PersonalityAlignmentEvaluator
-from areyouok_telegram.jobs.evaluations import ReasoningAlignmentEvaluator
-from areyouok_telegram.jobs.evaluations import SycophancyEvaluator
-from areyouok_telegram.jobs.evaluations import eval_production_response
-from areyouok_telegram.jobs.evaluations import get_generation_by_id_cached
+from areyouok_telegram.jobs.evaluations import (
+    GEN_CACHE,
+    EvaluationsJob,
+    PersonalityAlignmentEvaluator,
+    ReasoningAlignmentEvaluator,
+    SycophancyEvaluator,
+    eval_production_response,
+    get_generation_by_id_cached,
+)
 
 
 class TestGetGenerationByIdCached:

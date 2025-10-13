@@ -11,11 +11,7 @@ import uvloop
 from genai_prices import UpdatePrices
 
 from areyouok_telegram.app import create_application
-from areyouok_telegram.config import CONTROLLED_ENV
-from areyouok_telegram.config import ENV
-from areyouok_telegram.config import GITHUB_REPOSITORY
-from areyouok_telegram.config import GITHUB_SHA
-from areyouok_telegram.config import LOGFIRE_TOKEN
+from areyouok_telegram.config import CONTROLLED_ENV, ENV, GITHUB_REPOSITORY, GITHUB_SHA, LOGFIRE_TOKEN
 from areyouok_telegram.setup import database_setup
 
 

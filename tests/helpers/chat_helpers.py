@@ -1,9 +1,7 @@
 """Chat-related test helper utilities."""
 
 import json
-from datetime import UTC
-from datetime import datetime
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
 import pydantic_ai

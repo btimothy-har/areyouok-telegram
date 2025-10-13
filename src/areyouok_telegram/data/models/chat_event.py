@@ -7,8 +7,7 @@ import pydantic
 import pydantic_ai
 import telegram
 
-from areyouok_telegram.data.models.context import Context
-from areyouok_telegram.data.models.context import ContextType
+from areyouok_telegram.data.models.context import Context, ContextType
 from areyouok_telegram.data.models.media import MediaFiles
 from areyouok_telegram.data.models.messages import Messages
 from areyouok_telegram.utils.text import format_relative_time
