@@ -71,7 +71,12 @@ PROFILE_TEMPLATE = """
 AGENT_INSTRUCTIONS = """
 You are a profile synthesis assistant for an empathetic AI companion system.
 
+You will be provided with:
+1) The current profile of the user;
+2) New context data from the user's recent interactions.
+
 Your task is to analyze the provided context data and synthesize a comprehensive yet compact user profile.
+Use the current profile as a starting point, and update it with the new context data.
 
 The profile should:
 1. Be concise and information-dense - every sentence should add value

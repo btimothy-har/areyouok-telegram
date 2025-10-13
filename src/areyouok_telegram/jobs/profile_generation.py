@@ -2,6 +2,7 @@
 
 from datetime import UTC
 from datetime import datetime
+from datetime import timedelta
 
 import logfire
 from sqlalchemy import select
@@ -23,6 +24,8 @@ from areyouok_telegram.utils.text import format_relative_time
 CONTEXT_TYPES_FOR_PROFILE = [
     ContextType.MEMORY.value,
     ContextType.SESSION.value,
+    ContextType.METADATA.value,
+    ContextType.PROFILE_UPDATE.value,
 ]
 
 FORMATTED_CONTEXT_TEMPLATE = """
@@ -34,7 +37,10 @@ FORMATTED_CONTEXT_TEMPLATE = """
 """
 
 USER_PROMPT_TEMPLATE = """Analyze the following context data and synthesize a user profile.
+
+<previous_profile>
 {previous_profile}
+</previous_profile>
 
 <contexts>
 {contexts}
@@ -126,10 +132,11 @@ class ProfileGenerationJob(BaseJob):
             )
             return False
 
-        # Fetch ALL MEMORY + SESSION contexts for this chat
-        all_contexts = await self._fetch_contexts(chat_id=chat_id)
+        # Fetch contexts within the last 30 days
+        thirty_days_ago = self._run_timestamp - timedelta(days=30)
+        all_contexts = await self._fetch_contexts(chat_id=chat_id, since=thirty_days_ago)
 
-        # Filter for new contexts created since cutoff
+        # Filter for new contexts created since last run
         new_contexts = [ctx for ctx in all_contexts if ctx.created_at >= cutoff_time]
 
         # If no new contexts, skip
@@ -181,20 +188,18 @@ class ProfileGenerationJob(BaseJob):
         contexts_xml = "\n".join(context_items)
 
         # Get the most recent PROFILE context to include in the prompt
-        previous_profile_text = ""
+        prev_content = "No previous profile available."
         async with async_database() as db_conn:
             previous_profile = await Context.get_latest_profile(db_conn, chat_id=chat_id)
             if previous_profile:
                 try:
                     prev_content = previous_profile.decrypt_content(chat_encryption_key=encryption_key)
-                    if prev_content:
-                        previous_profile_text = f"\n\nPrevious Profile:\n{prev_content}"
                 except Exception:
                     logfire.exception("Failed to decrypt previous profile")
 
         # Generate profile using the agent
         user_prompt = USER_PROMPT_TEMPLATE.format(
-            previous_profile=previous_profile_text,
+            previous_profile=prev_content,
             contexts=contexts_xml,
         )
 
@@ -262,11 +267,12 @@ class ProfileGenerationJob(BaseJob):
             return active_session is not None
 
     @db_retry()
-    async def _fetch_contexts(self, *, chat_id: str) -> list[Context]:
-        """Fetch all MEMORY + SESSION contexts for a specific chat.
+    async def _fetch_contexts(self, *, chat_id: str, since: datetime) -> list[Context]:
+        """Fetch MEMORY + SESSION contexts for a specific chat within a time window.
 
         Args:
             chat_id: The chat ID to fetch contexts for
+            since: Only fetch contexts created after this datetime
 
         Returns:
             List of Context objects ordered by created_at
@@ -276,6 +282,7 @@ class ProfileGenerationJob(BaseJob):
                 select(Context)
                 .where(Context.chat_id == chat_id)
                 .where(Context.type.in_(CONTEXT_TYPES_FOR_PROFILE))
+                .where(Context.created_at >= since)
                 .order_by(Context.created_at.asc())
             )
             result = await db_conn.execute(stmt)

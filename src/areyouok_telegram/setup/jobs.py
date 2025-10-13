@@ -49,6 +49,16 @@ async def start_context_embedding_job(ctx: Application | ContextTypes.DEFAULT_TY
     )
 
 
+async def start_profile_generation_job(ctx: Application | ContextTypes.DEFAULT_TYPE):
+    """Start the profile generation job."""
+    await schedule_job(
+        context=ctx,
+        job=ProfileGenerationJob(),
+        interval=timedelta(seconds=PROFILE_JOB_INTERVAL_SECS),
+        first=datetime.now(UTC) + timedelta(seconds=120),  # Start 2 minutes after startup
+    )
+
+
 async def start_data_warning_job(ctx: Application | ContextTypes.DEFAULT_TYPE):
     """Start the data logging warning job."""
     # Schedule the job to run every hour, starting at the next 15-minute mark
@@ -74,14 +84,4 @@ async def start_ping_job(ctx: Application | ContextTypes.DEFAULT_TYPE):
         job=PingJob(),
         interval=timedelta(hours=1),  # Run every hour
         first=next_hour,
-    )
-
-
-async def start_profile_generation_job(ctx: Application | ContextTypes.DEFAULT_TYPE):
-    """Start the profile generation job."""
-    await schedule_job(
-        context=ctx,
-        job=ProfileGenerationJob(),
-        interval=timedelta(seconds=PROFILE_JOB_INTERVAL_SECS),
-        first=datetime.now(UTC) + timedelta(seconds=120),  # Start 2 minutes after startup
     )
