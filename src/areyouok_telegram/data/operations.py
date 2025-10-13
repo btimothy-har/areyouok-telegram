@@ -9,6 +9,7 @@ from areyouok_telegram.data.connection import async_database
 from areyouok_telegram.data.models.chat_event import SYSTEM_USER_ID
 from areyouok_telegram.data.models.chats import Chats
 from areyouok_telegram.data.models.command_usage import CommandUsage
+from areyouok_telegram.data.models.context import Context
 from areyouok_telegram.data.models.guided_sessions import GuidedSessions
 from areyouok_telegram.data.models.guided_sessions import GuidedSessionType
 from areyouok_telegram.data.models.llm_generations import LLMGenerations
@@ -18,6 +19,19 @@ from areyouok_telegram.data.models.sessions import Sessions
 from areyouok_telegram.utils.media import extract_media_from_telegram_message
 from areyouok_telegram.utils.media import handle_unsupported_media
 from areyouok_telegram.utils.retry import db_retry
+
+
+class InvalidChatError(Exception):
+    """Raised when no chat is found for a given chat_id.
+
+    This typically occurs when trying to access a chat that doesn't exist
+    in the database or hasn't been initialized yet.
+    """
+
+    def __init__(self, chat_id: str):
+        """Initialize the exception with the chat_id that caused the error."""
+        super().__init__(f"No chat found for chat_id {chat_id}.")
+        self.chat_id = chat_id
 
 
 class MissingGuidedSessionTypeError(RuntimeError):
@@ -160,6 +174,48 @@ async def close_chat_session(*, chat_session: Sessions):
             db_conn,
             timestamp=close_ts,
         )
+
+
+@db_retry()
+async def get_chat_encryption_key(*, chat_id: str) -> str:
+    """Get the encryption key for a chat.
+
+    Args:
+        chat_id: Chat identifier
+
+    Returns:
+        str: The decrypted Fernet encryption key
+
+    Raises:
+        InvalidChatError: If no chat is found
+    """
+    async with async_database() as db_conn:
+        chat_obj = await Chats.get_by_id(db_conn, chat_id=chat_id)
+
+        if not chat_obj:
+            raise InvalidChatError(chat_id)
+
+        return chat_obj.retrieve_key()
+
+
+@db_retry()
+async def get_latest_profile(*, chat_id: str) -> Context | None:
+    """Get the raw latest profile context for a chat.
+
+    This DOES NOT decrypt the content. Callers are responsible for decrypting the content if they need it.
+
+    Args:
+        chat_id: Chat identifier
+
+    Returns:
+        Context | None: Profile context, or None if no profile exists
+    """
+    async with async_database() as db_conn:
+        profile_context = await Context.get_latest_profile(db_conn, chat_id=chat_id)
+        if profile_context:
+            return profile_context
+
+    return None
 
 
 @db_retry()

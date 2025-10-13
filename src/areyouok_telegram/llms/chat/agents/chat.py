@@ -5,6 +5,7 @@ from typing import Literal
 from zoneinfo import ZoneInfo
 from zoneinfo import ZoneInfoNotFoundError
 
+import logfire
 import pydantic_ai
 from pydantic_ai import RunContext
 
@@ -12,6 +13,7 @@ from areyouok_telegram.config import SIMULATION_MODE
 from areyouok_telegram.data import Notifications
 from areyouok_telegram.data import UserMetadata
 from areyouok_telegram.data import async_database
+from areyouok_telegram.data import operations as data_operations
 from areyouok_telegram.llms.agent_anonymizer import anonymization_agent
 from areyouok_telegram.llms.chat.agents.tools import search_history_impl
 from areyouok_telegram.llms.chat.agents.tools import update_memory_impl
@@ -24,6 +26,7 @@ from areyouok_telegram.llms.chat.constants import RESTRICT_PERSONALITY_SWITCH
 from areyouok_telegram.llms.chat.constants import RESTRICT_REACTION_RESPONSE
 from areyouok_telegram.llms.chat.constants import RESTRICT_TEXT_RESPONSE
 from areyouok_telegram.llms.chat.constants import USER_PREFERENCES
+from areyouok_telegram.llms.chat.constants import USER_PROFILE
 from areyouok_telegram.llms.chat.personalities import PersonalityTypes
 from areyouok_telegram.llms.chat.prompt import BaseChatPromptTemplate
 from areyouok_telegram.llms.chat.responses import DoNothingResponse
@@ -117,6 +120,27 @@ async def instructions_with_personality_switch(ctx: pydantic_ai.RunContext[ChatA
     else:
         user_preferences_text = ""
 
+    # Fetch the latest profile for this chat
+    user_profile_text = ""
+    if not SIMULATION_MODE:
+        try:
+            user_profile = await data_operations.get_latest_profile(chat_id=ctx.deps.tg_chat_id)
+            if user_profile:
+                encryption_key = await data_operations.get_chat_encryption_key(chat_id=ctx.deps.tg_chat_id)
+                user_profile.decrypt_content(chat_encryption_key=encryption_key)
+
+        except Exception as e:
+            # If profile fetch fails, just continue without it
+            logfire.warning(
+                "Failed to fetch user profile, continuing without it",
+                chat_id=ctx.deps.tg_chat_id,
+                error=str(e),
+                _exc_info=True,
+            )
+        else:
+            if user_profile:
+                user_profile_text = USER_PROFILE.format(user_profile=user_profile.content)
+
     prompt = BaseChatPromptTemplate(
         response=RESPONSE_PROMPT.format(response_restrictions=restrict_response_text),
         message=MESSAGE_FOR_USER_PROMPT.format(important_message_for_user=ctx.deps.notification.content)
@@ -129,6 +153,7 @@ async def instructions_with_personality_switch(ctx: pydantic_ai.RunContext[ChatA
             else None,
         ),
         user_preferences=user_preferences_text,
+        user_profile=user_profile_text,
     )
     return prompt.as_prompt_string()
 

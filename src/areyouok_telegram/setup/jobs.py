@@ -6,6 +6,7 @@ import logfire
 from telegram.ext import Application
 from telegram.ext import ContextTypes
 
+from areyouok_telegram.config import PROFILE_JOB_INTERVAL_SECS
 from areyouok_telegram.config import RAG_JOB_INTERVAL_SECS
 from areyouok_telegram.data import Sessions
 from areyouok_telegram.data import async_database
@@ -13,6 +14,7 @@ from areyouok_telegram.jobs import ContextEmbeddingJob
 from areyouok_telegram.jobs import ConversationJob
 from areyouok_telegram.jobs import DataLogWarningJob
 from areyouok_telegram.jobs import PingJob
+from areyouok_telegram.jobs import ProfileGenerationJob
 from areyouok_telegram.jobs import schedule_job
 
 
@@ -44,6 +46,16 @@ async def start_context_embedding_job(ctx: Application | ContextTypes.DEFAULT_TY
         job=ContextEmbeddingJob(),
         interval=timedelta(seconds=RAG_JOB_INTERVAL_SECS),
         first=datetime.now(UTC) + timedelta(seconds=60),
+    )
+
+
+async def start_profile_generation_job(ctx: Application | ContextTypes.DEFAULT_TYPE):
+    """Start the profile generation job."""
+    await schedule_job(
+        context=ctx,
+        job=ProfileGenerationJob(),
+        interval=timedelta(seconds=PROFILE_JOB_INTERVAL_SECS),
+        first=datetime.now(UTC) + timedelta(seconds=300),  # Start 5 minutes after startup
     )
 
 

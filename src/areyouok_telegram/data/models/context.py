@@ -28,6 +28,8 @@ class ContextType(Enum):
     METADATA = "metadata"
     ACTION = "action"
     MEMORY = "memory"
+    PROFILE = "profile"
+    PROFILE_UPDATE = "profile_update"
 
 
 VALID_CONTEXT_TYPES = [context_type.value for context_type in ContextType]
@@ -46,7 +48,7 @@ class Context(Base):
     context_key = Column(String, nullable=False, unique=True)
 
     chat_id = Column(String, nullable=False)
-    session_id = Column(String, nullable=False)
+    session_id = Column(String, nullable=True)
     type = Column(String, nullable=False)
     encrypted_content = Column(String, nullable=False)
 
@@ -270,3 +272,30 @@ class Context(Base):
         )
         result = await db_conn.execute(stmt)
         return list(result.scalars().all())
+
+    @classmethod
+    @traced(extract_args=["chat_id"])
+    async def get_latest_profile(
+        cls,
+        db_conn: AsyncSession,
+        *,
+        chat_id: str,
+    ) -> "Context | None":
+        """Retrieve the most recent PROFILE context for a chat.
+
+        Args:
+            db_conn: Database session
+            chat_id: The chat ID to fetch profile for
+
+        Returns:
+            Most recent Profile Context or None
+        """
+        stmt = (
+            select(cls)
+            .where(cls.chat_id == chat_id)
+            .where(cls.type == ContextType.PROFILE.value)
+            .order_by(cls.created_at.desc())
+            .limit(1)
+        )
+        result = await db_conn.execute(stmt)
+        return result.scalars().first()

@@ -10,7 +10,6 @@ import telegram
 
 from areyouok_telegram.config import CHAT_SESSION_TIMEOUT_MINS
 from areyouok_telegram.data import ChatEvent
-from areyouok_telegram.data import Chats
 from areyouok_telegram.data import Context
 from areyouok_telegram.data import ContextType
 from areyouok_telegram.data import GuidedSessionType
@@ -24,7 +23,6 @@ from areyouok_telegram.data import async_database
 from areyouok_telegram.data import operations as data_operations
 from areyouok_telegram.jobs.base import BaseJob
 from areyouok_telegram.jobs.evaluations import EvaluationsJob
-from areyouok_telegram.jobs.exceptions import UserNotFoundForChatError
 from areyouok_telegram.jobs.scheduler import run_job_once
 from areyouok_telegram.llms import run_agent_with_tracking
 from areyouok_telegram.llms.chat import AgentResponse
@@ -75,8 +73,8 @@ class ConversationJob(BaseJob):
 
         # Get user encryption key - this will fail for non-private chats
         try:
-            self.chat_encryption_key = await self._get_chat_encryption_key()
-        except UserNotFoundForChatError:
+            self.chat_encryption_key = await data_operations.get_chat_encryption_key(chat_id=self.chat_id)
+        except data_operations.InvalidChatError:
             with logfire.span(
                 f"Stopping conversation job for chat {self.chat_id} - no user found.",
                 _span_name="ConversationJob._run.no_user",
@@ -512,25 +510,6 @@ class ConversationJob(BaseJob):
                 return None
 
             return chat_obj
-
-    @db_retry()
-    async def _get_chat_encryption_key(self) -> str:
-        """
-        Get the chat encryption key for the chat.
-
-        Returns:
-            The chat's encryption key
-
-        Raises:
-            UserNotFoundForChatError: If no chat is found (will be renamed to ChatNotFoundError later)
-        """
-        async with async_database() as db_conn:
-            chat_obj = await Chats.get_by_id(db_conn, chat_id=self.chat_id)
-
-            if not chat_obj:
-                raise UserNotFoundForChatError(self.chat_id)
-
-            return chat_obj.retrieve_key()
 
     @db_retry()
     async def _log_bot_activity(self) -> None:

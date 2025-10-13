@@ -15,8 +15,8 @@ from telegram.ext import ContextTypes
 from areyouok_telegram.data.models.chat_event import ChatEvent
 from areyouok_telegram.data.models.context import ContextType
 from areyouok_telegram.data.models.notifications import Notifications
+from areyouok_telegram.data.operations import InvalidChatError
 from areyouok_telegram.jobs.conversations import ConversationJob
-from areyouok_telegram.jobs.exceptions import UserNotFoundForChatError
 from areyouok_telegram.llms.chat import ChatAgentDependencies
 from areyouok_telegram.llms.chat import DoNothingResponse
 from areyouok_telegram.llms.chat import KeyboardResponse
@@ -55,7 +55,7 @@ class TestConversationJob:
 
         with (
             patch(
-                "areyouok_telegram.jobs.conversations.ConversationJob._get_chat_encryption_key",
+                "areyouok_telegram.data.operations.get_chat_encryption_key",
                 new=AsyncMock(return_value="test_encryption_key"),
             ),
             patch(
@@ -86,7 +86,7 @@ class TestConversationJob:
 
         with (
             patch(
-                "areyouok_telegram.jobs.conversations.ConversationJob._get_chat_encryption_key",
+                "areyouok_telegram.data.operations.get_chat_encryption_key",
                 new=AsyncMock(return_value="test_encryption_key"),
             ),
             patch(
@@ -357,13 +357,13 @@ class TestConversationJob:
 
     @pytest.mark.asyncio
     async def test_run_user_not_found_error(self):
-        """Test _run when UserNotFoundForChatError is raised."""
+        """Test _run when InvalidChatError is raised."""
         job = ConversationJob("123")
 
         with (
             patch(
-                "areyouok_telegram.jobs.conversations.ConversationJob._get_chat_encryption_key",
-                new=AsyncMock(side_effect=UserNotFoundForChatError("No user found")),
+                "areyouok_telegram.data.operations.get_chat_encryption_key",
+                new=AsyncMock(side_effect=InvalidChatError("No user found")),
             ),
             patch.object(job, "stop", new=AsyncMock()) as mock_stop,
             patch("areyouok_telegram.jobs.conversations.logfire.span") as mock_span,
@@ -380,7 +380,7 @@ class TestConversationJob:
 
         with (
             patch(
-                "areyouok_telegram.jobs.conversations.ConversationJob._get_chat_encryption_key",
+                "areyouok_telegram.data.operations.get_chat_encryption_key",
                 new=AsyncMock(return_value="test_encryption_key"),
             ),
             patch("areyouok_telegram.data.operations.get_or_create_active_session", new=AsyncMock(return_value=None)),
@@ -411,7 +411,7 @@ class TestConversationJob:
 
         with (
             patch(
-                "areyouok_telegram.jobs.conversations.ConversationJob._get_chat_encryption_key",
+                "areyouok_telegram.data.operations.get_chat_encryption_key",
                 new=AsyncMock(return_value="test_encryption_key"),
             ),
             patch(
@@ -472,7 +472,7 @@ class TestConversationJob:
 
         with (
             patch(
-                "areyouok_telegram.jobs.conversations.ConversationJob._get_chat_encryption_key",
+                "areyouok_telegram.data.operations.get_chat_encryption_key",
                 new=AsyncMock(return_value="test_encryption_key"),
             ),
             patch(
@@ -609,7 +609,10 @@ class TestConversationJob:
         mock_message = MagicMock()
 
         with (
-            patch.object(job, "_get_chat_encryption_key", new=AsyncMock(return_value="test_encryption_key")),
+            patch(
+                "areyouok_telegram.data.operations.get_chat_encryption_key",
+                new=AsyncMock(return_value="test_encryption_key"),
+            ),
             patch(
                 "areyouok_telegram.data.operations.get_or_create_active_session",
                 new=AsyncMock(return_value=mock_session),
@@ -1099,7 +1102,10 @@ class TestConversationJob:
         )
 
         with (
-            patch.object(job, "_get_chat_encryption_key", new=AsyncMock(return_value="test_encryption_key")),
+            patch(
+                "areyouok_telegram.data.operations.get_chat_encryption_key",
+                new=AsyncMock(return_value="test_encryption_key"),
+            ),
             patch(
                 "areyouok_telegram.data.operations.get_or_create_active_session",
                 new=AsyncMock(return_value=mock_session),
@@ -1150,7 +1156,10 @@ class TestConversationJob:
         )
 
         with (
-            patch.object(job, "_get_chat_encryption_key", new=AsyncMock(return_value="test_encryption_key")),
+            patch(
+                "areyouok_telegram.data.operations.get_chat_encryption_key",
+                new=AsyncMock(return_value="test_encryption_key"),
+            ),
             patch(
                 "areyouok_telegram.data.operations.get_or_create_active_session",
                 new=AsyncMock(return_value=mock_session),
@@ -1486,7 +1495,7 @@ class TestConversationJob:
 
         with (
             patch(
-                "areyouok_telegram.jobs.conversations.ConversationJob._get_chat_encryption_key",
+                "areyouok_telegram.data.operations.get_chat_encryption_key",
                 new=AsyncMock(return_value="test_encryption_key"),
             ),
             patch(
@@ -1732,30 +1741,6 @@ class TestConversationJob:
         assert result is None
 
     @pytest.mark.asyncio
-    @pytest.mark.usefixtures("mock_db_session")
-    async def test_get_chat_encryption_key_success(self):
-        """Test _get_chat_encryption_key returns encryption key."""
-        job = ConversationJob("123")
-
-        mock_chat = MagicMock()
-        mock_chat.retrieve_key.return_value = "test_encryption_key"
-
-        with patch("areyouok_telegram.jobs.conversations.Chats.get_by_id", new=AsyncMock(return_value=mock_chat)):
-            result = await job._get_chat_encryption_key()
-
-        assert result == "test_encryption_key"
-
-    @pytest.mark.asyncio
-    @pytest.mark.usefixtures("mock_db_session")
-    async def test_get_chat_encryption_key_not_found(self):
-        """Test _get_chat_encryption_key raises UserNotFoundForChatError when no chat found."""
-        job = ConversationJob("123")
-
-        with patch("areyouok_telegram.jobs.conversations.Chats.get_by_id", new=AsyncMock(return_value=None)):
-            with pytest.raises(UserNotFoundForChatError):
-                await job._get_chat_encryption_key()
-
-    @pytest.mark.asyncio
     async def test_get_chat_context_filtering_and_sorting(self, frozen_time):
         """Test _get_chat_context filtering and sorting logic."""
         job = ConversationJob("123")
@@ -1987,7 +1972,10 @@ class TestConversationJob:
         mock_context = MagicMock()  # Existing context
 
         with (
-            patch.object(job, "_get_chat_encryption_key", new=AsyncMock(return_value="test_encryption_key")),
+            patch(
+                "areyouok_telegram.data.operations.get_chat_encryption_key",
+                new=AsyncMock(return_value="test_encryption_key"),
+            ),
             patch(
                 "areyouok_telegram.data.operations.get_or_create_active_session",
                 new=AsyncMock(return_value=mock_session),
@@ -2017,7 +2005,10 @@ class TestConversationJob:
         mock_session.session_id = "session123"
 
         with (
-            patch.object(job, "_get_chat_encryption_key", new=AsyncMock(return_value="test_encryption_key")),
+            patch(
+                "areyouok_telegram.data.operations.get_chat_encryption_key",
+                new=AsyncMock(return_value="test_encryption_key"),
+            ),
             patch(
                 "areyouok_telegram.data.operations.get_or_create_active_session",
                 new=AsyncMock(return_value=mock_session),
@@ -2051,7 +2042,10 @@ class TestConversationJob:
         message_history = [MagicMock() for _ in range(7)]
 
         with (
-            patch.object(job, "_get_chat_encryption_key", new=AsyncMock(return_value="test_encryption_key")),
+            patch(
+                "areyouok_telegram.data.operations.get_chat_encryption_key",
+                new=AsyncMock(return_value="test_encryption_key"),
+            ),
             patch(
                 "areyouok_telegram.data.operations.get_or_create_active_session",
                 new=AsyncMock(return_value=mock_session),
@@ -2109,7 +2103,10 @@ class TestConversationJob:
                 return updated_session
 
         with (
-            patch.object(job, "_get_chat_encryption_key", new=AsyncMock(return_value="test_encryption_key")),
+            patch(
+                "areyouok_telegram.data.operations.get_chat_encryption_key",
+                new=AsyncMock(return_value="test_encryption_key"),
+            ),
             patch(
                 "areyouok_telegram.data.operations.get_or_create_active_session", side_effect=side_effect_get_session
             ),
@@ -2169,9 +2166,6 @@ class TestConversationJob:
         with patch("areyouok_telegram.jobs.conversations.async_database", side_effect=Exception("Database error")):
             with pytest.raises(Exception, match="Database error"):
                 await job._get_user_metadata()
-
-            with pytest.raises(Exception, match="Database error"):
-                await job._get_chat_encryption_key()
 
             with pytest.raises(Exception, match="Database error"):
                 await job._get_next_notification()

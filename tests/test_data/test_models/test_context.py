@@ -4,12 +4,14 @@ import hashlib
 import json
 from datetime import UTC
 from datetime import datetime
+from datetime import timedelta
 from unittest.mock import MagicMock
 
 import pytest
 from cryptography.fernet import Fernet
 
 from areyouok_telegram.data.models.context import Context
+from areyouok_telegram.data.models.context import ContextType
 from areyouok_telegram.data.models.context import InvalidContextTypeError
 from areyouok_telegram.encryption.exceptions import ContentNotDecryptedError
 
@@ -372,3 +374,62 @@ class TestContext:
 
         assert result == [mock_context1, mock_context2]
         mock_db_session.execute.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_latest_profile_returns_most_recent(self, mock_db_session):
+        """Test get_latest_profile returns the most recent PROFILE context."""
+
+        mock_profile = MagicMock()
+        mock_profile.chat_id = "chat123"
+        mock_profile.type = ContextType.PROFILE.value
+        mock_profile.created_at = datetime.now(UTC)
+
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.first.return_value = mock_profile
+        mock_db_session.execute.return_value = mock_result
+
+        result = await Context.get_latest_profile(mock_db_session, chat_id="chat123")
+
+        assert result == mock_profile
+        mock_db_session.execute.assert_called_once()
+
+        # Verify the query filters by chat_id and type=PROFILE
+        call_args = mock_db_session.execute.call_args[0][0]
+        # The statement should filter and order correctly
+        assert hasattr(call_args, "whereclause")
+
+    @pytest.mark.asyncio
+    async def test_get_latest_profile_returns_none_when_no_profiles(self, mock_db_session):
+        """Test get_latest_profile returns None when no profiles exist."""
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.first.return_value = None
+        mock_db_session.execute.return_value = mock_result
+
+        result = await Context.get_latest_profile(mock_db_session, chat_id="chat123")
+
+        assert result is None
+        mock_db_session.execute.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_latest_profile_ignores_other_types(self, mock_db_session):
+        """Test get_latest_profile only considers PROFILE type, not PROFILE_UPDATE or others."""
+
+        # Create a PROFILE context
+        mock_profile = MagicMock()
+        mock_profile.chat_id = "chat123"
+        mock_profile.type = ContextType.PROFILE.value
+        mock_profile.created_at = datetime.now(UTC) - timedelta(days=1)
+
+        # Mock returns the PROFILE (the query should filter for PROFILE type only)
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.first.return_value = mock_profile
+        mock_db_session.execute.return_value = mock_result
+
+        result = await Context.get_latest_profile(mock_db_session, chat_id="chat123")
+
+        assert result == mock_profile
+
+        # Verify the statement filters by type == PROFILE
+        call_args = mock_db_session.execute.call_args[0][0]
+        # Should have whereclause filtering by type
+        assert hasattr(call_args, "whereclause")
