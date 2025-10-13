@@ -127,11 +127,9 @@ The user may use the `/settings` command to update their preferred name, country
 """
 
 USER_PROFILE = """
-The following is a synthesized profile of the user based on your interactions:
+The following is a synthesized profile of the user based on their interactions with the assistant:
 
 {user_profile}
-
-This profile is automatically updated as you learn more about the user.
 """
 
 ONBOARDING_OBJECTIVES = """
