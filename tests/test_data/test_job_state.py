@@ -97,41 +97,52 @@ class TestJobState:
         assert key1 != key2
 
     @pytest.mark.asyncio
-    async def test_update_state_merges_with_existing(self, mock_db_session):
-        """Test that update_state merges new values with existing state (lines 118-138)."""
-        job_name = "test_job"
-        existing_state = {"last_run_time": "2025-01-01T00:00:00", "count": 100}
-        new_values = {"count": 200, "new_field": "new_value"}
+    async def test_save_state_upserts_new_record(self, mock_db_session):
+        """Test that save_state creates a new record when it doesn't exist (upsert insert case)."""
+        job_name = "new_job"
+        state_data = {"field1": "value1", "field2": "value2"}
 
-        # Mock get_state to return existing state
+        # Mock the database execute call for INSERT
         mock_result = MagicMock()
         mock_job_state = MagicMock(spec=JobState)
-        mock_job_state.state_data = existing_state
-        mock_result.scalar_one_or_none = MagicMock(return_value=mock_job_state)
+        mock_job_state.job_name = job_name
+        mock_job_state.state_data = state_data
+        mock_result.scalar_one = MagicMock(return_value=mock_job_state)
         mock_db_session.execute = AsyncMock(return_value=mock_result)
 
-        # Update state
-        await JobState.update_state(mock_db_session, job_name=job_name, **new_values)
+        # Save state (will insert since it doesn't exist)
+        job_state = await JobState.save_state(mock_db_session, job_name=job_name, state_data=state_data)
 
-        # Verify execute was called (twice: once for get_state, once for update)
-        assert mock_db_session.execute.call_count == 2
+        # Verify execute was called once (upsert statement)
+        mock_db_session.execute.assert_called_once()
+
+        # Verify the returned object
+        assert job_state.job_name == job_name
+        assert job_state.state_data == state_data
 
     @pytest.mark.asyncio
-    async def test_update_state_creates_empty_when_missing(self, mock_db_session):
-        """Test that update_state creates empty dict when no prior state exists (line 123-124)."""
-        job_name = "new_job"
-        new_values = {"field1": "value1"}
+    async def test_save_state_upserts_existing_record(self, mock_db_session):
+        """Test that save_state updates an existing record (upsert update case)."""
+        job_name = "existing_job"
+        new_state_data = {"last_run_time": "2025-01-02T00:00:00", "count": 200, "new_field": "new_value"}
 
-        # Mock get_state to return None (no existing state)
+        # Mock the database execute call for UPDATE (on conflict)
         mock_result = MagicMock()
-        mock_result.scalar_one_or_none = MagicMock(return_value=None)
+        mock_job_state = MagicMock(spec=JobState)
+        mock_job_state.job_name = job_name
+        mock_job_state.state_data = new_state_data
+        mock_result.scalar_one = MagicMock(return_value=mock_job_state)
         mock_db_session.execute = AsyncMock(return_value=mock_result)
 
-        # Update state
-        await JobState.update_state(mock_db_session, job_name=job_name, **new_values)
+        # Save state (will update since it exists)
+        job_state = await JobState.save_state(mock_db_session, job_name=job_name, state_data=new_state_data)
 
-        # Verify execute was called (twice: once for get_state, once for update)
-        assert mock_db_session.execute.call_count == 2
+        # Verify execute was called once (upsert statement handles both insert and update)
+        mock_db_session.execute.assert_called_once()
+
+        # Verify the returned object has the new state
+        assert job_state.job_name == job_name
+        assert job_state.state_data == new_state_data
 
     @pytest.mark.asyncio
     async def test_delete_state_removes_existing(self, mock_db_session):

@@ -12,7 +12,6 @@ from sqlalchemy.dialects.postgresql import TIMESTAMP
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import select
-from sqlalchemy.sql import update
 
 from areyouok_telegram.config import ENV
 from areyouok_telegram.data import Base
@@ -104,38 +103,6 @@ class JobState(Base):
 
         result = await db_conn.execute(stmt)
         return result.scalar_one()
-
-    @classmethod
-    @traced(extract_args=["job_name"])
-    async def update_state(cls, db_conn: AsyncSession, *, job_name: str, **kwargs) -> None:
-        """Update specific fields in the job state.
-
-        Args:
-            db_conn: Database connection
-            job_name: Unique name of the job
-            **kwargs: Key-value pairs to update in state_data
-        """
-        job_key = cls.generate_job_key(job_name)
-        now = datetime.now(UTC)
-
-        # Get current state
-        current_state = await cls.get_state(db_conn, job_name=job_name)
-        if current_state is None:
-            current_state = {}
-
-        # Merge with new values
-        updated_state = {**current_state, **kwargs}
-
-        stmt = (
-            update(cls)
-            .where(cls.job_key == job_key)
-            .values(
-                state_data=updated_state,
-                updated_at=now,
-            )
-        )
-
-        await db_conn.execute(stmt)
 
     @classmethod
     @traced(extract_args=["job_name"])
