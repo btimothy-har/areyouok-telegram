@@ -14,7 +14,9 @@ from areyouok_telegram.llms.agent_anonymizer import anonymization_agent
 from areyouok_telegram.llms.chat.agents.chat import ChatAgentDependencies
 from areyouok_telegram.llms.chat.agents.chat import get_current_time
 from areyouok_telegram.llms.chat.agents.chat import instructions_with_personality_switch
+from areyouok_telegram.llms.chat.agents.chat import search_history
 from areyouok_telegram.llms.chat.agents.chat import update_communication_style
+from areyouok_telegram.llms.chat.agents.chat import update_memory
 from areyouok_telegram.llms.chat.personalities import PersonalityTypes
 from areyouok_telegram.llms.exceptions import MetadataFieldUpdateError
 
@@ -557,3 +559,63 @@ class TestGetCurrentTimeTool:
 
             # Verify error message is returned
             assert result == "The user's timezone is not set or invalid, so the current time cannot be determined."
+
+
+class TestMemoryTools:
+    """Test memory and search history tools."""
+
+    @pytest.fixture
+    def mock_run_context(self):
+        """Create mock pydantic_ai run context for memory tools."""
+        context = MagicMock()
+        context.deps = ChatAgentDependencies(
+            tg_bot_id="bot123",
+            tg_chat_id="chat456",
+            tg_session_id="session789",
+        )
+        return context
+
+    @pytest.mark.asyncio
+    @patch("areyouok_telegram.llms.chat.agents.chat.update_memory_impl")
+    async def test_update_memory_tool(self, mock_impl, mock_run_context):
+        """Test update_memory tool calls shared implementation."""
+        mock_impl.return_value = "Information committed to memory: User loves hiking"
+
+        result = await update_memory(mock_run_context, "User loves hiking")
+
+        assert result == "Information committed to memory: User loves hiking"
+        mock_impl.assert_called_once_with(mock_run_context.deps, "User loves hiking")
+
+    @pytest.mark.asyncio
+    @patch("areyouok_telegram.llms.chat.agents.chat.update_memory_impl")
+    async def test_update_memory_with_complex_content(self, mock_impl, mock_run_context):
+        """Test update_memory with complex memory content."""
+        complex_memory = "User mentioned they have anxiety about public speaking and prefer written communication"
+        mock_impl.return_value = f"Information committed to memory: {complex_memory}"
+
+        result = await update_memory(mock_run_context, complex_memory)
+
+        mock_impl.assert_called_once()
+        assert complex_memory in result
+
+    @pytest.mark.asyncio
+    @patch("areyouok_telegram.llms.chat.agents.chat.search_history_impl")
+    async def test_search_history_tool(self, mock_impl, mock_run_context):
+        """Test search_history tool calls shared implementation."""
+        mock_impl.return_value = "**Answer:** User felt anxious about work deadlines"
+
+        result = await search_history(mock_run_context, "times user felt anxious")
+
+        assert result == "**Answer:** User felt anxious about work deadlines"
+        mock_impl.assert_called_once_with(mock_run_context.deps, "times user felt anxious")
+
+    @pytest.mark.asyncio
+    @patch("areyouok_telegram.llms.chat.agents.chat.search_history_impl")
+    async def test_search_history_with_no_results(self, mock_impl, mock_run_context):
+        """Test search_history when no results found."""
+        mock_impl.return_value = "No relevant past conversations found for: test query"
+
+        result = await search_history(mock_run_context, "test query")
+
+        assert "No relevant past conversations found" in result
+        mock_impl.assert_called_once()
