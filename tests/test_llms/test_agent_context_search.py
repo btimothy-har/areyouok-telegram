@@ -1,17 +1,12 @@
 """Tests for context search agent and utilities."""
 
-from datetime import UTC
-from datetime import datetime
-from unittest.mock import AsyncMock
-from unittest.mock import MagicMock
-from unittest.mock import patch
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pydantic
 import pytest
 
-from areyouok_telegram.llms.context_search import ContextSearchResponse
-from areyouok_telegram.llms.context_search import retrieve_relevant_contexts
-from areyouok_telegram.llms.context_search import search_chat_context
+from areyouok_telegram.llms.context_search import ContextSearchResponse, retrieve_relevant_contexts, search_chat_context
 
 
 @pytest.fixture

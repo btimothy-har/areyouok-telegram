@@ -1,15 +1,10 @@
 """Database model for persisting job execution state across restarts."""
 
 import hashlib
-from datetime import UTC
-from datetime import datetime
+from datetime import UTC, datetime
 
-from sqlalchemy import Column
-from sqlalchemy import Integer
-from sqlalchemy import String
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.dialects.postgresql import TIMESTAMP
-from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy import Column, Integer, String
+from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP, insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import select
 

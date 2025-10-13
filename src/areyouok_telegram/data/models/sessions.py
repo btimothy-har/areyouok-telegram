@@ -1,17 +1,12 @@
 import hashlib
 from datetime import datetime
 
-from sqlalchemy import Column
-from sqlalchemy import Integer
-from sqlalchemy import String
-from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import TIMESTAMP
-from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy import Column, Integer, String, select
+from sqlalchemy.dialects.postgresql import TIMESTAMP, insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from areyouok_telegram.config import ENV
-from areyouok_telegram.data import Base
-from areyouok_telegram.data import Messages
+from areyouok_telegram.data import Base, Messages
 from areyouok_telegram.logging import traced
 
 

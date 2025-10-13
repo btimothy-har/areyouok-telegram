@@ -1,21 +1,18 @@
-from datetime import UTC
-from datetime import datetime
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
 import logfire
-from telegram.ext import Application
-from telegram.ext import ContextTypes
+from telegram.ext import Application, ContextTypes
 
-from areyouok_telegram.config import PROFILE_JOB_INTERVAL_SECS
-from areyouok_telegram.config import RAG_JOB_INTERVAL_SECS
-from areyouok_telegram.data import Sessions
-from areyouok_telegram.data import async_database
-from areyouok_telegram.jobs import ContextEmbeddingJob
-from areyouok_telegram.jobs import ConversationJob
-from areyouok_telegram.jobs import DataLogWarningJob
-from areyouok_telegram.jobs import PingJob
-from areyouok_telegram.jobs import ProfileGenerationJob
-from areyouok_telegram.jobs import schedule_job
+from areyouok_telegram.config import PROFILE_JOB_INTERVAL_SECS, RAG_JOB_INTERVAL_SECS
+from areyouok_telegram.data import Sessions, async_database
+from areyouok_telegram.jobs import (
+    ContextEmbeddingJob,
+    ConversationJob,
+    DataLogWarningJob,
+    PingJob,
+    ProfileGenerationJob,
+    schedule_job,
+)
 
 
 async def restore_active_sessions(ctx: Application | ContextTypes.DEFAULT_TYPE):

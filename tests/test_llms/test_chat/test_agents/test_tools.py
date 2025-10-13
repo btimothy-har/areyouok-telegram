@@ -1,15 +1,11 @@
 """Tests for shared chat agent tools."""
 
-from unittest.mock import AsyncMock
-from unittest.mock import MagicMock
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from areyouok_telegram.llms.chat.agents.tools import search_history_impl
-from areyouok_telegram.llms.chat.agents.tools import update_memory_impl
-from areyouok_telegram.llms.exceptions import ContextSearchError
-from areyouok_telegram.llms.exceptions import MemoryUpdateError
+from areyouok_telegram.llms.chat.agents.tools import search_history_impl, update_memory_impl
+from areyouok_telegram.llms.exceptions import ContextSearchError, MemoryUpdateError
 
 
 class MockDependencies:

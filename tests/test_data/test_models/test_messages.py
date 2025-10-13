@@ -2,18 +2,14 @@
 
 import hashlib
 import json
-from datetime import UTC
-from datetime import datetime
-from unittest.mock import AsyncMock
-from unittest.mock import MagicMock
-from unittest.mock import patch
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import telegram
 from cryptography.fernet import Fernet
 
-from areyouok_telegram.data.models.messages import InvalidMessageTypeError
-from areyouok_telegram.data.models.messages import Messages
+from areyouok_telegram.data.models.messages import InvalidMessageTypeError, Messages
 from areyouok_telegram.encryption.exceptions import ContentNotDecryptedError
 
 

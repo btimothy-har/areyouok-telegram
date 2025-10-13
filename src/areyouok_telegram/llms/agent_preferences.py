@@ -5,8 +5,7 @@ import pydantic
 import pydantic_ai
 from pydantic_ai import RunContext
 
-from areyouok_telegram.data import UserMetadata
-from areyouok_telegram.data import async_database
+from areyouok_telegram.data import UserMetadata, async_database
 from areyouok_telegram.llms.exceptions import MetadataFieldUpdateError
 from areyouok_telegram.llms.models import GPT5Mini
 from areyouok_telegram.llms.utils import log_metadata_update_context

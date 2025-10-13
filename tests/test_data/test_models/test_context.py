@@ -2,17 +2,13 @@
 
 import hashlib
 import json
-from datetime import UTC
-from datetime import datetime
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
 import pytest
 from cryptography.fernet import Fernet
 
-from areyouok_telegram.data.models.context import Context
-from areyouok_telegram.data.models.context import ContextType
-from areyouok_telegram.data.models.context import InvalidContextTypeError
+from areyouok_telegram.data.models.context import Context, ContextType, InvalidContextTypeError
 from areyouok_telegram.encryption.exceptions import ContentNotDecryptedError
 
 

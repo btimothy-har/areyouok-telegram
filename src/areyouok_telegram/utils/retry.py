@@ -3,16 +3,10 @@ from datetime import timedelta
 
 import logfire
 import telegram.error
-from asyncpg.exceptions import ConnectionDoesNotExistError
-from asyncpg.exceptions import InterfaceError
+from asyncpg.exceptions import ConnectionDoesNotExistError, InterfaceError
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm.exc import DetachedInstanceError
-from tenacity import retry
-from tenacity import retry_if_exception_type
-from tenacity import stop_after_attempt
-from tenacity import wait_chain
-from tenacity import wait_fixed
-from tenacity import wait_random_exponential
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_chain, wait_fixed, wait_random_exponential
 
 
 def db_retry():

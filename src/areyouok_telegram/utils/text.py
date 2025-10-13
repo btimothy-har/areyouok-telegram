@@ -1,5 +1,4 @@
-from datetime import UTC
-from datetime import datetime
+from datetime import UTC, datetime
 from importlib.metadata import version
 
 import httpx

@@ -4,14 +4,16 @@ import pydantic
 import pytest
 from telegram.constants import ReactionEmoji
 
-from areyouok_telegram.llms.chat.responses import DoNothingResponse
-from areyouok_telegram.llms.chat.responses import KeyboardResponse
-from areyouok_telegram.llms.chat.responses import ReactionResponse
-from areyouok_telegram.llms.chat.responses import SwitchPersonalityResponse
-from areyouok_telegram.llms.chat.responses import TextResponse
-from areyouok_telegram.llms.chat.responses import TextWithButtonsResponse
-from areyouok_telegram.llms.chat.responses import _KeyboardButton
-from areyouok_telegram.llms.chat.responses import _MessageButton
+from areyouok_telegram.llms.chat.responses import (
+    DoNothingResponse,
+    KeyboardResponse,
+    ReactionResponse,
+    SwitchPersonalityResponse,
+    TextResponse,
+    TextWithButtonsResponse,
+    _KeyboardButton,
+    _MessageButton,
+)
 
 
 class TestMessageButton:

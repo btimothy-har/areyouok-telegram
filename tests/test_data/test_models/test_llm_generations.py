@@ -2,19 +2,14 @@
 
 import dataclasses
 import json
-from datetime import UTC
-from datetime import datetime
-from unittest.mock import AsyncMock
-from unittest.mock import MagicMock
-from unittest.mock import Mock
-from unittest.mock import patch
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pydantic
 import pydantic_ai
 import pytest
 
-from areyouok_telegram.data.models.llm_generations import LLMGenerations
-from areyouok_telegram.data.models.llm_generations import serialize_object
+from areyouok_telegram.data.models.llm_generations import LLMGenerations, serialize_object
 
 
 def create_mock_output(response_type: str, data: dict):

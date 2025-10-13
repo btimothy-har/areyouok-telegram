@@ -5,12 +5,9 @@ import hashlib
 from unittest.mock import patch
 
 import pytest
-from cryptography.fernet import Fernet
-from cryptography.fernet import InvalidToken
+from cryptography.fernet import Fernet, InvalidToken
 
-from areyouok_telegram.encryption.chat_keys import decrypt_chat_key
-from areyouok_telegram.encryption.chat_keys import encrypt_chat_key
-from areyouok_telegram.encryption.chat_keys import generate_chat_key
+from areyouok_telegram.encryption.chat_keys import decrypt_chat_key, encrypt_chat_key, generate_chat_key
 
 
 class TestChatKeys:

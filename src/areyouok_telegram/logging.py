@@ -1,7 +1,5 @@
-from collections.abc import Callable
-from collections.abc import Iterable
-from typing import Any
-from typing import TypeVar
+from collections.abc import Callable, Iterable
+from typing import Any, TypeVar
 
 import logfire
 

@@ -1,8 +1,6 @@
 """Test module for LLM utilities."""
 
-from unittest.mock import AsyncMock
-from unittest.mock import MagicMock
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import anthropic
 import google.genai.errors
@@ -11,8 +9,7 @@ import openai
 import pydantic_ai
 import pytest
 
-from areyouok_telegram.llms.utils import run_agent_with_tracking
-from areyouok_telegram.llms.utils import should_retry_llm_error
+from areyouok_telegram.llms.utils import run_agent_with_tracking, should_retry_llm_error
 
 
 class TestRunAgentWithTracking:

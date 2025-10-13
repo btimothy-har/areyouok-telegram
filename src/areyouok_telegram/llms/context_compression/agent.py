@@ -1,13 +1,15 @@
 import pydantic
 import pydantic_ai
 
-from areyouok_telegram.llms.context_compression.constants import CONNECTION_DESC
-from areyouok_telegram.llms.context_compression.constants import CONTEXT_TEMPLATE
-from areyouok_telegram.llms.context_compression.constants import CONVERSATION_DESC
-from areyouok_telegram.llms.context_compression.constants import FEEDBACK_DESC
-from areyouok_telegram.llms.context_compression.constants import LIFE_SITUATION_DESC
-from areyouok_telegram.llms.context_compression.constants import PERSONAL_CONTEXT_DESC
-from areyouok_telegram.llms.context_compression.constants import PRACTICAL_MATTERS_DESC
+from areyouok_telegram.llms.context_compression.constants import (
+    CONNECTION_DESC,
+    CONTEXT_TEMPLATE,
+    CONVERSATION_DESC,
+    FEEDBACK_DESC,
+    LIFE_SITUATION_DESC,
+    PERSONAL_CONTEXT_DESC,
+    PRACTICAL_MATTERS_DESC,
+)
 from areyouok_telegram.llms.models import Gemini25Flash
 
 

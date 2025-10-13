@@ -1,16 +1,16 @@
 """Tests for handlers/preferences.py."""
 
-from unittest.mock import AsyncMock
-from unittest.mock import MagicMock
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import telegram
 from telegram.ext import ContextTypes
 
-from areyouok_telegram.handlers.commands.preferences import _construct_user_preferences_response
-from areyouok_telegram.handlers.commands.preferences import _update_user_metadata_field
-from areyouok_telegram.handlers.commands.preferences import on_preferences_command
+from areyouok_telegram.handlers.commands.preferences import (
+    _construct_user_preferences_response,
+    _update_user_metadata_field,
+    on_preferences_command,
+)
 
 
 class TestOnPreferencesCommand:

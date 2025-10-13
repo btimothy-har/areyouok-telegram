@@ -1,7 +1,6 @@
 """Pydantic models for personality definitions."""
 
-from pydantic import BaseModel
-from pydantic import Field
+from pydantic import BaseModel, Field
 
 PERSONALITY_TEMPLATE = """
 <core_personality>

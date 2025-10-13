@@ -3,11 +3,9 @@
 from unittest.mock import patch
 
 import pytest
-from cryptography.fernet import Fernet
-from cryptography.fernet import InvalidToken
+from cryptography.fernet import Fernet, InvalidToken
 
-from areyouok_telegram.encryption.content import decrypt_content
-from areyouok_telegram.encryption.content import encrypt_content
+from areyouok_telegram.encryption.content import decrypt_content, encrypt_content
 
 
 class TestEncryptContent:

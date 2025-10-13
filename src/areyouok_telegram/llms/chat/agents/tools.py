@@ -2,13 +2,9 @@
 
 from typing import Protocol
 
-from areyouok_telegram.data import Chats
-from areyouok_telegram.data import Context
-from areyouok_telegram.data import ContextType
-from areyouok_telegram.data import async_database
+from areyouok_telegram.data import Chats, Context, ContextType, async_database
 from areyouok_telegram.llms.context_search import search_chat_context
-from areyouok_telegram.llms.exceptions import ContextSearchError
-from areyouok_telegram.llms.exceptions import MemoryUpdateError
+from areyouok_telegram.llms.exceptions import ContextSearchError, MemoryUpdateError
 
 
 class ChatDependencies(Protocol):

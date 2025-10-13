@@ -65,8 +65,7 @@ def simulate(character, personality, turns, no_switch):
 
     # Import simulator components
     from rich.console import Console
-    from simulator.simulate import ConversationEvaluator
-    from simulator.simulate import ConversationSimulator
+    from simulator.simulate import ConversationEvaluator, ConversationSimulator
 
     console = Console()
 

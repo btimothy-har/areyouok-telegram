@@ -4,9 +4,7 @@ from llama_index.vector_stores.postgres import PGVectorStore
 from sqlalchemy import make_url
 from sqlalchemy.orm import declarative_base
 
-from areyouok_telegram.config import ENV
-from areyouok_telegram.config import PG_CONNECTION_STRING
-from areyouok_telegram.config import RAG_EMBEDDING_DIMENSIONS
+from areyouok_telegram.config import ENV, PG_CONNECTION_STRING, RAG_EMBEDDING_DIMENSIONS
 
 Base = declarative_base()
 

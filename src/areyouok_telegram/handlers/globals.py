@@ -1,22 +1,14 @@
-from datetime import UTC
-from datetime import datetime
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
 import logfire
 import telegram
 from telegram.constants import ChatType
 from telegram.ext import ContextTypes
 
-from areyouok_telegram.data import Chats
-from areyouok_telegram.data import Context
-from areyouok_telegram.data import Users
-from areyouok_telegram.data import async_database
-from areyouok_telegram.data import operations as data_operations
+from areyouok_telegram.data import Chats, Context, Users, async_database, operations as data_operations
 from areyouok_telegram.handlers.exceptions import InvalidCallbackDataError
-from areyouok_telegram.jobs import ConversationJob
-from areyouok_telegram.jobs import schedule_job
-from areyouok_telegram.utils.retry import db_retry
-from areyouok_telegram.utils.retry import telegram_call
+from areyouok_telegram.jobs import ConversationJob, schedule_job
+from areyouok_telegram.utils.retry import db_retry, telegram_call
 
 
 async def on_new_update(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):

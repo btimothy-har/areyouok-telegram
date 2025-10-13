@@ -2,11 +2,8 @@
 
 import pytest
 from pydantic_ai import models
-from pydantic_ai.messages import ModelMessage
-from pydantic_ai.messages import ModelResponse
-from pydantic_ai.messages import TextPart
-from pydantic_ai.models.function import AgentInfo
-from pydantic_ai.models.function import FunctionModel
+from pydantic_ai.messages import ModelMessage, ModelResponse, TextPart
+from pydantic_ai.models.function import AgentInfo, FunctionModel
 from pydantic_ai.models.test import TestModel
 
 from areyouok_telegram.llms.agent_anonymizer import anonymization_agent

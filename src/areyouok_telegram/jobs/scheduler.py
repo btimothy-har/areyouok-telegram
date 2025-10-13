@@ -1,11 +1,9 @@
-from datetime import datetime
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import logfire
 from telegram.ext import ContextTypes
 
-from areyouok_telegram.jobs.base import JOB_LOCK
-from areyouok_telegram.jobs.base import BaseJob
+from areyouok_telegram.jobs.base import JOB_LOCK, BaseJob
 
 
 async def schedule_job(

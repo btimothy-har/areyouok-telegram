@@ -1,9 +1,6 @@
 import logfire
 
-from areyouok_telegram.config import CONTROLLED_ENV
-from areyouok_telegram.config import ENV
-from areyouok_telegram.config import LOG_CHAT_MESSAGES
-from areyouok_telegram.config import USER_ENCRYPTION_SALT
+from areyouok_telegram.config import CONTROLLED_ENV, ENV, LOG_CHAT_MESSAGES, USER_ENCRYPTION_SALT
 from areyouok_telegram.jobs.base import BaseJob
 
 

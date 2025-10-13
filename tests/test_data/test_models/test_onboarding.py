@@ -1,19 +1,18 @@
 """Tests for OnboardingSession model."""
 
 import hashlib
-from datetime import UTC
-from datetime import datetime
-from datetime import timedelta
-from unittest.mock import MagicMock
-from unittest.mock import patch
+from datetime import UTC, datetime, timedelta
+from unittest.mock import MagicMock, patch
 
 import pytest
 from freezegun import freeze_time
 
-from areyouok_telegram.data.models.guided_sessions import VALID_GUIDED_SESSION_STATES
-from areyouok_telegram.data.models.guided_sessions import GuidedSessions
-from areyouok_telegram.data.models.guided_sessions import GuidedSessionState
-from areyouok_telegram.data.models.guided_sessions import GuidedSessionType
+from areyouok_telegram.data.models.guided_sessions import (
+    VALID_GUIDED_SESSION_STATES,
+    GuidedSessions,
+    GuidedSessionState,
+    GuidedSessionType,
+)
 
 # Backward compatibility aliases
 VALID_ONBOARDING_STATES = VALID_GUIDED_SESSION_STATES

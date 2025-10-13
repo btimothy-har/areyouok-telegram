@@ -1,5 +1,4 @@
-from datetime import UTC
-from datetime import datetime
+from datetime import UTC, datetime
 
 import logfire
 import pydantic_ai
@@ -10,14 +9,12 @@ from areyouok_telegram.data.models.chat_event import SYSTEM_USER_ID
 from areyouok_telegram.data.models.chats import Chats
 from areyouok_telegram.data.models.command_usage import CommandUsage
 from areyouok_telegram.data.models.context import Context
-from areyouok_telegram.data.models.guided_sessions import GuidedSessions
-from areyouok_telegram.data.models.guided_sessions import GuidedSessionType
+from areyouok_telegram.data.models.guided_sessions import GuidedSessions, GuidedSessionType
 from areyouok_telegram.data.models.llm_generations import LLMGenerations
 from areyouok_telegram.data.models.llm_usage import LLMUsage
 from areyouok_telegram.data.models.messages import Messages
 from areyouok_telegram.data.models.sessions import Sessions
-from areyouok_telegram.utils.media import extract_media_from_telegram_message
-from areyouok_telegram.utils.media import handle_unsupported_media
+from areyouok_telegram.utils.media import extract_media_from_telegram_message, handle_unsupported_media
 from areyouok_telegram.utils.retry import db_retry
 
 

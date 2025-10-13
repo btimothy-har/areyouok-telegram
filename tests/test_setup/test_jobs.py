@@ -1,18 +1,13 @@
 """Tests for setup/jobs.py."""
 
 from datetime import timedelta
-from unittest.mock import AsyncMock
-from unittest.mock import MagicMock
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from telegram.ext import Application
 
-from areyouok_telegram.jobs import DataLogWarningJob
-from areyouok_telegram.jobs import PingJob
-from areyouok_telegram.setup.jobs import restore_active_sessions
-from areyouok_telegram.setup.jobs import start_data_warning_job
-from areyouok_telegram.setup.jobs import start_ping_job
+from areyouok_telegram.jobs import DataLogWarningJob, PingJob
+from areyouok_telegram.setup.jobs import restore_active_sessions, start_data_warning_job, start_ping_job
 
 
 class TestRestoreActiveSessions:

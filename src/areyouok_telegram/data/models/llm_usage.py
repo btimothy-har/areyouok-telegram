@@ -1,18 +1,10 @@
-from datetime import UTC
-from datetime import datetime
+from datetime import UTC, datetime
 
 import logfire
 import pydantic_ai
-from genai_prices import Usage
-from genai_prices import calc_price
-from sqlalchemy import Column
-from sqlalchemy import Float
-from sqlalchemy import Index
-from sqlalchemy import Integer
-from sqlalchemy import String
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.dialects.postgresql import TIMESTAMP
-from sqlalchemy.dialects.postgresql import insert as pg_insert
+from genai_prices import Usage, calc_price
+from sqlalchemy import Column, Float, Index, Integer, String
+from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP, insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from areyouok_telegram.config import ENV

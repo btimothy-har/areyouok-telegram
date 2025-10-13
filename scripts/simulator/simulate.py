@@ -6,8 +6,7 @@ import sys
 import uuid
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import UTC
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 # Add scripts directory to Python path for simulator imports
@@ -17,20 +16,18 @@ sys.path.insert(0, str(scripts_dir))
 
 import pydantic_ai
 import pydantic_evals
-from genai_prices import Usage
-from genai_prices import calc_price
+from genai_prices import Usage, calc_price
 from rich.console import Console
-from simulator.evaluators import ConversationEmpathyEvaluator
-from simulator.evaluators import ConversationMotivatingEvaluator
-from simulator.evaluators import ConversationPersonalityAlignmentEvaluator
-from simulator.evaluators import ConversationReasoningAlignmentEvaluator
-from simulator.evaluators import ConversationSycophancyEvaluator
+from simulator.evaluators import (
+    ConversationEmpathyEvaluator,
+    ConversationMotivatingEvaluator,
+    ConversationPersonalityAlignmentEvaluator,
+    ConversationReasoningAlignmentEvaluator,
+    ConversationSycophancyEvaluator,
+)
 from simulator.messages import ConversationMessage
 
-from areyouok_telegram.llms.chat import AgentResponse
-from areyouok_telegram.llms.chat import ChatAgentDependencies
-from areyouok_telegram.llms.chat import SwitchPersonalityResponse
-from areyouok_telegram.llms.chat import chat_agent
+from areyouok_telegram.llms.chat import AgentResponse, ChatAgentDependencies, SwitchPersonalityResponse, chat_agent
 from areyouok_telegram.llms.models import Gemini25Flash
 
 console = Console()

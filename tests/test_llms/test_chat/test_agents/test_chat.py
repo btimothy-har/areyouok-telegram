@@ -1,9 +1,6 @@
 """Tests for chat agents."""
 
-from unittest.mock import ANY
-from unittest.mock import AsyncMock
-from unittest.mock import MagicMock
-from unittest.mock import patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
 from freezegun import freeze_time
@@ -11,12 +8,14 @@ from freezegun import freeze_time
 from areyouok_telegram.data.models.notifications import Notifications
 from areyouok_telegram.data.models.user_metadata import UserMetadata
 from areyouok_telegram.llms.agent_anonymizer import anonymization_agent
-from areyouok_telegram.llms.chat.agents.chat import ChatAgentDependencies
-from areyouok_telegram.llms.chat.agents.chat import get_current_time
-from areyouok_telegram.llms.chat.agents.chat import instructions_with_personality_switch
-from areyouok_telegram.llms.chat.agents.chat import search_history
-from areyouok_telegram.llms.chat.agents.chat import update_communication_style
-from areyouok_telegram.llms.chat.agents.chat import update_memory
+from areyouok_telegram.llms.chat.agents.chat import (
+    ChatAgentDependencies,
+    get_current_time,
+    instructions_with_personality_switch,
+    search_history,
+    update_communication_style,
+    update_memory,
+)
 from areyouok_telegram.llms.chat.personalities import PersonalityTypes
 from areyouok_telegram.llms.exceptions import MetadataFieldUpdateError
 

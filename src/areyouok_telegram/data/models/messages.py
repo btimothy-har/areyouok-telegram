@@ -2,19 +2,13 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import UTC
-from datetime import datetime
+from datetime import UTC, datetime
 
 import telegram
 from cachetools import TTLCache
 from cryptography.fernet import Fernet
-from sqlalchemy import Column
-from sqlalchemy import Integer
-from sqlalchemy import String
-from sqlalchemy import Text
-from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import TIMESTAMP
-from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy import Column, Integer, String, Text, select
+from sqlalchemy.dialects.postgresql import TIMESTAMP, insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from areyouok_telegram.config import ENV

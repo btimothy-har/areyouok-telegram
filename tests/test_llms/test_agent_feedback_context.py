@@ -1,7 +1,6 @@
 """Tests for llms/agent_feedback_context.py."""
 
-from areyouok_telegram.llms.agent_feedback_context import ContextAgentDependencies
-from areyouok_telegram.llms.agent_feedback_context import feedback_context_agent
+from areyouok_telegram.llms.agent_feedback_context import ContextAgentDependencies, feedback_context_agent
 
 
 class TestFeedbackContextAgent:

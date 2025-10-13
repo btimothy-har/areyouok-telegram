@@ -1,20 +1,15 @@
 from typing import Literal
 
 import pydantic_ai
-from google.genai.types import HarmBlockThreshold
-from google.genai.types import HarmCategory
+from google.genai.types import HarmBlockThreshold, HarmCategory
 from pydantic_ai.models.anthropic import AnthropicModel
 from pydantic_ai.models.fallback import FallbackModel
-from pydantic_ai.models.google import GoogleModel
-from pydantic_ai.models.google import GoogleModelSettings
+from pydantic_ai.models.google import GoogleModel, GoogleModelSettings
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.google import GoogleProvider
 from pydantic_ai.providers.openrouter import OpenRouterProvider
 
-from areyouok_telegram.config import ANTHROPIC_API_KEY
-from areyouok_telegram.config import GEMINI_API_KEY
-from areyouok_telegram.config import OPENAI_API_KEY
-from areyouok_telegram.config import OPENROUTER_API_KEY
+from areyouok_telegram.config import ANTHROPIC_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, OPENROUTER_API_KEY
 from areyouok_telegram.llms.exceptions import ModelConfigurationError
 from areyouok_telegram.llms.utils import should_retry_llm_error
 
