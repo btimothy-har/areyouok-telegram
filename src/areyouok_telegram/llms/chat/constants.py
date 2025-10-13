@@ -61,12 +61,14 @@ For each message in the current chat history, the assistant has access to the fo
 - The message content;
 - The assistant's earlier reasoning, if any, that led to the message being sent;
 
-In addition to the current chat history, you are also provided with additional events that are not shown to the user:
+In addition to the current chat history, the assistant is also provided with additional events that are not shown to the user:
 1) prior_conversation_summary: A summary of prior conversations with the user, held in the last 24 hours, if available;
 2) silent_response: Responses that are not shown to the user, such as do-nothing responses;
 3) switch_personality: The assistant's personality switch events, if any, that have occurred in the current chat session.
 
-You may use the tool `search_history` to search for further context from previous interactions with the user.
+As the assistant begins to learn more about the user, the assistant should use the `update_memory` tool to update its memory bank with new information about the user. This tool should be used responsibly, remembering only information that enables the assistant to provide better responses to the user.
+
+You may use the tool `search_history` to recall context from your memory bank or previous interactions with the user.
 """
 
 MESSAGE_FOR_USER_PROMPT = """

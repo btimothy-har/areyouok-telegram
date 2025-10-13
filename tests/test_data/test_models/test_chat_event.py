@@ -98,6 +98,19 @@ class TestChatEvent:
 
         assert result.event_type == "switch_personality"
 
+    def test_from_context_memory(self, mock_context_sqlalchemy):
+        """Test creating ChatEvent from MEMORY context."""
+        mock_context_sqlalchemy.type = ContextType.MEMORY.value
+        mock_context_sqlalchemy.content = "User loves hiking"
+
+        result = ChatEvent.from_context(mock_context_sqlalchemy)
+
+        assert result.event_type == "user_memory"
+        assert result.event_data["content"] == "User loves hiking"
+        assert result.user_id is None
+        assert result.attachments == []
+        assert result.timestamp == mock_context_sqlalchemy.created_at
+
     def test_to_model_message_user(self, mock_chat_event_message, frozen_time):
         """Test converting user ChatEvent to model message."""
         chat_event = mock_chat_event_message(text="User input", user_id="user123")

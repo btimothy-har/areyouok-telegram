@@ -19,6 +19,8 @@ from areyouok_telegram.llms.agent_country_timezone import country_timezone_agent
 from areyouok_telegram.llms.agent_preferences import PreferencesAgentDependencies
 from areyouok_telegram.llms.agent_preferences import PreferencesUpdateResponse
 from areyouok_telegram.llms.agent_preferences import preferences_agent
+from areyouok_telegram.llms.chat.agents.tools import search_history_impl
+from areyouok_telegram.llms.chat.agents.tools import update_memory_impl
 from areyouok_telegram.llms.chat.constants import MESSAGE_FOR_USER_PROMPT
 from areyouok_telegram.llms.chat.constants import ONBOARDING_FIELDS
 from areyouok_telegram.llms.chat.constants import ONBOARDING_OBJECTIVES
@@ -274,6 +276,40 @@ async def search_past_conversations(
         return f"Unable to search past conversations: {str(e)}"
     else:
         return result
+
+
+@onboarding_agent.tool
+async def update_memory(
+    ctx: RunContext[OnboardingAgentDependencies],
+    information_to_remember: str,
+) -> str:
+    """
+    Update your memory bank with new information about the user that you want to remember.
+    """
+    return await update_memory_impl(ctx.deps, information_to_remember)
+
+
+@onboarding_agent.tool
+async def search_history(
+    ctx: RunContext[OnboardingAgentDependencies],
+    search_query: str,
+) -> str:
+    """
+    Search history for relevant context using semantic search.
+
+    Use this when you need to recall specific topics, emotions, events, or patterns
+    from previous conversations with this user. This helps maintain continuity and
+    shows the user you remember important details from your relationship.
+
+    Args:
+        search_query: Natural language query describing what to search for. The query should be
+        phrased from a 3rd-party perspective and pronoun-neutral.
+                    (e.g., "times user felt anxious about work", "user's goals")
+
+    Returns:
+        A formatted response with direct answer and context summary, or error message
+    """
+    return await search_history_impl(ctx.deps, search_query)
 
 
 @onboarding_agent.output_validator

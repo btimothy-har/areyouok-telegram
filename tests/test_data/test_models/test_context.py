@@ -68,6 +68,30 @@ class TestContext:
         assert exc_info.value.context_type == "invalid_type"
         mock_db_session.execute.assert_not_called()
 
+    @pytest.mark.asyncio
+    async def test_new_memory_type(self, mock_db_session):
+        """Test inserting a context with MEMORY type."""
+        mock_result = MagicMock()
+        mock_db_session.execute.return_value = mock_result
+        user_key = Fernet.generate_key().decode("utf-8")
+
+        await Context.new(
+            mock_db_session,
+            chat_encryption_key=user_key,
+            chat_id="123",
+            session_id="session_456",
+            ctype="memory",
+            content="User prefers morning check-ins",
+        )
+
+        # Verify execute was called
+        mock_db_session.execute.assert_called_once()
+
+        # Verify the statement is for context table
+        call_args = mock_db_session.execute.call_args[0][0]
+        assert hasattr(call_args, "table")
+        assert call_args.table.name == "context"
+
     def test_encrypt_content(self):
         """Test content encryption."""
         content = "test content to encrypt"
