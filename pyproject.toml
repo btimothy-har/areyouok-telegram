@@ -115,7 +115,8 @@ addopts = [
 asyncio_mode = "auto"
 pythonpath = ["src"]
 filterwarnings = [
-    # Suppress pydub's audioop deprecation - will be fixed by library before Python 3.13
+    # Suppress third-party deprecation warnings we can't control
+    "ignore::DeprecationWarning:llama_index.*:",
     "ignore::DeprecationWarning:pydub.*:",
 ]
 
