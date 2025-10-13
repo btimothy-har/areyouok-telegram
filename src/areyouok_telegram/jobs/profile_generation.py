@@ -217,14 +217,14 @@ class ProfileGenerationJob(BaseJob):
                 content=profile.content,
             )
 
-            # Also save the profile_update as a separate context
+            # Also save the change_log as a separate context
             await Context.new(
                 db_conn,
                 chat_encryption_key=encryption_key,
                 chat_id=chat_id,
                 session_id=None,
                 ctype=ContextType.PROFILE_UPDATE.value,
-                content=profile.profile_update,
+                content=profile.change_log,
             )
 
         logfire.info(

@@ -3,42 +3,46 @@ import pydantic_ai
 
 from areyouok_telegram.llms.models import Gemini25Flash
 from areyouok_telegram.llms.profile_generation.constants import AGENT_INSTRUCTIONS
+from areyouok_telegram.llms.profile_generation.constants import CHANGE_LOG_DESC
 from areyouok_telegram.llms.profile_generation.constants import EMOTIONAL_PATTERNS_DESC
-from areyouok_telegram.llms.profile_generation.constants import IDENTITY_DESC
-from areyouok_telegram.llms.profile_generation.constants import KEY_INFORMATION_DESC
-from areyouok_telegram.llms.profile_generation.constants import PREFERENCES_DESC
+from areyouok_telegram.llms.profile_generation.constants import GOALS_OUTCOMES_DESC
+from areyouok_telegram.llms.profile_generation.constants import IDENTITY_MARKERS_DESC
 from areyouok_telegram.llms.profile_generation.constants import PROFILE_TEMPLATE
-from areyouok_telegram.llms.profile_generation.constants import PROFILE_UPDATE_DESC
+from areyouok_telegram.llms.profile_generation.constants import SAFETY_PLAN_DESC
+from areyouok_telegram.llms.profile_generation.constants import STRENGTHS_VALUES_DESC
 
 
 class ProfileTemplate(pydantic.BaseModel):
     """Model for user profile synthesis."""
 
-    identity: str = pydantic.Field(
-        description=IDENTITY_DESC,
+    identity_markers: str = pydantic.Field(
+        description=IDENTITY_MARKERS_DESC,
     )
-    preferences: str = pydantic.Field(
-        description=PREFERENCES_DESC,
+    strengths_values: str = pydantic.Field(
+        description=STRENGTHS_VALUES_DESC,
+    )
+    goals_outcomes: str = pydantic.Field(
+        description=GOALS_OUTCOMES_DESC,
     )
     emotional_patterns: str = pydantic.Field(
         description=EMOTIONAL_PATTERNS_DESC,
     )
-    key_information: str = pydantic.Field(
-        description=KEY_INFORMATION_DESC,
+    safety_plan: str = pydantic.Field(
+        description=SAFETY_PLAN_DESC,
     )
-    profile_update: str = pydantic.Field(
-        description=PROFILE_UPDATE_DESC,
+    change_log: str = pydantic.Field(
+        description=CHANGE_LOG_DESC,
     )
 
     @property
     def content(self) -> str:
         """Return the profile as a formatted string."""
         return PROFILE_TEMPLATE.format(
-            identity=self.identity,
-            preferences=self.preferences,
+            identity_markers=self.identity_markers,
+            strengths_values=self.strengths_values,
+            goals_outcomes=self.goals_outcomes,
             emotional_patterns=self.emotional_patterns,
-            key_information=self.key_information,
-            profile_update=self.profile_update,
+            safety_plan=self.safety_plan,
         )
 
 
