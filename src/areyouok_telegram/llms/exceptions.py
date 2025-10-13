@@ -74,6 +74,25 @@ class MetadataFieldUpdateError(pydantic_ai.ModelRetry):
         self.field = field
 
 
+class MemoryUpdateError(pydantic_ai.ModelRetry):
+    """Exception raised when memory operations fail."""
+
+    def __init__(self, memory_info: str, exception: Exception):
+        self.message = f"Failed to store memory: {memory_info}. {str(exception)}"
+        self.memory_info = memory_info
+        self.exception = exception
+        super().__init__(self.message)
+
+
+class ContextSearchError(pydantic_ai.ModelRetry):
+    """Exception raised when context search operations fail."""
+
+    def __init__(self, search_query: str, exception: Exception):
+        self.message = f"Failed to search context: {search_query}. {str(exception)}"
+        self.search_query = search_query
+        self.exception = exception
+
+
 class CompleteOnboardingError(pydantic_ai.ModelRetry):
     """Exception raised when an error occurs while completing onboarding."""
 

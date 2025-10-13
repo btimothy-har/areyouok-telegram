@@ -13,6 +13,8 @@ from areyouok_telegram.data import Notifications
 from areyouok_telegram.data import UserMetadata
 from areyouok_telegram.data import async_database
 from areyouok_telegram.llms.agent_anonymizer import anonymization_agent
+from areyouok_telegram.llms.chat.agents.tools import search_history_impl
+from areyouok_telegram.llms.chat.agents.tools import update_memory_impl
 from areyouok_telegram.llms.chat.constants import MESSAGE_FOR_USER_PROMPT
 from areyouok_telegram.llms.chat.constants import PERSONALITY_PROMPT
 from areyouok_telegram.llms.chat.constants import PERSONALITY_SWITCH_INSTRUCTIONS
@@ -32,7 +34,6 @@ from areyouok_telegram.llms.chat.responses import TextResponse
 from areyouok_telegram.llms.chat.utils import check_restricted_responses
 from areyouok_telegram.llms.chat.utils import check_special_instructions
 from areyouok_telegram.llms.chat.utils import validate_response_data
-from areyouok_telegram.llms.context_search import search_chat_context
 from areyouok_telegram.llms.exceptions import MetadataFieldUpdateError
 from areyouok_telegram.llms.models import Gemini25Pro
 from areyouok_telegram.llms.utils import log_metadata_update_context
@@ -269,6 +270,17 @@ async def update_response_speed(
 
 
 @chat_agent.tool
+async def update_memory(
+    ctx: RunContext[ChatAgentDependencies],
+    information_to_remember: str,
+) -> str:
+    """
+    Update your memory bank with new information about the user that you want to remember.
+    """
+    return await update_memory_impl(ctx.deps, information_to_remember)
+
+
+@chat_agent.tool
 async def search_history(
     ctx: RunContext[ChatAgentDependencies],
     search_query: str,
@@ -288,13 +300,4 @@ async def search_history(
     Returns:
         A formatted response with direct answer and context summary, or error message
     """
-    try:
-        result = await search_chat_context(
-            chat_id=ctx.deps.tg_chat_id,
-            session_id=ctx.deps.tg_session_id,
-            search_query=search_query,
-        )
-    except Exception as e:
-        return f"Unable to search past conversations: {str(e)}"
-    else:
-        return result
+    return await search_history_impl(ctx.deps, search_query)

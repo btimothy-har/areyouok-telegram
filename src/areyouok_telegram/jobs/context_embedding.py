@@ -25,6 +25,7 @@ from areyouok_telegram.utils.retry import db_retry
 
 CONTEXT_TYPES_TO_EMBED = [
     ContextType.SESSION.value,
+    ContextType.MEMORY.value,
 ]
 
 

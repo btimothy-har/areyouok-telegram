@@ -27,6 +27,7 @@ class ContextType(Enum):
     PERSONALITY = "personality"
     METADATA = "metadata"
     ACTION = "action"
+    MEMORY = "memory"
 
 
 VALID_CONTEXT_TYPES = [context_type.value for context_type in ContextType]
