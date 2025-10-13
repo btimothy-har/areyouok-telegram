@@ -93,6 +93,7 @@ When generating the profile, write the following categories:
 - The user's life goals across short/medium/long-term horizons
 - Emotional patterns, especially what works and what doesn't
 - Safety plan following Stanley-Brown structure (warning signs, coping strategies, social network, professional support)
+- Change log of what has changed or been learned since the last profile update
 
 If no relevant information exists for a field, use "No information available yet." rather than making assumptions.
 For the safety plan, use "Not yet established" for sections where the user has not shared sufficient information.
