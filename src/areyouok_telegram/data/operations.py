@@ -9,6 +9,7 @@ from areyouok_telegram.data.connection import async_database
 from areyouok_telegram.data.models.chat_event import SYSTEM_USER_ID
 from areyouok_telegram.data.models.chats import Chats
 from areyouok_telegram.data.models.command_usage import CommandUsage
+from areyouok_telegram.data.models.context import Context
 from areyouok_telegram.data.models.guided_sessions import GuidedSessions
 from areyouok_telegram.data.models.guided_sessions import GuidedSessionType
 from areyouok_telegram.data.models.llm_generations import LLMGenerations
@@ -195,6 +196,29 @@ async def get_chat_encryption_key(*, chat_id: str) -> str:
             raise InvalidChatError(chat_id)
 
         return chat_obj.retrieve_key()
+
+
+@db_retry()
+async def get_latest_profile(*, chat_id: str) -> Context | None:
+    """Get the latest profile context for a chat, with content decrypted and cached.
+
+    Args:
+        chat_id: Chat identifier
+
+    Returns:
+        Context | None: Profile context with decrypted content cached, or None if no profile exists
+
+    Raises:
+        InvalidChatError: If no chat is found
+    """
+    async with async_database() as db_conn:
+        profile_context = await Context.get_latest_profile(db_conn, chat_id=chat_id)
+        if profile_context:
+            encryption_key = await get_chat_encryption_key(chat_id=chat_id)
+            profile_context.decrypt_content(chat_encryption_key=encryption_key)
+            return profile_context
+
+    return None
 
 
 @db_retry()

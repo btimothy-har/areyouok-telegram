@@ -5,11 +5,11 @@ from typing import Literal
 from zoneinfo import ZoneInfo
 from zoneinfo import ZoneInfoNotFoundError
 
+import logfire
 import pydantic_ai
 from pydantic_ai import RunContext
 
 from areyouok_telegram.config import SIMULATION_MODE
-from areyouok_telegram.data import Context
 from areyouok_telegram.data import Notifications
 from areyouok_telegram.data import UserMetadata
 from areyouok_telegram.data import async_database
@@ -123,17 +123,19 @@ async def instructions_with_personality_switch(ctx: pydantic_ai.RunContext[ChatA
     # Fetch the latest profile for this chat
     user_profile_text = ""
     if not SIMULATION_MODE:
-        async with async_database() as db_conn:
-            profile_context = await Context.get_latest_profile(db_conn, chat_id=ctx.deps.tg_chat_id)
-            if profile_context:
-                try:
-                    encryption_key = await data_operations.get_chat_encryption_key(chat_id=ctx.deps.tg_chat_id)
-                    profile_content = profile_context.decrypt_content(chat_encryption_key=encryption_key)
-                    if profile_content:
-                        user_profile_text = USER_PROFILE.format(user_profile=profile_content)
-                except Exception:
-                    # If profile fetch fails, just continue without it
-                    pass
+        try:
+            user_profile = await data_operations.get_latest_profile(chat_id=ctx.deps.tg_chat_id)
+        except Exception as e:
+            # If profile fetch fails, just continue without it
+            logfire.warning(
+                "Failed to fetch user profile, continuing without it",
+                chat_id=ctx.deps.tg_chat_id,
+                error=str(e),
+                _exc_info=True,
+            )
+        else:
+            if user_profile:
+                user_profile_text = USER_PROFILE.format(user_profile=user_profile.content)
 
     prompt = BaseChatPromptTemplate(
         response=RESPONSE_PROMPT.format(response_restrictions=restrict_response_text),

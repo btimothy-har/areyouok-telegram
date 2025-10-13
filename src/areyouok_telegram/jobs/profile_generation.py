@@ -93,6 +93,7 @@ class ProfileGenerationJob(BaseJob):
                     logfire.exception(
                         f"Failed to process profile for chat {chat.chat_id}",
                         chat_id=chat.chat_id,
+                        _exc_info=True,
                     )
                     # Continue processing other chats
 
