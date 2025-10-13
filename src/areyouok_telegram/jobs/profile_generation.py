@@ -165,15 +165,13 @@ class ProfileGenerationJob(BaseJob):
         decrypted_contents = []
         for context in all_contexts:
             try:
-                content_str = context.decrypt_content(chat_encryption_key=encryption_key)
-                if content_str:
-                    decrypted_contents.append(
-                        {
-                            "type": context.type,
-                            "content": content_str,
-                            "created_at": context.created_at,
-                        }
-                    )
+                # Decrypt and populate the cache, then use .content property
+                if context.decrypt_content(chat_encryption_key=encryption_key):
+                    decrypted_contents.append({
+                        "type": context.type,
+                        "content": context.content,
+                        "created_at": context.created_at,
+                    })
             except Exception:
                 logfire.exception(
                     f"Failed to decrypt context {context.id}",
