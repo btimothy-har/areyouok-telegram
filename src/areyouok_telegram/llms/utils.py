@@ -62,8 +62,8 @@ async def run_agent_with_tracking(
     agent: pydantic_ai.Agent,
     *,
     chat_id: str,
-    session_id: str | None = None,
-    run_kwargs: dict | None = None,
+    session_id: str,
+    run_kwargs: dict,
 ) -> pydantic_ai.agent.AgentRunResult:
     """
     Run a Pydantic AI agent and automatically track its usage.
@@ -77,8 +77,6 @@ async def run_agent_with_tracking(
     Returns:
         The agent run result
     """
-
-    run_kwargs = run_kwargs or {}
 
     # Ensure required kwargs are present
     if "user_prompt" not in run_kwargs and "message_history" not in run_kwargs:
@@ -95,7 +93,7 @@ async def run_agent_with_tracking(
     asyncio.create_task(
         data_operations.track_llm_usage(
             chat_id=chat_id,
-            session_id=session_id or "no_session",
+            session_id=session_id,
             agent=agent,
             result=result,
             runtime=generation_duration,

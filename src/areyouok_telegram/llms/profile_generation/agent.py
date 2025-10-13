@@ -1,7 +1,7 @@
 import pydantic
 import pydantic_ai
 
-from areyouok_telegram.llms.models import Gemini25Flash
+from areyouok_telegram.llms.models import GPT5
 from areyouok_telegram.llms.profile_generation.constants import AGENT_INSTRUCTIONS
 from areyouok_telegram.llms.profile_generation.constants import CHANGE_LOG_DESC
 from areyouok_telegram.llms.profile_generation.constants import EMOTIONAL_PATTERNS_DESC
@@ -46,10 +46,9 @@ class ProfileTemplate(pydantic.BaseModel):
         )
 
 
-agent_model = Gemini25Flash(
-    model_settings=pydantic_ai.models.google.GoogleModelSettings(
-        temperature=0.0,
-        google_thinking_config={"thinking_budget": 0},
+agent_model = GPT5(
+    model_settings=pydantic_ai.settings.ModelSettings(
+        temperature=0.2,
     ),
 )
 

@@ -55,7 +55,7 @@ async def start_profile_generation_job(ctx: Application | ContextTypes.DEFAULT_T
         context=ctx,
         job=ProfileGenerationJob(),
         interval=timedelta(seconds=PROFILE_JOB_INTERVAL_SECS),
-        first=datetime.now(UTC) + timedelta(seconds=120),  # Start 2 minutes after startup
+        first=datetime.now(UTC) + timedelta(seconds=300),  # Start 5 minutes after startup
     )
 
 

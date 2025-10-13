@@ -16,12 +16,13 @@ Document specific examples of how these manifest in their life.
 """
 
 GOALS_OUTCOMES_DESC = """
-The user's stated or implied goals across time horizons:
+The user's stated or implied goals across time horizons, in the context of their lived reality:
 - Short-term (days to weeks): immediate priorities, current focus areas
 - Medium-term (weeks to months): developing skills, habit changes, relationship goals
 - Long-term (months to years): life direction, major aspirations, sustained changes
 
 Include any specific outcomes they're working toward or hoping to achieve.
+Disregard any goals or outcomes unique to the conversation with the AI Assistant.
 """
 
 EMOTIONAL_PATTERNS_DESC = """
@@ -73,7 +74,7 @@ You are a profile synthesis assistant for an empathetic AI companion system.
 
 You will be provided with:
 1) The current profile of the user;
-2) New context data from the user's recent interactions.
+2) New context data from the user's recent interactions with the AI companion.
 
 Your task is to analyze the provided context data and synthesize a comprehensive yet compact user profile.
 Use the current profile as a starting point, and update it with the new context data.
@@ -84,15 +85,14 @@ The profile should:
 3. Avoid speculation - only include information explicitly provided by the user
 4. Use neutral, professional language while maintaining warmth
 5. Prioritize recent information over older data when there are conflicts
-6. Track what has changed in the change_log field
+6. Be contextualized to the user's lived reality and not in the context of the conversation with the AI Assistant
 
-When generating the profile:
-- Extract identity markers (name, pronouns, cultural context, triggers)
-- Map strengths and values to CHIME framework domains (Connectedness, Hope, Identity, Meaning, Empowerment)
-- Document goals across short/medium/long-term horizons
-- Identify emotional patterns, what works and what doesn't
-- Build a safety plan following Stanley-Brown structure (warning signs, coping strategies, social network, professional support)
-- Document what's new or changed since the last profile (if previous profile exists)
+When generating the profile, write the following categories:
+- Identity markers (name, pronouns, cultural context, triggers)
+- Strengths and values, following the CHIME framework (Connectedness, Hope, Identity, Meaning, Empowerment)
+- The user's life goals across short/medium/long-term horizons
+- Emotional patterns, especially what works and what doesn't
+- Safety plan following Stanley-Brown structure (warning signs, coping strategies, social network, professional support)
 
 If no relevant information exists for a field, use "No information available yet." rather than making assumptions.
 For the safety plan, use "Not yet established" for sections where the user has not shared sufficient information.
