@@ -135,10 +135,34 @@ class TestProfileGenerationJob:
         # Old context created before cutoff
         old_context = MagicMock()
         old_context.created_at = cutoff_time - timedelta(minutes=30)
+        old_context.type = ContextType.MEMORY.value
 
         with (
             patch.object(job, "_has_active_session", new=AsyncMock(return_value=False)),
             patch.object(job, "_fetch_contexts", new=AsyncMock(return_value=[old_context])),
+            patch("areyouok_telegram.jobs.profile_generation.logfire.debug") as mock_log,
+        ):
+            result = await job._process_chat(chat_id="chat123", cutoff_time=cutoff_time)
+
+        assert result is False
+        mock_log.assert_called_once()
+        assert "no new contexts" in str(mock_log.call_args)
+
+    @pytest.mark.asyncio
+    async def test_process_chat_skips_profile_update_contexts(self):
+        """Test _process_chat skips when only PROFILE_UPDATE contexts are new (no self-trigger)."""
+        job = ProfileGenerationJob()
+        job._run_timestamp = datetime.now(UTC)
+        cutoff_time = datetime.now(UTC) - timedelta(hours=1)
+
+        # New PROFILE_UPDATE context (created by previous job run)
+        profile_update_context = MagicMock()
+        profile_update_context.created_at = cutoff_time + timedelta(minutes=10)
+        profile_update_context.type = ContextType.PROFILE_UPDATE.value
+
+        with (
+            patch.object(job, "_has_active_session", new=AsyncMock(return_value=False)),
+            patch.object(job, "_fetch_contexts", new=AsyncMock(return_value=[profile_update_context])),
             patch("areyouok_telegram.jobs.profile_generation.logfire.debug") as mock_log,
         ):
             result = await job._process_chat(chat_id="chat123", cutoff_time=cutoff_time)
@@ -217,6 +241,7 @@ class TestProfileGenerationJob:
 
         new_context = MagicMock()
         new_context.created_at = cutoff_time + timedelta(minutes=10)
+        new_context.type = ContextType.MEMORY.value
 
         with (
             patch.object(job, "_has_active_session", new=AsyncMock(return_value=False)),
@@ -240,11 +265,13 @@ class TestProfileGenerationJob:
 
         context1 = MagicMock()
         context1.created_at = cutoff_time + timedelta(minutes=10)
+        context1.type = ContextType.MEMORY.value
         context1.id = "ctx1"
         context1.decrypt_content.side_effect = Exception("Decryption failed")
 
         context2 = MagicMock()
         context2.created_at = cutoff_time + timedelta(minutes=20)
+        context2.type = ContextType.SESSION.value
         context2.id = "ctx2"
         context2.decrypt_content.return_value = "Valid content"
 

@@ -21,7 +21,15 @@ from areyouok_telegram.logging import traced
 from areyouok_telegram.utils.retry import db_retry
 from areyouok_telegram.utils.text import format_relative_time
 
-CONTEXT_TYPES_FOR_PROFILE = [
+# Context types that trigger profile generation (excludes job outputs)
+TRIGGER_CONTEXT_TYPES = [
+    ContextType.MEMORY.value,
+    ContextType.SESSION.value,
+    ContextType.METADATA.value,
+]
+
+# Context types used as input for profile generation (includes all relevant context)
+INPUT_CONTEXT_TYPES = [
     ContextType.MEMORY.value,
     ContextType.SESSION.value,
     ContextType.METADATA.value,
@@ -137,10 +145,12 @@ class ProfileGenerationJob(BaseJob):
         thirty_days_ago = self._run_timestamp - timedelta(days=30)
         all_contexts = await self._fetch_contexts(chat_id=chat_id, since=thirty_days_ago)
 
-        # Filter for new contexts created since last run
-        new_contexts = [ctx for ctx in all_contexts if ctx.created_at >= cutoff_time]
+        # Filter for new TRIGGER contexts created since last run (excludes job outputs)
+        new_contexts = [
+            ctx for ctx in all_contexts if ctx.created_at >= cutoff_time and ctx.type in TRIGGER_CONTEXT_TYPES
+        ]
 
-        # If no new contexts, skip
+        # If no new trigger contexts, skip
         if not new_contexts:
             logfire.debug(
                 f"Skipping chat {chat_id} - no new contexts",
@@ -157,13 +167,11 @@ class ProfileGenerationJob(BaseJob):
             try:
                 content_str = context.decrypt_content(chat_encryption_key=encryption_key)
                 if content_str:
-                    decrypted_contents.append(
-                        {
-                            "type": context.type,
-                            "content": content_str,
-                            "created_at": context.created_at,
-                        }
-                    )
+                    decrypted_contents.append({
+                        "type": context.type,
+                        "content": content_str,
+                        "created_at": context.created_at,
+                    })
             except Exception:
                 logfire.exception(
                     f"Failed to decrypt context {context.id}",
@@ -272,7 +280,7 @@ class ProfileGenerationJob(BaseJob):
 
     @db_retry()
     async def _fetch_contexts(self, *, chat_id: str, since: datetime) -> list[Context]:
-        """Fetch MEMORY + SESSION contexts for a specific chat within a time window.
+        """Fetch all input contexts for a specific chat within a time window.
 
         Args:
             chat_id: The chat ID to fetch contexts for
@@ -285,7 +293,7 @@ class ProfileGenerationJob(BaseJob):
             stmt = (
                 select(Context)
                 .where(Context.chat_id == chat_id)
-                .where(Context.type.in_(CONTEXT_TYPES_FOR_PROFILE))
+                .where(Context.type.in_(INPUT_CONTEXT_TYPES))
                 .where(Context.created_at >= since)
                 .order_by(Context.created_at.asc())
             )
