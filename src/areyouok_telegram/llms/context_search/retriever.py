@@ -3,7 +3,7 @@
 from llama_index.core.vector_stores import ExactMatchFilter
 from llama_index.core.vector_stores import MetadataFilters
 
-from areyouok_telegram.config import RAG_RETRIEVAL_LIMIT
+from areyouok_telegram.config import RAG_TOP_K
 from areyouok_telegram.data import Chats
 from areyouok_telegram.data import Context
 from areyouok_telegram.data import async_database
@@ -33,7 +33,7 @@ async def retrieve_relevant_contexts(
     """
     # Create retriever with metadata filtering for user isolation
     retriever = context_vector_index.as_retriever(
-        similarity_top_k=RAG_RETRIEVAL_LIMIT,
+        similarity_top_k=RAG_TOP_K,
         filters=MetadataFilters(filters=[ExactMatchFilter(key="chat_id", value=chat_id)]),
     )
 

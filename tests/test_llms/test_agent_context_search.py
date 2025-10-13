@@ -189,7 +189,7 @@ class TestRetrieveRelevantContexts:
 
     @pytest.mark.asyncio
     async def test_retrieval_uses_config_limit(self, mock_nodes, mock_context_objects, mock_chat_object):
-        """Test retrieval uses RAG_RETRIEVAL_LIMIT from config."""
+        """Test retrieval uses RAG_TOP_K from config."""
         mock_retriever = MagicMock()
         mock_retriever.aretrieve = AsyncMock(return_value=mock_nodes)
 
@@ -198,7 +198,7 @@ class TestRetrieveRelevantContexts:
             patch("areyouok_telegram.llms.context_search.retriever.async_database") as mock_db,
             patch("areyouok_telegram.llms.context_search.retriever.Context") as mock_context_class,
             patch("areyouok_telegram.llms.context_search.retriever.Chats") as mock_chats_class,
-            patch("areyouok_telegram.llms.context_search.retriever.RAG_RETRIEVAL_LIMIT", 30),
+            patch("areyouok_telegram.llms.context_search.retriever.RAG_TOP_K", 30),
         ):
             mock_index.as_retriever.return_value = mock_retriever
 

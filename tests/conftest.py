@@ -185,16 +185,20 @@ def mock_conversation_history(mock_chat_event_message, mock_chat_event_context):
         events = []
 
         # Add context events
-        events.extend([
-            mock_chat_event_context(content=f"Context {i + 1}", context_type=ContextType.SESSION)
-            for i in range(context_count)
-        ])
+        events.extend(
+            [
+                mock_chat_event_context(content=f"Context {i + 1}", context_type=ContextType.SESSION)
+                for i in range(context_count)
+            ]
+        )
 
         # Add message events
-        events.extend([
-            mock_chat_event_message(text=f"Message {i + 1}", message_id=str(100 + i), user_id=f"user{i + 1}")
-            for i in range(message_count)
-        ])
+        events.extend(
+            [
+                mock_chat_event_message(text=f"Message {i + 1}", message_id=str(100 + i), user_id=f"user{i + 1}")
+                for i in range(message_count)
+            ]
+        )
 
         return events
 

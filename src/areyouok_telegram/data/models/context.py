@@ -114,14 +114,11 @@ class Context(Base):
         session_id: str,
         ctype: str,
         content: str,
-    ) -> int:
+    ) -> None:
         """Insert a new context item in the database with encrypted content.
 
         Note: This always creates a new record. The context_key is unique per content,
         so identical content will be rejected by the database constraint.
-
-        Returns:
-            The ID of the inserted context record
         """
         now = datetime.now(UTC)
 
@@ -145,13 +142,7 @@ class Context(Base):
             created_at=now,
         )
 
-        # Return the ID for triggering indexing job
-        stmt = stmt.returning(cls.id)
-
-        result = await db_conn.execute(stmt)
-        context_id = result.scalar_one()
-
-        return context_id
+        await db_conn.execute(stmt)
 
     @classmethod
     @traced(extract_args=["session_id"])
