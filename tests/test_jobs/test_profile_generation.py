@@ -225,7 +225,6 @@ class TestProfileGenerationJob:
                 "areyouok_telegram.jobs.profile_generation.data_operations.get_chat_encryption_key",
                 new=AsyncMock(side_effect=InvalidChatError("chat123")),
             ),
-            patch("areyouok_telegram.jobs.profile_generation.logfire.exception") as mock_log,
         ):
             # Should be caught by the generic exception handler in _process_chat
             # which is called from run_job

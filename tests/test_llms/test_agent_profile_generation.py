@@ -117,6 +117,6 @@ class TestProfileGenerationAgent:
         assert "change_log" in fields
 
         # Verify all fields have descriptions
-        for field_name, field_info in fields.items():
+        for field_info in fields.values():
             assert field_info.description is not None
             assert len(field_info.description) > 0

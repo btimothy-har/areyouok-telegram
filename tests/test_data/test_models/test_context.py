@@ -11,6 +11,7 @@ import pytest
 from cryptography.fernet import Fernet
 
 from areyouok_telegram.data.models.context import Context
+from areyouok_telegram.data.models.context import ContextType
 from areyouok_telegram.data.models.context import InvalidContextTypeError
 from areyouok_telegram.encryption.exceptions import ContentNotDecryptedError
 
@@ -377,7 +378,6 @@ class TestContext:
     @pytest.mark.asyncio
     async def test_get_latest_profile_returns_most_recent(self, mock_db_session):
         """Test get_latest_profile returns the most recent PROFILE context."""
-        from areyouok_telegram.data.models.context import ContextType
 
         mock_profile = MagicMock()
         mock_profile.chat_id = "chat123"
@@ -413,7 +413,6 @@ class TestContext:
     @pytest.mark.asyncio
     async def test_get_latest_profile_ignores_other_types(self, mock_db_session):
         """Test get_latest_profile only considers PROFILE type, not PROFILE_UPDATE or others."""
-        from areyouok_telegram.data.models.context import ContextType
 
         # Create a PROFILE context
         mock_profile = MagicMock()

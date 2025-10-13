@@ -12,6 +12,8 @@ import telegram
 from areyouok_telegram.data import operations as data_operations
 from areyouok_telegram.data.models.chat_event import SYSTEM_USER_ID
 from areyouok_telegram.data.models.guided_sessions import GuidedSessionType
+from areyouok_telegram.data.operations import InvalidChatError
+from areyouok_telegram.data.operations import get_chat_encryption_key
 
 
 class TestGetOrCreateActiveSession:
@@ -941,7 +943,6 @@ class TestGetLatestProfile:
     @pytest.mark.asyncio
     async def test_get_latest_profile_invalid_chat_error(self):
         """Test get_latest_profile raises InvalidChatError when chat doesn't exist."""
-        from areyouok_telegram.data.operations import InvalidChatError
 
         mock_profile_context = MagicMock()
 
@@ -971,7 +972,6 @@ class TestGetChatEncryptionKey:
     @pytest.mark.asyncio
     async def test_get_chat_encryption_key_success(self):
         """Test get_chat_encryption_key returns encryption key."""
-        from areyouok_telegram.data.operations import get_chat_encryption_key
 
         mock_chat = MagicMock()
         mock_chat.retrieve_key.return_value = "test_encryption_key"
@@ -995,9 +995,6 @@ class TestGetChatEncryptionKey:
     @pytest.mark.asyncio
     async def test_get_chat_encryption_key_invalid_chat_error(self):
         """Test get_chat_encryption_key raises InvalidChatError when chat doesn't exist."""
-        from areyouok_telegram.data.operations import InvalidChatError
-        from areyouok_telegram.data.operations import get_chat_encryption_key
-
         with (
             patch("areyouok_telegram.data.operations.async_database") as mock_async_db,
             patch(
