@@ -40,3 +40,6 @@ RAG_EMBEDDING_DIMENSIONS = int(os.getenv("RAG_EMBEDDING_DIMENSIONS", "1536"))
 RAG_BATCH_SIZE = int(os.getenv("RAG_BATCH_SIZE", "100"))
 RAG_JOB_INTERVAL_SECS = int(os.getenv("RAG_JOB_INTERVAL_SECS", "300"))
 RAG_TOP_K = int(os.getenv("RAG_TOP_K", "30"))
+
+# Profile Generation Configuration
+PROFILE_JOB_INTERVAL_SECS = int(os.getenv("PROFILE_JOB_INTERVAL_SECS", "3600"))  # Default to hourly

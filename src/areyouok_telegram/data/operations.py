@@ -20,6 +20,19 @@ from areyouok_telegram.utils.media import handle_unsupported_media
 from areyouok_telegram.utils.retry import db_retry
 
 
+class InvalidChatError(Exception):
+    """Raised when no chat is found for a given chat_id.
+
+    This typically occurs when trying to access a chat that doesn't exist
+    in the database or hasn't been initialized yet.
+    """
+
+    def __init__(self, chat_id: str):
+        """Initialize the exception with the chat_id that caused the error."""
+        super().__init__(f"No chat found for chat_id {chat_id}.")
+        self.chat_id = chat_id
+
+
 class MissingGuidedSessionTypeError(RuntimeError):
     def __init__(self):
         message = "Guided Session Type must be provided."
@@ -160,6 +173,28 @@ async def close_chat_session(*, chat_session: Sessions):
             db_conn,
             timestamp=close_ts,
         )
+
+
+@db_retry()
+async def get_chat_encryption_key(*, chat_id: str) -> str:
+    """Get the encryption key for a chat.
+
+    Args:
+        chat_id: Chat identifier
+
+    Returns:
+        str: The decrypted Fernet encryption key
+
+    Raises:
+        InvalidChatError: If no chat is found
+    """
+    async with async_database() as db_conn:
+        chat_obj = await Chats.get_by_id(db_conn, chat_id=chat_id)
+
+        if not chat_obj:
+            raise InvalidChatError(chat_id)
+
+        return chat_obj.retrieve_key()
 
 
 @db_retry()

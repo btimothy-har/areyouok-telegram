@@ -12,6 +12,7 @@ class BaseChatPromptTemplate(pydantic.BaseModel):
     objectives: str | None = None
     personality: str | None = None
     user_preferences: str | None = None
+    user_profile: str | None = None
 
     def as_prompt_string(self):
         prompt_parts = [
@@ -32,5 +33,8 @@ class BaseChatPromptTemplate(pydantic.BaseModel):
 
         if self.user_preferences:
             prompt_parts.append(f"<user_preferences>{self.user_preferences}</user_preferences>")
+
+        if self.user_profile:
+            prompt_parts.append(f"<user_profile>{self.user_profile}</user_profile>")
 
         return "\n".join(prompt_parts)

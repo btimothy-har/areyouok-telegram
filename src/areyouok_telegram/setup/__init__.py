@@ -10,6 +10,7 @@ from areyouok_telegram.setup.jobs import restore_active_sessions
 from areyouok_telegram.setup.jobs import start_context_embedding_job
 from areyouok_telegram.setup.jobs import start_data_warning_job
 from areyouok_telegram.setup.jobs import start_ping_job
+from areyouok_telegram.setup.jobs import start_profile_generation_job
 
 __all__ = [
     "database_setup",
@@ -22,4 +23,5 @@ __all__ = [
     "start_data_warning_job",
     "start_ping_job",
     "start_context_embedding_job",
+    "start_profile_generation_job",
 ]

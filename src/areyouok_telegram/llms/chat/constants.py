@@ -126,6 +126,14 @@ The following are known attributes/preferences about the user that the assistant
 The user may use the `/settings` command to update their preferred name, country, and timezone.
 """
 
+USER_PROFILE = """
+The following is a synthesized profile of the user based on your interactions:
+
+{user_profile}
+
+This profile is automatically updated as you learn more about the user.
+"""
+
 ONBOARDING_OBJECTIVES = """
 The assistant is responsible for gathering the following information from the user: {onboarding_fields}
 
