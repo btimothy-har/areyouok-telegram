@@ -16,7 +16,7 @@ class TestLogMetadataUpdateContext:
     @pytest.mark.asyncio
     @patch("areyouok_telegram.llms.utils.async_database")
     @patch("areyouok_telegram.llms.utils.Chats.get_by_id")
-    @patch("areyouok_telegram.llms.utils.Context.new_or_update")
+    @patch("areyouok_telegram.llms.utils.Context.new")
     async def test_log_metadata_update_context_success(
         self, mock_context_update, mock_chats_get_by_id, mock_async_database
     ):
@@ -96,7 +96,7 @@ class TestLogMetadataUpdateContext:
     @pytest.mark.asyncio
     @patch("areyouok_telegram.llms.utils.async_database")
     @patch("areyouok_telegram.llms.utils.Chats.get_by_id")
-    @patch("areyouok_telegram.llms.utils.Context.new_or_update")
+    @patch("areyouok_telegram.llms.utils.Context.new")
     async def test_log_metadata_update_context_database_error(
         self, mock_context_update, mock_chats_get_by_id, mock_async_database
     ):
@@ -136,7 +136,7 @@ class TestLogMetadataUpdateContext:
     @pytest.mark.asyncio
     @patch("areyouok_telegram.llms.utils.async_database")
     @patch("areyouok_telegram.llms.utils.Chats.get_by_id")
-    @patch("areyouok_telegram.llms.utils.Context.new_or_update")
+    @patch("areyouok_telegram.llms.utils.Context.new")
     async def test_log_metadata_update_context_different_content_formats(
         self, mock_context_update, mock_chats_get_by_id, mock_async_database
     ):
@@ -179,11 +179,11 @@ class TestLogMetadataUpdateContext:
     @pytest.mark.asyncio
     @patch("areyouok_telegram.llms.utils.async_database")
     @patch("areyouok_telegram.llms.utils.Chats.get_by_id")
-    @patch("areyouok_telegram.llms.utils.Context.new_or_update")
+    @patch("areyouok_telegram.llms.utils.Context.new")
     async def test_log_metadata_update_context_parameter_validation(
         self, mock_context_update, mock_chats_get_by_id, mock_async_database
     ):
-        """Test that all required parameters are passed correctly to Context.new_or_update."""
+        """Test that all required parameters are passed correctly to Context.new."""
         # Setup mocks
         mock_db_conn = AsyncMock()
         mock_async_database.return_value.__aenter__ = AsyncMock(return_value=mock_db_conn)

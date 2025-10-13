@@ -33,3 +33,10 @@ LOG_CHAT_MESSAGES = os.getenv("LOG_CHAT_MESSAGES", "false").lower() in ("true", 
 
 # Simulation mode - when enabled, disables database dependencies
 SIMULATION_MODE = os.getenv("SIMULATION_MODE", "false").lower() in ("true", "1", "yes")
+
+# RAG Configuration
+RAG_EMBEDDING_MODEL = os.getenv("RAG_EMBEDDING_MODEL", "text-embedding-3-small")
+RAG_EMBEDDING_DIMENSIONS = int(os.getenv("RAG_EMBEDDING_DIMENSIONS", "1536"))
+RAG_BATCH_SIZE = int(os.getenv("RAG_BATCH_SIZE", "100"))
+RAG_JOB_INTERVAL_SECS = int(os.getenv("RAG_JOB_INTERVAL_SECS", "300"))
+RAG_TOP_K = int(os.getenv("RAG_TOP_K", "30"))

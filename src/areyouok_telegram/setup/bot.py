@@ -12,8 +12,8 @@ from areyouok_telegram.logging import traced
 from areyouok_telegram.setup.exceptions import BotCommandsSetupError
 from areyouok_telegram.setup.exceptions import BotDescriptionSetupError
 from areyouok_telegram.setup.exceptions import BotNameSetupError
-from areyouok_telegram.utils import package_version
-from areyouok_telegram.utils import telegram_retry
+from areyouok_telegram.utils.retry import telegram_retry
+from areyouok_telegram.utils.text import package_version
 
 
 def _generate_bot_name():

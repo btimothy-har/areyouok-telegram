@@ -10,7 +10,7 @@ from areyouok_telegram.handlers.exceptions import NoEditedMessageError
 from areyouok_telegram.handlers.exceptions import NoMessageError
 from areyouok_telegram.handlers.exceptions import NoMessageReactionError
 from areyouok_telegram.logging import traced
-from areyouok_telegram.utils import telegram_call
+from areyouok_telegram.utils.retry import telegram_call
 
 
 @traced(extract_args=["update"])

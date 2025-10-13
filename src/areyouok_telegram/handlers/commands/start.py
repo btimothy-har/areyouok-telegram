@@ -9,8 +9,8 @@ from areyouok_telegram.data.connection import async_database
 from areyouok_telegram.handlers.constants import MD2_ONBOARDING_COMPLETE_MESSAGE
 from areyouok_telegram.handlers.constants import MD2_ONBOARDING_START_MESSAGE
 from areyouok_telegram.logging import traced
-from areyouok_telegram.utils import db_retry
-from areyouok_telegram.utils import telegram_call
+from areyouok_telegram.utils.retry import db_retry
+from areyouok_telegram.utils.retry import telegram_call
 
 
 @traced(extract_args=["update"])

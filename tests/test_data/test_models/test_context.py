@@ -2,7 +2,8 @@
 
 import hashlib
 import json
-from unittest.mock import AsyncMock
+from datetime import UTC
+from datetime import datetime
 from unittest.mock import MagicMock
 
 import pytest
@@ -26,13 +27,13 @@ class TestContext:
         assert Context.generate_context_key(chat_id, ctype, encrypted_content) == expected
 
     @pytest.mark.asyncio
-    async def test_new_or_update_valid_type(self, mock_db_session):
+    async def test_new_valid_type(self, mock_db_session):
         """Test inserting a new context with valid type."""
-        mock_result = AsyncMock()
+        mock_result = MagicMock()
         mock_db_session.execute.return_value = mock_result
         user_key = Fernet.generate_key().decode("utf-8")
 
-        await Context.new_or_update(
+        await Context.new(
             mock_db_session,
             chat_encryption_key=user_key,
             chat_id="123",
@@ -50,12 +51,12 @@ class TestContext:
         assert call_args.table.name == "context"
 
     @pytest.mark.asyncio
-    async def test_new_or_update_invalid_type(self, mock_db_session):
+    async def test_new_invalid_type(self, mock_db_session):
         """Test inserting a context with invalid type raises error."""
         user_key = Fernet.generate_key().decode("utf-8")
 
         with pytest.raises(InvalidContextTypeError) as exc_info:
-            await Context.new_or_update(
+            await Context.new(
                 mock_db_session,
                 chat_encryption_key=user_key,
                 chat_id="123",
@@ -299,3 +300,51 @@ class TestContext:
         call_args = mock_db_session.execute.call_args[0][0]
         # The statement should be a select with where clauses for both chat_id and type
         assert hasattr(call_args, "whereclause")
+
+    @pytest.mark.asyncio
+    async def test_get_by_ids_empty_list(self, mock_db_session):
+        """Test get_by_ids with empty list returns empty list (line 247-248)."""
+        result = await Context.get_by_ids(mock_db_session, ids=[])
+
+        assert result == []
+        # Execute should NOT be called for empty list
+        mock_db_session.execute.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_get_by_ids_with_ids(self, mock_db_session):
+        """Test get_by_ids retrieves contexts by IDs (lines 250-252)."""
+        mock_context1 = MagicMock(spec=Context)
+        mock_context1.id = 1
+        mock_context2 = MagicMock(spec=Context)
+        mock_context2.id = 2
+
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = [mock_context1, mock_context2]
+        mock_result = MagicMock()
+        mock_result.scalars.return_value = mock_scalars
+        mock_db_session.execute.return_value = mock_result
+
+        result = await Context.get_by_ids(mock_db_session, ids=[1, 2])
+
+        assert result == [mock_context1, mock_context2]
+        mock_db_session.execute.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_by_created_timestamp(self, mock_db_session):
+        """Test get_by_created_timestamp retrieves contexts in time range (lines 273-280)."""
+        mock_context1 = MagicMock(spec=Context)
+        mock_context2 = MagicMock(spec=Context)
+
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = [mock_context1, mock_context2]
+        mock_result = MagicMock()
+        mock_result.scalars.return_value = mock_scalars
+        mock_db_session.execute.return_value = mock_result
+
+        from_time = datetime(2025, 1, 1, tzinfo=UTC)
+        to_time = datetime(2025, 1, 31, tzinfo=UTC)
+
+        result = await Context.get_by_created_timestamp(mock_db_session, from_timestamp=from_time, to_timestamp=to_time)
+
+        assert result == [mock_context1, mock_context2]
+        mock_db_session.execute.assert_called_once()

@@ -1281,7 +1281,7 @@ class TestConversationJob:
         with (
             patch("areyouok_telegram.jobs.conversations.async_database") as mock_async_db,
             patch(
-                "areyouok_telegram.jobs.conversations.Context.new_or_update",
+                "areyouok_telegram.jobs.conversations.Context.new",
                 new=AsyncMock(),
             ) as mock_new_or_update,
         ):

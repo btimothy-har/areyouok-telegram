@@ -11,9 +11,9 @@ from areyouok_telegram.llms.agent_preferences import PreferencesAgentDependencie
 from areyouok_telegram.llms.agent_preferences import PreferencesUpdateResponse
 from areyouok_telegram.llms.agent_preferences import preferences_agent
 from areyouok_telegram.logging import traced
-from areyouok_telegram.utils import db_retry
-from areyouok_telegram.utils import escape_markdown_v2
-from areyouok_telegram.utils import telegram_call
+from areyouok_telegram.utils.retry import db_retry
+from areyouok_telegram.utils.retry import telegram_call
+from areyouok_telegram.utils.text import escape_markdown_v2
 
 
 @traced(extract_args=["update"])

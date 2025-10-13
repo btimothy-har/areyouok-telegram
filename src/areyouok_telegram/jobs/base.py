@@ -9,7 +9,10 @@ from datetime import datetime
 import logfire
 from telegram.ext import ContextTypes
 
+from areyouok_telegram.data import JobState
+from areyouok_telegram.data import async_database
 from areyouok_telegram.logging import traced
+from areyouok_telegram.utils.retry import db_retry
 
 JOB_LOCK = defaultdict(asyncio.Lock)
 
@@ -86,3 +89,65 @@ class BaseJob(ABC):
         Internal method to run the job. This should be overridden by subclasses to implement the job's logic.
         """
         raise NotImplementedError("Subclasses must implement the 'run_job' method.")
+
+    @traced(extract_args=["state_data"])
+    @db_retry()
+    async def save_state(self, **state_data) -> None:
+        """
+        Save job state to the database.
+
+        This method persists job execution state (e.g., last_run_time) to the database,
+        ensuring state survives bot restarts.
+
+        Args:
+            **state_data: Key-value pairs to store in job state.
+                         Values should be JSON-serializable.
+
+        Example:
+            await self.save_state(
+                last_run_time=datetime.now(UTC).isoformat(),
+                processed_count=100
+            )
+        """
+        async with async_database() as db_conn:
+            await JobState.save_state(db_conn, job_name=self.name, state_data=state_data)
+
+        logfire.debug(f"Saved state for job {self.name}", state_keys=list(state_data.keys()))
+
+    @traced(extract_args=False)
+    @db_retry()
+    async def load_state(self) -> dict:
+        """
+        Load job state from the database.
+
+        Returns:
+            Dictionary of persisted state data, or empty dict if no state exists.
+
+        Example:
+            state = await self.load_state()
+            last_run_time = state.get('last_run_time')
+            if last_run_time:
+                last_run_time = datetime.fromisoformat(last_run_time)
+        """
+        async with async_database() as db_conn:
+            state = await JobState.get_state(db_conn, job_name=self.name)
+
+        if state:
+            logfire.debug(f"Loaded state for job {self.name}", state_keys=list(state.keys()))
+            return state
+
+        logfire.debug(f"No state found for job {self.name}, returning empty dict")
+        return {}
+
+    @traced(extract_args=False)
+    @db_retry()
+    async def clear_state(self) -> None:
+        """
+        Clear persisted job state from the database.
+
+        This is useful for resetting a job's state or during cleanup.
+        """
+        async with async_database() as db_conn:
+            await JobState.delete_state(db_conn, job_name=self.name)
+
+        logfire.info(f"Cleared state for job {self.name}")

@@ -65,6 +65,8 @@ In addition to the current chat history, you are also provided with additional e
 1) prior_conversation_summary: A summary of prior conversations with the user, held in the last 24 hours, if available;
 2) silent_response: Responses that are not shown to the user, such as do-nothing responses;
 3) switch_personality: The assistant's personality switch events, if any, that have occurred in the current chat session.
+
+You may use the tool `search_history` to search for further context from previous interactions with the user.
 """
 
 MESSAGE_FOR_USER_PROMPT = """

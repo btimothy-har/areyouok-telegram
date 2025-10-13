@@ -1,3 +1,5 @@
+from datetime import UTC
+from datetime import datetime
 from importlib.metadata import version
 
 import httpx
@@ -9,6 +11,61 @@ from areyouok_telegram.logging import traced
 def package_version():
     """Get the package version."""
     return version("areyouok-telegram")
+
+
+def format_relative_time(created_at: datetime, reference_time: datetime | None = None) -> str:
+    """Format a datetime as relative time from a reference point.
+
+    Args:
+        created_at: The datetime to format
+        reference_time: The reference point to calculate relative time from (defaults to now)
+
+    Returns:
+        Human-readable relative time string (e.g., "2 days ago", "3 hours ago")
+    """
+    if reference_time is None:
+        reference_time = datetime.now(UTC)
+
+    delta = reference_time - created_at
+
+    # Handle future dates (shouldn't happen but let's be safe)
+    if delta.total_seconds() < 0:
+        return "just now"
+
+    seconds = int(delta.total_seconds())
+
+    # Less than a minute
+    if seconds < 60:
+        return "just now"
+
+    # Less than an hour
+    minutes = seconds // 60
+    if minutes < 60:
+        return f"{minutes} minute{'s' if minutes != 1 else ''} ago"
+
+    # Less than a day
+    hours = minutes // 60
+    if hours < 24:
+        return f"{hours} hour{'s' if hours != 1 else ''} ago"
+
+    # Less than a week
+    days = hours // 24
+    if days < 7:
+        return f"{days} day{'s' if days != 1 else ''} ago"
+
+    # Less than a month (30 days)
+    if days < 30:
+        weeks = days // 7
+        return f"{weeks} week{'s' if weeks != 1 else ''} ago"
+
+    # Less than a year
+    if days < 365:
+        months = days // 30
+        return f"{months} month{'s' if months != 1 else ''} ago"
+
+    # Years
+    years = days // 365
+    return f"{years} year{'s' if years != 1 else ''} ago"
 
 
 def escape_markdown_v2(text: str) -> str:

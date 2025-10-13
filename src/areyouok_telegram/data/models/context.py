@@ -105,7 +105,7 @@ class Context(Base):
 
     @classmethod
     @traced(extract_args=["chat_id", "session_id", "ctype"])
-    async def new_or_update(
+    async def new(
         cls,
         db_conn: AsyncSession,
         *,
@@ -114,8 +114,12 @@ class Context(Base):
         session_id: str,
         ctype: str,
         content: str,
-    ):
-        """Insert or update a context item in the database with encrypted content."""
+    ) -> None:
+        """Insert a new context item in the database with encrypted content.
+
+        Note: This always creates a new record. The context_key is unique per content,
+        so identical content will be rejected by the database constraint.
+        """
         now = datetime.now(UTC)
 
         if ctype not in VALID_CONTEXT_TYPES:
@@ -127,22 +131,15 @@ class Context(Base):
             chat_encryption_key=chat_encryption_key,
         )
 
+        context_key = cls.generate_context_key(chat_id, ctype, encrypted_content)
+
         stmt = pg_insert(cls).values(
-            context_key=cls.generate_context_key(chat_id, ctype, encrypted_content),
+            context_key=context_key,
             chat_id=str(chat_id),
             session_id=session_id,
             type=ctype,
             encrypted_content=encrypted_content,
             created_at=now,
-        )
-
-        stmt = stmt.on_conflict_do_update(
-            index_elements=["context_key"],
-            set_={
-                "session_id": stmt.excluded.session_id,
-                "encrypted_content": stmt.excluded.encrypted_content,
-                "created_at": stmt.excluded.created_at,
-            },
         )
 
         await db_conn.execute(stmt)
@@ -220,3 +217,55 @@ class Context(Base):
         contexts = result.scalars().all()
 
         return contexts if contexts else None
+
+    @classmethod
+    @traced(extract_args=["ids"])
+    async def get_by_ids(
+        cls,
+        db_conn: AsyncSession,
+        *,
+        ids: list[int],
+    ) -> list["Context"]:
+        """Retrieve contexts by list of IDs.
+
+        Args:
+            db_conn: Database session
+            ids: List of Context IDs to retrieve
+
+        Returns:
+            List of Context objects (may be empty if no matches)
+        """
+        if not ids:
+            return []
+
+        stmt = select(cls).where(cls.id.in_(ids))
+        result = await db_conn.execute(stmt)
+        return list(result.scalars().all())
+
+    @classmethod
+    @traced(extract_args=["from_timestamp", "to_timestamp"])
+    async def get_by_created_timestamp(
+        cls,
+        db_conn: AsyncSession,
+        *,
+        from_timestamp: datetime,
+        to_timestamp: datetime,
+    ) -> list["Context"]:
+        """Retrieve contexts created after given timestamp.
+
+        Args:
+            db_conn: Database session
+            from_timestamp: Datetime to query from (contexts created after this time)
+            to_timestamp: Datetime to query to (contexts created before this time)
+
+        Returns:
+            List of Context objects ordered by created_at (oldest first)
+        """
+        stmt = (
+            select(cls)
+            .where(cls.created_at >= from_timestamp)
+            .where(cls.created_at < to_timestamp)
+            .order_by(cls.created_at.asc())
+        )
+        result = await db_conn.execute(stmt)
+        return list(result.scalars().all())

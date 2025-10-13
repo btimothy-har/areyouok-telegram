@@ -121,7 +121,7 @@ async def log_metadata_update_context(
         chat_obj = await Chats.get_by_id(db_conn, chat_id=chat_id)
         chat_encryption_key = chat_obj.retrieve_key()
 
-        await Context.new_or_update(
+        await Context.new(
             db_conn,
             chat_encryption_key=chat_encryption_key,
             chat_id=chat_id,

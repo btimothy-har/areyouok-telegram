@@ -34,6 +34,11 @@ application = [
     "cachetools~=5.5.0",
     "pycountry>=24.6.1",
     "genai-prices~=0.0.27",
+    "llama-index-core~=0.14.4",
+    "llama-index-vector-stores-postgres",
+    "llama-index-embeddings-openai",
+    "llama-index-storage-docstore-postgres",
+    "aiolimiter~=1.2.0",
 ]
 dev = [
     "ruff~=0.13.1",
@@ -109,6 +114,11 @@ addopts = [
 ]
 asyncio_mode = "auto"
 pythonpath = ["src"]
+filterwarnings = [
+    # Suppress third-party deprecation warnings we can't control
+    "ignore::DeprecationWarning:llama_index.*:",
+    "ignore::DeprecationWarning:pydub.*:",
+]
 
 [tool.coverage.run]
 source = ["src/areyouok_telegram"]

@@ -9,9 +9,9 @@ from areyouok_telegram.config import DEVELOPER_CHAT_ID
 from areyouok_telegram.config import DEVELOPER_THREAD_ID
 from areyouok_telegram.data import Updates
 from areyouok_telegram.data import async_database
-from areyouok_telegram.utils import db_retry
-from areyouok_telegram.utils import split_long_message
-from areyouok_telegram.utils import telegram_call
+from areyouok_telegram.utils.retry import db_retry
+from areyouok_telegram.utils.retry import telegram_call
+from areyouok_telegram.utils.text import split_long_message
 
 
 async def on_error_event(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE) -> None:

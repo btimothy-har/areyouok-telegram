@@ -15,8 +15,8 @@ from areyouok_telegram.data import operations as data_operations
 from areyouok_telegram.handlers.exceptions import InvalidCallbackDataError
 from areyouok_telegram.jobs import ConversationJob
 from areyouok_telegram.jobs import schedule_job
-from areyouok_telegram.utils import db_retry
-from areyouok_telegram.utils import telegram_call
+from areyouok_telegram.utils.retry import db_retry
+from areyouok_telegram.utils.retry import telegram_call
 
 
 async def on_new_update(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):
@@ -60,7 +60,7 @@ async def on_dynamic_response_callback(update: telegram.Update, context: Context
             )
             chat_obj = await Chats.get_by_id(db_conn, chat_id=chat_id)
 
-            await Context.new_or_update(
+            await Context.new(
                 db_conn,
                 chat_encryption_key=chat_obj.retrieve_key(),
                 chat_id=str(update.effective_chat.id),

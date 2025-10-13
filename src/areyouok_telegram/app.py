@@ -26,6 +26,7 @@ from areyouok_telegram.setup import setup_bot_commands
 from areyouok_telegram.setup import setup_bot_description
 from areyouok_telegram.setup import setup_bot_name
 from areyouok_telegram.setup import setup_bot_short_description
+from areyouok_telegram.setup import start_context_embedding_job
 from areyouok_telegram.setup import start_data_warning_job
 from areyouok_telegram.setup import start_ping_job
 
@@ -38,6 +39,7 @@ async def application_post_init(application: Application):
     await restore_active_sessions(application)
     await start_data_warning_job(application)
     await start_ping_job(application)
+    await start_context_embedding_job(application)
     await setup_bot_commands(application)
 
 

@@ -32,6 +32,7 @@ from areyouok_telegram.llms.chat.responses import TextResponse
 from areyouok_telegram.llms.chat.utils import check_restricted_responses
 from areyouok_telegram.llms.chat.utils import check_special_instructions
 from areyouok_telegram.llms.chat.utils import validate_response_data
+from areyouok_telegram.llms.context_search import search_chat_context
 from areyouok_telegram.llms.exceptions import CompleteOnboardingError
 from areyouok_telegram.llms.exceptions import MetadataFieldUpdateError
 from areyouok_telegram.llms.models import Gemini25Pro
@@ -242,6 +243,37 @@ async def terminate_onboarding(ctx: RunContext[OnboardingAgentDependencies]) -> 
     )
 
     return "Onboarding terminated successfully."
+
+
+@onboarding_agent.tool
+async def search_past_conversations(
+    ctx: RunContext[OnboardingAgentDependencies],
+    search_query: str,
+) -> str:
+    """
+    Search past conversations for relevant context using semantic search.
+
+    Use this when you need to recall specific topics, emotions, events, or patterns
+    from previous conversations with this user. This helps maintain continuity and
+    shows the user you remember important details from your relationship.
+
+    Args:
+        search_query: Natural language query describing what to search for
+                     (e.g., "times user felt anxious about work", "user's goals")
+
+    Returns:
+        A formatted response with direct answer and context summary, or error message
+    """
+    try:
+        result = await search_chat_context(
+            chat_id=ctx.deps.tg_chat_id,
+            session_id=ctx.deps.tg_session_id,
+            search_query=search_query,
+        )
+    except Exception as e:
+        return f"Unable to search past conversations: {str(e)}"
+    else:
+        return result
 
 
 @onboarding_agent.output_validator

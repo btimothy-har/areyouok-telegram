@@ -25,10 +25,10 @@ from areyouok_telegram.llms import run_agent_with_tracking
 from areyouok_telegram.llms.agent_feedback_context import ContextAgentDependencies
 from areyouok_telegram.llms.agent_feedback_context import feedback_context_agent
 from areyouok_telegram.logging import traced
-from areyouok_telegram.utils import db_retry
-from areyouok_telegram.utils import package_version
-from areyouok_telegram.utils import shorten_url
-from areyouok_telegram.utils import telegram_call
+from areyouok_telegram.utils.retry import db_retry
+from areyouok_telegram.utils.retry import telegram_call
+from areyouok_telegram.utils.text import package_version
+from areyouok_telegram.utils.text import shorten_url
 
 FEEDBACK_CACHE = TTLCache(maxsize=1000, ttl=300)  # Cache feedback context for 5 minutes
 
