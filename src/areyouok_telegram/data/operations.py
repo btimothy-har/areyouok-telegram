@@ -200,16 +200,15 @@ async def get_chat_encryption_key(*, chat_id: str) -> str:
 
 @db_retry()
 async def get_latest_profile(*, chat_id: str) -> Context | None:
-    """Get the latest profile context for a chat, with content decrypted and cached.
+    """Get the raw latest profile context for a chat.
+
+    This DOES NOT decrypt the content. Callers are responsible for decrypting the content if they need it.
 
     Args:
         chat_id: Chat identifier
 
     Returns:
-        Context | None: Profile context with decrypted content cached, or None if no profile exists
-
-    Raises:
-        InvalidChatError: If no chat is found
+        Context | None: Profile context, or None if no profile exists
     """
     async with async_database() as db_conn:
         profile_context = await Context.get_latest_profile(db_conn, chat_id=chat_id)

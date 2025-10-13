@@ -896,9 +896,8 @@ class TestGetLatestProfile:
 
     @pytest.mark.asyncio
     async def test_get_latest_profile_success(self):
-        """Test get_latest_profile returns Context object with content decrypted."""
+        """Test get_latest_profile returns raw Context object without decryption."""
         mock_profile_context = MagicMock()
-        mock_profile_context.decrypt_content.return_value = "# User Profile\n\nTest profile content"
 
         with (
             patch("areyouok_telegram.data.operations.async_database") as mock_async_db,
@@ -906,21 +905,15 @@ class TestGetLatestProfile:
                 "areyouok_telegram.data.operations.Context.get_latest_profile",
                 new=AsyncMock(return_value=mock_profile_context),
             ) as mock_get_latest,
-            patch(
-                "areyouok_telegram.data.operations.get_chat_encryption_key",
-                new=AsyncMock(return_value="test_encryption_key"),
-            ) as mock_get_key,
         ):
             mock_db_conn = AsyncMock()
             mock_async_db.return_value.__aenter__.return_value = mock_db_conn
 
             result = await data_operations.get_latest_profile(chat_id="chat123")
 
-        # Returns the Context object itself (with content now decrypted and cached)
+        # Returns the raw Context object without decryption
         assert result == mock_profile_context
         mock_get_latest.assert_called_once_with(mock_db_conn, chat_id="chat123")
-        mock_get_key.assert_called_once_with(chat_id="chat123")
-        mock_profile_context.decrypt_content.assert_called_once_with(chat_encryption_key="test_encryption_key")
 
     @pytest.mark.asyncio
     async def test_get_latest_profile_no_profile_exists(self):
@@ -939,31 +932,6 @@ class TestGetLatestProfile:
 
         assert result is None
         mock_get_latest.assert_called_once_with(mock_db_conn, chat_id="chat123")
-
-    @pytest.mark.asyncio
-    async def test_get_latest_profile_invalid_chat_error(self):
-        """Test get_latest_profile raises InvalidChatError when chat doesn't exist."""
-
-        mock_profile_context = MagicMock()
-
-        with (
-            patch("areyouok_telegram.data.operations.async_database") as mock_async_db,
-            patch(
-                "areyouok_telegram.data.operations.Context.get_latest_profile",
-                new=AsyncMock(return_value=mock_profile_context),
-            ),
-            patch(
-                "areyouok_telegram.data.operations.get_chat_encryption_key",
-                new=AsyncMock(side_effect=InvalidChatError("chat123")),
-            ),
-        ):
-            mock_db_conn = AsyncMock()
-            mock_async_db.return_value.__aenter__.return_value = mock_db_conn
-
-            with pytest.raises(InvalidChatError) as exc_info:
-                await data_operations.get_latest_profile(chat_id="chat123")
-
-            assert exc_info.value.chat_id == "chat123"
 
 
 class TestGetChatEncryptionKey:

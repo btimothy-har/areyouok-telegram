@@ -88,7 +88,15 @@ class TestInstructionsWithPersonalitySwitch:
         context.deps.restricted_responses = set()
         context.deps.instruction = None
 
-        with patch.object(UserMetadata, "get_by_user_id", return_value=mock_user_metadata):
+        # Mock database connection
+        mock_db_conn = AsyncMock()
+        
+        with (
+            patch("areyouok_telegram.llms.chat.agents.chat.async_database") as mock_async_db,
+            patch.object(UserMetadata, "get_by_user_id", new=AsyncMock(return_value=mock_user_metadata)),
+        ):
+            mock_async_db.return_value.__aenter__.return_value = mock_db_conn
+            mock_async_db.return_value.__aexit__.return_value = None
             yield context
 
     @pytest.mark.asyncio
@@ -159,14 +167,13 @@ class TestInstructionsWithPersonalitySwitch:
     @pytest.mark.asyncio
     async def test_instructions_user_metadata_called_correctly(self, mock_run_context):
         """Test that UserMetadata.get_by_user_id is called with correct chat_id."""
-        with patch.object(UserMetadata, "get_by_user_id") as mock_get_user:
-            mock_metadata = MagicMock(spec=UserMetadata)
-            mock_metadata.preferred_name = "Test"
-            mock_metadata.country = "Test"
-            mock_metadata.timezone = "UTC"
-            mock_metadata.communication_style = "Test"
-            mock_get_user.return_value = mock_metadata
-
+        mock_metadata = MagicMock(spec=UserMetadata)
+        mock_metadata.preferred_name = "Test"
+        mock_metadata.country = "Test"
+        mock_metadata.timezone = "UTC"
+        mock_metadata.communication_style = "Test"
+        
+        with patch.object(UserMetadata, "get_by_user_id", new=AsyncMock(return_value=mock_metadata)) as mock_get_user:
             await instructions_with_personality_switch(mock_run_context)
 
             mock_get_user.assert_called_once_with(ANY, user_id=mock_run_context.deps.tg_chat_id)
