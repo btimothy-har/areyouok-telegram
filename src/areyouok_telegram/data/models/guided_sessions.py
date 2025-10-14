@@ -178,7 +178,7 @@ class GuidedSessions(Base):
         chat_id: str,
         chat_session: str,
         session_type: str,
-    ) -> "GuidedSessions":
+    ) -> None:
         """Start a guided session for a user.
 
         Creates a new guided session record, preserving audit trail of previous attempts.
@@ -189,9 +189,6 @@ class GuidedSessions(Base):
             chat_id: Chat ID to start guided session for
             chat_session: Session key from Sessions table to link to
             session_type: Type of guided session (from GuidedSessionType enum)
-
-        Returns:
-            GuidedSessions: Active guided session state object
 
         Raises:
             InvalidGuidedSessionTypeError: If session_type is not valid
