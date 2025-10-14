@@ -1,10 +1,12 @@
 """Tests for GuidedSessions model."""
 
 import hashlib
+import json
 from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
+from cryptography.fernet import Fernet
 from freezegun import freeze_time
 
 from areyouok_telegram.data.models.guided_sessions import (
@@ -16,6 +18,7 @@ from areyouok_telegram.data.models.guided_sessions import (
     InvalidGuidedSessionStateError,
     InvalidGuidedSessionTypeError,
 )
+from areyouok_telegram.encryption.exceptions import ContentNotDecryptedError
 
 # Backward compatibility aliases for testing
 VALID_ONBOARDING_STATES = VALID_GUIDED_SESSION_STATES
@@ -627,3 +630,249 @@ class TestBackwardCompatibility:
         assert guided_session.is_active is False
         assert guided_session.is_completed is False
         assert guided_session.is_incomplete is True
+
+
+class TestGuidedSessionsMetadata:
+    """Test encrypted metadata functionality for GuidedSessions."""
+
+    def test_encrypt_metadata_dict(self):
+        """Test encrypting metadata dict."""
+        metadata = {"step": 1, "responses": {"name": "Alice"}}
+        encryption_key = Fernet.generate_key().decode("utf-8")
+
+        encrypted = GuidedSessions.encrypt_metadata(metadata=metadata, chat_encryption_key=encryption_key)
+
+        # Should be a string (base64 encoded encrypted data)
+        assert isinstance(encrypted, str)
+        assert len(encrypted) > 0
+
+        # Should be able to decrypt it back
+        fernet = Fernet(encryption_key.encode())
+        decrypted_bytes = fernet.decrypt(encrypted.encode("utf-8"))
+        decrypted_content = json.loads(decrypted_bytes.decode("utf-8"))
+        assert decrypted_content == metadata
+
+    def test_encrypt_metadata_empty_dict(self):
+        """Test encrypting empty dict."""
+        metadata = {}
+        encryption_key = Fernet.generate_key().decode("utf-8")
+
+        encrypted = GuidedSessions.encrypt_metadata(metadata=metadata, chat_encryption_key=encryption_key)
+
+        # Should still work with empty dict
+        assert isinstance(encrypted, str)
+        assert len(encrypted) > 0
+
+        # Verify it decrypts to empty dict
+        fernet = Fernet(encryption_key.encode())
+        decrypted_bytes = fernet.decrypt(encrypted.encode("utf-8"))
+        decrypted_content = json.loads(decrypted_bytes.decode("utf-8"))
+        assert decrypted_content == {}
+
+    def test_encrypt_metadata_nested_dict(self):
+        """Test encrypting nested dict structure."""
+        metadata = {
+            "step": 3,
+            "responses": {"name": "Bob", "preferences": {"style": "casual", "speed": "fast"}},
+            "timestamps": ["2025-01-01", "2025-01-02"],
+        }
+        encryption_key = Fernet.generate_key().decode("utf-8")
+
+        encrypted = GuidedSessions.encrypt_metadata(metadata=metadata, chat_encryption_key=encryption_key)
+
+        # Verify complex structure is preserved
+        fernet = Fernet(encryption_key.encode())
+        decrypted_bytes = fernet.decrypt(encrypted.encode("utf-8"))
+        decrypted_content = json.loads(decrypted_bytes.decode("utf-8"))
+        assert decrypted_content == metadata
+
+    def test_decrypt_metadata_with_encrypted_data(self):
+        """Test decrypting metadata when encrypted_metadata exists."""
+        guided_session = GuidedSessions()
+        guided_session.guided_session_key = "decrypt_with_data_key"
+        metadata = {"step": 2, "data": "value"}
+        encryption_key = Fernet.generate_key().decode("utf-8")
+
+        # Encrypt and set
+        guided_session.encrypted_metadata = GuidedSessions.encrypt_metadata(
+            metadata=metadata, chat_encryption_key=encryption_key
+        )
+
+        # Decrypt
+        guided_session.decrypt_metadata(chat_encryption_key=encryption_key)
+
+        # Verify it's in cache
+        assert guided_session.guided_session_key in guided_session._metadata_cache
+
+    def test_decrypt_metadata_no_encrypted_data(self):
+        """Test decrypting when no encrypted_metadata exists."""
+        guided_session = GuidedSessions()
+        guided_session.guided_session_key = "decrypt_no_data_key"
+        guided_session.encrypted_metadata = None
+        encryption_key = Fernet.generate_key().decode("utf-8")
+
+        # Should not raise error, just do nothing
+        guided_session.decrypt_metadata(chat_encryption_key=encryption_key)
+
+        # Cache should remain empty for this key
+        assert guided_session.guided_session_key not in guided_session._metadata_cache
+
+    def test_decrypt_metadata_already_cached(self):
+        """Test that decrypt doesn't re-decrypt if already in cache."""
+        guided_session = GuidedSessions()
+        guided_session.guided_session_key = "decrypt_already_cached_key"
+        metadata = {"step": 2}
+        encryption_key = Fernet.generate_key().decode("utf-8")
+
+        # Encrypt and set
+        guided_session.encrypted_metadata = GuidedSessions.encrypt_metadata(
+            metadata=metadata, chat_encryption_key=encryption_key
+        )
+
+        # First decrypt
+        guided_session.decrypt_metadata(chat_encryption_key=encryption_key)
+        cached_value = guided_session._metadata_cache[guided_session.guided_session_key]
+
+        # Second decrypt - should use cached value
+        guided_session.decrypt_metadata(chat_encryption_key=encryption_key)
+        assert guided_session._metadata_cache[guided_session.guided_session_key] == cached_value
+
+    def test_session_metadata_property_with_decrypted_data(self):
+        """Test accessing session_metadata property after decryption."""
+        guided_session = GuidedSessions()
+        guided_session.guided_session_key = "property_with_decrypt_key"
+        metadata = {"step": 3, "responses": {"name": "Charlie"}}
+        encryption_key = Fernet.generate_key().decode("utf-8")
+
+        # Encrypt, set, and decrypt
+        guided_session.encrypted_metadata = GuidedSessions.encrypt_metadata(
+            metadata=metadata, chat_encryption_key=encryption_key
+        )
+        guided_session.decrypt_metadata(chat_encryption_key=encryption_key)
+
+        # Access property
+        result = guided_session.session_metadata
+        assert result == metadata
+
+    def test_session_metadata_property_without_decryption(self):
+        """Test accessing session_metadata property before decryption raises error."""
+        guided_session = GuidedSessions()
+        guided_session.guided_session_key = "property_without_decrypt_key"
+        metadata = {"step": 1}
+        encryption_key = Fernet.generate_key().decode("utf-8")
+
+        # Encrypt and set, but don't decrypt
+        guided_session.encrypted_metadata = GuidedSessions.encrypt_metadata(
+            metadata=metadata, chat_encryption_key=encryption_key
+        )
+
+        # Should raise ContentNotDecryptedError
+        with pytest.raises(ContentNotDecryptedError) as exc_info:
+            _ = guided_session.session_metadata
+
+        assert exc_info.value.field_name == "property_without_decrypt_key"
+
+    def test_session_metadata_property_no_encrypted_data(self):
+        """Test accessing session_metadata property when no encrypted data exists."""
+        guided_session = GuidedSessions()
+        guided_session.guided_session_key = "property_no_data_key"
+        guided_session.encrypted_metadata = None
+
+        # Should return None, not raise error
+        result = guided_session.session_metadata
+        assert result is None
+
+    async def test_update_metadata(self, mock_db_session):
+        """Test updating metadata on a guided session."""
+        guided_session = GuidedSessions()
+        guided_session.guided_session_key = "update_metadata_key"
+        metadata = {"step": 4, "new_data": "updated"}
+        encryption_key = Fernet.generate_key().decode("utf-8")
+
+        with freeze_time("2025-01-02 12:00:00"):
+            await guided_session.update_metadata(
+                mock_db_session, metadata=metadata, chat_encryption_key=encryption_key
+            )
+
+        # Verify encrypted_metadata was set
+        assert guided_session.encrypted_metadata is not None
+
+        # Verify updated_at was set
+        assert guided_session.updated_at == datetime(2025, 1, 2, 12, 0, 0, tzinfo=UTC)
+
+        # Verify session was added to db
+        mock_db_session.add.assert_called_once_with(guided_session)
+
+        # Verify it can be decrypted
+        fernet = Fernet(encryption_key.encode())
+        decrypted_bytes = fernet.decrypt(guided_session.encrypted_metadata.encode("utf-8"))
+        decrypted_content = json.loads(decrypted_bytes.decode("utf-8"))
+        assert decrypted_content == metadata
+
+    async def test_update_metadata_overwrites_existing(self, mock_db_session):
+        """Test that update_metadata overwrites existing metadata."""
+        guided_session = GuidedSessions()
+        guided_session.guided_session_key = "update_overwrites_key"
+        encryption_key = Fernet.generate_key().decode("utf-8")
+
+        # Set initial metadata
+        initial_metadata = {"step": 1}
+        guided_session.encrypted_metadata = GuidedSessions.encrypt_metadata(
+            metadata=initial_metadata, chat_encryption_key=encryption_key
+        )
+
+        # Update with new metadata
+        new_metadata = {"step": 2, "complete": True}
+        await guided_session.update_metadata(
+            mock_db_session, metadata=new_metadata, chat_encryption_key=encryption_key
+        )
+
+        # Verify new metadata replaced old
+        fernet = Fernet(encryption_key.encode())
+        decrypted_bytes = fernet.decrypt(guided_session.encrypted_metadata.encode("utf-8"))
+        decrypted_content = json.loads(decrypted_bytes.decode("utf-8"))
+        assert decrypted_content == new_metadata
+        assert decrypted_content != initial_metadata
+
+    def test_metadata_cache_isolation(self):
+        """Test that metadata cache is isolated between different sessions."""
+        encryption_key = Fernet.generate_key().decode("utf-8")
+
+        session1 = GuidedSessions()
+        session1.guided_session_key = "key_1"
+        session1.encrypted_metadata = GuidedSessions.encrypt_metadata(
+            metadata={"session": 1}, chat_encryption_key=encryption_key
+        )
+
+        session2 = GuidedSessions()
+        session2.guided_session_key = "key_2"
+        session2.encrypted_metadata = GuidedSessions.encrypt_metadata(
+            metadata={"session": 2}, chat_encryption_key=encryption_key
+        )
+
+        # Decrypt both
+        session1.decrypt_metadata(chat_encryption_key=encryption_key)
+        session2.decrypt_metadata(chat_encryption_key=encryption_key)
+
+        # Verify each has correct data
+        assert session1.session_metadata == {"session": 1}
+        assert session2.session_metadata == {"session": 2}
+
+    def test_encrypt_decrypt_round_trip_with_special_characters(self):
+        """Test encryption/decryption with special characters in metadata."""
+        metadata = {
+            "unicode": "Hello 世界 🌍",
+            "special": "Test\nNewline\tTab",
+            "quotes": 'Single \' and double " quotes',
+        }
+        encryption_key = Fernet.generate_key().decode("utf-8")
+
+        # Encrypt
+        encrypted = GuidedSessions.encrypt_metadata(metadata=metadata, chat_encryption_key=encryption_key)
+
+        # Decrypt manually to verify
+        fernet = Fernet(encryption_key.encode())
+        decrypted_bytes = fernet.decrypt(encrypted.encode("utf-8"))
+        decrypted_content = json.loads(decrypted_bytes.decode("utf-8"))
+
+        assert decrypted_content == metadata
