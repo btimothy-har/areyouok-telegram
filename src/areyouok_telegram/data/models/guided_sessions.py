@@ -164,7 +164,7 @@ class GuidedSessions(Base):
             return None
 
         if self.guided_session_key not in self._metadata_cache:
-            raise ContentNotDecryptedError(self.guided_session_key)
+            raise ContentNotDecryptedError("session_metadata")
 
         metadata_json = self._metadata_cache.get(self.guided_session_key)
         return json.loads(metadata_json) if metadata_json else None
