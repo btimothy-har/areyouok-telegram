@@ -1,13 +1,17 @@
 import hashlib
+import json
 from datetime import UTC, datetime, timedelta
 from enum import Enum
 
-from sqlalchemy import Column, ForeignKey, Integer, String, select
+from cachetools import TTLCache
+from cryptography.fernet import Fernet
+from sqlalchemy import Column, ForeignKey, Integer, String, Text, select
 from sqlalchemy.dialects.postgresql import TIMESTAMP, insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from areyouok_telegram.config import ENV
 from areyouok_telegram.data import Base
+from areyouok_telegram.encryption.exceptions import ContentNotDecryptedError
 from areyouok_telegram.logging import traced
 
 
@@ -65,10 +69,16 @@ class GuidedSessions(Base):
     started_at = Column(TIMESTAMP(timezone=True), nullable=False)
     completed_at = Column(TIMESTAMP(timezone=True), nullable=True)
 
+    # Encrypted session-specific metadata (e.g., onboarding responses, workflow state)
+    encrypted_metadata = Column(Text, nullable=True)
+
     # Metadata
     id = Column(Integer, primary_key=True, autoincrement=True)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False)
     updated_at = Column(TIMESTAMP(timezone=True), nullable=False)
+
+    # TTL cache for decrypted metadata (1 hour TTL, max 1000 entries)
+    _metadata_cache: TTLCache[str, str] = TTLCache(maxsize=1000, ttl=1 * 60 * 60)
 
     @staticmethod
     def generate_guided_session_key(chat_session: str, session_type: str, started_at: datetime) -> str:
@@ -108,22 +118,77 @@ class GuidedSessions(Base):
         return now - self.started_at > timedelta(hours=1)
 
     @classmethod
+    def encrypt_metadata(cls, *, metadata: dict, chat_encryption_key: str) -> str:
+        """Encrypt metadata using the chat's encryption key.
+
+        Args:
+            metadata: The metadata dict to encrypt
+            chat_encryption_key: The chat's Fernet encryption key
+
+        Returns:
+            str: The encrypted metadata as base64-encoded string
+        """
+        fernet = Fernet(chat_encryption_key.encode())
+        metadata_str = json.dumps(metadata)
+        encrypted_bytes = fernet.encrypt(metadata_str.encode("utf-8"))
+        return encrypted_bytes.decode("utf-8")
+
+    def decrypt_metadata(self, *, chat_encryption_key: str) -> None:
+        """Decrypt metadata using the chat's encryption key and cache it.
+
+        Args:
+            chat_encryption_key: The chat's Fernet encryption key
+
+        Raises:
+            ValueError: If the encryption key format is invalid
+            InvalidToken: If the encryption key is wrong or data is corrupted
+        """
+        if self.encrypted_metadata and self.guided_session_key not in self._metadata_cache:
+            fernet = Fernet(chat_encryption_key.encode())
+            encrypted_bytes = self.encrypted_metadata.encode("utf-8")
+            decrypted_bytes = fernet.decrypt(encrypted_bytes)
+            metadata_json = decrypted_bytes.decode("utf-8")
+            self._metadata_cache[self.guided_session_key] = metadata_json
+
+    @property
+    def session_metadata(self) -> dict | None:
+        """Get the decrypted session metadata from cache.
+
+        Returns:
+            dict | None: The decrypted metadata dict, or None if no metadata exists
+
+        Raises:
+            ContentNotDecryptedError: If metadata hasn't been decrypted yet
+        """
+        if not self.encrypted_metadata:
+            return None
+
+        if self.guided_session_key not in self._metadata_cache:
+            raise ContentNotDecryptedError("session_metadata")
+
+        metadata_json = self._metadata_cache.get(self.guided_session_key)
+        return json.loads(metadata_json) if metadata_json else None
+
+    @classmethod
     @traced(extract_args=["chat_session", "session_type"])
     async def start_new_session(
-        cls, db_conn: AsyncSession, *, chat_id: str, chat_session: str, session_type: str
-    ) -> "GuidedSessions":
+        cls,
+        db_conn: AsyncSession,
+        *,
+        chat_id: str,
+        chat_session: str,
+        session_type: str,
+    ) -> None:
         """Start a guided session for a user.
 
         Creates a new guided session record, preserving audit trail of previous attempts.
+        To add metadata to the session, call update_metadata() separately.
 
         Args:
             db_conn: Database connection
             chat_id: Chat ID to start guided session for
             chat_session: Session key from Sessions table to link to
             session_type: Type of guided session (from GuidedSessionType enum)
-
-        Returns:
-            GuidedSessions: Active guided session state object
 
         Raises:
             InvalidGuidedSessionTypeError: If session_type is not valid
@@ -172,6 +237,29 @@ class GuidedSessions(Base):
         """
         self.state = GuidedSessionState.INCOMPLETE.value
         self.updated_at = timestamp
+        db_conn.add(self)
+
+    @traced(extract_args=False)
+    async def update_metadata(
+        self,
+        db_conn: AsyncSession,
+        *,
+        metadata: dict,
+        chat_encryption_key: str,
+    ) -> None:
+        """Update the encrypted metadata for this guided session.
+
+        Args:
+            db_conn: Database connection
+            metadata: New metadata dict to encrypt and store
+            chat_encryption_key: Chat's encryption key
+        """
+        self.encrypted_metadata = self.encrypt_metadata(metadata=metadata, chat_encryption_key=chat_encryption_key)
+        self.updated_at = datetime.now(UTC)
+
+        if self.guided_session_key in self._metadata_cache:
+            self._metadata_cache.pop(self.guided_session_key, None)
+
         db_conn.add(self)
 
     @classmethod
