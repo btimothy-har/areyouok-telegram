@@ -790,9 +790,7 @@ class TestGuidedSessionsMetadata:
         encryption_key = Fernet.generate_key().decode("utf-8")
 
         with freeze_time("2025-01-02 12:00:00"):
-            await guided_session.update_metadata(
-                mock_db_session, metadata=metadata, chat_encryption_key=encryption_key
-            )
+            await guided_session.update_metadata(mock_db_session, metadata=metadata, chat_encryption_key=encryption_key)
 
         # Verify encrypted_metadata was set
         assert guided_session.encrypted_metadata is not None
@@ -823,9 +821,7 @@ class TestGuidedSessionsMetadata:
 
         # Update with new metadata
         new_metadata = {"step": 2, "complete": True}
-        await guided_session.update_metadata(
-            mock_db_session, metadata=new_metadata, chat_encryption_key=encryption_key
-        )
+        await guided_session.update_metadata(mock_db_session, metadata=new_metadata, chat_encryption_key=encryption_key)
 
         # Verify new metadata replaced old
         fernet = Fernet(encryption_key.encode())
@@ -863,7 +859,7 @@ class TestGuidedSessionsMetadata:
         metadata = {
             "unicode": "Hello 世界 🌍",
             "special": "Test\nNewline\tTab",
-            "quotes": 'Single \' and double " quotes',
+            "quotes": "Single ' and double \" quotes",
         }
         encryption_key = Fernet.generate_key().decode("utf-8")
 
