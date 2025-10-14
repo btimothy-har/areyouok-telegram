@@ -242,7 +242,7 @@ class GuidedSessions(Base):
         self.updated_at = timestamp
         db_conn.add(self)
 
-    @traced(extract_args=["timestamp"])
+    @traced(extract_args=False)
     async def update_metadata(
         self,
         db_conn: AsyncSession,
