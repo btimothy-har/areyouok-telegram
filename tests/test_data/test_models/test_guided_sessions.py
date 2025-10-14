@@ -766,11 +766,11 @@ class TestGuidedSessionsMetadata:
             metadata=metadata, chat_encryption_key=encryption_key
         )
 
-        # Should raise ContentNotDecryptedError
+        # Should raise ContentNotDecryptedError with property name
         with pytest.raises(ContentNotDecryptedError) as exc_info:
             _ = guided_session.session_metadata
 
-        assert exc_info.value.field_name == "property_without_decrypt_key"
+        assert exc_info.value.field_name == "session_metadata"
 
     def test_session_metadata_property_no_encrypted_data(self):
         """Test accessing session_metadata property when no encrypted data exists."""
@@ -829,6 +829,38 @@ class TestGuidedSessionsMetadata:
         decrypted_content = json.loads(decrypted_bytes.decode("utf-8"))
         assert decrypted_content == new_metadata
         assert decrypted_content != initial_metadata
+
+    async def test_update_metadata_invalidates_cache(self, mock_db_session):
+        """Test that update_metadata clears cached decrypted data."""
+        guided_session = GuidedSessions()
+        guided_session.guided_session_key = "update_invalidates_cache_key"
+        encryption_key = Fernet.generate_key().decode("utf-8")
+
+        # Set and decrypt initial metadata
+        initial_metadata = {"step": 1, "old": "data"}
+        guided_session.encrypted_metadata = GuidedSessions.encrypt_metadata(
+            metadata=initial_metadata, chat_encryption_key=encryption_key
+        )
+        guided_session.decrypt_metadata(chat_encryption_key=encryption_key)
+
+        # Verify it's cached
+        assert guided_session.guided_session_key in guided_session._metadata_cache
+        assert guided_session.session_metadata == initial_metadata
+
+        # Update metadata - should clear cache
+        new_metadata = {"step": 2, "new": "data"}
+        await guided_session.update_metadata(mock_db_session, metadata=new_metadata, chat_encryption_key=encryption_key)
+
+        # Cache should be cleared for this key
+        assert guided_session.guided_session_key not in guided_session._metadata_cache
+
+        # Accessing property should raise error until re-decrypted
+        with pytest.raises(ContentNotDecryptedError):
+            _ = guided_session.session_metadata
+
+        # After re-decrypting, should get new metadata
+        guided_session.decrypt_metadata(chat_encryption_key=encryption_key)
+        assert guided_session.session_metadata == new_metadata
 
     def test_metadata_cache_isolation(self):
         """Test that metadata cache is isolated between different sessions."""

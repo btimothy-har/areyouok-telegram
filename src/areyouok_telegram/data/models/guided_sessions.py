@@ -259,6 +259,10 @@ class GuidedSessions(Base):
         """
         self.encrypted_metadata = self.encrypt_metadata(metadata=metadata, chat_encryption_key=chat_encryption_key)
         self.updated_at = datetime.now(UTC)
+
+        if self.guided_session_key in self._metadata_cache:
+            self._metadata_cache.pop(self.guided_session_key, None)
+
         db_conn.add(self)
 
     @classmethod
