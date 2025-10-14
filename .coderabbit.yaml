@@ -45,12 +45,12 @@ reviews:
     ignore_usernames: []
   finishing_touches:
     docstrings:
-      enabled: true
+      enabled: false
     unit_tests:
       enabled: false
   pre_merge_checks:
     docstrings:
-      mode: warning
+      mode: off
       threshold: 80
     title:
       mode: warning
