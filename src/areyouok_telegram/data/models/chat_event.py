@@ -19,6 +19,8 @@ CONTEXT_TYPE_MAP = {
     ContextType.METADATA.value: "user_metadata_update",
     ContextType.ACTION.value: "user_button_action",
     ContextType.MEMORY.value: "user_memory",
+    ContextType.PROFILE_UPDATE.value: "user_profile_update",
+    ContextType.PROFILE.value: "user_profile",
 }
 
 SYSTEM_USER_ID = "system"
@@ -80,13 +82,9 @@ class ChatEvent(pydantic.BaseModel):
 
             # Handle reactions, assuming only emoji reactions for simplicity
             # TODO: Handle custom and paid reactions
-            reaction_string = ", ".join(
-                [
-                    r.emoji
-                    for r in message.telegram_object.new_reaction
-                    if r.type == telegram.constants.ReactionType.EMOJI
-                ]
-            )
+            reaction_string = ", ".join([
+                r.emoji for r in message.telegram_object.new_reaction if r.type == telegram.constants.ReactionType.EMOJI
+            ])
             event_data = {
                 "emojis": reaction_string,
                 "to_message_id": str(message.message_id),

@@ -19,6 +19,7 @@ class GuidedSessionType(Enum):
     """Types of guided sessions supported by the system."""
 
     ONBOARDING = "onboarding"
+    JOURNALING = "journaling"
     # Future session types can be added here:
     # MINDFULNESS = "mindfulness"
     # GOAL_SETTING = "goal_setting"
@@ -309,3 +310,22 @@ class GuidedSessions(Base):
         stmt = select(cls).where(cls.guided_session_key == guided_session_key)
         result = await db_conn.execute(stmt)
         return result.scalars().one_or_none()
+
+    @classmethod
+    async def get_active_session_by_type(
+        cls,
+        db_conn: AsyncSession,
+        *,
+        chat_id: str,
+        session_type: str,
+    ) -> "GuidedSessions | None":
+        """Retrieve an active guided session by chat ID and session type."""
+        stmt = (
+            select(cls)
+            .where(cls.chat_id == chat_id)
+            .where(cls.session_type == session_type)
+            .where(cls.state == GuidedSessionState.ACTIVE.value)
+            .order_by(cls.created_at.desc())
+        )
+        result = await db_conn.execute(stmt)
+        return result.scalars().first()

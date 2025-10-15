@@ -1,4 +1,5 @@
 from areyouok_telegram.handlers.commands.feedback import on_feedback_command
+from areyouok_telegram.handlers.commands.journal import on_journal_command
 from areyouok_telegram.handlers.commands.preferences import on_preferences_command
 from areyouok_telegram.handlers.commands.start import on_start_command
 from areyouok_telegram.handlers.errors import on_error_event
@@ -14,5 +15,6 @@ __all__ = [
     "on_message_react",
     "on_preferences_command",
     "on_start_command",
+    "on_journal_command",
     "on_feedback_command",
 ]

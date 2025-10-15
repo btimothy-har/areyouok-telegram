@@ -173,6 +173,8 @@ class Context(Base):
         db_conn: AsyncSession,
         *,
         chat_id: str,
+        from_timestamp: datetime,
+        to_timestamp: datetime,
         ctype: str | None = None,
     ) -> list["Context"] | None:
         """Retrieve a context by chat_id, optionally filtered by type."""
@@ -180,7 +182,12 @@ class Context(Base):
         if ctype and ctype not in VALID_CONTEXT_TYPES:
             raise InvalidContextTypeError(ctype)
 
-        stmt = select(cls).where(cls.chat_id == chat_id)
+        stmt = (
+            select(cls)
+            .where(cls.chat_id == chat_id)
+            .where(cls.created_at >= from_timestamp)
+            .where(cls.created_at < to_timestamp)
+        )
 
         if ctype:
             stmt = stmt.where(cls.type == ctype)
