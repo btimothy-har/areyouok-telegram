@@ -34,7 +34,9 @@ class CommonChatAgentDependencies:
     tg_bot_id: str
     tg_chat_id: str
     tg_session_id: str
-    restricted_responses: set[Literal["text", "reaction", "switch_personality"]] = field(default_factory=set)
+    restricted_responses: set[Literal["text", "reaction", "switch_personality", "keyboard"]] = field(
+        default_factory=set
+    )
     notification: Notifications | None = None
 
     def to_dict(self) -> dict:
