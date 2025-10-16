@@ -809,8 +809,8 @@ class TestConversationJob:
 
         with (
             patch(
-                "areyouok_telegram.data.operations.get_or_create_guided_session",
-                new=AsyncMock(return_value=mock_onboarding_session),
+                "areyouok_telegram.data.operations.get_active_guided_sessions",
+                new=AsyncMock(return_value=[]),
             ),
             patch.object(job, "_get_chat_context", new=AsyncMock(return_value=[mock_chat_event])),
             patch.object(job, "_get_chat_history", new=AsyncMock(return_value=[])),
@@ -852,8 +852,8 @@ class TestConversationJob:
 
         with (
             patch(
-                "areyouok_telegram.data.operations.get_or_create_guided_session",
-                new=AsyncMock(return_value=mock_onboarding_session),
+                "areyouok_telegram.data.operations.get_active_guided_sessions",
+                new=AsyncMock(return_value=[]),
             ),
             patch.object(job, "_get_chat_context", new=AsyncMock(return_value=[mock_personality_context])),
             patch.object(job, "_get_chat_history", new=AsyncMock(return_value=[])),
@@ -883,8 +883,8 @@ class TestConversationJob:
 
         with (
             patch(
-                "areyouok_telegram.data.operations.get_or_create_guided_session",
-                new=AsyncMock(return_value=mock_onboarding_session),
+                "areyouok_telegram.data.operations.get_active_guided_sessions",
+                new=AsyncMock(return_value=[]),
             ),
             patch.object(job, "_get_chat_context", new=AsyncMock(return_value=[])),
             patch.object(job, "_get_chat_history", new=AsyncMock(return_value=[])),
@@ -915,8 +915,8 @@ class TestConversationJob:
 
         with (
             patch(
-                "areyouok_telegram.data.operations.get_or_create_guided_session",
-                new=AsyncMock(return_value=mock_onboarding_session),
+                "areyouok_telegram.data.operations.get_active_guided_sessions",
+                new=AsyncMock(return_value=[]),
             ),
             patch.object(job, "_get_chat_context", new=AsyncMock(return_value=[])),
             patch.object(job, "_get_chat_history", new=AsyncMock(return_value=[])),
@@ -956,8 +956,8 @@ class TestConversationJob:
 
         with (
             patch(
-                "areyouok_telegram.data.operations.get_or_create_guided_session",
-                new=AsyncMock(return_value=mock_onboarding_session),
+                "areyouok_telegram.data.operations.get_active_guided_sessions",
+                new=AsyncMock(return_value=[]),
             ),
             patch.object(job, "_get_chat_context", new=AsyncMock(return_value=[])),
             patch.object(job, "_get_chat_history", new=AsyncMock(return_value=[mock_chat_event])),
@@ -987,8 +987,8 @@ class TestConversationJob:
 
         with (
             patch(
-                "areyouok_telegram.data.operations.get_or_create_guided_session",
-                new=AsyncMock(return_value=mock_onboarding_session),
+                "areyouok_telegram.data.operations.get_active_guided_sessions",
+                new=AsyncMock(return_value=[]),
             ),
             patch.object(job, "_get_chat_context", new=AsyncMock(return_value=[])),
             patch.object(
@@ -1020,8 +1020,8 @@ class TestConversationJob:
 
         with (
             patch(
-                "areyouok_telegram.data.operations.get_or_create_guided_session",
-                new=AsyncMock(return_value=mock_onboarding_session),
+                "areyouok_telegram.data.operations.get_active_guided_sessions",
+                new=AsyncMock(return_value=[]),
             ),
             patch.object(job, "_get_chat_context", new=AsyncMock(return_value=[])),
             patch.object(job, "_get_chat_history", new=AsyncMock(return_value=[])),
@@ -1057,8 +1057,8 @@ class TestConversationJob:
 
         with (
             patch(
-                "areyouok_telegram.data.operations.get_or_create_guided_session",
-                new=AsyncMock(return_value=mock_onboarding_session),
+                "areyouok_telegram.data.operations.get_active_guided_sessions",
+                new=AsyncMock(return_value=[]),
             ),
             patch.object(job, "_get_chat_context", new=AsyncMock(return_value=[])),
             patch.object(
@@ -1369,8 +1369,8 @@ class TestConversationJob:
 
         with (
             patch(
-                "areyouok_telegram.data.operations.get_or_create_guided_session",
-                new=AsyncMock(return_value=mock_onboarding_session),
+                "areyouok_telegram.data.operations.get_active_guided_sessions",
+                new=AsyncMock(return_value=[]),
             ),
             patch.object(job, "_get_chat_context", new=AsyncMock(return_value=[])),
             patch.object(job, "_get_chat_history", new=AsyncMock(return_value=[])),
@@ -1592,7 +1592,7 @@ class TestConversationJob:
 
     @pytest.mark.asyncio
     async def test_execute_keyboard_response_multi_row(self):
-        """Test _execute_text_response with KeyboardResponse (more than 3 buttons - 3 per row)."""
+        """Test _execute_text_response with KeyboardResponse (5 or fewer buttons - single column)."""
         job = ConversationJob("123")
         job._run_context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
         job._run_context.bot.send_message = AsyncMock(return_value=MagicMock(spec=telegram.Message))
@@ -1627,17 +1627,20 @@ class TestConversationJob:
         assert reply_markup is not None
         assert isinstance(reply_markup, telegram.ReplyKeyboardMarkup)
 
-        # Check button layout (more than 3 buttons - 3 per row)
-        assert len(reply_markup.keyboard) == 2  # 2 rows
-        assert len(reply_markup.keyboard[0]) == 3  # First row has 3 buttons
-        assert len(reply_markup.keyboard[1]) == 2  # Second row has 2 buttons
+        # Check button layout (5 or fewer buttons - single column)
+        assert len(reply_markup.keyboard) == 5  # 5 rows (one per button)
+        assert len(reply_markup.keyboard[0]) == 1  # Each row has 1 button
+        assert len(reply_markup.keyboard[1]) == 1
+        assert len(reply_markup.keyboard[2]) == 1
+        assert len(reply_markup.keyboard[3]) == 1
+        assert len(reply_markup.keyboard[4]) == 1
 
         # Check button content
         assert reply_markup.keyboard[0][0].text == "Option 1"
-        assert reply_markup.keyboard[0][1].text == "Option 2"
-        assert reply_markup.keyboard[0][2].text == "Option 3"
-        assert reply_markup.keyboard[1][0].text == "Option 4"
-        assert reply_markup.keyboard[1][1].text == "Option 5"
+        assert reply_markup.keyboard[1][0].text == "Option 2"
+        assert reply_markup.keyboard[2][0].text == "Option 3"
+        assert reply_markup.keyboard[3][0].text == "Option 4"
+        assert reply_markup.keyboard[4][0].text == "Option 5"
 
     @pytest.mark.asyncio
     async def test_execute_text_response_removes_keyboard_for_text_only(self):
@@ -2142,8 +2145,8 @@ class TestConversationJob:
 
         with (
             patch(
-                "areyouok_telegram.data.operations.get_or_create_guided_session",
-                new=AsyncMock(return_value=mock_onboarding_session),
+                "areyouok_telegram.data.operations.get_active_guided_sessions",
+                new=AsyncMock(return_value=[]),
             ),
             patch.object(job, "_get_chat_context", new=AsyncMock()) as mock_get_context,
             patch.object(job, "_get_chat_history", new=AsyncMock(return_value=[])),
