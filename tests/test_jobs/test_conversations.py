@@ -763,11 +763,12 @@ class TestConversationJob:
         mock_onboarding_session = MagicMock()
         mock_onboarding_session.guided_session_key = "onboarding123"
         mock_onboarding_session.is_active = True
+        mock_onboarding_session.session_type = "onboarding"
 
         with (
             patch(
-                "areyouok_telegram.data.operations.get_or_create_guided_session",
-                new=AsyncMock(return_value=mock_onboarding_session),
+                "areyouok_telegram.data.operations.get_active_guided_sessions",
+                new=AsyncMock(return_value=[mock_onboarding_session]),
             ),
             patch.object(job, "_get_chat_context", new=AsyncMock(return_value=[])),
             patch.object(job, "_get_chat_history", new=AsyncMock(return_value=[])),

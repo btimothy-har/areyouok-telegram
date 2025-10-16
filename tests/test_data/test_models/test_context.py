@@ -192,6 +192,8 @@ class TestContext:
     @pytest.mark.asyncio
     async def test_get_by_chat_id_found(self, mock_db_session):
         """Test retrieving contexts by chat ID."""
+        from datetime import UTC, datetime, timedelta
+
         mock_context = MagicMock(spec=Context)
         mock_scalars = MagicMock()
         mock_scalars.all.return_value = [mock_context]
@@ -199,7 +201,12 @@ class TestContext:
         mock_result.scalars.return_value = mock_scalars
         mock_db_session.execute.return_value = mock_result
 
-        result = await Context.get_by_chat_id(mock_db_session, chat_id="123")
+        now = datetime.now(UTC)
+        from_timestamp = now - timedelta(days=7)
+
+        result = await Context.get_by_chat_id(
+            mock_db_session, chat_id="123", from_timestamp=from_timestamp, to_timestamp=now
+        )
 
         assert result == [mock_context]
         mock_db_session.execute.assert_called_once()
@@ -267,8 +274,15 @@ class TestContext:
     @pytest.mark.asyncio
     async def test_get_by_chat_id_invalid_type(self, mock_db_session):
         """Test get_by_chat_id with invalid type raises error (line 184)."""
+        from datetime import UTC, datetime, timedelta
+
+        now = datetime.now(UTC)
+        from_timestamp = now - timedelta(days=7)
+
         with pytest.raises(InvalidContextTypeError) as exc_info:
-            await Context.get_by_chat_id(mock_db_session, chat_id="123", ctype="invalid_type")
+            await Context.get_by_chat_id(
+                mock_db_session, chat_id="123", from_timestamp=from_timestamp, to_timestamp=now, ctype="invalid_type"
+            )
 
         assert exc_info.value.context_type == "invalid_type"
         mock_db_session.execute.assert_not_called()
@@ -276,6 +290,8 @@ class TestContext:
     @pytest.mark.asyncio
     async def test_get_by_chat_id_with_type_filter(self, mock_db_session):
         """Test get_by_chat_id with type filter applies WHERE clause (line 189)."""
+        from datetime import UTC, datetime, timedelta
+
         mock_context = MagicMock(spec=Context)
         mock_scalars = MagicMock()
         mock_scalars.all.return_value = [mock_context]
@@ -283,7 +299,12 @@ class TestContext:
         mock_result.scalars.return_value = mock_scalars
         mock_db_session.execute.return_value = mock_result
 
-        result = await Context.get_by_chat_id(mock_db_session, chat_id="123", ctype="session")
+        now = datetime.now(UTC)
+        from_timestamp = now - timedelta(days=7)
+
+        result = await Context.get_by_chat_id(
+            mock_db_session, chat_id="123", from_timestamp=from_timestamp, to_timestamp=now, ctype="session"
+        )
 
         assert result == [mock_context]
         mock_db_session.execute.assert_called_once()
