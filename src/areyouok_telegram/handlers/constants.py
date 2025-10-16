@@ -3,6 +3,8 @@ MD2_ONBOARDING_START_MESSAGE = r"Hello there\! 👋 Please give us a few moments
 
 MD2_ONBOARDING_COMPLETE_MESSAGE = r"Hi there\! It seems like you've already completed your onboarding\. If you wish to modify your preferences, use the `/preferences` command\."
 
+MD2_JOURNAL_START_MESSAGE = r"✨ Let's take a moment to reflect\. I'm preparing some prompts based on your recent experiences\.\.\. This will just take a second\."
+
 MD2_PREFERENCES_DISPLAY_TEMPLATE = r"""*Your Current Preferences:*
 
 📝 *Preferred Name:* {name}

@@ -8,7 +8,7 @@ from pydantic_ai import ModelRetry
 
 from areyouok_telegram.data import Context
 from areyouok_telegram.data.models.chat_event import CONTEXT_TYPE_MAP
-from areyouok_telegram.llms.models import Gemini25Pro
+from areyouok_telegram.llms.models import Gemini25Flash
 from areyouok_telegram.utils.text import format_relative_time
 
 FORMATTED_CONTEXT_TEMPLATE = """
@@ -41,7 +41,12 @@ class JournalPrompts(pydantic.BaseModel):
     )
 
 
-agent_model = Gemini25Pro()
+agent_model = Gemini25Flash(
+    model_settings=pydantic_ai.models.google.GoogleModelSettings(
+        temperature=0.0,
+        google_thinking_config={"thinking_budget": 2_500},
+    ),
+)
 
 journal_prompts_agent = pydantic_ai.Agent(
     model=agent_model.model,

@@ -100,6 +100,13 @@ class CompleteOnboardingError(pydantic_ai.ModelRetry):
         super().__init__(f"Error completing onboarding: {message}")
 
 
+class JournalingError(pydantic_ai.ModelRetry):
+    """Exception raised when an error occurs during a journaling session."""
+
+    def __init__(self, message: str):
+        super().__init__(f"Error in journaling session: {message}")
+
+
 class ResponseLengthError(pydantic_ai.ModelRetry):
     """Exception raised when the agent's response exceeds the allowed length."""
 

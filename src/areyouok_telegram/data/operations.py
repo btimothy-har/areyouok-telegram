@@ -98,17 +98,17 @@ async def get_or_create_guided_session(
 
 
 @db_retry()
-async def get_active_guided_session(
+async def get_active_guided_sessions(
     *,
     session: Sessions,
-) -> GuidedSessions | None:
-    """Get the active guided session for a chat, regardless of type.
+) -> list[GuidedSessions]:
+    """Get the active guided sessions for a chat, regardless of type.
 
     Args:
         session: The current chat session
 
     Returns:
-        The active guided session if one exists, None otherwise
+        The active guided sessions
     """
     async with async_database() as db_conn:
         all_sessions = await GuidedSessions.get_by_chat_session(
@@ -117,11 +117,7 @@ async def get_active_guided_session(
             session_type=None,
         )
 
-        # Filter for active sessions only
-        active_sessions = [s for s in all_sessions if s.is_active]
-
-        # Return the first active session found, or None
-        return active_sessions[0] if active_sessions else None
+        return [s for s in all_sessions if s.is_active]
 
 
 @db_retry()
