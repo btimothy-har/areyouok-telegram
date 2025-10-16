@@ -2,7 +2,9 @@ import hashlib
 import json
 from datetime import UTC, datetime, timedelta
 from enum import Enum
+from typing import Literal
 
+import pydantic
 from cachetools import TTLCache
 from cryptography.fernet import Fernet
 from sqlalchemy import Column, ForeignKey, Integer, String, Text, select
@@ -19,6 +21,7 @@ class GuidedSessionType(Enum):
     """Types of guided sessions supported by the system."""
 
     ONBOARDING = "onboarding"
+    JOURNALING = "journaling"
     # Future session types can be added here:
     # MINDFULNESS = "mindfulness"
     # GOAL_SETTING = "goal_setting"
@@ -30,6 +33,12 @@ class GuidedSessionState(Enum):
     ACTIVE = "active"
     COMPLETE = "complete"
     INCOMPLETE = "incomplete"
+
+
+class JournalContextMetadata(pydantic.BaseModel):
+    phase: Literal["topic_selection", "journaling", "follow_up", "complete"]
+    generated_topics: list[str]
+    selected_topic: str | None = None
 
 
 VALID_GUIDED_SESSION_STATES = [state.value for state in GuidedSessionState]
@@ -151,7 +160,7 @@ class GuidedSessions(Base):
             self._metadata_cache[self.guided_session_key] = metadata_json
 
     @property
-    def session_metadata(self) -> dict | None:
+    def session_metadata(self) -> dict:
         """Get the decrypted session metadata from cache.
 
         Returns:
@@ -161,13 +170,13 @@ class GuidedSessions(Base):
             ContentNotDecryptedError: If metadata hasn't been decrypted yet
         """
         if not self.encrypted_metadata:
-            return None
+            return {}
 
         if self.guided_session_key not in self._metadata_cache:
             raise ContentNotDecryptedError("session_metadata")
 
         metadata_json = self._metadata_cache.get(self.guided_session_key)
-        return json.loads(metadata_json) if metadata_json else None
+        return json.loads(metadata_json) if metadata_json else {}
 
     @classmethod
     @traced(extract_args=["chat_session", "session_type"])
@@ -309,3 +318,22 @@ class GuidedSessions(Base):
         stmt = select(cls).where(cls.guided_session_key == guided_session_key)
         result = await db_conn.execute(stmt)
         return result.scalars().one_or_none()
+
+    @classmethod
+    async def get_active_session_by_type(
+        cls,
+        db_conn: AsyncSession,
+        *,
+        chat_id: str,
+        session_type: str,
+    ) -> "GuidedSessions | None":
+        """Retrieve an active guided session by chat ID and session type."""
+        stmt = (
+            select(cls)
+            .where(cls.chat_id == chat_id)
+            .where(cls.session_type == session_type)
+            .where(cls.state == GuidedSessionState.ACTIVE.value)
+            .order_by(cls.created_at.desc())
+        )
+        result = await db_conn.execute(stmt)
+        return result.scalars().first()

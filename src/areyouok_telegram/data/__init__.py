@@ -4,7 +4,7 @@ from areyouok_telegram.data.models.chat_event import SYSTEM_USER_ID, ChatEvent
 from areyouok_telegram.data.models.chats import Chats
 from areyouok_telegram.data.models.command_usage import CommandUsage
 from areyouok_telegram.data.models.context import Context, ContextType
-from areyouok_telegram.data.models.guided_sessions import GuidedSessions, GuidedSessionType
+from areyouok_telegram.data.models.guided_sessions import GuidedSessions, GuidedSessionType, JournalContextMetadata
 from areyouok_telegram.data.models.job_state import JobState
 from areyouok_telegram.data.models.llm_generations import LLMGenerations
 from areyouok_telegram.data.models.llm_usage import LLMUsage
@@ -36,6 +36,7 @@ __all__ = [
     "GuidedSessionType",
     "Context",
     "ContextType",
+    "JournalContextMetadata",
     "JobState",
     "LLMGenerations",
     "LLMUsage",

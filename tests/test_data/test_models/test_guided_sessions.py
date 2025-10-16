@@ -111,9 +111,9 @@ class TestGuidedSessionType:
 
     def test_valid_guided_session_types_constant(self):
         """Test VALID_GUIDED_SESSION_TYPES contains all enum values."""
-        expected_types = ["onboarding"]
+        expected_types = ["onboarding", "journaling"]
         assert set(VALID_GUIDED_SESSION_TYPES) == set(expected_types)
-        assert len(VALID_GUIDED_SESSION_TYPES) == 1
+        assert len(VALID_GUIDED_SESSION_TYPES) == 2
 
 
 class TestGuidedSessionState:
@@ -778,9 +778,9 @@ class TestGuidedSessionsMetadata:
         guided_session.guided_session_key = "property_no_data_key"
         guided_session.encrypted_metadata = None
 
-        # Should return None, not raise error
+        # Should return empty dict, not raise error
         result = guided_session.session_metadata
-        assert result is None
+        assert result == {}
 
     async def test_update_metadata(self, mock_db_session):
         """Test updating metadata on a guided session."""

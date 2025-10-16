@@ -18,8 +18,8 @@ class BaseChatPromptTemplate(pydantic.BaseModel):
         prompt_parts = [
             f"<identity>{self.identity}</identity>",
             f"<rules>{self.rules}</rules>",
-            f"<response>{self.response}</response>",
             f"<knowledge>{self.knowledge}</knowledge>",
+            f"<response>{self.response}</response>",
         ]
 
         if self.message:

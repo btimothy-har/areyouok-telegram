@@ -18,6 +18,7 @@ from areyouok_telegram.handlers import (
     on_edit_message,
     on_error_event,
     on_feedback_command,
+    on_journal_command,
     on_message_react,
     on_new_message,
     on_new_update,
@@ -77,6 +78,7 @@ def create_application() -> Application:
 
     # Command Handlers
     application.add_handler(CommandHandler("start", on_start_command, block=False), group=2)
+    application.add_handler(CommandHandler("journal", on_journal_command, block=False), group=2)
     application.add_handler(CommandHandler("preferences", on_preferences_command, block=False), group=2)
     application.add_handler(CommandHandler("feedback", on_feedback_command, block=False), group=2)
 

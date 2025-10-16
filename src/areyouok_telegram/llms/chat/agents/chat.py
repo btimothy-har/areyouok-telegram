@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -8,7 +8,7 @@ import pydantic_ai
 from pydantic_ai import RunContext
 
 from areyouok_telegram.config import SIMULATION_MODE
-from areyouok_telegram.data import Notifications, UserMetadata, async_database, operations as data_operations
+from areyouok_telegram.data import UserMetadata, async_database, operations as data_operations
 from areyouok_telegram.llms.agent_anonymizer import anonymization_agent
 from areyouok_telegram.llms.chat.agents.tools import search_history_impl, update_memory_impl
 from areyouok_telegram.llms.chat.constants import (
@@ -33,6 +33,7 @@ from areyouok_telegram.llms.chat.responses import (
     TextResponse,
 )
 from areyouok_telegram.llms.chat.utils import (
+    CommonChatAgentDependencies,
     check_restricted_responses,
     check_special_instructions,
     validate_response_data,
@@ -45,26 +46,14 @@ AgentResponse = TextResponse | ReactionResponse | SwitchPersonalityResponse | Do
 
 
 @dataclass
-class ChatAgentDependencies:
+class ChatAgentDependencies(CommonChatAgentDependencies):
     """Context data passed to the LLM agent for making decisions."""
 
-    tg_bot_id: str
-    tg_chat_id: str
-    tg_session_id: str
     personality: str = PersonalityTypes.COMPANIONSHIP.value
-    restricted_responses: set[Literal["text", "keyboard", "reaction", "switch_personality"]] = field(
-        default_factory=set
-    )
-    notification: Notifications | None = None
 
     def to_dict(self) -> dict:
-        return {
-            "tg_bot_id": self.tg_bot_id,
-            "tg_chat_id": self.tg_chat_id,
-            "tg_session_id": self.tg_session_id,
+        return super().to_dict() | {
             "personality": self.personality,
-            "restricted_responses": list(self.restricted_responses),
-            "notification_content": self.notification.content if self.notification else None,
         }
 
 

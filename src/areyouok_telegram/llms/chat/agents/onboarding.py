@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Any
 
 import pydantic_ai
 from pydantic_ai import RunContext
@@ -25,6 +25,7 @@ from areyouok_telegram.llms.chat.constants import (
 from areyouok_telegram.llms.chat.prompt import BaseChatPromptTemplate
 from areyouok_telegram.llms.chat.responses import DoNothingResponse, KeyboardResponse, ReactionResponse, TextResponse
 from areyouok_telegram.llms.chat.utils import (
+    CommonChatAgentDependencies,
     check_restricted_responses,
     check_special_instructions,
     validate_response_data,
@@ -38,24 +39,14 @@ AgentResponse = TextResponse | ReactionResponse | DoNothingResponse | KeyboardRe
 
 
 @dataclass
-class OnboardingAgentDependencies:
+class OnboardingAgentDependencies(CommonChatAgentDependencies):
     """Dependencies for the onboarding agent."""
 
-    tg_bot_id: str
-    tg_chat_id: str
-    tg_session_id: str
-    onboarding_session_key: str
-    restricted_responses: set[Literal["text", "reaction", "switch_personality"]] = field(default_factory=set)
-    notification: Notifications | None = None
+    onboarding_session_key: str = field(kw_only=True)
 
     def to_dict(self) -> dict:
-        return {
-            "tg_bot_id": self.tg_bot_id,
-            "tg_chat_id": self.tg_chat_id,
-            "tg_session_id": self.tg_session_id,
+        return super().to_dict() | {
             "onboarding_session_key": self.onboarding_session_key,
-            "restricted_responses": list(self.restricted_responses),
-            "notification_content": self.notification.content if self.notification else None,
         }
 
 

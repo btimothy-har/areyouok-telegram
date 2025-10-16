@@ -19,6 +19,8 @@ CONTEXT_TYPE_MAP = {
     ContextType.METADATA.value: "user_metadata_update",
     ContextType.ACTION.value: "user_button_action",
     ContextType.MEMORY.value: "user_memory",
+    ContextType.PROFILE_UPDATE.value: "user_profile_update",
+    ContextType.PROFILE.value: "user_profile",
 }
 
 SYSTEM_USER_ID = "system"

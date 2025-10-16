@@ -12,6 +12,7 @@ from areyouok_telegram.data import (
     Context,
     ContextType,
     GuidedSessionType,
+    JournalContextMetadata,
     MediaFiles,
     Messages,
     MessageTypes,
@@ -35,6 +36,7 @@ from areyouok_telegram.llms.chat import (
     chat_agent,
     onboarding_agent,
 )
+from areyouok_telegram.llms.chat.agents.journaling import JournalingAgentDependencies, journaling_agent
 from areyouok_telegram.llms.context_compression import ContextTemplate, context_compression_agent
 from areyouok_telegram.logging import traced
 from areyouok_telegram.utils.retry import db_retry, telegram_call
@@ -231,7 +233,7 @@ class ConversationJob(BaseJob):
         self,
         *,
         include_context: bool = True,
-    ) -> tuple[list[ChatEvent], ChatAgentDependencies | OnboardingAgentDependencies]:
+    ) -> tuple[list[ChatEvent], ChatAgentDependencies | OnboardingAgentDependencies | JournalingAgentDependencies]:
         """Prepare the conversation input for the chat session.
         This method gathers the message history and checks for unsupported media types.
         Returns:
@@ -240,15 +242,23 @@ class ConversationJob(BaseJob):
         message_history = []
         latest_personality_context = None
 
-        # Check for active onboarding sessions linked to this chat session
-        get_onboarding_session = await data_operations.get_or_create_guided_session(
-            chat_id=self.chat_id,
-            session=self.active_session,
-            stype=GuidedSessionType.ONBOARDING,
-            create_if_not_exists=False,
-        )
+        # Check for active guided sessions linked to this chat session (priority over onboarding/chat)
+        active_guided_sessions = await data_operations.get_active_guided_sessions(session=self.active_session)
 
-        onboarding_session = get_onboarding_session if getattr(get_onboarding_session, "is_active", False) else None
+        if active_guided_sessions:
+            if any(s.session_type == GuidedSessionType.JOURNALING.value for s in active_guided_sessions):
+                guided_session = next(
+                    s for s in active_guided_sessions if s.session_type == GuidedSessionType.JOURNALING.value
+                )
+
+            elif any(s.session_type == GuidedSessionType.ONBOARDING.value for s in active_guided_sessions):
+                guided_session = next(
+                    s for s in active_guided_sessions if s.session_type == GuidedSessionType.ONBOARDING.value
+                )
+            else:
+                guided_session = None
+        else:
+            guided_session = None
 
         if include_context:
             # Gather chat context
@@ -272,8 +282,16 @@ class ConversationJob(BaseJob):
             "notification": notification,
         }
 
-        if onboarding_session:
-            deps_data["onboarding_session_key"] = onboarding_session.guided_session_key
+        if guided_session and guided_session.session_type == GuidedSessionType.JOURNALING.value:
+            # Journaling session takes priority
+            guided_session.decrypt_metadata(chat_encryption_key=self.chat_encryption_key)
+
+            deps_data["journaling_session_key"] = guided_session.guided_session_key
+            deps_data["journaling_session_metadata"] = JournalContextMetadata(**guided_session.session_metadata)
+            deps = JournalingAgentDependencies(**deps_data)
+
+        elif guided_session and guided_session.session_type == GuidedSessionType.ONBOARDING.value:
+            deps_data["onboarding_session_key"] = guided_session.guided_session_key
             deps = OnboardingAgentDependencies(**deps_data)
 
         else:
@@ -301,7 +319,7 @@ class ConversationJob(BaseJob):
         self,
         *,
         conversation_history: list[ChatEvent],
-        dependencies: ChatAgentDependencies | OnboardingAgentDependencies,
+        dependencies: ChatAgentDependencies | OnboardingAgentDependencies | JournalingAgentDependencies,
     ) -> AgentResponse:
         """Process messages for this chat and send appropriate replies.
 
@@ -312,7 +330,13 @@ class ConversationJob(BaseJob):
         agent_run_payload = None
         agent_run_time = datetime.now(UTC)
 
-        agent = onboarding_agent if isinstance(dependencies, OnboardingAgentDependencies) else chat_agent
+        # Select appropriate agent based on dependency type
+        if isinstance(dependencies, JournalingAgentDependencies):
+            agent = journaling_agent
+        elif isinstance(dependencies, OnboardingAgentDependencies):
+            agent = onboarding_agent
+        else:
+            agent = chat_agent
 
         agent_run_payload = await run_agent_with_tracking(
             agent,
@@ -441,12 +465,12 @@ class ConversationJob(BaseJob):
 
         elif response.response_type == "KeyboardResponse":
             button_rows = []
-            # If 3 or fewer buttons, arrange in single column (separate rows)
-            if len(response.buttons) <= 3:
+            # If 5 or fewer buttons, arrange in single column (separate rows)
+            if len(response.buttons) <= 5:
                 for btn in response.buttons:
                     button_rows.append([telegram.KeyboardButton(text=btn.text)])
             else:
-                # For more than 3 buttons, use 3-per-row layout
+                # For more than 5 buttons, use 3-per-row layout
                 for i in range(0, len(response.buttons), 3):
                     row_buttons = [telegram.KeyboardButton(text=btn.text) for btn in response.buttons[i : i + 3]]
                     button_rows.append(row_buttons)
