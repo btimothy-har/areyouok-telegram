@@ -1,3 +1,5 @@
+"""ChatEvent helper model for combining Message and Context data."""
+
 # ruff: noqa: TRY003
 
 import json
@@ -8,8 +10,8 @@ import pydantic_ai
 import telegram
 
 from areyouok_telegram.data.models.context import Context, ContextType
-from areyouok_telegram.data.models.media import MediaFiles
-from areyouok_telegram.data.models.messages import Messages
+from areyouok_telegram.data.models.media_file import MediaFile
+from areyouok_telegram.data.models.message import Message
 from areyouok_telegram.utils.text import format_relative_time
 
 CONTEXT_TYPE_MAP = {
@@ -34,7 +36,7 @@ class ChatEvent(pydantic.BaseModel):
     timestamp: datetime
     event_type: str
     event_data: dict
-    attachments: list[MediaFiles] = pydantic.Field(default_factory=list)
+    attachments: list[MediaFile] = pydantic.Field(default_factory=list)
     user_id: str | None = None
 
     @pydantic.model_validator(mode="after")
@@ -53,12 +55,12 @@ class ChatEvent(pydantic.BaseModel):
         return self
 
     @classmethod
-    def from_message(cls, message: Messages, attachments: list[MediaFiles]) -> "ChatEvent":
+    def from_message(cls, message: Message, attachments: list[MediaFile]) -> "ChatEvent":
         if message.message_type == "Message":
             event_type = "message"
             event_data = {
                 "text": message.telegram_object.text or message.telegram_object.caption or "",
-                "message_id": str(message.message_id),
+                "message_id": str(message.telegram_message_id),
             }
 
             if message.telegram_object.reply_markup:
@@ -91,7 +93,7 @@ class ChatEvent(pydantic.BaseModel):
             )
             event_data = {
                 "emojis": reaction_string,
-                "to_message_id": str(message.message_id),
+                "to_message_id": str(message.telegram_message_id),
             }
 
         else:
@@ -107,11 +109,14 @@ class ChatEvent(pydantic.BaseModel):
             event_type=event_type,
             event_data=event_data,
             attachments=attachments,
-            user_id=message.user_id,
+            user_id=message.telegram_user_id,
         )
 
     @classmethod
     def from_context(cls, context: Context) -> "ChatEvent":
+        # Note: For Context, we need to get chat_id from the context model
+        # Since Context now uses internal IDs, we need to convert to telegram_chat_id if needed
+        # For now, we'll use the internal chat_id as a string
         return cls(
             event_type=CONTEXT_TYPE_MAP.get(context.type, "context"),
             event_data={
@@ -119,7 +124,7 @@ class ChatEvent(pydantic.BaseModel):
             },
             timestamp=context.created_at,
             attachments=[],
-            user_id=context.chat_id if context.type == ContextType.ACTION.value else None,
+            user_id=str(context.chat_id) if context.type == ContextType.ACTION.value else None,
         )
 
     def to_model_message(self, bot_id: str, ts_reference: datetime) -> pydantic_ai.messages.ModelMessage:

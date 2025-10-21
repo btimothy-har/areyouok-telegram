@@ -1,3 +1,7 @@
+"""UserMetadata Pydantic model for user preferences and settings."""
+
+from __future__ import annotations
+
 import hashlib
 import json
 from datetime import UTC, datetime
@@ -5,13 +9,12 @@ from typing import Any
 from zoneinfo import ZoneInfo, available_timezones
 
 import pycountry
-from cachetools import TTLCache
-from sqlalchemy import Column, Integer, String, select
-from sqlalchemy.dialects.postgresql import TIMESTAMP, insert as pg_insert
-from sqlalchemy.ext.asyncio import AsyncSession
+import pydantic
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from areyouok_telegram.config import ENV
-from areyouok_telegram.data import Base
+from areyouok_telegram.data.database import async_database
+from areyouok_telegram.data.database.schemas import UserMetadataTable
 from areyouok_telegram.encryption import decrypt_content, encrypt_content
 from areyouok_telegram.logging import traced
 
@@ -20,15 +23,6 @@ RESPONSE_SPEED_MAP = {
     "normal": 2.0,
     "slow": 5.0,
 }
-
-
-class InvalidFieldError(Exception):
-    """Raised when an invalid field name is provided."""
-
-    def __init__(self, field: str, valid_fields: list[str]):
-        super().__init__(f"Invalid field '{field}'. Valid fields: {valid_fields}")
-        self.field = field
-        self.valid_fields = valid_fields
 
 
 class InvalidFieldValueError(Exception):
@@ -55,99 +49,95 @@ class InvalidTimezoneError(InvalidFieldValueError):
         super().__init__(field="timezone", value=value, expected="valid IANA timezone identifier or 'rather_not_say'")
 
 
-class UserMetadata(Base):
-    """User metadata and preferences stored as encrypted JSON."""
+class UserMetadata(pydantic.BaseModel):
+    """User metadata and preferences."""
 
-    __tablename__ = "user_metadata"
-    __table_args__ = {"schema": ENV}
+    model_config = pydantic.ConfigDict(arbitrary_types_allowed=True, validate_assignment=True)
 
-    # Valid metadata fields
-    _VALID_FIELDS = {
-        "preferred_name",
-        "country",
-        "timezone",
-        "response_speed",
-        "response_speed_adj",
-        "communication_style",
-    }
+    # Required fields
+    user_id: int
 
-    # TTL cache for decrypted metadata (1 hour TTL, max 1000 entries)
-    _metadata_cache: TTLCache[str, dict] = TTLCache(maxsize=1000, ttl=1 * 60 * 60)
+    # Optional fields
+    id: int = 0
+    preferred_name: str | None = None
+    country: str = pydantic.Field(default="rather_not_say")
+    timezone: str = pydantic.Field(default="rather_not_say")
+    response_speed: str = pydantic.Field(default="normal")
+    response_speed_adj: int = 0
+    communication_style: str | None = None
+    created_at: datetime = pydantic.Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = pydantic.Field(default_factory=lambda: datetime.now(UTC))
 
-    user_key = Column(String, nullable=False, unique=True)
-    user_id = Column(String, nullable=False, unique=True)
-    content = Column(String, nullable=True)  # Stores encrypted JSON string
+    @pydantic.field_validator("response_speed")
+    @classmethod
+    def validate_response_speed_field(cls, v: str | None) -> str:
+        """Validate response_speed field."""
+        if v is None:
+            return "normal"
+        v = v.lower()
+        if v not in ["fast", "normal", "slow"]:
+            raise InvalidFieldValueError("response_speed", v, "one of: 'fast', 'normal', 'slow'")
+        return v
 
-    # Metadata
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    created_at = Column(TIMESTAMP(timezone=True), nullable=False)
-    updated_at = Column(TIMESTAMP(timezone=True), nullable=False)
+    @pydantic.field_validator("country")
+    @classmethod
+    def validate_country_field(cls, v: str) -> str:
+        """Validate country field."""
+        if v.lower() == "rather_not_say":
+            return "rather_not_say"
+        country = pycountry.countries.get(alpha_3=v.upper())
+        if not country:
+            raise InvalidCountryCodeError(v)
+        return v.upper()
+
+    @pydantic.field_validator("timezone")
+    @classmethod
+    def validate_timezone_field(cls, v: str) -> str:
+        """Validate timezone field."""
+        if v.lower() == "rather_not_say":
+            return "rather_not_say"
+        all_timezones = available_timezones()
+        for tz in all_timezones:
+            if tz.lower() == v.lower():
+                ZoneInfo(tz)  # Validate it's a real timezone
+                return tz
+        raise InvalidTimezoneError(v)
 
     @staticmethod
-    def generate_user_key(user_id: str) -> str:
-        """Generate a unique key for user metadata based on their user ID."""
+    def generate_object_key(user_id: int) -> str:
+        """Generate a unique object key for user metadata based on user ID."""
         return hashlib.sha256(f"metadata:{user_id}".encode()).hexdigest()
 
-    def _get_metadata(self) -> dict:
-        """Get decrypted metadata from cache or decrypt from database.
-
-        Returns:
-            dict: The decrypted metadata dictionary
-        """
-        # Check cache first
-        if self.user_key in self._metadata_cache:
-            return self._metadata_cache[self.user_key]
-
-        # Decrypt if not cached and metadata exists
-        if self.content:
-            decrypted_json = decrypt_content(self.content)
-            metadata_dict = json.loads(decrypted_json) if decrypted_json else {}
-            self._metadata_cache[self.user_key] = metadata_dict
-            return metadata_dict
-
-        return {}
-
-    def _set_metadata(self, metadata_dict: dict):
-        """Encrypt and store metadata.
+    @staticmethod
+    def decrypt_metadata(encrypted_content: str) -> dict:
+        """Decrypt metadata content.
 
         Args:
-            metadata_dict: The metadata dictionary to encrypt and store
+            encrypted_content: The encrypted JSON string
+
+        Returns:
+            Dictionary of metadata fields
         """
-        json_str = json.dumps(metadata_dict)
-        self.content = encrypt_content(json_str)
-        # Update cache
-        self._metadata_cache[self.user_key] = metadata_dict
+        decrypted_json = decrypt_content(encrypted_content)
+        return json.loads(decrypted_json) if decrypted_json else {}
 
-    # Read-only properties for metadata fields
-    @property
-    def preferred_name(self) -> str | None:
-        """Get user's preferred name."""
-        return self._get_metadata().get("preferred_name")
+    def encrypt_metadata(self) -> str:
+        """Encrypt metadata fields into a JSON string.
 
-    @property
-    def country(self) -> str | None:
-        """Get user's country."""
-        return self._get_metadata().get("country")
-
-    @property
-    def timezone(self) -> str | None:
-        """Get user's timezone."""
-        return self._get_metadata().get("timezone")
-
-    @property
-    def response_speed(self) -> str | None:
-        """Get user's response speed preference."""
-        return self._get_metadata().get("response_speed")
-
-    @property
-    def response_speed_adj(self) -> int | None:
-        """Get user's response speed adjustment."""
-        return self._get_metadata().get("response_speed_adj")
-
-    @property
-    def communication_style(self) -> str | None:
-        """Get user's communication style preference."""
-        return self._get_metadata().get("communication_style")
+        Returns:
+            Encrypted JSON string
+        """
+        metadata_dict = {
+            "preferred_name": self.preferred_name,
+            "country": self.country,
+            "timezone": self.timezone,
+            "response_speed": self.response_speed,
+            "response_speed_adj": self.response_speed_adj,
+            "communication_style": self.communication_style,
+        }
+        # Remove None values
+        metadata_dict = {k: v for k, v in metadata_dict.items() if v is not None}
+        return encrypt_content(json.dumps(metadata_dict))
 
     @property
     def response_wait_time(self) -> float:
@@ -156,183 +146,103 @@ class UserMetadata(Base):
         Returns:
             Response wait time in seconds (fast=0, normal=2, slow=5), with adjustment
         """
-        response_speed_adj = self.response_speed_adj or 0
-        return max(RESPONSE_SPEED_MAP.get(self.response_speed, 2.0) + response_speed_adj, 0)
+        return max(RESPONSE_SPEED_MAP.get(self.response_speed, 2.0) + self.response_speed_adj, 0)
 
-    @classmethod
-    @traced(extract_args=["user_id", "field"])
-    async def update_metadata(
-        cls,
-        db_conn: AsyncSession,
-        *,
-        user_id: str,
-        field: str,
-        value: Any,
-    ) -> "UserMetadata":
-        """Update a single metadata field for a user.
+    def to_dict(self) -> dict[str, Any]:
+        """Return a dictionary representation of the user metadata."""
+        return {
+            "user_id": self.user_id,
+            "preferred_name": self.preferred_name,
+            "communication_style": self.communication_style,
+            "response_speed": self.response_speed,
+            "response_speed_adj": self.response_speed_adj,
+            "country": self.country,
+            "timezone": self.timezone,
+        }
 
-        Args:
-            db_conn: Database connection
-            user_id: User ID to update
-            field: Field name to update
-            value: New value for the field
+    @traced(extract_args=["user_id"])
+    async def save(self) -> UserMetadata:
+        """Save or update user metadata in the database.
 
         Returns:
-            UserMetadata: Updated user metadata object
-
-        Raises:
-            InvalidFieldError: If field name is invalid
-            InvalidFieldValueError: If value provided is incorrect for the field
+            UserMetadata instance refreshed from database
         """
-        # Validate field name
-        if field not in cls._VALID_FIELDS:
-            valid_fields = list(cls._VALID_FIELDS)
-            raise InvalidFieldError(field, valid_fields)
-
-        # Validate and normalize field values
-        validated_value = cls.validate_field(field, value)
-
         now = datetime.now(UTC)
-        user_key = cls.generate_user_key(user_id)
+        object_key = self.generate_object_key(self.user_id)
 
-        # Get existing metadata or create new
-        existing = await cls.get_by_user_id(db_conn, user_id=user_id)
+        # Encrypt metadata
+        encrypted_content = self.encrypt_metadata()
 
-        if existing:
-            metadata_dict = existing._get_metadata()
-        else:
-            metadata_dict = {}
+        async with async_database() as db_conn:
+            stmt = pg_insert(UserMetadataTable).values(
+                object_key=object_key,
+                user_id=self.user_id,
+                content=encrypted_content,
+                created_at=self.created_at,
+                updated_at=now,
+            )
 
-        # Update the field in the dictionary
-        if validated_value is None:
-            metadata_dict.pop(field, None)
-        else:
-            metadata_dict[field] = validated_value
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["object_key"],
+                set_={
+                    "content": stmt.excluded.content,
+                    "updated_at": stmt.excluded.updated_at,
+                },
+            ).returning(UserMetadataTable)
 
-        # Encrypt the entire JSON
-        encrypted_json = encrypt_content(json.dumps(metadata_dict))
+            result = await db_conn.execute(stmt)
+            row = result.scalar_one()
 
-        # Prepare values for database update
-        values = {
-            "user_key": user_key,
-            "user_id": user_id,
-            "content": encrypted_json,
-            "created_at": now,
-            "updated_at": now,
-        }
+            # Return with decrypted fields
+            metadata_dict = UserMetadata.decrypt_metadata(row.content) if row.content else {}
 
-        stmt = pg_insert(cls).values(**values)
-
-        # On conflict, update metadata and updated_at
-        update_values = {
-            "content": stmt.excluded.content,
-            "updated_at": stmt.excluded.updated_at,
-        }
-
-        stmt = stmt.on_conflict_do_update(
-            index_elements=["user_key"],
-            set_=update_values,
-        )
-
-        await db_conn.execute(stmt)
-
-        # Return the updated object
-        return await cls.get_by_user_id(db_conn, user_id=user_id)
+            return UserMetadata(
+                id=row.id,
+                user_id=row.user_id,
+                preferred_name=metadata_dict.get("preferred_name"),
+                country=metadata_dict.get("country", "rather_not_say"),
+                timezone=metadata_dict.get("timezone", "rather_not_say"),
+                response_speed=metadata_dict.get("response_speed", "normal"),
+                response_speed_adj=metadata_dict.get("response_speed_adj", 0),
+                communication_style=metadata_dict.get("communication_style"),
+                created_at=row.created_at,
+                updated_at=row.updated_at,
+            )
 
     @classmethod
     async def get_by_user_id(
         cls,
-        db_conn: AsyncSession,
         *,
-        user_id: str,
-    ) -> "UserMetadata | None":
-        """Retrieve user metadata by user ID."""
-        stmt = select(cls).where(cls.user_id == user_id)
-        result = await db_conn.execute(stmt)
-        return result.scalars().first()
-
-    @classmethod
-    def validate_field(cls, field: str, value: Any) -> Any:
-        """Validate and normalize a field value.
+        user_id: int,
+    ) -> UserMetadata | None:
+        """Retrieve user metadata by user ID with decrypted fields.
 
         Args:
-            field: Field name to validate
-            value: Value to validate
+            user_id: Internal user ID (FK to users.id)
 
         Returns:
-            The validated and normalized value
-
-        Raises:
-            InvalidFieldValueError: If value is invalid for the field
+            UserMetadata instance if found, None otherwise
         """
-        if value is None:
-            return None
+        async with async_database() as db_conn:
+            stmt = select(UserMetadataTable).where(UserMetadataTable.user_id == user_id)
+            result = await db_conn.execute(stmt)
+            row = result.scalars().first()
 
-        if field == "preferred_name":
-            if not isinstance(value, str):
-                raise InvalidFieldValueError(field, value, "a string or None")
-            return value
+            if row is None:
+                return None
 
-        elif field == "country":
-            if not isinstance(value, str):
-                raise InvalidFieldValueError(field, value, "a string or None")
+            # Decrypt metadata fields
+            metadata_dict = cls.decrypt_metadata(row.content) if row.content else {}
 
-            if value.lower() == "rather_not_say":
-                return "rather_not_say"
-            else:
-                country = pycountry.countries.get(alpha_3=value.upper())
-                if country:
-                    return value.upper()
-            raise InvalidCountryCodeError(value)
-
-        elif field == "timezone":
-            if not isinstance(value, str):
-                raise InvalidFieldValueError(field, value, "a string or None")
-
-            if value.lower() == "rather_not_say":
-                return "rather_not_say"
-            else:
-                all_timezones = available_timezones()
-                for tz in all_timezones:
-                    if tz.lower() == value.lower():
-                        ZoneInfo(tz)
-                        return tz
-
-            raise InvalidTimezoneError(value)
-
-        elif field == "response_speed":
-            if not isinstance(value, str):
-                raise InvalidFieldValueError(field, value, "a string or None")
-
-            value = value.lower() or "normal"
-            if value not in ["fast", "normal", "slow"]:
-                raise InvalidFieldValueError(field, value, "one of: 'fast', 'normal', 'slow'")
-
-            return value
-
-        elif field == "response_speed_adj":
-            try:
-                return int(value)
-            except (TypeError, ValueError) as e:
-                raise InvalidFieldValueError(field, value, "an integer number of seconds or None") from e
-
-        elif field == "communication_style":
-            if not isinstance(value, str):
-                raise InvalidFieldValueError(field, value, "a string or None")
-            return value
-
-        else:
-            return value
-
-    def to_dict(self) -> dict[str, Any]:
-        """Return a dictionary representation of the user metadata."""
-        metadata = self._get_metadata()
-        return {
-            "user_id": self.user_id,
-            "preferred_name": metadata.get("preferred_name"),
-            "communication_style": metadata.get("communication_style"),
-            "response_speed": metadata.get("response_speed"),
-            "response_speed_adj": metadata.get("response_speed_adj"),
-            "country": metadata.get("country"),
-            "timezone": metadata.get("timezone"),
-        }
+            return cls(
+                id=row.id,
+                user_id=row.user_id,
+                preferred_name=metadata_dict.get("preferred_name"),
+                country=metadata_dict.get("country", "rather_not_say"),
+                timezone=metadata_dict.get("timezone", "rather_not_say"),
+                response_speed=metadata_dict.get("response_speed", "normal"),
+                response_speed_adj=metadata_dict.get("response_speed_adj", 0),
+                communication_style=metadata_dict.get("communication_style"),
+                created_at=row.created_at,
+                updated_at=row.updated_at,
+            )

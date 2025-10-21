@@ -1,18 +1,22 @@
+"""Context Pydantic model for session context and metadata."""
+
+from __future__ import annotations
+
 import hashlib
 import json
 from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
-from cachetools import TTLCache
+import pydantic
 from cryptography.fernet import Fernet
-from sqlalchemy import Column, Integer, String, select
-from sqlalchemy.dialects.postgresql import TIMESTAMP, insert as pg_insert
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from areyouok_telegram.config import ENV
-from areyouok_telegram.data import Base
-from areyouok_telegram.encryption.exceptions import ContentNotDecryptedError
+from areyouok_telegram.data.database import async_database
+from areyouok_telegram.data.database.schemas import ContextTable
+from areyouok_telegram.data.models.chat import Chat
+from areyouok_telegram.data.models.session import Session
 from areyouok_telegram.logging import traced
 
 
@@ -36,268 +40,214 @@ class InvalidContextTypeError(Exception):
         self.context_type = context_type
 
 
-class Context(Base):
-    __tablename__ = "context"
-    __table_args__ = {"schema": ENV}
+class Context(pydantic.BaseModel):
+    """Session context and metadata model."""
 
-    context_key = Column(String, nullable=False, unique=True)
+    model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
 
-    chat_id = Column(String, nullable=False)
-    session_id = Column(String, nullable=True)
-    type = Column(String, nullable=False)
-    encrypted_content = Column(String, nullable=False)
+    # Required fields
+    chat: Chat
+    type: str
+    content: Any
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    created_at = Column(TIMESTAMP(timezone=True), nullable=False)
+    # Optional fields
+    id: int = 0
+    session_id: int | None = None
+    created_at: datetime = pydantic.Field(default_factory=lambda: datetime.now(UTC))
 
-    # TTL cache for decrypted content (1 hour TTL, max 1000 entries)
-    _data_cache: TTLCache[str, bytes] = TTLCache(maxsize=1000, ttl=1 * 60 * 60)
+    @property
+    def chat_id(self) -> int:
+        """Get chat_id from the Chat object."""
+        return self.chat.id
 
     @staticmethod
-    def generate_context_key(chat_id: str, ctype: str, encrypted_content: str) -> str:
-        """Generate a unique key for a context based on chat ID, type, and encrypted content."""
-        return hashlib.sha256(f"{chat_id}:{ctype}:{encrypted_content}".encode()).hexdigest()
+    def generate_object_key(chat_id: int, ctype: str, encrypted_content: str) -> str:
+        """Generate a unique object key for a context based on chat ID, type, and encrypted content."""
+        return hashlib.sha256(f"context:{chat_id}:{ctype}:{encrypted_content}".encode()).hexdigest()
 
-    @classmethod
-    def encrypt_content(cls, *, content: str, chat_encryption_key: str) -> str:
-        """Encrypt the content using the user's encryption key.
+    @staticmethod
+    def decrypt_content(encrypted_content: str, chat_encryption_key: str) -> Any:
+        """Decrypt the content using the chat's encryption key.
 
         Args:
-            content: The content string to encrypt
-            chat_encryption_key: The user's Fernet encryption key
+            encrypted_content: The encrypted content string
+            chat_encryption_key: The chat's Fernet encryption key
+
+        Returns:
+            Decrypted content as python object
+        """
+        fernet = Fernet(chat_encryption_key.encode())
+        encrypted_bytes = encrypted_content.encode("utf-8")
+        decrypted_bytes = fernet.decrypt(encrypted_bytes)
+        content_json = decrypted_bytes.decode("utf-8")
+        return json.loads(content_json)
+
+    def encrypt_content(self) -> str:
+        """Encrypt the content using the chat's encryption key.
+
+        Args:
+            content: The content to encrypt
+            chat_encryption_key: The chat's Fernet encryption key
 
         Returns:
             str: The encrypted content as base64-encoded string
         """
-        fernet = Fernet(chat_encryption_key.encode())
-        encrypted_bytes = fernet.encrypt(content.encode("utf-8"))
+        fernet = Fernet(self.chat.retrieve_key().encode())
+        content_json = json.dumps(self.content)
+        encrypted_bytes = fernet.encrypt(content_json.encode("utf-8"))
         return encrypted_bytes.decode("utf-8")
 
-    def decrypt_content(self, *, chat_encryption_key: str) -> str | None:
-        """Decrypt the content using the user's encryption key.
+    @traced(extract_args=["chat_id", "session_id", "type"])
+    async def save(self) -> Context:
+        """Save the context to the database with encrypted content.
 
-        Args:
-            chat_encryption_key: The user's Fernet encryption key
-
-        Returns:
-            str: The decrypted content string, or None if no encrypted content
-        """
-        if not self.encrypted_content:
-            return None
-
-        fernet = Fernet(chat_encryption_key.encode())
-        encrypted_bytes = self.encrypted_content.encode("utf-8")
-        decrypted_bytes = fernet.decrypt(encrypted_bytes)
-
-        self._data_cache[self.context_key] = decrypted_bytes
-        return decrypted_bytes.decode("utf-8")
-
-    @property
-    def content(self) -> Any:
-        """Return the decrypted content from the cache."""
-        decrypted_bytes = self._data_cache.get(self.context_key)
-        if decrypted_bytes is None:
-            raise ContentNotDecryptedError(self.context_key)
-
-        return json.loads(decrypted_bytes.decode("utf-8"))
-
-    @classmethod
-    @traced(extract_args=["chat_id", "session_id", "ctype"])
-    async def new(
-        cls,
-        db_conn: AsyncSession,
-        *,
-        chat_encryption_key: str,
-        chat_id: str,
-        session_id: str,
-        ctype: str,
-        content: str,
-    ) -> None:
-        """Insert a new context item in the database with encrypted content.
-
-        Note: This always creates a new record. The context_key is unique per content,
+        Note: This always creates a new record. The object_key is unique per content,
         so identical content will be rejected by the database constraint.
+
+        Returns:
+            Context instance refreshed from database (with decrypted content)
         """
-        now = datetime.now(UTC)
+        # Get encryption key from chat
+        chat_encryption_key = self.chat.retrieve_key()
 
-        if ctype not in VALID_CONTEXT_TYPES:
-            raise InvalidContextTypeError(ctype)
+        # Encrypt the content for storage
+        encrypted_content = self.encrypt_content(self.content, chat_encryption_key)
+        object_key = self.generate_object_key(self.chat_id, self.type, encrypted_content)
 
-        # Encrypt the content
-        encrypted_content = cls.encrypt_content(
-            content=json.dumps(content),
-            chat_encryption_key=chat_encryption_key,
-        )
+        async with async_database() as db_conn:
+            stmt = (
+                pg_insert(ContextTable)
+                .values(
+                    object_key=object_key,
+                    chat_id=self.chat.id,
+                    session_id=self.session_id,
+                    type=self.type,
+                    encrypted_content=encrypted_content,
+                    created_at=self.created_at,
+                )
+                .returning(ContextTable)
+            )
 
-        context_key = cls.generate_context_key(chat_id, ctype, encrypted_content)
+            result = await db_conn.execute(stmt)
+            row = result.scalar_one()
 
-        stmt = pg_insert(cls).values(
-            context_key=context_key,
-            chat_id=str(chat_id),
-            session_id=session_id,
-            type=ctype,
-            encrypted_content=encrypted_content,
-            created_at=now,
-        )
-
-        await db_conn.execute(stmt)
+            # Return Context with the chat object and decrypted content
+            return Context(
+                id=row.id,
+                chat=self.chat,
+                session_id=row.session_id,
+                type=row.type,
+                content=self.content,
+                created_at=row.created_at,
+            )
 
     @classmethod
-    @traced(extract_args=["session_id"])
-    async def get_by_session_id(
+    @traced(extract_args=["chat"])
+    async def get_by_chat(
         cls,
-        db_conn: AsyncSession,
+        chat: Chat,
         *,
-        session_id: str,
+        session: Session | None = None,
         ctype: str | None = None,
-    ) -> list["Context"] | None:
-        """Retrieve a context by session_id, optionally filtered by type."""
+        from_timestamp: datetime | None = None,
+        to_timestamp: datetime | None = None,
+    ) -> list[Context]:
+        """Retrieve contexts for a chat with optional filtering, auto-decrypted.
 
+        Args:
+            chat: Chat object (provides chat_id and encryption key)
+            session: Optional Session to filter by
+            ctype: Optional context type to filter by
+            from_timestamp: Optional start of time range (inclusive)
+            to_timestamp: Optional end of time range (exclusive)
+
+        Returns:
+            List of decrypted Context instances (empty list if no matches)
+
+        Raises:
+            InvalidContextTypeError: If context type is invalid
+        """
         if ctype and ctype not in VALID_CONTEXT_TYPES:
             raise InvalidContextTypeError(ctype)
 
-        stmt = select(cls).where(cls.session_id == session_id)
+        async with async_database() as db_conn:
+            stmt = select(ContextTable).where(ContextTable.chat_id == chat.id)
 
-        if ctype:
-            stmt = stmt.where(cls.type == ctype)
+            # Apply optional filters
+            if session:
+                stmt = stmt.where(ContextTable.session_id == session.id)
 
-        result = await db_conn.execute(stmt)
-        contexts = result.scalars().all()
+            if ctype:
+                stmt = stmt.where(ContextTable.type == ctype)
 
-        return contexts if contexts else None
+            if from_timestamp:
+                stmt = stmt.where(ContextTable.created_at >= from_timestamp)
 
-    @classmethod
-    @traced(extract_args=["chat_id"])
-    async def get_by_chat_id(
-        cls,
-        db_conn: AsyncSession,
-        *,
-        chat_id: str,
-        from_timestamp: datetime,
-        to_timestamp: datetime,
-        ctype: str | None = None,
-    ) -> list["Context"] | None:
-        """Retrieve a context by chat_id, optionally filtered by type."""
+            if to_timestamp:
+                stmt = stmt.where(ContextTable.created_at < to_timestamp)
 
-        if ctype and ctype not in VALID_CONTEXT_TYPES:
-            raise InvalidContextTypeError(ctype)
+            stmt = stmt.order_by(ContextTable.created_at.desc())
 
-        stmt = (
-            select(cls)
-            .where(cls.chat_id == chat_id)
-            .where(cls.created_at >= from_timestamp)
-            .where(cls.created_at < to_timestamp)
-        )
+            result = await db_conn.execute(stmt)
+            rows = result.scalars().all()
 
-        if ctype:
-            stmt = stmt.where(cls.type == ctype)
+            # Convert to Context instances and decrypt content
+            encryption_key = chat.retrieve_key()
+            contexts = []
+            for row in rows:
+                # Decrypt content during construction
+                decrypted_content = None
+                if encryption_key:
+                    decrypted_content = cls.decrypt_content(row.encrypted_content, encryption_key)
 
-        result = await db_conn.execute(stmt)
-        contexts = result.scalars().all()
+                context = Context(
+                    id=row.id,
+                    chat=chat,
+                    session_id=row.session_id,
+                    type=row.type,
+                    content=decrypted_content,
+                    created_at=row.created_at,
+                )
+                contexts.append(context)
 
-        return contexts if contexts else None
-
-    @classmethod
-    @traced(extract_args=["chat_id"])
-    async def retrieve_context_by_chat(
-        cls,
-        db_conn: AsyncSession,
-        *,
-        chat_id: str,
-        ctype: str | None = None,
-    ) -> list["Context"] | None:
-        """Retrieve contexts by chat_id and optional type, returning a list of Context objects."""
-
-        if ctype and ctype not in VALID_CONTEXT_TYPES:
-            raise InvalidContextTypeError(ctype)
-
-        stmt = select(cls).where(cls.chat_id == chat_id)
-
-        if ctype:
-            stmt = stmt.where(cls.type == ctype)
-
-        stmt = stmt.order_by(cls.created_at.desc())
-
-        result = await db_conn.execute(stmt)
-        contexts = result.scalars().all()
-
-        return contexts if contexts else None
+            return contexts
 
     @classmethod
-    @traced(extract_args=["ids"])
-    async def get_by_ids(
+    @traced(extract_args=["context_id"])
+    async def get_by_id(
         cls,
-        db_conn: AsyncSession,
+        chat: Chat,
         *,
-        ids: list[int],
-    ) -> list["Context"]:
-        """Retrieve contexts by list of IDs.
+        context_id: int,
+    ) -> Context | None:
+        """Retrieve a single context by ID, auto-decrypted.
 
         Args:
-            db_conn: Database session
-            ids: List of Context IDs to retrieve
+            chat: Chat object (provides encryption key)
+            context_id: Internal context ID
 
         Returns:
-            List of Context objects (may be empty if no matches)
+            Decrypted Context instance if found, None otherwise
         """
-        if not ids:
-            return []
+        async with async_database() as db_conn:
+            stmt = select(ContextTable).where(ContextTable.id == context_id)
+            result = await db_conn.execute(stmt)
+            row = result.scalars().first()
 
-        stmt = select(cls).where(cls.id.in_(ids))
-        result = await db_conn.execute(stmt)
-        return list(result.scalars().all())
+            if row is None:
+                return None
 
-    @classmethod
-    @traced(extract_args=["from_timestamp", "to_timestamp"])
-    async def get_by_created_timestamp(
-        cls,
-        db_conn: AsyncSession,
-        *,
-        from_timestamp: datetime,
-        to_timestamp: datetime,
-    ) -> list["Context"]:
-        """Retrieve contexts created after given timestamp.
+            # Auto-decrypt content
+            encryption_key = chat.retrieve_key()
+            decrypted_content = None
+            if encryption_key:
+                decrypted_content = cls.decrypt_content(row.encrypted_content, encryption_key)
 
-        Args:
-            db_conn: Database session
-            from_timestamp: Datetime to query from (contexts created after this time)
-            to_timestamp: Datetime to query to (contexts created before this time)
-
-        Returns:
-            List of Context objects ordered by created_at (oldest first)
-        """
-        stmt = (
-            select(cls)
-            .where(cls.created_at >= from_timestamp)
-            .where(cls.created_at < to_timestamp)
-            .order_by(cls.created_at.asc())
-        )
-        result = await db_conn.execute(stmt)
-        return list(result.scalars().all())
-
-    @classmethod
-    @traced(extract_args=["chat_id"])
-    async def get_latest_profile(
-        cls,
-        db_conn: AsyncSession,
-        *,
-        chat_id: str,
-    ) -> "Context | None":
-        """Retrieve the most recent PROFILE context for a chat.
-
-        Args:
-            db_conn: Database session
-            chat_id: The chat ID to fetch profile for
-
-        Returns:
-            Most recent Profile Context or None
-        """
-        stmt = (
-            select(cls)
-            .where(cls.chat_id == chat_id)
-            .where(cls.type == ContextType.PROFILE.value)
-            .order_by(cls.created_at.desc())
-            .limit(1)
-        )
-        result = await db_conn.execute(stmt)
-        return result.scalars().first()
+            return Context(
+                id=row.id,
+                chat=chat,
+                session_id=row.session_id,
+                type=row.type,
+                content=decrypted_content,
+                created_at=row.created_at,
+            )

@@ -1,118 +1,117 @@
-"""Database model for persisting job execution state across restarts."""
+"""JobState Pydantic model for persisting job execution state."""
 
 import hashlib
 from datetime import UTC, datetime
 
-from sqlalchemy import Column, Integer, String
-from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP, insert as pg_insert
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.sql import select
+import pydantic
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from areyouok_telegram.config import ENV
-from areyouok_telegram.data import Base
+from areyouok_telegram.data.database import async_database
+from areyouok_telegram.data.database.schemas import JobStateTable
 from areyouok_telegram.logging import traced
 
 
-class JobState(Base):
-    """Store persistent state for background jobs.
+class JobState(pydantic.BaseModel):
+    """Model for persisting job execution state across restarts."""
 
-    This table tracks execution state for jobs that need to persist information
-    across bot restarts (e.g., last_run_time for batch processing jobs).
-    """
+    model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
 
-    __tablename__ = "job_state"
-    __table_args__ = {"schema": ENV}
+    # Internal ID
+    id: int
 
-    job_key = Column(String, nullable=False, unique=True, index=True)
-    job_name = Column(String, nullable=False, index=True)
+    # Job identification
+    job_name: str
 
     # JSON state data - flexible schema for different job types
-    state_data = Column(JSONB, nullable=False, default={})
+    state_data: dict
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    created_at = Column(TIMESTAMP(timezone=True), nullable=False)
-    updated_at = Column(TIMESTAMP(timezone=True), nullable=False)
+    # Metadata
+    created_at: datetime
+    updated_at: datetime
 
     @staticmethod
-    def generate_job_key(job_name: str) -> str:
-        """Generate a unique key for a job based on its name."""
+    def generate_object_key(job_name: str) -> str:
+        """Generate a unique object key for a job based on its name."""
         return hashlib.sha256(f"job:{job_name}".encode()).hexdigest()
 
     @classmethod
     @traced(extract_args=["job_name"])
-    async def get_state(cls, db_conn: AsyncSession, *, job_name: str) -> dict | None:
+    async def get_state(cls, *, job_name: str) -> dict | None:
         """Retrieve the current state for a job.
 
         Args:
-            db_conn: Database connection
             job_name: Unique name of the job
 
         Returns:
             Dictionary of state data, or None if no state exists
         """
-        job_key = cls.generate_job_key(job_name)
+        object_key = cls.generate_object_key(job_name)
 
-        stmt = select(cls).where(cls.job_key == job_key)
-        result = await db_conn.execute(stmt)
-        job_state = result.scalar_one_or_none()
+        async with async_database() as db_conn:
+            stmt = select(JobStateTable).where(JobStateTable.object_key == object_key)
+            result = await db_conn.execute(stmt)
+            row = result.scalar_one_or_none()
 
-        if job_state:
-            return job_state.state_data
+            if row:
+                return row.state_data
 
-        return None
+            return None
 
     @classmethod
     @traced(extract_args=["job_name"])
-    async def save_state(cls, db_conn: AsyncSession, *, job_name: str, state_data: dict) -> "JobState":
+    async def save_state(cls, *, job_name: str, state_data: dict) -> "JobState":
         """Save or update the state for a job.
 
         Args:
-            db_conn: Database connection
             job_name: Unique name of the job
             state_data: Dictionary of state data to persist
 
         Returns:
-            JobState record
+            JobState instance
         """
-        job_key = cls.generate_job_key(job_name)
+        object_key = cls.generate_object_key(job_name)
         now = datetime.now(UTC)
 
-        stmt = (
-            pg_insert(cls)
-            .values(
-                job_key=job_key,
-                job_name=job_name,
-                state_data=state_data,
-                created_at=now,
-                updated_at=now,
+        async with async_database() as db_conn:
+            stmt = (
+                pg_insert(JobStateTable)
+                .values(
+                    object_key=object_key,
+                    job_name=job_name,
+                    state_data=state_data,
+                    created_at=now,
+                    updated_at=now,
+                )
+                .on_conflict_do_update(
+                    index_elements=["object_key"],
+                    set_={
+                        "state_data": state_data,
+                        "updated_at": now,
+                    },
+                )
+                .returning(JobStateTable)
             )
-            .on_conflict_do_update(
-                index_elements=["job_key"],
-                set_={
-                    "state_data": state_data,
-                    "updated_at": now,
-                },
-            )
-            .returning(cls)
-        )
 
-        result = await db_conn.execute(stmt)
-        return result.scalar_one()
+            result = await db_conn.execute(stmt)
+            row = result.scalar_one()
+
+            return cls.model_validate(row, from_attributes=True)
 
     @classmethod
     @traced(extract_args=["job_name"])
-    async def delete_state(cls, db_conn: AsyncSession, *, job_name: str) -> None:
+    async def delete_state(cls, *, job_name: str) -> None:
         """Delete the state for a job.
 
         Args:
-            db_conn: Database connection
             job_name: Unique name of the job
         """
-        job_key = cls.generate_job_key(job_name)
+        object_key = cls.generate_object_key(job_name)
 
-        stmt = select(cls).where(cls.job_key == job_key)
-        result = await db_conn.execute(stmt)
-        job_state = result.scalar_one_or_none()
+        async with async_database() as db_conn:
+            stmt = select(JobStateTable).where(JobStateTable.object_key == object_key)
+            result = await db_conn.execute(stmt)
+            row = result.scalar_one_or_none()
 
-        if job_state:
-            await db_conn.delete(job_state)
+            if row:
+                await db_conn.delete(row)
