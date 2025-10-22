@@ -1,5 +1,7 @@
 """LLMUsage Pydantic model for tracking LLM token usage and costs."""
 
+from __future__ import annotations
+
 from datetime import UTC, datetime
 
 import logfire
@@ -18,9 +20,6 @@ class LLMUsage(pydantic.BaseModel):
 
     model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
 
-    # Internal ID
-    id: int
-
     # Foreign keys
     chat_id: int
     session_id: int
@@ -38,7 +37,7 @@ class LLMUsage(pydantic.BaseModel):
     output_tokens: int = 0
 
     # Performance
-    runtime: float
+    runtime: float = 0.0
     details: dict | None = None
 
     # Cost tracking (in USD)
@@ -46,9 +45,47 @@ class LLMUsage(pydantic.BaseModel):
     output_cost: float | None = None
     total_cost: float | None = None
 
+    # Internal ID
+    id: int = 0
+
+    @traced()
+    async def save(self) -> LLMUsage:
+        """Save the LLM usage record to the database.
+
+        Returns:
+            LLMUsage instance with id populated
+        """
+        async with async_database() as db_conn:
+            stmt = (
+                pg_insert(LLMUsageTable)
+                .values(
+                    chat_id=self.chat_id,
+                    session_id=self.session_id,
+                    timestamp=self.timestamp,
+                    usage_type=self.usage_type,
+                    model=self.model,
+                    provider=self.provider,
+                    input_tokens=self.input_tokens,
+                    output_tokens=self.output_tokens,
+                    runtime=self.runtime,
+                    details=self.details,
+                    input_cost=self.input_cost,
+                    output_cost=self.output_cost,
+                    total_cost=self.total_cost,
+                )
+                .returning(LLMUsageTable)
+            )
+
+            result = await db_conn.execute(stmt)
+            row = result.scalar_one()
+
+            # Update self with the database-generated id
+            self.id = row.id
+
+            return self
+
     @classmethod
-    @traced(extract_args=["chat_id", "session_id", "agent", "data"])
-    async def track_pydantic_usage(
+    def from_pydantic_usage(
         cls,
         *,
         chat_id: int,
@@ -56,8 +93,8 @@ class LLMUsage(pydantic.BaseModel):
         agent: pydantic_ai.Agent,
         data: pydantic_ai.usage.RunUsage,
         runtime: float,
-    ) -> int:
-        """Log usage data from pydantic in the database.
+    ) -> LLMUsage:
+        """Create an LLMUsage instance from pydantic_ai usage data.
 
         Args:
             chat_id: Internal chat ID (FK to chats.id)
@@ -67,7 +104,7 @@ class LLMUsage(pydantic.BaseModel):
             runtime: Generation runtime in seconds
 
         Returns:
-            Number of rows inserted
+            LLMUsage instance (not yet saved to database)
         """
         if agent.model.model_name.startswith("fallback:"):
             model = agent.model.models[0]
@@ -76,90 +113,32 @@ class LLMUsage(pydantic.BaseModel):
 
         model_name = model.model_name.split("/", 1)[-1]
 
-        now = datetime.now(UTC)
-
         # Calculate costs using genai-prices
-        input_cost, output_cost, total_cost = cls._calculate_costs(
+        input_cost, output_cost, total_cost = cls.calculate_costs(
             model_name=model_name,
             provider=model.system,
-            input_tokens=data.request_tokens,
-            output_tokens=data.response_tokens,
+            input_tokens=data.input_tokens,
+            output_tokens=data.output_tokens,
         )
 
-        async with async_database() as db_conn:
-            stmt = pg_insert(LLMUsageTable).values(
-                chat_id=chat_id,
-                session_id=session_id,
-                timestamp=now,
-                usage_type=f"pydantic.{agent.name}",
-                model=model_name,
-                provider=model.system,
-                input_tokens=data.request_tokens,
-                output_tokens=data.response_tokens,
-                runtime=runtime,
-                details=data.details if data.details else None,
-                input_cost=input_cost,
-                output_cost=output_cost,
-                total_cost=total_cost,
-            )
+        return cls(
+            chat_id=chat_id,
+            session_id=session_id,
+            timestamp=datetime.now(UTC),
+            usage_type=f"pydantic.{agent.name}",
+            model=model_name,
+            provider=model.system,
+            input_tokens=data.input_tokens,
+            output_tokens=data.output_tokens,
+            runtime=runtime,
+            details=data.details if data.details else None,
+            input_cost=input_cost,
+            output_cost=output_cost,
+            total_cost=total_cost,
+        )
 
-            result = await db_conn.execute(stmt)
-            return result.rowcount
-
-    @classmethod
-    @traced(extract_args=["chat_id", "session_id", "usage_type", "model", "provider", "input_tokens", "output_tokens"])
-    async def track_generic_usage(
-        cls,
-        *,
-        chat_id: int,
-        session_id: int,
-        usage_type: str,
-        model: str,
-        provider: str,
-        input_tokens: int = 0,
-        output_tokens: int = 0,
-        runtime: float = 0.0,
-    ) -> int:
-        """Log generic usage data in the database.
-
-        Args:
-            chat_id: Internal chat ID (FK to chats.id)
-            session_id: Internal session ID (FK to sessions.id)
-            usage_type: Type of usage
-            model: Model name
-            provider: Provider name
-            input_tokens: Number of input tokens
-            output_tokens: Number of output tokens
-            runtime: Runtime in seconds
-
-        Returns:
-            Number of rows inserted
-        """
-        now = datetime.now(UTC)
-
-        async with async_database() as db_conn:
-            stmt = pg_insert(LLMUsageTable).values(
-                chat_id=chat_id,
-                session_id=session_id,
-                timestamp=now,
-                usage_type=usage_type,
-                model=model,
-                provider=provider,
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                runtime=runtime,
-                details=None,
-                input_cost=None,
-                output_cost=None,
-                total_cost=None,
-            )
-
-            result = await db_conn.execute(stmt)
-            return result.rowcount
-
-    @classmethod
-    def _calculate_costs(
-        cls,
+    @staticmethod
+    def calculate_costs(
         *,
         model_name: str,
         provider: str,

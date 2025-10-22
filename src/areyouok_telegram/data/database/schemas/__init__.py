@@ -5,11 +5,14 @@ from areyouok_telegram.data.database.schemas.llm import LLMGenerationsTable, LLM
 from areyouok_telegram.data.database.schemas.messaging import (
     MediaFilesTable,
     MessagesTable,
+)
+from areyouok_telegram.data.database.schemas.sessions import ContextTable, GuidedSessionsTable, SessionsTable
+from areyouok_telegram.data.database.schemas.system import (
+    CommandUsageTable,
+    JobStateTable,
     NotificationsTable,
     UpdatesTable,
 )
-from areyouok_telegram.data.database.schemas.sessions import ContextTable, GuidedSessionsTable, SessionsTable
-from areyouok_telegram.data.database.schemas.system import CommandUsageTable, JobStateTable
 
 __all__ = [
     # Core
@@ -19,8 +22,6 @@ __all__ = [
     # Messaging
     "MessagesTable",
     "MediaFilesTable",
-    "UpdatesTable",
-    "NotificationsTable",
     # Sessions
     "SessionsTable",
     "ContextTable",
@@ -31,4 +32,6 @@ __all__ = [
     # System
     "CommandUsageTable",
     "JobStateTable",
+    "NotificationsTable",
+    "UpdatesTable",
 ]

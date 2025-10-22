@@ -103,10 +103,10 @@ class UserMetadata(pydantic.BaseModel):
                 return tz
         raise InvalidTimezoneError(v)
 
-    @staticmethod
-    def generate_object_key(user_id: int) -> str:
+    @property
+    def object_key(self) -> str:
         """Generate a unique object key for user metadata based on user ID."""
-        return hashlib.sha256(f"metadata:{user_id}".encode()).hexdigest()
+        return hashlib.sha256(f"metadata:{self.user_id}".encode()).hexdigest()
 
     @staticmethod
     def decrypt_metadata(encrypted_content: str) -> dict:
@@ -168,14 +168,13 @@ class UserMetadata(pydantic.BaseModel):
             UserMetadata instance refreshed from database
         """
         now = datetime.now(UTC)
-        object_key = self.generate_object_key(self.user_id)
 
         # Encrypt metadata
         encrypted_content = self.encrypt_metadata()
 
         async with async_database() as db_conn:
             stmt = pg_insert(UserMetadataTable).values(
-                object_key=object_key,
+                object_key=self.object_key,
                 user_id=self.user_id,
                 content=encrypted_content,
                 created_at=self.created_at,

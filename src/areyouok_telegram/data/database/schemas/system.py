@@ -16,6 +16,9 @@ class CommandUsageTable(Base):
     # Primary key
     id = Column(Integer, primary_key=True, autoincrement=True)
 
+    # Unique identifier
+    object_key = Column(String, nullable=False, unique=True, index=True)
+
     # Foreign keys
     chat_id = Column(Integer, ForeignKey(f"{ENV}.chats.id"), nullable=False, index=True)
     session_id = Column(Integer, ForeignKey(f"{ENV}.sessions.id"), nullable=True, index=True)
@@ -46,3 +49,51 @@ class JobStateTable(Base):
     # Metadata
     created_at = Column(TIMESTAMP(timezone=True), nullable=False)
     updated_at = Column(TIMESTAMP(timezone=True), nullable=False)
+
+
+class UpdatesTable(Base):
+    """Store raw Telegram updates."""
+
+    __tablename__ = "updates"
+    __table_args__ = {"schema": ENV}
+
+    # Primary key
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    # Unique identifier
+    object_key = Column(String, nullable=False, unique=True, index=True)
+
+    # Telegram update ID
+    telegram_update_id = Column(Integer, nullable=False, index=True)
+
+    # Update payload
+    payload = Column(JSONB, nullable=False)
+
+    # Metadata
+    created_at = Column(TIMESTAMP(timezone=True), nullable=False)
+    updated_at = Column(TIMESTAMP(timezone=True), nullable=False)
+
+
+class NotificationsTable(Base):
+    """Pending notifications for users."""
+
+    __tablename__ = "notifications"
+    __table_args__ = {"schema": ENV}
+
+    # Primary key
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    # Unique identifier
+    object_key = Column(String, nullable=False, unique=True, index=True)
+
+    # Foreign key to chats
+    chat_id = Column(Integer, ForeignKey(f"{ENV}.chats.id"), nullable=False, index=True)
+
+    # Notification data
+    content = Column(String, nullable=False)
+    priority = Column(Integer, nullable=False, default=2)
+
+    # Metadata
+    created_at = Column(TIMESTAMP(timezone=True), nullable=False)
+    updated_at = Column(TIMESTAMP(timezone=True), nullable=False)
+    processed_at = Column(TIMESTAMP(timezone=True), nullable=True)

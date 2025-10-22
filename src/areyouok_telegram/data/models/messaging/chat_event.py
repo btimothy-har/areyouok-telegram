@@ -1,7 +1,5 @@
 """ChatEvent helper model for combining Message and Context data."""
 
-# ruff: noqa: TRY003
-
 import json
 from datetime import datetime
 
@@ -9,9 +7,10 @@ import pydantic
 import pydantic_ai
 import telegram
 
-from areyouok_telegram.data.models.context import Context, ContextType
-from areyouok_telegram.data.models.media_file import MediaFile
-from areyouok_telegram.data.models.message import Message
+from areyouok_telegram.data.exceptions import BaseDataError
+from areyouok_telegram.data.models.messaging.context import Context, ContextType
+from areyouok_telegram.data.models.messaging.media_file import MediaFile
+from areyouok_telegram.data.models.messaging.message import Message
 from areyouok_telegram.utils.text import format_relative_time
 
 CONTEXT_TYPE_MAP = {
@@ -26,6 +25,33 @@ CONTEXT_TYPE_MAP = {
 }
 
 SYSTEM_USER_ID = "system"
+
+
+class AttachmentsOnlyAllowedForMessagesError(ValueError, BaseDataError):
+    """Raised when attachments are only allowed for message events."""
+
+    def __init__(self, event_type: str, attachments: list[MediaFile]):
+        super().__init__("Attachments are only allowed for message events.")
+        self.event_type = event_type
+        self.attachments = attachments
+
+
+class UserIDRequiredForMessagesError(ValueError, BaseDataError):
+    """Raised when user ID is required for message events."""
+
+    def __init__(self, event_type: str):
+        super().__init__("User ID must be provided for message and reaction events.")
+        self.event_type = event_type
+
+
+class UnsupportedMessageTypeError(TypeError, BaseDataError):
+    """Raised when an unsupported message type is provided."""
+
+    def __init__(self, message_type: str):
+        super().__init__(
+            f"Unsupported message type: {message_type}. Only Message and MessageReactionUpdated are supported."
+        )
+        self.message_type = message_type
 
 
 class ChatEvent(pydantic.BaseModel):
@@ -44,14 +70,14 @@ class ChatEvent(pydantic.BaseModel):
         if self.event_type == "message":
             return self
         if self.attachments:
-            raise ValueError("Attachments are only allowed for message events.")
+            raise AttachmentsOnlyAllowedForMessagesError(self.event_type, self.attachments)
         return self
 
     @pydantic.model_validator(mode="after")
     def user_id_must_be_provided_for_messages(self) -> "ChatEvent":
         if self.event_type in ["message", "reaction"]:
             if not self.user_id:
-                raise ValueError("User ID must be provided for message and reaction events.")
+                raise UserIDRequiredForMessagesError(self.event_type)
         return self
 
     @classmethod
@@ -93,9 +119,7 @@ class ChatEvent(pydantic.BaseModel):
             }
 
         else:
-            raise TypeError(
-                f"Unsupported message type: {type(message)}. Only Message and MessageReactionUpdated are supported."
-            )
+            raise UnsupportedMessageTypeError(message.message_type)
 
         if message.reasoning:
             event_data["reasoning"] = message.reasoning

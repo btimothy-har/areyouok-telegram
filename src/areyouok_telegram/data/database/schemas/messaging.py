@@ -1,7 +1,7 @@
 """Messaging schemas for messages, media, updates, and notifications."""
 
 from sqlalchemy import Column, ForeignKey, Integer, String, Text
-from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP
+from sqlalchemy.dialects.postgresql import TIMESTAMP
 
 from areyouok_telegram.config import ENV
 from areyouok_telegram.data.database import Base
@@ -24,7 +24,7 @@ class MessagesTable(Base):
     chat_id = Column(Integer, ForeignKey(f"{ENV}.chats.id"), nullable=False, index=True)
 
     # Telegram identifier
-    telegram_message_id = Column(String, nullable=False, index=True)
+    telegram_message_id = Column(Integer, nullable=False, index=True)
 
     # Message data
     message_type = Column(String, nullable=False)
@@ -68,51 +68,3 @@ class MediaFilesTable(Base):
     created_at = Column(TIMESTAMP(timezone=True), nullable=False)
     updated_at = Column(TIMESTAMP(timezone=True), nullable=False)
     last_accessed_at = Column(TIMESTAMP(timezone=True), nullable=True)
-
-
-class UpdatesTable(Base):
-    """Store raw Telegram updates."""
-
-    __tablename__ = "updates"
-    __table_args__ = {"schema": ENV}
-
-    # Primary key
-    id = Column(Integer, primary_key=True, autoincrement=True)
-
-    # Unique identifier
-    object_key = Column(String, nullable=False, unique=True, index=True)
-
-    # Telegram update ID
-    telegram_update_id = Column(String, nullable=False, index=True)
-
-    # Update payload
-    payload = Column(JSONB, nullable=False)
-
-    # Metadata
-    created_at = Column(TIMESTAMP(timezone=True), nullable=False)
-    updated_at = Column(TIMESTAMP(timezone=True), nullable=False)
-
-
-class NotificationsTable(Base):
-    """Pending notifications for users."""
-
-    __tablename__ = "notifications"
-    __table_args__ = {"schema": ENV}
-
-    # Primary key
-    id = Column(Integer, primary_key=True, autoincrement=True)
-
-    # Unique identifier
-    object_key = Column(String, nullable=False, unique=True, index=True)
-
-    # Foreign key to chats
-    chat_id = Column(Integer, ForeignKey(f"{ENV}.chats.id"), nullable=False, index=True)
-
-    # Notification data
-    content = Column(String, nullable=False)
-    priority = Column(Integer, nullable=False, default=2)
-
-    # Metadata
-    created_at = Column(TIMESTAMP(timezone=True), nullable=False)
-    updated_at = Column(TIMESTAMP(timezone=True), nullable=False)
-    processed_at = Column(TIMESTAMP(timezone=True), nullable=True)

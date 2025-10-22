@@ -1,6 +1,7 @@
 """Update Pydantic model for raw Telegram updates."""
 
 import hashlib
+import json
 from datetime import UTC, datetime
 
 import pydantic
@@ -17,44 +18,51 @@ class Update(pydantic.BaseModel):
 
     model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
 
-    # Internal ID
-    id: int
-
-    # Telegram update ID
-    telegram_update_id: str
-
-    # Update payload
+    telegram_update_id: int
     payload: dict
 
     # Metadata
-    created_at: datetime
-    updated_at: datetime
+    id: int = 0
+    created_at: datetime = pydantic.Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = pydantic.Field(default_factory=lambda: datetime.now(UTC))
 
-    @staticmethod
-    def generate_object_key(payload: str) -> str:
+    @property
+    def object_key(self) -> str:
         """Generate a unique object key for an update based on its payload."""
-        return hashlib.sha256(f"update:{payload}".encode()).hexdigest()
+
+        payload_str = json.dumps(self.payload, sort_keys=True)
+        return hashlib.sha256(f"update:{payload_str}".encode()).hexdigest()
 
     @classmethod
-    @traced(extract_args=["update"])
-    async def new_or_upsert(cls, *, update: telegram.Update) -> "Update":
-        """Insert or update an update in the database.
+    def from_telegram(cls, *, update: telegram.Update) -> "Update":
+        """Create an Update instance from a Telegram Update object.
 
         Args:
             update: Telegram Update object
 
         Returns:
-            Update instance
+            Update instance (not yet saved to database)
+        """
+        return cls(
+            telegram_update_id=update.update_id,
+            payload=update.to_dict(),
+        )
+
+    @traced()
+    async def save(self) -> "Update":
+        """Save or update the update in the database.
+
+        Returns:
+            Update instance refreshed from database
         """
         now = datetime.now(UTC)
-        object_key = cls.generate_object_key(update.to_json())
 
         async with async_database() as db_conn:
             stmt = pg_insert(UpdatesTable).values(
-                object_key=object_key,
-                telegram_update_id=str(update.update_id),
-                payload=update.to_dict(),
-                created_at=now,
+                object_key=self.object_key,
+                telegram_update_id=self.telegram_update_id,
+                payload=self.payload,
+                created_at=self.created_at,
                 updated_at=now,
             )
 
@@ -69,4 +77,4 @@ class Update(pydantic.BaseModel):
             result = await db_conn.execute(stmt)
             row = result.scalar_one()
 
-            return cls.model_validate(row, from_attributes=True)
+            return Update.model_validate(row, from_attributes=True)

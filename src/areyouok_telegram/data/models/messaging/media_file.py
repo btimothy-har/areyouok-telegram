@@ -8,12 +8,12 @@ from datetime import UTC, datetime
 
 import pydantic
 from cryptography.fernet import Fernet
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from areyouok_telegram.data.database import async_database
 from areyouok_telegram.data.database.schemas import MediaFilesTable
-from areyouok_telegram.data.models.chat import Chat
+from areyouok_telegram.data.models.messaging.chat import Chat
 from areyouok_telegram.logging import traced
 
 
@@ -24,7 +24,7 @@ class MediaFile(pydantic.BaseModel):
 
     # Required fields
     chat: Chat
-    message_id: int  # FK to messages.id
+    message_id: int
     file_id: str
     file_unique_id: str
     mime_type: str
@@ -35,17 +35,16 @@ class MediaFile(pydantic.BaseModel):
     file_size: int | None = None
     created_at: datetime = pydantic.Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = pydantic.Field(default_factory=lambda: datetime.now(UTC))
-    last_accessed_at: datetime | None = None
 
     @property
     def chat_id(self) -> int:
         """Get chat_id from the Chat object."""
         return self.chat.id
 
-    @staticmethod
-    def generate_object_key(chat_id: int, message_id: int, file_unique_id: str) -> str:
+    @property
+    def object_key(self) -> str:
         """Generate a unique object key using internal IDs."""
-        return hashlib.sha256(f"media:{chat_id}:{message_id}:{file_unique_id}".encode()).hexdigest()
+        return hashlib.sha256(f"media:{self.chat.id}:{self.message_id}:{self.file_unique_id}".encode()).hexdigest()
 
     @staticmethod
     def decrypt_content(encrypted_content_base64: str, chat_encryption_key: str) -> bytes:
@@ -114,11 +113,10 @@ class MediaFile(pydantic.BaseModel):
 
         # Encrypt content for storage
         encrypted_content_base64 = self.encrypt_content()
-        object_key = self.generate_object_key(self.chat.id, self.message_id, self.file_unique_id)
 
         async with async_database() as db_conn:
             stmt = pg_insert(MediaFilesTable).values(
-                object_key=object_key,
+                object_key=self.object_key,
                 file_id=self.file_id,
                 file_unique_id=self.file_unique_id,
                 chat_id=self.chat.id,
@@ -128,7 +126,6 @@ class MediaFile(pydantic.BaseModel):
                 encrypted_content_base64=encrypted_content_base64,
                 created_at=self.created_at,
                 updated_at=now,
-                last_accessed_at=self.last_accessed_at,
             )
             stmt = stmt.on_conflict_do_update(
                 index_elements=["object_key"],
@@ -159,7 +156,6 @@ class MediaFile(pydantic.BaseModel):
                 file_size=row.file_size,
                 created_at=row.created_at,
                 updated_at=row.updated_at,
-                last_accessed_at=row.last_accessed_at,
             )
 
     @classmethod
@@ -205,31 +201,7 @@ class MediaFile(pydantic.BaseModel):
                     file_size=row.file_size,
                     created_at=row.created_at,
                     updated_at=row.updated_at,
-                    last_accessed_at=row.last_accessed_at,
                 )
                 media_files.append(media_file)
 
-            # Update last_accessed_at for all found media files
-            if media_files:
-                media_ids = [m.id for m in media_files]
-                await cls._bulk_update_last_accessed(media_ids)
-
             return media_files
-
-    @classmethod
-    async def _bulk_update_last_accessed(cls, media_ids: list[int]) -> None:
-        """Update last_accessed_at timestamp for given media IDs.
-
-        Args:
-            media_ids: List of media record IDs to update
-        """
-        if not media_ids:
-            return
-
-        async with async_database() as db_conn:
-            stmt = (
-                update(MediaFilesTable)
-                .where(MediaFilesTable.id.in_(media_ids))
-                .values(last_accessed_at=datetime.now(UTC))
-            )
-            await db_conn.execute(stmt)

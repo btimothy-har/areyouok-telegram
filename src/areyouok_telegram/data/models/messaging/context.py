@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 from datetime import UTC, datetime
@@ -15,8 +16,8 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from areyouok_telegram.data.database import async_database
 from areyouok_telegram.data.database.schemas import ContextTable
-from areyouok_telegram.data.models.chat import Chat
-from areyouok_telegram.data.models.session import Session
+from areyouok_telegram.data.models.messaging.chat import Chat
+from areyouok_telegram.data.models.messaging.session import Session
 from areyouok_telegram.logging import traced
 
 
@@ -60,10 +61,10 @@ class Context(pydantic.BaseModel):
         """Get chat_id from the Chat object."""
         return self.chat.id
 
-    @staticmethod
-    def generate_object_key(chat_id: int, ctype: str, encrypted_content: str) -> str:
-        """Generate a unique object key for a context based on chat ID, type, and encrypted content."""
-        return hashlib.sha256(f"context:{chat_id}:{ctype}:{encrypted_content}".encode()).hexdigest()
+    @property
+    def object_key(self) -> str:
+        content_b64 = base64.b64encode(json.dumps(self.content).encode()).decode()
+        return hashlib.sha256(f"context:{self.chat.id}:{self.type}:{content_b64}".encode()).hexdigest()
 
     @staticmethod
     def decrypt_content(encrypted_content: str, chat_encryption_key: str) -> Any:
@@ -107,18 +108,14 @@ class Context(pydantic.BaseModel):
         Returns:
             Context instance refreshed from database (with decrypted content)
         """
-        # Get encryption key from chat
-        chat_encryption_key = self.chat.retrieve_key()
-
         # Encrypt the content for storage
-        encrypted_content = self.encrypt_content(self.content, chat_encryption_key)
-        object_key = self.generate_object_key(self.chat_id, self.type, encrypted_content)
+        encrypted_content = self.encrypt_content()
 
         async with async_database() as db_conn:
             stmt = (
                 pg_insert(ContextTable)
                 .values(
-                    object_key=object_key,
+                    object_key=self.object_key,
                     chat_id=self.chat.id,
                     session_id=self.session_id,
                     type=self.type,

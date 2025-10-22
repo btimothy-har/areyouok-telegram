@@ -15,8 +15,8 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from areyouok_telegram.data.database import async_database
 from areyouok_telegram.data.database.schemas import GuidedSessionsTable
-from areyouok_telegram.data.models.chat import Chat
-from areyouok_telegram.data.models.session import Session
+from areyouok_telegram.data.models.messaging.chat import Chat
+from areyouok_telegram.data.models.messaging.session import Session
 from areyouok_telegram.logging import traced
 
 
@@ -78,11 +78,13 @@ class GuidedSession(pydantic.BaseModel):
     created_at: datetime = pydantic.Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = pydantic.Field(default_factory=lambda: datetime.now(UTC))
 
-    @staticmethod
-    def generate_object_key(session_id: int, session_type: str, started_at: datetime) -> str:
+    @property
+    def object_key(self) -> str:
         """Generate a unique object key based on session ID, session type, and start time."""
-        timestamp_str = started_at.isoformat()
-        return hashlib.sha256(f"guided_session:{session_id}:{session_type}:{timestamp_str}".encode()).hexdigest()
+        timestamp_str = self.started_at.isoformat()
+        return hashlib.sha256(
+            f"guided_session:{self.session_id}:{self.session_type}:{timestamp_str}".encode()
+        ).hexdigest()
 
     @staticmethod
     def decrypt_metadata(encrypted_metadata: str, chat_encryption_key: str) -> dict:
@@ -166,7 +168,6 @@ class GuidedSession(pydantic.BaseModel):
             GuidedSession instance refreshed from database
         """
         now = datetime.now(UTC)
-        object_key = self.generate_object_key(self.session_id, self.session_type, self.started_at)
 
         # Encrypt metadata for storage
         encrypted_metadata = None
@@ -175,7 +176,7 @@ class GuidedSession(pydantic.BaseModel):
 
         async with async_database() as db_conn:
             values = {
-                "object_key": object_key,
+                "object_key": self.object_key,
                 "session_id": self.session.id,
                 "chat_id": self.chat.id,
                 "session_type": self.session_type,

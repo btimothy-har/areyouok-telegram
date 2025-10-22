@@ -14,8 +14,8 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from areyouok_telegram.data.database import async_database
 from areyouok_telegram.data.database.schemas import MessagesTable
-from areyouok_telegram.data.models.chat import Chat
-from areyouok_telegram.data.models.user import User
+from areyouok_telegram.data.exceptions import InvalidIDArgumentError
+from areyouok_telegram.data.models.messaging.chat import Chat
 from areyouok_telegram.logging import traced
 
 MessageTypes = telegram.Message | telegram.MessageReactionUpdated
@@ -35,7 +35,7 @@ class Message(pydantic.BaseModel):
     # Required fields
     chat: Chat
     user_id: int
-    telegram_message_id: str
+    telegram_message_id: int
     message_type: str
     payload: dict
 
@@ -46,10 +46,12 @@ class Message(pydantic.BaseModel):
     created_at: datetime = pydantic.Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = pydantic.Field(default_factory=lambda: datetime.now(UTC))
 
-    @staticmethod
-    def generate_object_key(user_id: int, chat_id: int, telegram_message_id: str, message_type: str) -> str:
+    @property
+    def object_key(self) -> str:
         """Generate a unique object key for a message using internal IDs."""
-        return hashlib.sha256(f"message:{user_id}:{chat_id}:{telegram_message_id}:{message_type}".encode()).hexdigest()
+        return hashlib.sha256(
+            f"message:{self.user_id}:{self.chat.id}:{self.telegram_message_id}:{self.message_type}".encode()
+        ).hexdigest()
 
     @staticmethod
     def decrypt_message(
@@ -109,15 +111,6 @@ class Message(pydantic.BaseModel):
         return self.chat.id
 
     @property
-    async def user(self) -> User:
-        """Lazy-load the User object for this message.
-
-        Returns:
-            User instance
-        """
-        return await User.get_by_id(user_id=self.user_id)
-
-    @property
     def message_type_obj(self) -> type[MessageTypes]:
         """Return the class type of the message based on its type string."""
         if self.message_type == "MessageReactionUpdated":
@@ -145,14 +138,12 @@ class Message(pydantic.BaseModel):
         """
         now = datetime.now(UTC)
 
-        object_key = self.generate_object_key(self.user_id, self.chat.id, self.telegram_message_id, self.message_type)
-
         # Encrypt the payload and reasoning together
         encrypted_payload, encrypted_reasoning = self.encrypt_message()
 
         async with async_database() as db_conn:
             stmt = pg_insert(MessagesTable).values(
-                object_key=object_key,
+                object_key=self.object_key,
                 user_id=self.user_id,
                 chat_id=self.chat.id,
                 telegram_message_id=self.telegram_message_id,
@@ -206,7 +197,7 @@ class Message(pydantic.BaseModel):
         return cls(
             user_id=user_id,
             chat=chat,
-            telegram_message_id=str(message.message_id),
+            telegram_message_id=message.message_id,
             message_type=message.__class__.__name__,
             payload=message.to_dict(),
             reasoning=reasoning,
@@ -220,7 +211,7 @@ class Message(pydantic.BaseModel):
         chat: Chat,
         *,
         message_id: int | None = None,
-        telegram_message_id: str | None = None,
+        telegram_message_id: int | None = None,
     ) -> Message | None:
         """Retrieve a message by internal ID or Telegram message ID, auto-decrypted.
 
@@ -236,7 +227,7 @@ class Message(pydantic.BaseModel):
             ValueError: If neither or both IDs are provided
         """
         if sum([message_id is not None, telegram_message_id is not None]) != 1:
-            raise ValueError("Provide exactly one of: message_id, telegram_message_id")
+            raise InvalidIDArgumentError(["message_id", "telegram_message_id"])
 
         async with async_database() as db_conn:
             if message_id is not None:

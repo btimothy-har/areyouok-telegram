@@ -1,5 +1,7 @@
 """JobState Pydantic model for persisting job execution state."""
 
+from __future__ import annotations
+
 import hashlib
 from datetime import UTC, datetime
 
@@ -27,13 +29,13 @@ class JobState(pydantic.BaseModel):
     state_data: dict
 
     # Metadata
-    created_at: datetime
-    updated_at: datetime
+    created_at: datetime = pydantic.Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = pydantic.Field(default_factory=lambda: datetime.now(UTC))
 
-    @staticmethod
-    def generate_object_key(job_name: str) -> str:
+    @property
+    def object_key(self) -> str:
         """Generate a unique object key for a job based on its name."""
-        return hashlib.sha256(f"job:{job_name}".encode()).hexdigest()
+        return hashlib.sha256(f"job:{self.job_name}".encode()).hexdigest()
 
     @classmethod
     @traced(extract_args=["job_name"])
@@ -46,10 +48,8 @@ class JobState(pydantic.BaseModel):
         Returns:
             Dictionary of state data, or None if no state exists
         """
-        object_key = cls.generate_object_key(job_name)
-
         async with async_database() as db_conn:
-            stmt = select(JobStateTable).where(JobStateTable.object_key == object_key)
+            stmt = select(JobStateTable).where(JobStateTable.job_name == job_name)
             result = await db_conn.execute(stmt)
             row = result.scalar_one_or_none()
 
@@ -58,36 +58,28 @@ class JobState(pydantic.BaseModel):
 
             return None
 
-    @classmethod
-    @traced(extract_args=["job_name"])
-    async def save_state(cls, *, job_name: str, state_data: dict) -> "JobState":
+    @traced()
+    async def save(self) -> JobState:
         """Save or update the state for a job.
 
-        Args:
-            job_name: Unique name of the job
-            state_data: Dictionary of state data to persist
-
         Returns:
-            JobState instance
+            JobState instance refreshed from database
         """
-        object_key = cls.generate_object_key(job_name)
-        now = datetime.now(UTC)
-
         async with async_database() as db_conn:
             stmt = (
                 pg_insert(JobStateTable)
                 .values(
-                    object_key=object_key,
-                    job_name=job_name,
-                    state_data=state_data,
-                    created_at=now,
-                    updated_at=now,
+                    object_key=self.object_key,
+                    job_name=self.job_name,
+                    state_data=self.state_data,
+                    created_at=self.created_at,
+                    updated_at=self.updated_at,
                 )
                 .on_conflict_do_update(
                     index_elements=["object_key"],
                     set_={
-                        "state_data": state_data,
-                        "updated_at": now,
+                        "state_data": self.state_data,
+                        "updated_at": self.updated_at,
                     },
                 )
                 .returning(JobStateTable)
@@ -96,20 +88,13 @@ class JobState(pydantic.BaseModel):
             result = await db_conn.execute(stmt)
             row = result.scalar_one()
 
-            return cls.model_validate(row, from_attributes=True)
+            return JobState.model_validate(row, from_attributes=True)
 
-    @classmethod
-    @traced(extract_args=["job_name"])
-    async def delete_state(cls, *, job_name: str) -> None:
-        """Delete the state for a job.
-
-        Args:
-            job_name: Unique name of the job
-        """
-        object_key = cls.generate_object_key(job_name)
-
+    @traced()
+    async def delete(self) -> None:
+        """Delete the state for a job."""
         async with async_database() as db_conn:
-            stmt = select(JobStateTable).where(JobStateTable.object_key == object_key)
+            stmt = select(JobStateTable).where(JobStateTable.object_key == self.object_key)
             result = await db_conn.execute(stmt)
             row = result.scalar_one_or_none()
 

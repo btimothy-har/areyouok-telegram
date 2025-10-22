@@ -11,7 +11,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from areyouok_telegram.data.database import async_database
 from areyouok_telegram.data.database.schemas import NotificationsTable
-from areyouok_telegram.data.models.chat import Chat
+from areyouok_telegram.data.models.messaging.chat import Chat
 from areyouok_telegram.logging import traced
 
 
@@ -31,17 +31,19 @@ class Notification(pydantic.BaseModel):
     updated_at: datetime = pydantic.Field(default_factory=lambda: datetime.now(UTC))
     processed_at: datetime | None = None
 
-    @staticmethod
-    def generate_object_key(chat_id: int, content: str, created_at: datetime) -> str:
+    @property
+    def object_key(self) -> str:
         """Generate a unique object key for a notification."""
-        return hashlib.sha256(f"notification:{chat_id}:{content}:{created_at.isoformat()}".encode()).hexdigest()
+        return hashlib.sha256(
+            f"notification:{self.chat_id}:{self.content}:{self.created_at.isoformat()}".encode()
+        ).hexdigest()
 
     @property
     def status(self) -> str:
         """Return status based on processed_at."""
         return "pending" if self.processed_at is None else "completed"
 
-    @traced(extract_args=["chat_id", "content"])
+    @traced()
     async def save(self) -> Notification:
         """Save or update the notification in the database.
 
@@ -49,11 +51,10 @@ class Notification(pydantic.BaseModel):
             Notification instance refreshed from database
         """
         now = datetime.now(UTC)
-        object_key = self.generate_object_key(self.chat_id, self.content, self.created_at)
 
         async with async_database() as db_conn:
             stmt = pg_insert(NotificationsTable).values(
-                object_key=object_key,
+                object_key=self.object_key,
                 chat_id=self.chat_id,
                 content=self.content,
                 priority=self.priority,

@@ -11,6 +11,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from areyouok_telegram.data.database import async_database
 from areyouok_telegram.data.database.schemas import ChatsTable
+from areyouok_telegram.data.exceptions import InvalidIDArgumentError
 from areyouok_telegram.encryption import decrypt_chat_key, encrypt_chat_key, generate_chat_key
 from areyouok_telegram.logging import traced
 
@@ -21,7 +22,7 @@ class Chat(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
 
     # Telegram ID
-    telegram_chat_id: str
+    telegram_chat_id: int
     encrypted_key: str
 
     # Chat attributes
@@ -38,10 +39,10 @@ class Chat(pydantic.BaseModel):
     # TTL cache for decrypted keys (10 minutes TTL, max 1000 entries)
     _key_cache: TTLCache[int, str] = TTLCache(maxsize=1000, ttl=10 * 60)
 
-    @staticmethod
-    def generate_object_key(telegram_chat_id: str) -> str:
+    @property
+    def object_key(self) -> str:
         """Generate a unique object key for a chat based on Telegram chat ID."""
-        return hashlib.sha256(f"chat:{telegram_chat_id}".encode()).hexdigest()
+        return hashlib.sha256(f"chat:{self.telegram_chat_id}".encode()).hexdigest()
 
     @staticmethod
     def generate_encryption_key() -> str:
@@ -81,7 +82,7 @@ class Chat(pydantic.BaseModel):
         cls,
         *,
         chat_id: int | None = None,
-        telegram_chat_id: str | None = None,
+        telegram_chat_id: int | None = None,
     ) -> "Chat | None":
         """Retrieve a chat by internal chat ID or Telegram chat ID.
 
@@ -96,7 +97,7 @@ class Chat(pydantic.BaseModel):
             ValueError: If neither or both IDs are provided
         """
         if sum([chat_id is not None, telegram_chat_id is not None]) != 1:
-            raise ValueError("Provide exactly one of: chat_id, telegram_chat_id")
+            raise InvalidIDArgumentError(["chat_id", "telegram_chat_id"])
 
         async with async_database() as db_conn:
             if chat_id is not None:
@@ -123,7 +124,7 @@ class Chat(pydantic.BaseModel):
             Chat instance (not yet saved to database)
         """
         return cls(
-            telegram_chat_id=str(chat.id),
+            telegram_chat_id=chat.id,
             type=chat.type,
             title=chat.title,
             is_forum=chat.is_forum if chat.is_forum is not None else False,
@@ -142,14 +143,13 @@ class Chat(pydantic.BaseModel):
             Chat instance with updated fields from database
         """
         now = datetime.now(UTC)
-        object_key = self.generate_object_key(self.telegram_chat_id)
 
         if not self.encrypted_key:
             self.encrypted_key = Chat.generate_encryption_key()
 
         async with async_database() as db_conn:
             stmt = pg_insert(ChatsTable).values(
-                object_key=object_key,
+                object_key=self.object_key,
                 telegram_chat_id=self.telegram_chat_id,
                 encrypted_key=self.encrypted_key,
                 type=self.type,

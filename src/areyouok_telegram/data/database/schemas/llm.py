@@ -1,6 +1,6 @@
 """LLM-related schemas for usage tracking and generation history."""
 
-from sqlalchemy import Column, Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import Column, Float, ForeignKey, Index, Integer, String
 from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP
 
 from areyouok_telegram.config import ENV
@@ -49,7 +49,7 @@ class LLMUsageTable(Base):
 
 
 class LLMGenerationsTable(Base):
-    """Track LLM generation outputs with encrypted payloads."""
+    """Track LLM generation outputs."""
 
     __tablename__ = "llm_generations"
     __table_args__ = {"schema": ENV}
@@ -69,8 +69,8 @@ class LLMGenerationsTable(Base):
     model = Column(String, nullable=False)
     timestamp = Column(TIMESTAMP(timezone=True), nullable=False)
 
-    # Response data (encrypted)
+    # Response data (unencrypted)
     response_type = Column(String, nullable=False)
-    encrypted_output = Column(Text, nullable=False)
-    encrypted_messages = Column(Text, nullable=False)
-    encrypted_deps = Column(Text, nullable=True)
+    output = Column(JSONB, nullable=False)
+    messages = Column(JSONB, nullable=False)
+    deps = Column(JSONB, nullable=True)

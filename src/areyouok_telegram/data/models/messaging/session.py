@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-from datetime import datetime
+from datetime import UTC, datetime
 
 import pydantic
 from sqlalchemy import select
@@ -11,7 +11,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from areyouok_telegram.data.database import async_database
 from areyouok_telegram.data.database.schemas import SessionsTable
-from areyouok_telegram.data.models.chat import Chat
+from areyouok_telegram.data.models.messaging.chat import Chat
 from areyouok_telegram.logging import traced
 
 
@@ -33,11 +33,11 @@ class Session(pydantic.BaseModel):
     last_bot_activity: datetime | None = None
     message_count: int = 0
 
-    @staticmethod
-    def generate_object_key(chat_id: int, session_start: datetime) -> str:
+    @property
+    def object_key(self) -> str:
         """Generate a unique object key for a session based on chat ID and start time."""
-        timestamp_str = session_start.isoformat()
-        return hashlib.sha256(f"session:{chat_id}:{timestamp_str}".encode()).hexdigest()
+        timestamp_str = self.session_start.isoformat()
+        return hashlib.sha256(f"session:{self.chat.id}:{timestamp_str}".encode()).hexdigest()
 
     @property
     def chat_id(self) -> int:
@@ -62,13 +62,11 @@ class Session(pydantic.BaseModel):
         Returns:
             Session instance refreshed from database
         """
-        object_key = self.generate_object_key(self.chat.id, self.session_start)
-
         async with async_database() as db_conn:
             stmt = (
                 pg_insert(SessionsTable)
                 .values(
-                    object_key=object_key,
+                    object_key=self.object_key,
                     chat_id=self.chat.id,
                     session_start=self.session_start,
                     session_end=self.session_end,
@@ -160,6 +158,23 @@ class Session(pydantic.BaseModel):
         """
         self.session_end = timestamp
         return await self.save()
+
+    @classmethod
+    async def get_or_create_new_session(cls, *, chat: Chat, session_start: datetime | None = None) -> Session:
+        """Get or create a new session for a chat.
+        Args:
+            chat: Chat object
+        Returns:
+            Session instance
+        """
+
+        session = await cls.get_sessions(chat=chat, active=True)
+        if session:
+            return session
+        else:
+            session_start = session_start or datetime.now(UTC)
+            new_session = cls(chat=chat, session_start=session_start)
+            return await new_session.save()
 
     @classmethod
     @traced(extract_args=["chat", "active"])
