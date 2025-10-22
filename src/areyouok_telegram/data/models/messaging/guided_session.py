@@ -18,6 +18,7 @@ from areyouok_telegram.data.database.schemas import GuidedSessionsTable
 from areyouok_telegram.data.models.messaging.chat import Chat
 from areyouok_telegram.data.models.messaging.session import Session
 from areyouok_telegram.logging import traced
+from areyouok_telegram.utils.retry import db_retry
 
 
 class GuidedSessionType(Enum):
@@ -161,6 +162,7 @@ class GuidedSession(pydantic.BaseModel):
         return now - self.started_at > timedelta(hours=1)
 
     @traced(extract_args=["chat_id", "session_id", "session_type"])
+    @db_retry()
     async def save(self) -> GuidedSession:
         """Save or update the guided session in the database.
 
@@ -247,6 +249,7 @@ class GuidedSession(pydantic.BaseModel):
 
     @classmethod
     @traced(extract_args=["chat"])
+    @db_retry()
     async def get_by_chat(
         cls,
         chat: Chat,
@@ -315,6 +318,7 @@ class GuidedSession(pydantic.BaseModel):
 
     @classmethod
     @traced(extract_args=["guided_session_id"])
+    @db_retry()
     async def get_by_id(
         cls,
         guided_session_id: int,

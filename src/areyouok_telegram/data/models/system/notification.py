@@ -13,6 +13,7 @@ from areyouok_telegram.data.database import async_database
 from areyouok_telegram.data.database.schemas import NotificationsTable
 from areyouok_telegram.data.models.messaging.chat import Chat
 from areyouok_telegram.logging import traced
+from areyouok_telegram.utils.retry import db_retry
 
 
 class Notification(pydantic.BaseModel):
@@ -44,6 +45,7 @@ class Notification(pydantic.BaseModel):
         return "pending" if self.processed_at is None else "completed"
 
     @traced()
+    @db_retry()
     async def save(self) -> Notification:
         """Save or update the notification in the database.
 
@@ -80,6 +82,7 @@ class Notification(pydantic.BaseModel):
 
     @classmethod
     @traced(extract_args=["chat"])
+    @db_retry()
     async def get_next_pending(
         cls,
         chat: Chat,

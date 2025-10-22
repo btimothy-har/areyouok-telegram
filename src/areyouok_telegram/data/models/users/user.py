@@ -14,6 +14,7 @@ from areyouok_telegram.data.database import async_database
 from areyouok_telegram.data.database.schemas import UsersTable
 from areyouok_telegram.data.exceptions import InvalidIDArgumentError
 from areyouok_telegram.logging import traced
+from areyouok_telegram.utils.retry import db_retry
 
 
 class User(pydantic.BaseModel):
@@ -39,6 +40,7 @@ class User(pydantic.BaseModel):
 
     @classmethod
     @traced(extract_args=["id", "telegram_user_id"])
+    @db_retry()
     async def get_by_id(
         cls,
         *,
@@ -75,6 +77,7 @@ class User(pydantic.BaseModel):
             return cls.model_validate(row, from_attributes=True)
 
     @traced(extract_args=["telegram_user_id"])
+    @db_retry()
     async def save(self) -> User:
         """Save or update the user in the database.
 

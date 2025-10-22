@@ -17,6 +17,7 @@ from areyouok_telegram.data.database import async_database
 from areyouok_telegram.data.database.schemas import UserMetadataTable
 from areyouok_telegram.encryption import decrypt_content, encrypt_content
 from areyouok_telegram.logging import traced
+from areyouok_telegram.utils.retry import db_retry
 
 RESPONSE_SPEED_MAP = {
     "fast": 0.0,
@@ -161,6 +162,7 @@ class UserMetadata(pydantic.BaseModel):
         }
 
     @traced(extract_args=["user_id"])
+    @db_retry()
     async def save(self) -> UserMetadata:
         """Save or update user metadata in the database.
 
@@ -209,6 +211,7 @@ class UserMetadata(pydantic.BaseModel):
             )
 
     @classmethod
+    @db_retry()
     async def get_by_user_id(
         cls,
         *,

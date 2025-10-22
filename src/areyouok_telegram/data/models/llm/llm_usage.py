@@ -13,6 +13,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from areyouok_telegram.data.database import async_database
 from areyouok_telegram.data.database.schemas import LLMUsageTable
 from areyouok_telegram.logging import traced
+from areyouok_telegram.utils.retry import db_retry
 
 
 class LLMUsage(pydantic.BaseModel):
@@ -49,6 +50,7 @@ class LLMUsage(pydantic.BaseModel):
     id: int = 0
 
     @traced()
+    @db_retry()
     async def save(self) -> LLMUsage:
         """Save the LLM usage record to the database.
 

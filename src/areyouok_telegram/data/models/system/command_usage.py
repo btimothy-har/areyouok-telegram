@@ -12,6 +12,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from areyouok_telegram.data.database import async_database
 from areyouok_telegram.data.database.schemas import CommandUsageTable
 from areyouok_telegram.data.models.messaging.chat import Chat
+from areyouok_telegram.utils.retry import db_retry
 
 
 class CommandUsage(pydantic.BaseModel):
@@ -38,6 +39,7 @@ class CommandUsage(pydantic.BaseModel):
         """Get chat_id from the Chat object."""
         return self.chat.id
 
+    @db_retry()
     async def save(self) -> CommandUsage:
         """Save the command usage to the database."""
         try:

@@ -13,6 +13,7 @@ from areyouok_telegram.data.database import async_database
 from areyouok_telegram.data.database.schemas import SessionsTable
 from areyouok_telegram.data.models.messaging.chat import Chat
 from areyouok_telegram.logging import traced
+from areyouok_telegram.utils.retry import db_retry
 
 
 class Session(pydantic.BaseModel):
@@ -56,6 +57,7 @@ class Session(pydantic.BaseModel):
         return self.last_bot_activity > self.last_user_activity
 
     @traced(extract_args=["chat_id"])
+    @db_retry()
     async def save(self) -> Session:
         """Save or update the session in the database.
 
@@ -178,6 +180,7 @@ class Session(pydantic.BaseModel):
 
     @classmethod
     @traced(extract_args=["chat", "active"])
+    @db_retry()
     async def get_sessions(
         cls,
         *,
@@ -248,6 +251,7 @@ class Session(pydantic.BaseModel):
             return sessions
 
     @classmethod
+    @db_retry()
     async def get_by_id(cls, *, session_id: int) -> Session | None:
         """Retrieve a session by its internal ID.
 

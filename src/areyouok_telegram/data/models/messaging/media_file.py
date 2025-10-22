@@ -15,6 +15,7 @@ from areyouok_telegram.data.database import async_database
 from areyouok_telegram.data.database.schemas import MediaFilesTable
 from areyouok_telegram.data.models.messaging.chat import Chat
 from areyouok_telegram.logging import traced
+from areyouok_telegram.utils.retry import db_retry
 
 
 class MediaFile(pydantic.BaseModel):
@@ -103,6 +104,7 @@ class MediaFile(pydantic.BaseModel):
         )
 
     @traced(extract_args=["chat_id", "message_id", "file_id"])
+    @db_retry()
     async def save(self) -> MediaFile:
         """Save or update the media file in the database with encrypted content.
 
@@ -160,6 +162,7 @@ class MediaFile(pydantic.BaseModel):
 
     @classmethod
     @traced(extract_args=["chat", "message_id"])
+    @db_retry()
     async def get_by_message(
         cls,
         chat: Chat,

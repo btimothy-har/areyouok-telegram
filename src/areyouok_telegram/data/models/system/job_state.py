@@ -12,6 +12,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from areyouok_telegram.data.database import async_database
 from areyouok_telegram.data.database.schemas import JobStateTable
 from areyouok_telegram.logging import traced
+from areyouok_telegram.utils.retry import db_retry
 
 
 class JobState(pydantic.BaseModel):
@@ -39,6 +40,7 @@ class JobState(pydantic.BaseModel):
 
     @classmethod
     @traced(extract_args=["job_name"])
+    @db_retry()
     async def get_state(cls, *, job_name: str) -> dict | None:
         """Retrieve the current state for a job.
 
@@ -59,6 +61,7 @@ class JobState(pydantic.BaseModel):
             return None
 
     @traced()
+    @db_retry()
     async def save(self) -> JobState:
         """Save or update the state for a job.
 
@@ -91,6 +94,7 @@ class JobState(pydantic.BaseModel):
             return JobState.model_validate(row, from_attributes=True)
 
     @traced()
+    @db_retry()
     async def delete(self) -> None:
         """Delete the state for a job."""
         async with async_database() as db_conn:

@@ -19,6 +19,7 @@ from areyouok_telegram.data.database.schemas import ContextTable
 from areyouok_telegram.data.models.messaging.chat import Chat
 from areyouok_telegram.data.models.messaging.session import Session
 from areyouok_telegram.logging import traced
+from areyouok_telegram.utils.retry import db_retry
 
 
 class ContextType(Enum):
@@ -99,6 +100,7 @@ class Context(pydantic.BaseModel):
         return encrypted_bytes.decode("utf-8")
 
     @traced(extract_args=["chat_id", "session_id", "type"])
+    @db_retry()
     async def save(self) -> Context:
         """Save the context to the database with encrypted content.
 
@@ -140,6 +142,7 @@ class Context(pydantic.BaseModel):
 
     @classmethod
     @traced(extract_args=["chat"])
+    @db_retry()
     async def get_by_chat(
         cls,
         chat: Chat,
@@ -211,6 +214,7 @@ class Context(pydantic.BaseModel):
 
     @classmethod
     @traced(extract_args=["context_id"])
+    @db_retry()
     async def get_by_id(
         cls,
         chat: Chat,

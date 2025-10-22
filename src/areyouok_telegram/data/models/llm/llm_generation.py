@@ -14,6 +14,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from areyouok_telegram.data.database import async_database
 from areyouok_telegram.data.database.schemas import LLMGenerationsTable
 from areyouok_telegram.logging import traced
+from areyouok_telegram.utils.retry import db_retry
 
 
 def serialize_object(obj: Any) -> str:
@@ -116,6 +117,7 @@ class LLMGeneration(pydantic.BaseModel):
         return output_dict, messages_json, deps_dict
 
     @traced()
+    @db_retry()
     async def save(self) -> "LLMGeneration":
         """Save the LLM generation to the database.
 
@@ -216,6 +218,7 @@ class LLMGeneration(pydantic.BaseModel):
 
     @classmethod
     @traced(extract_args=["generation_id"])
+    @db_retry()
     async def get_by_id(
         cls,
         *,
@@ -256,6 +259,7 @@ class LLMGeneration(pydantic.BaseModel):
 
     @classmethod
     @traced(extract_args=["session_id"])
+    @db_retry()
     async def get_by_session(
         cls,
         *,

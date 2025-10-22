@@ -11,6 +11,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from areyouok_telegram.data.database import async_database
 from areyouok_telegram.data.database.schemas import UpdatesTable
 from areyouok_telegram.logging import traced
+from areyouok_telegram.utils.retry import db_retry
 
 
 class Update(pydantic.BaseModel):
@@ -49,6 +50,7 @@ class Update(pydantic.BaseModel):
         )
 
     @traced()
+    @db_retry()
     async def save(self) -> "Update":
         """Save or update the update in the database.
 
