@@ -3,35 +3,42 @@
 import telegram
 from telegram.ext import ContextTypes
 
-from areyouok_telegram.data import (
-    GuidedSessions,
-    GuidedSessionType,
-    JournalContextMetadata,
-    Sessions,
-    operations as data_operations,
-)
-from areyouok_telegram.data.connection import async_database
+from areyouok_telegram.data.models import Chat, CommandUsage, GuidedSession, Message, Session, User
+from areyouok_telegram.data.models.messaging import GuidedSessionState, GuidedSessionType, JournalContextMetadata
 from areyouok_telegram.handlers.constants import MD2_JOURNAL_START_MESSAGE
+from areyouok_telegram.handlers.exceptions import NoChatFoundError, NoUserFoundError
 from areyouok_telegram.logging import traced
-from areyouok_telegram.utils.retry import db_retry, telegram_call
+from areyouok_telegram.utils.retry import telegram_call
 
 
 @traced(extract_args=["update"])
 async def on_journal_command(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /journal command to start a new journaling session."""
 
-    active_session = await data_operations.get_or_create_active_session(
-        chat_id=str(update.effective_chat.id),
+    chat = await Chat.get_by_id(telegram_chat_id=update.effective_chat.id)
+    if not chat:
+        raise NoChatFoundError(update.effective_chat.id)
+
+    active_session = await Session.get_or_create_new_session(
+        chat=chat,
+        session_start=update.message.date,
+    )
+
+    # Track command usage
+    command_usage = CommandUsage(
+        chat=chat,
+        command="journal",
+        session_id=active_session.id,
         timestamp=update.message.date,
     )
+    await command_usage.save()
 
-    await data_operations.track_command_usage(
-        command="journal",
-        chat_id=str(update.effective_chat.id),
-        session_id=active_session.session_id,
+    # Check for existing active guided sessions
+    existing_sessions = await GuidedSession.get_by_chat(
+        chat=chat,
+        session=active_session,
+        state=GuidedSessionState.ACTIVE.value,
     )
-
-    existing_sessions = await data_operations.get_active_guided_sessions(session=active_session)
 
     if existing_sessions:
         await telegram_call(
@@ -50,18 +57,30 @@ async def on_journal_command(update: telegram.Update, context: ContextTypes.DEFA
         selected_topic=None,
     )
 
-    await initialize_journaling_session(
-        chat_id=str(update.effective_chat.id),
+    new_session = GuidedSession(
+        chat=chat,
         session=active_session,
-        chat_encryption_key=await data_operations.get_chat_encryption_key(chat_id=str(update.effective_chat.id)),
-        initial_metadata=initial_metadata,
+        session_type=GuidedSessionType.JOURNALING.value,
+        state=GuidedSessionState.ACTIVE.value,
+        metadata=initial_metadata.model_dump(),
     )
+    await new_session.save()
 
     # Record this event in the session
-    await data_operations.new_session_event(
-        session=active_session,
+    user = await User.get_by_id(telegram_user_id=update.effective_user.id)
+    if not user:
+        raise NoUserFoundError(update.effective_user.id)
+
+    message = Message.from_telegram(
+        user_id=user.id,
+        chat=chat,
         message=update.message,
-        user_id=str(update.effective_user.id),
+        session_id=active_session.id,
+    )
+    await message.save()
+
+    await active_session.new_message(
+        timestamp=update.message.date,
         is_user=True,
     )
 
@@ -72,36 +91,3 @@ async def on_journal_command(update: telegram.Update, context: ContextTypes.DEFA
         text=MD2_JOURNAL_START_MESSAGE,
         parse_mode="MarkdownV2",
     )
-
-
-@db_retry()
-async def initialize_journaling_session(
-    *,
-    chat_id: str,
-    session: Sessions,
-    chat_encryption_key: str,
-    initial_metadata: JournalContextMetadata,
-) -> None:
-    """Initialize a new journaling session."""
-    async with async_database() as db_conn:
-        await GuidedSessions.start_new_session(
-            db_conn,
-            chat_id=chat_id,
-            chat_session=session.session_id,
-            session_type=GuidedSessionType.JOURNALING.value,
-        )
-
-        all_sessions = await GuidedSessions.get_by_chat_session(
-            db_conn,
-            chat_session=session.session_id,
-            session_type=GuidedSessionType.JOURNALING.value,
-        )
-
-        active_session = [s for s in all_sessions if s.is_active][0]
-
-        # Update with encrypted metadata
-        await active_session.update_metadata(
-            db_conn,
-            metadata=initial_metadata.model_dump(),
-            chat_encryption_key=chat_encryption_key,
-        )
