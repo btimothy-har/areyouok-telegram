@@ -13,8 +13,8 @@ from areyouok_telegram.handlers.exceptions import (
     NoMessageReactionError,
     NoUserFoundError,
 )
+from areyouok_telegram.handlers.media import extract_media_from_telegram_message
 from areyouok_telegram.logging import traced
-from areyouok_telegram.utils.media import extract_media_from_telegram_message
 from areyouok_telegram.utils.retry import telegram_call
 
 

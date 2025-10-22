@@ -1,5 +1,6 @@
 import asyncio
 import time
+from datetime import UTC, datetime
 from io import BytesIO
 
 import logfire
@@ -7,10 +8,10 @@ import openai
 import telegram
 from openai.types import audio as openai_audio
 from pydub import AudioSegment
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from areyouok_telegram.config import OPENAI_API_KEY
-from areyouok_telegram.data import LLMUsage, MediaFiles, Notifications
+from areyouok_telegram.data.models import Chat, LLMUsage, MediaFile, Notification
+from areyouok_telegram.handlers.exceptions import NoChatFoundError
 from areyouok_telegram.logging import traced
 from areyouok_telegram.utils.retry import telegram_call
 
@@ -25,18 +26,17 @@ class VoiceNotProcessableError(Exception):
 
 @traced(extract_args=["message"])
 async def extract_media_from_telegram_message(
-    db_conn: AsyncSession,
     user_encryption_key: str,
     *,
     message: telegram.Message,
-    session_id: str | None = None,
+    session_id: int | None = None,
 ) -> int:
     """Process media files from a Telegram message.
 
     Args:
-        db_conn: Database connection
         user_encryption_key: The user's Fernet encryption key
         message: Telegram message object
+        session_id: Optional session ID
 
     Returns:
         int: Number of media files processed
@@ -63,7 +63,6 @@ async def extract_media_from_telegram_message(
     await asyncio.gather(
         *[
             _download_file(
-                db_conn,
                 user_encryption_key,
                 session_id=session_id,
                 message=message,
@@ -86,21 +85,22 @@ async def extract_media_from_telegram_message(
 
 @traced(extract_args=["chat_id", "message_id"])
 async def handle_unsupported_media(
-    db_conn: AsyncSession,
     *,
-    chat_id: str,
-    message_id: str,
+    chat_id: int,
+    message_id: int,
 ) -> None:
     """Check for unsupported media types and create notifications.
 
     Args:
-        db_conn: Database connection
-        chat_id: Chat ID
-        message_id: Message ID
+        chat_id: Chat ID (internal ID)
+        message_id: Message ID (internal ID)
     """
-    stored_media = await MediaFiles.get_by_message_id(
-        db_conn,
-        chat_id=chat_id,
+    chat = await Chat.get_by_id(chat_id=chat_id)
+    if not chat:
+        return
+
+    stored_media = await MediaFile.get_by_message(
+        chat=chat,
         message_id=message_id,
     )
 
@@ -118,12 +118,12 @@ async def handle_unsupported_media(
                     f"The user sent {', '.join(unsupported_media_types)} files, but you can only view images and PDFs."
                 )
 
-            await Notifications.add(
-                db_conn,
+            notification = Notification(
                 chat_id=chat_id,
                 content=content,
-                priority=2,  # Medium priority
+                priority=2,
             )
+            await notification.save()
 
 
 def transcribe_voice_data_sync(voice_data: bytes) -> list[openai_audio.transcription.Transcription]:
@@ -178,35 +178,39 @@ def transcribe_voice_data_sync(voice_data: bytes) -> list[openai_audio.transcrip
 
 @traced(extract_args=["message", "file"])
 async def _download_file(
-    db_conn: AsyncSession,
-    user_encryption_key: str,
+    user_encryption_key: str,  # noqa: ARG001
     *,
     message: telegram.Message,
     file: telegram.File,
-    session_id: str | None = None,
+    session_id: int | None = None,
 ) -> bytes:
     """Download a Telegram file as bytes.
 
     Args:
-        db_conn: Database connection
         user_encryption_key: The user's Fernet encryption key
         message: Telegram message object
         file: Telegram file
+        session_id: Optional session ID
     """
     try:
         content_bytes = await telegram_call(file.download_as_bytearray)
 
-        # Pass individual attributes to create_file
-        await MediaFiles.create_file(
-            db_conn,
-            user_encryption_key,
+        # Get chat object for saving
+        chat = await Chat.get_by_id(telegram_chat_id=message.chat.id)
+        if not chat:
+            raise NoChatFoundError(message.chat.id)  # noqa: TRY301
+
+        # Create and save media file
+        media_file = MediaFile(
+            chat=chat,
+            message_id=message.message_id,
             file_id=file.file_id,
             file_unique_id=file.file_unique_id,
-            chat_id=str(message.chat.id),
-            message_id=str(message.message_id),
+            mime_type=file.file_path.split(".")[-1] if file.file_path else "application/octet-stream",
+            bytes_data=bytes(content_bytes),
             file_size=file.file_size,
-            content_bytes=bytes(content_bytes),
         )
+        await media_file.save()
 
         # For voice messages, also create a transcription
         if message.voice and file.file_unique_id == message.voice.file_unique_id:
@@ -228,30 +232,31 @@ async def _download_file(
 
                     end_time = time.perf_counter()
 
-                    await LLMUsage.track_generic_usage(
-                        db_conn,
-                        chat_id=str(message.chat.id),
+                    llm_usage = LLMUsage(
+                        chat_id=chat.id,
                         session_id=session_id,
+                        timestamp=datetime.now(UTC),
                         usage_type="openai.voice_transcription",
-                        model="openai/gpt-4o-transcribe",
+                        model="gpt-4o-transcribe",
                         provider="openai",
                         input_tokens=sum(t.usage.prompt_tokens for t in transcriptions),
                         output_tokens=sum(t.usage.completion_tokens for t in transcriptions),
                         runtime=end_time - start_time,
                     )
+                    await llm_usage.save()
 
                     # Store the transcription as a text file
                     transcription_bytes = transcription_text.encode("utf-8")
-                    await MediaFiles.create_file(
-                        db_conn,
-                        user_encryption_key,
+                    transcription_media = MediaFile(
+                        chat=chat,
+                        message_id=message.message_id,
                         file_id=f"{file.file_id}_transcription",
                         file_unique_id=f"{file.file_unique_id}_transcription",
-                        chat_id=str(message.chat.id),
-                        message_id=str(message.message_id),
+                        mime_type="text/plain",
+                        bytes_data=transcription_bytes,
                         file_size=len(transcription_bytes),
-                        content_bytes=transcription_bytes,
                     )
+                    await transcription_media.save()
                     logfire.info(
                         f"Transcription is {len(transcription_text)} characters long.", chat_id=message.chat.id
                     )
