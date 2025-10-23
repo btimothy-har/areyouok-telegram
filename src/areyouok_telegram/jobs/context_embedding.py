@@ -9,10 +9,10 @@ from llama_index.core.schema import TransformComponent
 from llama_index.embeddings.openai import OpenAIEmbedding
 
 from areyouok_telegram.config import OPENAI_API_KEY, RAG_BATCH_SIZE, RAG_EMBEDDING_DIMENSIONS, RAG_EMBEDDING_MODEL
-from areyouok_telegram.data import Chats, Context, ContextType, async_database, context_doc_store, context_vector_store
+from areyouok_telegram.data.database import context_doc_store, context_vector_store
+from areyouok_telegram.data.models import Chat, Context, ContextType
 from areyouok_telegram.jobs.base import BaseJob
 from areyouok_telegram.logging import traced
-from areyouok_telegram.utils.retry import db_retry
 
 CONTEXT_TYPES_TO_EMBED = [
     ContextType.SESSION.value,
@@ -81,23 +81,22 @@ class ContextEmbeddingJob(BaseJob):
             else:
                 cutoff_time = datetime(1970, 1, 1, tzinfo=UTC)
 
-            # Fetch contexts created since last run
-            new_contexts = await self._fetch_new_contexts(
-                from_timestamp=cutoff_time,
-                to_timestamp=self._run_timestamp,
-            )
+            # Fetch all chats and their contexts created since last run
             documents: list[Document] = []
+            all_chats = await Chat.get()
 
-            if new_contexts:
-                # Create documents batch
-                for context in new_contexts:
+            for chat in all_chats:
+                # Fetch contexts for this chat within the time range
+                contexts = await Context.get_by_chat(
+                    chat=chat,
+                    from_timestamp=cutoff_time,
+                    to_timestamp=self._run_timestamp,
+                )
+
+                # Create documents batch for contexts that should be embedded
+                for context in contexts:
                     if context.type not in CONTEXT_TYPES_TO_EMBED:
                         continue
-
-                    encryption_key = await self._get_encryption_key(chat_id=context.chat_id)
-
-                    # Decrypt content
-                    context.decrypt_content(chat_encryption_key=encryption_key)
 
                     if not context.content:
                         continue
@@ -116,6 +115,7 @@ class ContextEmbeddingJob(BaseJob):
                     )
                     documents.append(doc)
 
+            if documents:
                 await pipeline.arun(documents=documents)
 
             await self.save_state(
@@ -132,38 +132,3 @@ class ContextEmbeddingJob(BaseJob):
         except Exception:
             logfire.exception("Failed to run context embedding batch job")
             raise
-
-    @db_retry()
-    async def _fetch_new_contexts(
-        self,
-        *,
-        from_timestamp: datetime,
-        to_timestamp: datetime,
-    ) -> list[Context]:
-        """Fetch contexts created since given time with their encryption keys.
-
-        Args:
-            since: Datetime cutoff (get contexts created after this)
-
-        Returns:
-            List of [Context]
-        """
-        async with async_database() as db_conn:
-            # Get contexts created since cutoff
-            contexts = await Context.get_by_created_timestamp(
-                db_conn,
-                from_timestamp=from_timestamp,
-                to_timestamp=to_timestamp,
-            )
-
-            if not contexts:
-                return []
-
-            return contexts
-
-    @db_retry()
-    async def _get_encryption_key(self, *, chat_id: str) -> str:
-        """Get the encryption key for a chat."""
-        async with async_database() as db_conn:
-            chat = await Chats.get_by_id(db_conn, chat_id=chat_id)
-            return chat.retrieve_key()

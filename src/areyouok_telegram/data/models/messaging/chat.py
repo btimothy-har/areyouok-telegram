@@ -116,6 +116,49 @@ class Chat(pydantic.BaseModel):
             return cls.model_validate(row, from_attributes=True)
 
     @classmethod
+    @traced(extract_args=["chat_type", "limit"])
+    @db_retry()
+    async def get(
+        cls,
+        *,
+        chat_type: str | None = None,
+        from_timestamp: datetime | None = None,
+        to_timestamp: datetime | None = None,
+        limit: int | None = None,
+    ) -> list["Chat"]:
+        """Retrieve chats with optional filtering.
+
+        Args:
+            chat_type: Optional chat type to filter by (e.g., "private", "group")
+            from_timestamp: Optional start of time range (created_at >= this)
+            to_timestamp: Optional end of time range (created_at < this)
+            limit: Optional maximum number of results
+
+        Returns:
+            List of Chat instances matching the criteria
+        """
+        async with async_database() as db_conn:
+            stmt = select(ChatsTable)
+
+            if chat_type:
+                stmt = stmt.where(ChatsTable.type == chat_type)
+
+            if from_timestamp:
+                stmt = stmt.where(ChatsTable.created_at >= from_timestamp)
+
+            if to_timestamp:
+                stmt = stmt.where(ChatsTable.created_at < to_timestamp)
+
+            stmt = stmt.order_by(ChatsTable.created_at.desc())
+
+            if limit:
+                stmt = stmt.limit(limit)
+
+            result = await db_conn.execute(stmt)
+            rows = result.scalars().all()
+            return [cls.model_validate(row, from_attributes=True) for row in rows]
+
+    @classmethod
     def from_telegram(cls, chat: telegram.Chat) -> "Chat":
         """Create a Chat instance from a Telegram Chat object.
 

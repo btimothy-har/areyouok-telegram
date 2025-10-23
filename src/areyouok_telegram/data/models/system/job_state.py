@@ -20,9 +20,6 @@ class JobState(pydantic.BaseModel):
 
     model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
 
-    # Internal ID
-    id: int
-
     # Job identification
     job_name: str
 
@@ -30,6 +27,7 @@ class JobState(pydantic.BaseModel):
     state_data: dict
 
     # Metadata
+    id: int = 0
     created_at: datetime = pydantic.Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = pydantic.Field(default_factory=lambda: datetime.now(UTC))
 
@@ -41,14 +39,14 @@ class JobState(pydantic.BaseModel):
     @classmethod
     @traced(extract_args=["job_name"])
     @db_retry()
-    async def get_state(cls, *, job_name: str) -> dict | None:
-        """Retrieve the current state for a job.
+    async def get(cls, *, job_name: str) -> JobState | None:
+        """Retrieve the JobState instance for a job.
 
         Args:
             job_name: Unique name of the job
 
         Returns:
-            Dictionary of state data, or None if no state exists
+            JobState instance, or None if no state exists
         """
         async with async_database() as db_conn:
             stmt = select(JobStateTable).where(JobStateTable.job_name == job_name)
@@ -56,7 +54,7 @@ class JobState(pydantic.BaseModel):
             row = result.scalar_one_or_none()
 
             if row:
-                return row.state_data
+                return cls.model_validate(row, from_attributes=True)
 
             return None
 
