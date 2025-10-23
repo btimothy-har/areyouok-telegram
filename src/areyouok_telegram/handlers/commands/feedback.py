@@ -13,8 +13,8 @@ from telegram.ext import ContextTypes
 from areyouok_telegram.config import ENV
 from areyouok_telegram.data.models import Chat, ChatEvent, CommandUsage, Context, MediaFile, Message, Session
 from areyouok_telegram.data.models.messaging import ContextType
-from areyouok_telegram.handlers.constants import MD2_FEEDBACK_MESSAGE
 from areyouok_telegram.handlers.exceptions import NoChatFoundError
+from areyouok_telegram.handlers.utils.constants import MD2_FEEDBACK_MESSAGE
 from areyouok_telegram.llms import run_agent_with_tracking
 from areyouok_telegram.llms.agent_feedback_context import ContextAgentDependencies, feedback_context_agent
 from areyouok_telegram.logging import traced

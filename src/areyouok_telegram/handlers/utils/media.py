@@ -11,7 +11,6 @@ from pydub import AudioSegment
 
 from areyouok_telegram.config import OPENAI_API_KEY
 from areyouok_telegram.data.models import Chat, LLMUsage, MediaFile, Notification
-from areyouok_telegram.handlers.exceptions import NoChatFoundError
 from areyouok_telegram.logging import traced
 from areyouok_telegram.utils.retry import telegram_call
 
@@ -26,7 +25,7 @@ class VoiceNotProcessableError(Exception):
 
 @traced(extract_args=["message"])
 async def extract_media_from_telegram_message(
-    user_encryption_key: str,
+    chat: Chat,
     *,
     message: telegram.Message,
     session_id: int | None = None,
@@ -34,7 +33,7 @@ async def extract_media_from_telegram_message(
     """Process media files from a Telegram message.
 
     Args:
-        user_encryption_key: The user's Fernet encryption key
+        chat: Chat object
         message: Telegram message object
         session_id: Optional session ID
 
@@ -63,7 +62,7 @@ async def extract_media_from_telegram_message(
     await asyncio.gather(
         *[
             _download_file(
-                user_encryption_key,
+                chat,
                 session_id=session_id,
                 message=message,
                 file=file,
@@ -126,59 +125,9 @@ async def handle_unsupported_media(
             await notification.save()
 
 
-def transcribe_voice_data_sync(voice_data: bytes) -> list[openai_audio.transcription.Transcription]:
-    """Synchronously transcribe voice data using OpenAI.
-
-    Args:
-        voice_data: Voice file content as bytes
-
-    Returns:
-        Transcribed text
-
-    Raises:
-        VoiceNotProcessableError: If voice cannot be processed
-    """
-    client = openai.OpenAI(api_key=OPENAI_API_KEY)
-    try:
-        audio_segment = AudioSegment.from_ogg(BytesIO(voice_data))
-
-        max_segment_length = 10 * 60 * 1000  # 10 minutes in milliseconds
-        total_duration = len(audio_segment)
-        transcriptions = []
-
-        start = 0
-        while start < total_duration:
-            end = min(start + max_segment_length, total_duration)
-            segment = audio_segment[start:end]
-
-            # Export segment to mp3 format for OpenAI
-            audio_file = BytesIO()
-            segment.export(audio_file, format="mp3")
-            audio_file.seek(0)
-            audio_file.name = "segment.mp3"
-
-            transcription = client.audio.transcriptions.create(
-                file=audio_file,
-                model="gpt-4o-transcribe",
-                chunking_strategy="auto",
-                language="en",
-                prompt=transcriptions[-1].text
-                if transcriptions and getattr(transcriptions[-1], "text", None)
-                else None,
-                temperature=0.2,
-            )
-            transcriptions.append(transcription)
-            start = end
-
-    except Exception as e:
-        raise VoiceNotProcessableError() from e
-
-    return transcriptions
-
-
 @traced(extract_args=["message", "file"])
 async def _download_file(
-    user_encryption_key: str,  # noqa: ARG001
+    chat: Chat,
     *,
     message: telegram.Message,
     file: telegram.File,
@@ -187,18 +136,13 @@ async def _download_file(
     """Download a Telegram file as bytes.
 
     Args:
-        user_encryption_key: The user's Fernet encryption key
+        chat: Chat object (provides context and encryption key)
         message: Telegram message object
         file: Telegram file
         session_id: Optional session ID
     """
     try:
         content_bytes = await telegram_call(file.download_as_bytearray)
-
-        # Get chat object for saving
-        chat = await Chat.get_by_id(telegram_chat_id=message.chat.id)
-        if not chat:
-            raise NoChatFoundError(message.chat.id)  # noqa: TRY301
 
         # Create and save media file
         media_file = MediaFile(
@@ -224,7 +168,6 @@ async def _download_file(
             ):
                 try:
                     # Transcribe the voice message in a separate thread
-
                     start_time = time.perf_counter()
 
                     transcriptions = await asyncio.to_thread(transcribe_voice_data_sync, bytes(content_bytes))
@@ -279,3 +222,53 @@ async def _download_file(
             file_id=file.file_id,
             file_unique_id=file.file_unique_id,
         )
+
+
+def transcribe_voice_data_sync(voice_data: bytes) -> list[openai_audio.transcription.Transcription]:
+    """Synchronously transcribe voice data using OpenAI.
+
+    Args:
+        voice_data: Voice file content as bytes
+
+    Returns:
+        Transcribed text
+
+    Raises:
+        VoiceNotProcessableError: If voice cannot be processed
+    """
+    client = openai.OpenAI(api_key=OPENAI_API_KEY)
+    try:
+        audio_segment = AudioSegment.from_ogg(BytesIO(voice_data))
+
+        max_segment_length = 10 * 60 * 1000  # 10 minutes in milliseconds
+        total_duration = len(audio_segment)
+        transcriptions = []
+
+        start = 0
+        while start < total_duration:
+            end = min(start + max_segment_length, total_duration)
+            segment = audio_segment[start:end]
+
+            # Export segment to mp3 format for OpenAI
+            audio_file = BytesIO()
+            segment.export(audio_file, format="mp3")
+            audio_file.seek(0)
+            audio_file.name = "segment.mp3"
+
+            transcription = client.audio.transcriptions.create(
+                file=audio_file,
+                model="gpt-4o-transcribe",
+                chunking_strategy="auto",
+                language="en",
+                prompt=transcriptions[-1].text
+                if transcriptions and getattr(transcriptions[-1], "text", None)
+                else None,
+                temperature=0.2,
+            )
+            transcriptions.append(transcription)
+            start = end
+
+    except Exception as e:
+        raise VoiceNotProcessableError() from e
+
+    return transcriptions

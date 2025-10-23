@@ -3,8 +3,8 @@ import telegram
 from telegram.ext import ContextTypes
 
 from areyouok_telegram.data.models import Chat, CommandUsage, Session, User, UserMetadata
-from areyouok_telegram.handlers.constants import MD2_PREFERENCES_DISPLAY_TEMPLATE
 from areyouok_telegram.handlers.exceptions import NoChatFoundError, NoUserFoundError
+from areyouok_telegram.handlers.utils.constants import MD2_PREFERENCES_DISPLAY_TEMPLATE
 from areyouok_telegram.llms import run_agent_with_tracking
 from areyouok_telegram.llms.agent_preferences import (
     PreferencesAgentDependencies,

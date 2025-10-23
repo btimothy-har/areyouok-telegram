@@ -3,8 +3,8 @@ from telegram.ext import ContextTypes
 
 from areyouok_telegram.data.models import Chat, CommandUsage, GuidedSession, Message, Session, User
 from areyouok_telegram.data.models.messaging import GuidedSessionState, GuidedSessionType
-from areyouok_telegram.handlers.constants import MD2_ONBOARDING_COMPLETE_MESSAGE, MD2_ONBOARDING_START_MESSAGE
 from areyouok_telegram.handlers.exceptions import NoChatFoundError, NoUserFoundError
+from areyouok_telegram.handlers.utils.constants import MD2_ONBOARDING_COMPLETE_MESSAGE, MD2_ONBOARDING_START_MESSAGE
 from areyouok_telegram.logging import traced
 from areyouok_telegram.utils.retry import telegram_call
 

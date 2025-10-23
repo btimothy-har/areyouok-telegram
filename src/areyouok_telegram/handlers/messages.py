@@ -13,7 +13,7 @@ from areyouok_telegram.handlers.exceptions import (
     NoMessageReactionError,
     NoUserFoundError,
 )
-from areyouok_telegram.handlers.media import extract_media_from_telegram_message
+from areyouok_telegram.handlers.utils.media import extract_media_from_telegram_message
 from areyouok_telegram.logging import traced
 from areyouok_telegram.utils.retry import telegram_call
 
@@ -59,7 +59,7 @@ async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_
 
     # Extract media if present
     await extract_media_from_telegram_message(
-        user_encryption_key=chat.retrieve_key(),
+        chat,
         message=update.message,
         session_id=session.id,
     )
