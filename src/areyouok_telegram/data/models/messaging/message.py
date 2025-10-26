@@ -166,12 +166,15 @@ class Message(pydantic.BaseModel):
                 },
             )
 
-            await db_conn.execute(stmt)
+            # Return the ID of the inserted/updated row
+            stmt = stmt.returning(MessagesTable.id)
+            result = await db_conn.execute(stmt)
+            message_id = result.scalar_one()
 
-        # Return refreshed from database
+        # Return refreshed from database using the internal ID
         return await Message.get_by_id(
             self.chat,
-            telegram_message_id=self.telegram_message_id,
+            message_id=message_id,
         )
 
     @classmethod
