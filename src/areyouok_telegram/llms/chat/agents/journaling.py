@@ -38,7 +38,7 @@ from areyouok_telegram.llms.chat.utils import (
     check_special_instructions,
     validate_response_data,
 )
-from areyouok_telegram.llms.exceptions import JournalingError
+from areyouok_telegram.llms.exceptions import JournalingSessionNotActiveError
 from areyouok_telegram.llms.models import Gemini25Pro
 from areyouok_telegram.llms.utils import run_agent_with_tracking
 
@@ -231,7 +231,7 @@ async def complete_journaling_session(ctx: RunContext[JournalingAgentDependencie
     """Mark the journaling session as complete."""
 
     if not ctx.deps.journaling_session.is_active:
-        raise JournalingError(f"Journaling session is currently {ctx.deps.journaling_session.state}.")
+        raise JournalingSessionNotActiveError
 
     metadata = ctx.deps.journaling_session_metadata
     metadata.phase = "complete"

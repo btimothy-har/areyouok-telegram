@@ -41,6 +41,14 @@ from areyouok_telegram.logging import traced
 from areyouok_telegram.utils.retry import telegram_call
 
 
+class UserNotFoundError(ValueError):
+    """Raised when a user is not found for a chat."""
+
+    def __init__(self, telegram_chat_id: int):
+        super().__init__(f"User not found for chat {telegram_chat_id}")
+        self.telegram_chat_id = telegram_chat_id
+
+
 class ConversationJob(BaseJob):
     """
     A class-based job for handling conversations in a specific chat.
@@ -349,7 +357,7 @@ class ConversationJob(BaseJob):
         # Get user for the chat
         user = await User.get_by_id(telegram_user_id=chat.telegram_chat_id)
         if not user:
-            raise ValueError(f"User not found for chat {chat.telegram_chat_id}")
+            raise UserNotFoundError(chat.telegram_chat_id)
 
         deps_data = {
             "bot_id": self._bot_id,

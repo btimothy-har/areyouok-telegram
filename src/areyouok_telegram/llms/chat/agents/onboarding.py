@@ -30,10 +30,10 @@ from areyouok_telegram.llms.chat.utils import (
 )
 from areyouok_telegram.llms.context_search import search_chat_context
 from areyouok_telegram.llms.exceptions import (
-    CompleteOnboardingError,
     ContextSearchError,
     MemoryUpdateError,
     MetadataFieldUpdateError,
+    SessionNotActiveError,
 )
 from areyouok_telegram.llms.models import Gemini25Pro
 from areyouok_telegram.llms.utils import run_agent_with_tracking
@@ -187,7 +187,7 @@ async def save_user_response(
 async def complete_onboarding(ctx: RunContext[OnboardingAgentDependencies]) -> str:
     """Mark the user's onboarding as complete."""
     if not ctx.deps.onboarding_session.is_active:
-        raise CompleteOnboardingError(f"Onboarding session is currently {ctx.deps.onboarding_session.state}.")
+        raise SessionNotActiveError
 
     await ctx.deps.onboarding_session.complete()
 
@@ -206,7 +206,7 @@ async def complete_onboarding(ctx: RunContext[OnboardingAgentDependencies]) -> s
 async def terminate_onboarding(ctx: RunContext[OnboardingAgentDependencies]) -> str:
     """Stop the user's onboarding without marking it as complete."""
     if not ctx.deps.onboarding_session.is_active:
-        raise CompleteOnboardingError(f"Onboarding session is currently {ctx.deps.onboarding_session.state}.")
+        raise SessionNotActiveError
 
     await ctx.deps.onboarding_session.inactivate()
 
