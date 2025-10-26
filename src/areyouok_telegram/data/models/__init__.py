@@ -16,6 +16,7 @@ from areyouok_telegram.data.models.messaging import (
     Context,
     ContextType,
     GuidedSession,
+    GuidedSessionState,
     GuidedSessionType,
     JournalContextMetadata,
     MediaFile,
@@ -50,6 +51,7 @@ __all__ = [
     "Context",
     "ContextType",
     "GuidedSession",
+    "GuidedSessionState",
     "GuidedSessionType",
     "JournalContextMetadata",
     # LLM
