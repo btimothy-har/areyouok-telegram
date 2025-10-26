@@ -25,20 +25,26 @@ class TestFeedbackContextAgent:
         # Check that the agent has output validators
         assert len(feedback_context_agent._output_validators) > 0
 
-    def test_context_agent_dependencies_structure(self):
+    def test_context_agent_dependencies_structure(self, chat_factory):
         """Test that ContextAgentDependencies is properly structured."""
-        deps = ContextAgentDependencies(tg_chat_id="test_chat_123", tg_session_id="test_session_456")
+        mock_chat = chat_factory(id_value=123)
+        mock_session = MagicMock()
+        mock_session.id = 456
+        
+        deps = ContextAgentDependencies(chat=mock_chat, session=mock_session)
+        assert deps.chat == mock_chat
+        assert deps.session == mock_session
 
-        assert deps.tg_chat_id == "test_chat_123"
-        assert deps.tg_session_id == "test_session_456"
-
-    def test_context_agent_dependencies_dataclass(self):
+    def test_context_agent_dependencies_dataclass(self, chat_factory):
         """Test that ContextAgentDependencies behaves as expected dataclass."""
-        deps = ContextAgentDependencies(tg_chat_id="chat_id", tg_session_id="session_id")
+        mock_chat = chat_factory(id_value=789)
+        mock_session = MagicMock()
+        mock_session.id = 101
+        
+        deps = ContextAgentDependencies(chat=mock_chat, session=mock_session)
 
-        # Test that we can access attributes
-        assert hasattr(deps, "tg_chat_id")
-        assert hasattr(deps, "tg_session_id")
+        # Test that it's a dataclass
+        assert dataclasses.is_dataclass(deps)
 
         # Test string representation
         deps_str = str(deps)
