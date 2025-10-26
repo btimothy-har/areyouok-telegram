@@ -90,4 +90,3 @@ def test_user_metadata_to_dict():
     assert d["user_id"] == 7
     assert d["preferred_name"] == "Bob"
     assert d["response_speed"] == "fast"
-

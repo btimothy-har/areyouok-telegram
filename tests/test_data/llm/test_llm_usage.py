@@ -77,4 +77,3 @@ def test_llm_usage_calculate_costs_failure():
 
             assert input_cost is None and output_cost is None and total_cost is None
             mock_warn.assert_called_once()
-

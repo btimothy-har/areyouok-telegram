@@ -111,5 +111,3 @@ class TestTranscribeVoiceDataSync:
         ):
             with pytest.raises(VoiceNotProcessableError):
                 transcribe_voice_data_sync(mock_voice_data)
-
-

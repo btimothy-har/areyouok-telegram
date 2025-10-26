@@ -47,4 +47,3 @@ async def test_user_save_and_get_by_id(mock_db_session):
     assert saved.id == 9
     assert saved.telegram_user_id == 12345
     assert mock_db_session.execute.call_count == 2
-

@@ -96,4 +96,3 @@ async def test_llm_generation_save_and_get_by_id(mock_db_session):
     mock_db_session.execute.return_value = _ResOneOrNone()
     fetched = await LLMGeneration.get_by_id(generation_id=20)
     assert fetched and fetched.agent == "test_agent"
-

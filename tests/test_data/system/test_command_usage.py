@@ -37,4 +37,3 @@ async def test_command_usage_save_exception_logged(mock_db_session, chat_factory
 
     assert result == 0
     mock_logfire.assert_called_once()
-

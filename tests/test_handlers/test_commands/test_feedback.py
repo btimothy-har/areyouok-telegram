@@ -185,5 +185,3 @@ class TestOnFeedbackCommand:
         assert "entry.604567897=Test+context" in formatted_url  # Spaces encoded as +
         assert "entry.4225678=test" in formatted_url
         assert "entry.191939218=1.2.3" in formatted_url
-
-

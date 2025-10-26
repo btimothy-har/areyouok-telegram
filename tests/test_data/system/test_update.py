@@ -41,4 +41,3 @@ async def test_update_save(mock_db_session):
     saved = await upd.save()
     assert saved.id == 2
     assert saved.telegram_update_id == 456
-

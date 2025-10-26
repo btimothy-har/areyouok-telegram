@@ -73,4 +73,3 @@ async def test_notification_mark_as_completed(mock_db_session):
     updated = await notif.mark_as_completed()
     assert updated.processed_at is not None
     assert updated.status == "completed"
-
