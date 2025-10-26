@@ -9,7 +9,6 @@ Issues tagged with a milestone are targeted for the assigned release version. Br
 All PRs into protected branches (`main` and `release-**`) must:
 1) be approved by a repository collaborator with write permissions.
 2) pass all CI checks (tests and code linting).
-3) meet a mininum of 85% test coverage.
 
 ---
 
