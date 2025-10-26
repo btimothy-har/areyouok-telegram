@@ -7,7 +7,7 @@ import pytest
 import telegram
 from pydub import AudioSegment
 
-from areyouok_telegram.handlers.media import (
+from areyouok_telegram.handlers.utils.media import (
     VoiceNotProcessableError,
     _download_file,
     extract_media_from_telegram_message,

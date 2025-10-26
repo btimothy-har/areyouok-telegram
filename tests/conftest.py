@@ -132,6 +132,21 @@ def session_factory(chat_factory):
 
 
 @pytest.fixture
+def mock_active_session(chat_factory):
+    """Create a mock active session for testing handlers."""
+    # Use MagicMock to allow tests to access both .id and .session_id
+    session = MagicMock()
+    session.id = 123
+    session.session_id = "123"  # String version for legacy tests
+    session.chat_id = 456
+    session.session_start = FROZEN_TIME
+    session.last_user_activity = FROZEN_TIME
+    session.last_bot_activity = FROZEN_TIME
+    session.message_count = 0
+    return session
+
+
+@pytest.fixture
 def mock_telegram_user():
     """Create a mock Telegram user."""
     user = MagicMock(spec=telegram.User)

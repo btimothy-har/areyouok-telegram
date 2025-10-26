@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pydantic_ai
 
-from areyouok_telegram.data.models.media import MediaFiles
+from areyouok_telegram.data.models import MediaFile
 
 
 def create_message_dict(text="Test", message_id="123", timestamp="10 seconds ago", reasoning=None):
@@ -42,7 +42,7 @@ def create_mock_media_files(count=1, mime_type="image/png", *, is_anthropic_supp
     """Helper to create mock media file objects."""
     files = []
     for _ in range(count):
-        mock_file = MagicMock(spec=MediaFiles)
+        mock_file = MagicMock(spec=MediaFile)
         mock_file.mime_type = mime_type
         mock_file.is_anthropic_supported = is_anthropic_supported
         mock_file.bytes_data = b"fake image data"

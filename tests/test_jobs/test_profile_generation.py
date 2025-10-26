@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from areyouok_telegram.data.models.context import ContextType
-from areyouok_telegram.data.operations import InvalidChatError
+from areyouok_telegram.data.models import ContextType
+from areyouok_telegram.handlers.exceptions import NoChatFoundError
 from areyouok_telegram.jobs.profile_generation import ProfileGenerationJob
 from areyouok_telegram.llms.profile_generation import ProfileTemplate
 
@@ -197,7 +197,7 @@ class TestProfileGenerationJob:
             patch.object(job, "_has_active_session", new=AsyncMock(return_value=False)),
             patch.object(job, "_fetch_contexts", new=AsyncMock(return_value=[new_context])),
             patch(
-                "areyouok_telegram.jobs.profile_generation.data_operations.get_chat_encryption_key",
+                "areyouok_telegram.data.models.Chat.get_by_id",
                 new=AsyncMock(return_value="test_key"),
             ),
             patch("areyouok_telegram.jobs.profile_generation.async_database") as mock_async_db,
@@ -230,7 +230,7 @@ class TestProfileGenerationJob:
 
     @pytest.mark.asyncio
     async def test_process_chat_handles_invalid_chat_error(self):
-        """Test _process_chat handles InvalidChatError gracefully."""
+        """Test _process_chat handles NoChatFoundError gracefully."""
         job = ProfileGenerationJob()
         job._run_timestamp = datetime.now(UTC)
         cutoff_time = datetime.now(UTC) - timedelta(hours=1)
@@ -243,13 +243,13 @@ class TestProfileGenerationJob:
             patch.object(job, "_has_active_session", new=AsyncMock(return_value=False)),
             patch.object(job, "_fetch_contexts", new=AsyncMock(return_value=[new_context])),
             patch(
-                "areyouok_telegram.jobs.profile_generation.data_operations.get_chat_encryption_key",
-                new=AsyncMock(side_effect=InvalidChatError("chat123")),
+                "areyouok_telegram.data.models.Chat.get_by_id",
+                new=AsyncMock(side_effect=NoChatFoundError("chat123")),
             ),
         ):
             # Should be caught by the generic exception handler in _process_chat
             # which is called from run_job
-            with pytest.raises(InvalidChatError):
+            with pytest.raises(NoChatFoundError):
                 await job._process_chat(chat_id="chat123", cutoff_time=cutoff_time)
 
     @pytest.mark.asyncio
@@ -275,7 +275,7 @@ class TestProfileGenerationJob:
             patch.object(job, "_has_active_session", new=AsyncMock(return_value=False)),
             patch.object(job, "_fetch_contexts", new=AsyncMock(return_value=[context1, context2])),
             patch(
-                "areyouok_telegram.jobs.profile_generation.data_operations.get_chat_encryption_key",
+                "areyouok_telegram.data.models.Chat.get_by_id",
                 new=AsyncMock(return_value="test_key"),
             ),
             patch("areyouok_telegram.jobs.profile_generation.logfire.exception") as mock_log_exc,

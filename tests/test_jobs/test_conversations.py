@@ -8,10 +8,8 @@ import telegram
 from telegram.constants import ReactionEmoji
 from telegram.ext import ContextTypes
 
-from areyouok_telegram.data.models.chat_event import ChatEvent
-from areyouok_telegram.data.models.context import ContextType
-from areyouok_telegram.data.models.notifications import Notifications
-from areyouok_telegram.data.operations import InvalidChatError
+from areyouok_telegram.data.models import ChatEvent, ContextType, Notification
+from areyouok_telegram.handlers.exceptions import NoChatFoundError
 from areyouok_telegram.jobs.conversations import ConversationJob
 from areyouok_telegram.llms.chat import (
     ChatAgentDependencies,
@@ -363,7 +361,7 @@ class TestConversationJob:
         with (
             patch(
                 "areyouok_telegram.data.operations.get_chat_encryption_key",
-                new=AsyncMock(side_effect=InvalidChatError("No user found")),
+                new=AsyncMock(side_effect=NoChatFoundError("No user found")),
             ),
             patch.object(job, "stop", new=AsyncMock()) as mock_stop,
             patch("areyouok_telegram.jobs.conversations.logfire.span") as mock_span,

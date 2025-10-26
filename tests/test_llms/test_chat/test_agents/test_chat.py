@@ -5,8 +5,7 @@ from unittest.mock import ANY, AsyncMock, MagicMock, patch
 import pytest
 from freezegun import freeze_time
 
-from areyouok_telegram.data.models.notifications import Notifications
-from areyouok_telegram.data.models.user_metadata import UserMetadata
+from areyouok_telegram.data.models import Notification, UserMetadata
 from areyouok_telegram.llms.agent_anonymizer import anonymization_agent
 from areyouok_telegram.llms.chat.agents.chat import (
     ChatAgentDependencies,

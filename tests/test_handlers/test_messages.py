@@ -35,11 +35,14 @@ class TestOnNewMessage:
 
         with (
             patch(
-                "areyouok_telegram.handlers.messages.data_operations.get_or_create_active_session",
+                "areyouok_telegram.data.models.Session.get_or_create_new_session",
                 new=AsyncMock(return_value=mock_active_session),
             ) as mock_get_session,
             patch(
-                "areyouok_telegram.handlers.messages.data_operations.new_session_event", new=AsyncMock()
+                "areyouok_telegram.data.models.Message.save", new=AsyncMock()
+            ),
+            patch(
+                "areyouok_telegram.data.models.Session.new_message", new=AsyncMock()
             ) as mock_new_event,
             patch("areyouok_telegram.handlers.messages.telegram_call", new=AsyncMock()) as mock_telegram_call,
             patch("areyouok_telegram.handlers.messages.generate_feedback_context", new=AsyncMock()) as _,
@@ -113,10 +116,11 @@ class TestOnNewMessage:
 
         with (
             patch(
-                "areyouok_telegram.handlers.messages.data_operations.get_or_create_active_session",
+                "areyouok_telegram.data.models.Session.get_or_create_new_session",
                 new=AsyncMock(return_value=mock_active_session),
             ),
-            patch("areyouok_telegram.handlers.messages.data_operations.new_session_event", new=AsyncMock()),
+            patch("areyouok_telegram.data.models.Message.save", new=AsyncMock()),
+            patch("areyouok_telegram.data.models.Session.new_message", new=AsyncMock()),
             patch("areyouok_telegram.handlers.messages.telegram_call", new=AsyncMock()),
             patch("asyncio.create_task") as mock_create_task,
             patch("random.random", return_value=0.2),  # Mock to be < 1/3 to trigger task creation
@@ -161,11 +165,14 @@ class TestOnNewMessage:
 
         with (
             patch(
-                "areyouok_telegram.handlers.messages.data_operations.get_or_create_active_session",
+                "areyouok_telegram.data.models.Session.get_or_create_new_session",
                 new=AsyncMock(return_value=mock_active_session),
             ),
             patch(
-                "areyouok_telegram.handlers.messages.data_operations.new_session_event", new=AsyncMock()
+                "areyouok_telegram.data.models.Message.save", new=AsyncMock()
+            ),
+            patch(
+                "areyouok_telegram.data.models.Session.new_message", new=AsyncMock()
             ) as mock_new_event,
             patch("areyouok_telegram.handlers.messages.telegram_call", new=AsyncMock()) as mock_telegram_call,
             patch(
@@ -201,11 +208,14 @@ class TestOnNewMessage:
 
         with (
             patch(
-                "areyouok_telegram.handlers.messages.data_operations.get_or_create_active_session",
+                "areyouok_telegram.data.models.Session.get_or_create_new_session",
                 new=AsyncMock(return_value=mock_active_session),
             ),
             patch(
-                "areyouok_telegram.handlers.messages.data_operations.new_session_event", new=AsyncMock()
+                "areyouok_telegram.data.models.Message.save", new=AsyncMock()
+            ),
+            patch(
+                "areyouok_telegram.data.models.Session.new_message", new=AsyncMock()
             ) as mock_new_event,
             patch("areyouok_telegram.handlers.messages.telegram_call", new=AsyncMock()) as mock_telegram_call,
             patch("asyncio.create_task") as mock_create_task,
@@ -243,11 +253,14 @@ class TestOnEditMessage:
 
         with (
             patch(
-                "areyouok_telegram.handlers.messages.data_operations.get_or_create_active_session",
+                "areyouok_telegram.data.models.Session.get_or_create_new_session",
                 new=AsyncMock(return_value=mock_active_session),
             ) as mock_get_session,
             patch(
-                "areyouok_telegram.handlers.messages.data_operations.new_session_event", new=AsyncMock()
+                "areyouok_telegram.data.models.Message.save", new=AsyncMock()
+            ),
+            patch(
+                "areyouok_telegram.data.models.Session.new_message", new=AsyncMock()
             ) as mock_new_event,
         ):
             await on_edit_message(mock_update, mock_context)
@@ -304,11 +317,14 @@ class TestOnMessageReact:
 
         with (
             patch(
-                "areyouok_telegram.handlers.messages.data_operations.get_or_create_active_session",
+                "areyouok_telegram.data.models.Session.get_or_create_new_session",
                 new=AsyncMock(return_value=mock_active_session),
             ) as mock_get_session,
             patch(
-                "areyouok_telegram.handlers.messages.data_operations.new_session_event", new=AsyncMock()
+                "areyouok_telegram.data.models.Message.save", new=AsyncMock()
+            ),
+            patch(
+                "areyouok_telegram.data.models.Session.new_message", new=AsyncMock()
             ) as mock_new_event,
         ):
             await on_message_react(mock_update, mock_context)

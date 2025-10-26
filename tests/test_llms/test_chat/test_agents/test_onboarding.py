@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from areyouok_telegram.data.models.notifications import Notifications
+from areyouok_telegram.data.models import Notification
 from areyouok_telegram.llms.chat.agents.onboarding import (
     OnboardingAgentDependencies,
     onboarding_agent,

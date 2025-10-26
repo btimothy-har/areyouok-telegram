@@ -43,11 +43,11 @@ class TestOnFeedbackCommand:
         with (
             patch("uuid.uuid4", return_value=MagicMock(spec=uuid.UUID, __str__=lambda _: test_uuid)),
             patch(
-                "areyouok_telegram.handlers.commands.feedback.data_operations.get_or_create_active_session",
+                "areyouok_telegram.data.models.Session.get_or_create_new_session",
                 new=AsyncMock(return_value=mock_active_session),
             ),
             patch(
-                "areyouok_telegram.handlers.commands.feedback.data_operations.track_command_usage", new=AsyncMock()
+                "areyouok_telegram.data.models.CommandUsage.save", new=AsyncMock()
             ) as mock_track,
             patch(
                 "areyouok_telegram.handlers.commands.feedback.generate_feedback_context",
@@ -135,11 +135,11 @@ class TestOnFeedbackCommand:
         with (
             patch("uuid.uuid4", return_value=MagicMock(spec=uuid.UUID, __str__=lambda _: test_uuid)),
             patch(
-                "areyouok_telegram.handlers.commands.feedback.data_operations.get_or_create_active_session",
+                "areyouok_telegram.data.models.Session.get_or_create_new_session",
                 new=AsyncMock(return_value=None),
             ),
             patch(
-                "areyouok_telegram.handlers.commands.feedback.data_operations.track_command_usage", new=AsyncMock()
+                "areyouok_telegram.data.models.CommandUsage.save", new=AsyncMock()
             ) as mock_track,
             patch(
                 "areyouok_telegram.handlers.commands.feedback.shorten_url", new=AsyncMock(return_value=test_short_url)

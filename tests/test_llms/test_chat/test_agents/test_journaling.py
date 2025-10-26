@@ -1,18 +1,17 @@
 """Tests for journaling agent components (unit tests only)."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from pydantic_ai.exceptions import ModelRetry
 
-from areyouok_telegram.data import JournalContextMetadata
+from areyouok_telegram.data.models import JournalContextMetadata
 from areyouok_telegram.llms.chat.agents.journaling import (
     JournalingAgentDependencies,
     complete_journaling_session,
     generate_topics,
     journaling_agent,
-    retrieve_journal_context,
     update_selected_topic,
 )
 from areyouok_telegram.llms.exceptions import JournalingError
@@ -133,8 +132,7 @@ class TestGenerateTopicsTool:
         return mock_ctx
 
     @pytest.mark.asyncio
-    @patch("areyouok_telegram.llms.chat.agents.journaling.data_operations.get_chat_encryption_key")
-    @patch("areyouok_telegram.llms.chat.agents.journaling.retrieve_journal_context")
+    @patch("areyouok_telegram.data.models.Chat.get_by_id")
     @patch("areyouok_telegram.llms.chat.agents.journaling.run_agent_with_tracking")
     @patch("areyouok_telegram.llms.chat.agents.journaling.async_database")
     @patch("areyouok_telegram.llms.chat.agents.journaling.GuidedSessions.get_by_guided_session_key")
@@ -145,7 +143,6 @@ class TestGenerateTopicsTool:
         mock_sessions_get,
         mock_async_database,
         mock_run_agent,
-        mock_retrieve_context,
         mock_get_encryption_key,
         mock_context,
     ):
@@ -185,18 +182,15 @@ class TestGenerateTopicsTool:
         assert mock_context.deps.journaling_session_metadata.generated_topics == ["Prompt 1", "Prompt 2", "Prompt 3"]
 
     @pytest.mark.asyncio
-    @patch("areyouok_telegram.llms.chat.agents.journaling.data_operations.get_chat_encryption_key")
-    @patch("areyouok_telegram.llms.chat.agents.journaling.retrieve_journal_context")
+    @patch("areyouok_telegram.data.models.Chat.get_by_id")
     async def test_generate_topics_without_context(
         self,
-        mock_retrieve_context,
         mock_get_encryption_key,
         mock_context,
     ):
         """Test generate_topics when no context is available."""
         # Setup mocks
         mock_get_encryption_key.return_value = "test_key"
-        mock_retrieve_context.return_value = None
 
         # Execute
         result = await generate_topics(ctx=mock_context)
@@ -352,66 +346,3 @@ class TestCompleteJournalingSessionTool:
         # Execute and verify it raises
         with pytest.raises(JournalingError, match="currently complete"):
             await complete_journaling_session(ctx=mock_context)
-
-
-class TestRetrieveJournalContext:
-    """Test retrieve_journal_context function."""
-
-    @pytest.mark.asyncio
-    @patch("areyouok_telegram.llms.chat.agents.journaling.async_database")
-    @patch("areyouok_telegram.llms.chat.agents.journaling.GuidedSessions.get_by_chat_id")
-    @patch("areyouok_telegram.llms.chat.agents.journaling.Context.get_by_chat_id")
-    async def test_retrieve_journal_context_with_previous_session(
-        self,
-        mock_context_get,
-        mock_sessions_get,
-        mock_async_database,
-    ):
-        """Test retrieving context when there's a previous journal session."""
-        # Setup mocks
-        mock_db_conn = AsyncMock()
-        mock_async_database.return_value.__aenter__.return_value = mock_db_conn
-
-        # Mock previous journal session
-        mock_prev_session = MagicMock()
-        mock_prev_session.completed_at = datetime.now(UTC) - timedelta(days=2)
-        mock_sessions_get.return_value = [mock_prev_session]
-
-        # Mock contexts
-        mock_context1 = MagicMock()
-        mock_context1.type = "session"
-        mock_context2 = MagicMock()
-        mock_context2.type = "memory"
-        mock_context_get.return_value = [mock_context1, mock_context2]
-
-        # Execute
-        result = await retrieve_journal_context(chat_id="123456789")
-
-        # Verify
-        assert result is not None
-        assert len(result) == 2
-        mock_context_get.assert_called_once()
-
-    @pytest.mark.asyncio
-    @patch("areyouok_telegram.llms.chat.agents.journaling.async_database")
-    @patch("areyouok_telegram.llms.chat.agents.journaling.GuidedSessions.get_by_chat_id")
-    @patch("areyouok_telegram.llms.chat.agents.journaling.Context.get_by_chat_id")
-    async def test_retrieve_journal_context_no_contexts(
-        self,
-        mock_context_get,
-        mock_sessions_get,
-        mock_async_database,
-    ):
-        """Test retrieving context when there are no contexts available."""
-        # Setup mocks
-        mock_db_conn = AsyncMock()
-        mock_async_database.return_value.__aenter__.return_value = mock_db_conn
-
-        mock_sessions_get.return_value = []
-        mock_context_get.return_value = []
-
-        # Execute
-        result = await retrieve_journal_context(chat_id="123456789")
-
-        # Verify
-        assert result is None

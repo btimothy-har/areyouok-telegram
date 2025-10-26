@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pydantic_evals
 import pytest
 
-from areyouok_telegram.data.models.llm_generations import LLMGenerations
+from areyouok_telegram.data.models import LLMGeneration
 from areyouok_telegram.jobs.evaluations import (
     GEN_CACHE,
     EvaluationsJob,
@@ -43,7 +43,7 @@ class TestGetGenerationByIdCached:
         mock_generation = MagicMock(spec=LLMGenerations)
         mock_generation.id = 1
 
-        with patch("areyouok_telegram.jobs.evaluations.LLMGenerations.get_by_generation_id") as mock_get:
+        with patch("areyouok_telegram.jobs.evaluations.LLMGeneration.get_by_id") as mock_get:
             mock_get.return_value = mock_generation
 
             result = await get_generation_by_id_cached("new_gen_id")
@@ -56,7 +56,7 @@ class TestGetGenerationByIdCached:
     @pytest.mark.usefixtures("mock_db_session")
     async def test_cache_miss_none_result(self):
         """Test cache miss with None result from database raises ValueError."""
-        with patch("areyouok_telegram.jobs.evaluations.LLMGenerations.get_by_generation_id") as mock_get:
+        with patch("areyouok_telegram.jobs.evaluations.LLMGeneration.get_by_id") as mock_get:
             mock_get.return_value = None
 
             with pytest.raises(ValueError, match="Generation with ID nonexistent_gen_id not found"):
@@ -403,7 +403,7 @@ class TestEvaluationsJob:
         job = EvaluationsJob("chat123", "session456")
 
         with (
-            patch("areyouok_telegram.jobs.evaluations.LLMGenerations.get_by_session", return_value=[]),
+            patch("areyouok_telegram.jobs.evaluations.LLMGeneration.get_by_session", return_value=[]),
             patch("logfire.warning") as mock_warning,
         ):
             await job.run_job()
@@ -428,7 +428,7 @@ class TestEvaluationsJob:
         mock_dataset.evaluate = AsyncMock()
 
         with (
-            patch("areyouok_telegram.jobs.evaluations.LLMGenerations.get_by_session", return_value=[mock_gen1]),
+            patch("areyouok_telegram.jobs.evaluations.LLMGeneration.get_by_session", return_value=[mock_gen1]),
             patch("pydantic_evals.Dataset", return_value=mock_dataset),
             patch("areyouok_telegram.jobs.evaluations.ENV", "development"),
         ):
@@ -459,7 +459,7 @@ class TestEvaluationsJob:
         mock_dataset.evaluate = AsyncMock()
 
         with (
-            patch("areyouok_telegram.jobs.evaluations.LLMGenerations.get_by_session", return_value=[mock_gen1]),
+            patch("areyouok_telegram.jobs.evaluations.LLMGeneration.get_by_session", return_value=[mock_gen1]),
             patch("pydantic_evals.Dataset", return_value=mock_dataset),
             patch("areyouok_telegram.jobs.evaluations.ENV", "production"),
         ):
@@ -487,7 +487,7 @@ class TestEvaluationsJob:
         mock_dataset.evaluate = AsyncMock()
 
         with (
-            patch("areyouok_telegram.jobs.evaluations.LLMGenerations.get_by_session", return_value=[mock_gen1]),
+            patch("areyouok_telegram.jobs.evaluations.LLMGeneration.get_by_session", return_value=[mock_gen1]),
             patch("pydantic_evals.Dataset", return_value=mock_dataset),
         ):
             await job.run_job()
@@ -545,7 +545,7 @@ class TestEvaluationsJob:
         mock_dataset.evaluate = AsyncMock()
 
         with (
-            patch("areyouok_telegram.jobs.evaluations.LLMGenerations.get_by_session", return_value=[mock_gen1]),
+            patch("areyouok_telegram.jobs.evaluations.LLMGeneration.get_by_session", return_value=[mock_gen1]),
             patch("pydantic_evals.Case", return_value=mock_case) as mock_case_constructor,
             patch("pydantic_evals.Dataset", return_value=mock_dataset),
         ):

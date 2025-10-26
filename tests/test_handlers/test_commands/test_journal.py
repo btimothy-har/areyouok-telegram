@@ -6,9 +6,9 @@ import pytest
 import telegram
 from telegram.ext import ContextTypes
 
-from areyouok_telegram.data import JournalContextMetadata
+from areyouok_telegram.data.models import JournalContextMetadata
 from areyouok_telegram.handlers.commands.journal import on_journal_command
-from areyouok_telegram.handlers.constants import MD2_JOURNAL_START_MESSAGE
+from areyouok_telegram.handlers.utils.constants import MD2_JOURNAL_START_MESSAGE
 
 
 class TestOnJournalCommand:
@@ -45,19 +45,20 @@ class TestOnJournalCommand:
 
         with (
             patch(
-                "areyouok_telegram.handlers.commands.journal.data_operations.get_or_create_active_session",
+                "areyouok_telegram.data.models.Session.get_or_create_new_session",
                 new=AsyncMock(return_value=mock_session),
             ),
-            patch("areyouok_telegram.handlers.commands.journal.data_operations.track_command_usage", new=AsyncMock()),
+            patch("areyouok_telegram.data.models.CommandUsage.save", new=AsyncMock()),
             patch(
-                "areyouok_telegram.handlers.commands.journal.data_operations.get_active_guided_sessions",
+                "areyouok_telegram.data.models.GuidedSession.get_by_chat",
                 new=AsyncMock(return_value=[]),
             ),
             patch(
-                "areyouok_telegram.handlers.commands.journal.data_operations.get_chat_encryption_key",
+                "areyouok_telegram.data.models.Chat.get_by_id",
                 new=AsyncMock(return_value="test_encryption_key"),
             ),
-            patch("areyouok_telegram.handlers.commands.journal.data_operations.new_session_event", new=AsyncMock()),
+            patch("areyouok_telegram.data.models.Message.save", new=AsyncMock()),
+            patch("areyouok_telegram.data.models.Session.new_message", new=AsyncMock()),
             patch("areyouok_telegram.handlers.commands.journal.async_database") as mock_async_database,
             patch(
                 "areyouok_telegram.handlers.commands.journal.GuidedSessions.start_new_session",
@@ -118,12 +119,12 @@ class TestOnJournalCommand:
 
         with (
             patch(
-                "areyouok_telegram.handlers.commands.journal.data_operations.get_or_create_active_session",
+                "areyouok_telegram.data.models.Session.get_or_create_new_session",
                 new=AsyncMock(return_value=mock_session),
             ),
-            patch("areyouok_telegram.handlers.commands.journal.data_operations.track_command_usage", new=AsyncMock()),
+            patch("areyouok_telegram.data.models.CommandUsage.save", new=AsyncMock()),
             patch(
-                "areyouok_telegram.handlers.commands.journal.data_operations.get_active_guided_sessions",
+                "areyouok_telegram.data.models.GuidedSession.get_by_chat",
                 new=AsyncMock(return_value=[mock_existing_session]),
             ),
         ):
@@ -168,21 +169,22 @@ class TestOnJournalCommand:
 
         with (
             patch(
-                "areyouok_telegram.handlers.commands.journal.data_operations.get_or_create_active_session",
+                "areyouok_telegram.data.models.Session.get_or_create_new_session",
                 new=AsyncMock(return_value=mock_session),
             ),
             patch(
-                "areyouok_telegram.handlers.commands.journal.data_operations.track_command_usage", new=AsyncMock()
+                "areyouok_telegram.data.models.CommandUsage.save", new=AsyncMock()
             ) as mock_track,
             patch(
-                "areyouok_telegram.handlers.commands.journal.data_operations.get_active_guided_sessions",
+                "areyouok_telegram.data.models.GuidedSession.get_by_chat",
                 new=AsyncMock(return_value=[]),
             ),
             patch(
-                "areyouok_telegram.handlers.commands.journal.data_operations.get_chat_encryption_key",
+                "areyouok_telegram.data.models.Chat.get_by_id",
                 new=AsyncMock(return_value="test_key"),
             ),
-            patch("areyouok_telegram.handlers.commands.journal.data_operations.new_session_event", new=AsyncMock()),
+            patch("areyouok_telegram.data.models.Message.save", new=AsyncMock()),
+            patch("areyouok_telegram.data.models.Session.new_message", new=AsyncMock()),
             patch("areyouok_telegram.handlers.commands.journal.async_database") as mock_async_database,
             patch(
                 "areyouok_telegram.handlers.commands.journal.GuidedSessions.start_new_session",
@@ -241,19 +243,20 @@ class TestOnJournalCommand:
 
         with (
             patch(
-                "areyouok_telegram.handlers.commands.journal.data_operations.get_or_create_active_session",
+                "areyouok_telegram.data.models.Session.get_or_create_new_session",
                 new=AsyncMock(return_value=mock_session),
             ),
-            patch("areyouok_telegram.handlers.commands.journal.data_operations.track_command_usage", new=AsyncMock()),
+            patch("areyouok_telegram.data.models.CommandUsage.save", new=AsyncMock()),
             patch(
-                "areyouok_telegram.handlers.commands.journal.data_operations.get_active_guided_sessions",
+                "areyouok_telegram.data.models.GuidedSession.get_by_chat",
                 new=AsyncMock(return_value=[]),
             ),
             patch(
-                "areyouok_telegram.handlers.commands.journal.data_operations.get_chat_encryption_key",
+                "areyouok_telegram.data.models.Chat.get_by_id",
                 new=AsyncMock(return_value="test_key"),
             ),
-            patch("areyouok_telegram.handlers.commands.journal.data_operations.new_session_event", new=AsyncMock()),
+            patch("areyouok_telegram.data.models.Message.save", new=AsyncMock()),
+            patch("areyouok_telegram.data.models.Session.new_message", new=AsyncMock()),
             patch("areyouok_telegram.handlers.commands.journal.async_database") as mock_async_database,
             patch(
                 "areyouok_telegram.handlers.commands.journal.GuidedSessions.start_new_session",

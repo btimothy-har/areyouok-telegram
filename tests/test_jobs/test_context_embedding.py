@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from freezegun import freeze_time
 
-from areyouok_telegram.data import Context
+from areyouok_telegram.data.models import Context
 from areyouok_telegram.jobs.context_embedding import ContextEmbeddingJob
 
 
