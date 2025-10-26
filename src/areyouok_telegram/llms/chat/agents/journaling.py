@@ -9,7 +9,6 @@ from pydantic_ai import RunContext
 
 from areyouok_telegram.config import SIMULATION_MODE
 from areyouok_telegram.data.models import (
-    Chat,
     Context,
     ContextType,
     GuidedSession,
@@ -51,57 +50,16 @@ class JournalingAgentDependencies(CommonChatAgentDependencies):
     """Dependencies for the journaling agent."""
 
     journaling_session: GuidedSession = field(kw_only=True)
-    journaling_session_metadata: JournalContextMetadata | None = field(kw_only=True)
+
+    @property
+    def journaling_session_metadata(self) -> JournalContextMetadata:
+        """Parse metadata from the session."""
+        return JournalContextMetadata(**self.journaling_session.metadata)
 
     def to_dict(self) -> dict:
         return super().to_dict() | {
             "journaling_session_id": self.journaling_session.id,
-            "journaling_session_key": self.journaling_session.object_key,
-            "journaling_session_metadata": self.journaling_session_metadata.model_dump()
-            if self.journaling_session_metadata
-            else None,
         }
-
-
-async def retrieve_journal_context(*, chat: Chat) -> list[Context] | None:
-    """Retrieve relevant journal context for a chat."""
-    # Determine the start timestamp for context retrieval
-    now = datetime.now(UTC)
-    seven_days_ago = now - timedelta(days=7)
-
-    relevant_context_types = [
-        ContextType.SESSION.value,
-        ContextType.MEMORY.value,
-        ContextType.PROFILE_UPDATE.value,
-        ContextType.PROFILE.value,
-    ]
-
-    # Find the most recent completed journaling session
-    all_journal_sessions = await GuidedSession.get_by_chat(
-        chat=chat,
-        session_type=GuidedSessionType.JOURNALING.value,
-    )
-
-    completed_sessions = [s for s in all_journal_sessions if s.completed_at]
-    if completed_sessions:
-        # Use the completion time of the most recent journal session if within 7 days
-        last_journal_time = max(s.completed_at for s in completed_sessions)
-        from_timestamp = max(last_journal_time, seven_days_ago)
-    else:
-        # No previous journal session or too old, use 7 days ago
-        from_timestamp = seven_days_ago
-
-    # Retrieve contexts of specific types since the determined timestamp
-    contexts = await Context.get_by_chat(
-        chat=chat,
-        from_timestamp=from_timestamp,
-        to_timestamp=now,
-    )
-
-    if contexts:
-        return [ctx for ctx in contexts if ctx.type in relevant_context_types]
-
-    return None
 
 
 agent_model = Gemini25Pro()
@@ -185,7 +143,38 @@ async def generate_topics(ctx: RunContext[JournalingAgentDependencies]) -> str:
     Returns a newline-separated string of topics.
     """
 
-    journal_context_items = await retrieve_journal_context(chat=ctx.deps.chat)
+    # Retrieve journal context - determine the start timestamp
+    now = datetime.now(UTC)
+    seven_days_ago = now - timedelta(days=7)
+
+    relevant_context_types = [
+        ContextType.SESSION.value,
+        ContextType.MEMORY.value,
+        ContextType.PROFILE_UPDATE.value,
+        ContextType.PROFILE.value,
+    ]
+
+    # Find the most recent completed journaling session
+    all_journal_sessions = await GuidedSession.get_by_chat(
+        chat=ctx.deps.chat,
+        session_type=GuidedSessionType.JOURNALING.value,
+    )
+
+    completed_sessions = [s for s in all_journal_sessions if s.completed_at]
+    if completed_sessions:
+        last_journal_time = max(s.completed_at for s in completed_sessions)
+        from_timestamp = max(last_journal_time, seven_days_ago)
+    else:
+        from_timestamp = seven_days_ago
+
+    # Retrieve contexts of specific types since the determined timestamp
+    contexts = await Context.get_by_chat(
+        chat=ctx.deps.chat,
+        from_timestamp=from_timestamp,
+        to_timestamp=now,
+    )
+
+    journal_context_items = [ctx for ctx in contexts if ctx.type in relevant_context_types] if contexts else None
 
     if journal_context_items:
         journal_context_text = construct_journal_context_text(journal_context_items=journal_context_items)
@@ -205,8 +194,10 @@ async def generate_topics(ctx: RunContext[JournalingAgentDependencies]) -> str:
 
         agent_response: JournalPrompts = prompt_result.output
 
-        ctx.deps.journaling_session_metadata.generated_topics = agent_response.prompts
-        ctx.deps.journaling_session.metadata = ctx.deps.journaling_session_metadata.model_dump()
+        # Update metadata with generated topics
+        metadata = ctx.deps.journaling_session_metadata
+        metadata.generated_topics = agent_response.prompts
+        ctx.deps.journaling_session.metadata = metadata.model_dump()
         await ctx.deps.journaling_session.save()
 
         return "\n".join(agent_response.prompts)
@@ -221,13 +212,15 @@ async def update_selected_topic(ctx: RunContext[JournalingAgentDependencies], to
     Sets the selected topic for the journaling session.
     """
 
-    if ctx.deps.journaling_session_metadata.phase != "topic_selection":
+    metadata = ctx.deps.journaling_session_metadata
+
+    if metadata.phase != "topic_selection":
         raise pydantic_ai.ModelRetry("Journaling session is not in the topic_selection phase.")  # noqa: TRY003
 
-    ctx.deps.journaling_session_metadata.phase = "journaling"
-    ctx.deps.journaling_session_metadata.selected_topic = topic
+    metadata.phase = "journaling"
+    metadata.selected_topic = topic
 
-    ctx.deps.journaling_session.metadata = ctx.deps.journaling_session_metadata.model_dump()
+    ctx.deps.journaling_session.metadata = metadata.model_dump()
     await ctx.deps.journaling_session.save()
 
     return "User's selected topic updated successfully."
@@ -240,8 +233,9 @@ async def complete_journaling_session(ctx: RunContext[JournalingAgentDependencie
     if not ctx.deps.journaling_session.is_active:
         raise JournalingError(f"Journaling session is currently {ctx.deps.journaling_session.state}.")
 
-    ctx.deps.journaling_session_metadata.phase = "complete"
-    ctx.deps.journaling_session.metadata = ctx.deps.journaling_session_metadata.model_dump()
+    metadata = ctx.deps.journaling_session_metadata
+    metadata.phase = "complete"
+    ctx.deps.journaling_session.metadata = metadata.model_dump()
 
     await ctx.deps.journaling_session.save()
     await ctx.deps.journaling_session.complete()

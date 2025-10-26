@@ -11,7 +11,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from areyouok_telegram.data.database import async_database
 from areyouok_telegram.data.database.schemas import ChatsTable
-from areyouok_telegram.data.exceptions import InvalidIDArgumentError
+from areyouok_telegram.data.exceptions import InvalidIDArgumentError, MissingEncryptionKeyError
 from areyouok_telegram.encryption import decrypt_chat_key, encrypt_chat_key, generate_chat_key
 from areyouok_telegram.logging import traced
 from areyouok_telegram.utils.retry import db_retry
@@ -24,7 +24,6 @@ class Chat(pydantic.BaseModel):
 
     # Telegram ID
     telegram_chat_id: int
-    encrypted_key: str
 
     # Chat attributes
     type: str
@@ -33,12 +32,20 @@ class Chat(pydantic.BaseModel):
     id: int = 0
     title: str | None = None
     is_forum: bool = False
+    encrypted_key: str | None = None
 
     created_at: datetime = pydantic.Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = pydantic.Field(default_factory=lambda: datetime.now(UTC))
 
     # TTL cache for decrypted keys (10 minutes TTL, max 1000 entries)
     _key_cache: TTLCache[int, str] = TTLCache(maxsize=1000, ttl=10 * 60)
+
+    @pydantic.model_validator(mode="after")
+    def validate_encrypted_key(self) -> "Chat":
+        """Validate that saved chats have an encrypted key."""
+        if self.id != 0 and not self.encrypted_key:
+            raise MissingEncryptionKeyError(self.id)
+        return self
 
     @property
     def object_key(self) -> str:
@@ -78,7 +85,6 @@ class Chat(pydantic.BaseModel):
         return decrypted_key
 
     @classmethod
-    @traced(extract_args=["id", "telegram_chat_id"])
     @db_retry()
     async def get_by_id(
         cls,
@@ -116,7 +122,7 @@ class Chat(pydantic.BaseModel):
             return cls.model_validate(row, from_attributes=True)
 
     @classmethod
-    @traced(extract_args=["chat_type", "limit"])
+    @traced(extract_args=False)
     @db_retry()
     async def get(
         cls,

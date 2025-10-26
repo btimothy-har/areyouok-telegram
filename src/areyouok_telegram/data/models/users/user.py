@@ -39,7 +39,7 @@ class User(pydantic.BaseModel):
         return hashlib.sha256(f"user:{self.telegram_user_id}".encode()).hexdigest()
 
     @classmethod
-    @traced(extract_args=["id", "telegram_user_id"])
+    @traced(extract_args=False)
     @db_retry()
     async def get_by_id(
         cls,
@@ -76,7 +76,7 @@ class User(pydantic.BaseModel):
 
             return cls.model_validate(row, from_attributes=True)
 
-    @traced(extract_args=["telegram_user_id"])
+    @traced(extract_args=False)
     @db_retry()
     async def save(self) -> User:
         """Save or update the user in the database.

@@ -99,7 +99,7 @@ class Context(pydantic.BaseModel):
         encrypted_bytes = fernet.encrypt(content_json.encode("utf-8"))
         return encrypted_bytes.decode("utf-8")
 
-    @traced(extract_args=["chat_id", "session_id", "type"])
+    @traced(extract_args=False)
     @db_retry()
     async def save(self) -> Context:
         """Save the context to the database with encrypted content.
@@ -141,7 +141,7 @@ class Context(pydantic.BaseModel):
             )
 
     @classmethod
-    @traced(extract_args=["chat"])
+    @traced(extract_args=False)
     @db_retry()
     async def get_by_chat(
         cls,

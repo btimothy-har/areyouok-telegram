@@ -1,6 +1,6 @@
 """System schemas for command tracking and job state."""
 
-from sqlalchemy import Column, ForeignKey, Integer, String
+from sqlalchemy import BigInteger, Column, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP
 
 from areyouok_telegram.config import ENV
@@ -64,7 +64,7 @@ class UpdatesTable(Base):
     object_key = Column(String, nullable=False, unique=True, index=True)
 
     # Telegram update ID
-    telegram_update_id = Column(Integer, nullable=False, index=True)
+    telegram_update_id = Column(BigInteger, nullable=False, index=True)
 
     # Update payload
     payload = Column(JSONB, nullable=False)

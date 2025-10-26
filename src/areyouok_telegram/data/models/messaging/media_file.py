@@ -103,7 +103,7 @@ class MediaFile(pydantic.BaseModel):
             or self.mime_type.startswith("text/")
         )
 
-    @traced(extract_args=["chat_id", "message_id", "file_id"])
+    @traced(extract_args=False)
     @db_retry()
     async def save(self) -> MediaFile:
         """Save or update the media file in the database with encrypted content.
@@ -161,7 +161,7 @@ class MediaFile(pydantic.BaseModel):
             )
 
     @classmethod
-    @traced(extract_args=["chat", "message_id"])
+    @traced(extract_args=["message_id"])
     @db_retry()
     async def get_by_message(
         cls,

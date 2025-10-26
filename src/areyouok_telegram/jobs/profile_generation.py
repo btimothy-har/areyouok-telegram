@@ -202,8 +202,7 @@ class ProfileGenerationJob(BaseJob):
 
         result = await run_agent_with_tracking(
             profile_generation_agent,
-            chat_id=chat.id,
-            session_id="profile_generation",
+            chat=chat,
             run_kwargs={"user_prompt": user_prompt},
         )
 

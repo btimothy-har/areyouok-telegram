@@ -161,7 +161,7 @@ class GuidedSession(pydantic.BaseModel):
         now = datetime.now(UTC)
         return now - self.started_at > timedelta(hours=1)
 
-    @traced(extract_args=["chat_id", "session_id", "session_type"])
+    @traced(extract_args=False)
     @db_retry()
     async def save(self) -> GuidedSession:
         """Save or update the guided session in the database.
@@ -248,7 +248,7 @@ class GuidedSession(pydantic.BaseModel):
         return await self.save()
 
     @classmethod
-    @traced(extract_args=["chat"])
+    @traced(extract_args=False)
     @db_retry()
     async def get_by_chat(
         cls,

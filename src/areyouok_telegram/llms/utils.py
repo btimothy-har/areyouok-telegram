@@ -6,12 +6,12 @@ import time
 import anthropic
 import google
 import httpx
+import logfire
 import openai
 import pydantic_ai
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_chain, wait_fixed, wait_random_exponential
 
-from areyouok_telegram.data import operations as data_operations
-from areyouok_telegram.data.models import Chat, Context, ContextType, Session
+from areyouok_telegram.data.models import Chat, LLMGeneration, LLMUsage, Session
 
 
 def should_retry_llm_error(e: Exception) -> bool:
@@ -54,7 +54,7 @@ async def run_agent_with_tracking(
     agent: pydantic_ai.Agent,
     *,
     chat: Chat,
-    session: Session,
+    session: Session | None = None,
     run_kwargs: dict,
 ) -> pydantic_ai.agent.AgentRunResult:
     """
@@ -62,8 +62,8 @@ async def run_agent_with_tracking(
 
     Args:
         agent: The Pydantic AI agent to run
-        chat: Chat object for tracking
-        session: Session object for tracking
+        chat: Chat object for tracking (required)
+        session: Session object for tracking (optional, can be None for background jobs)
         run_kwargs: Arguments to pass to agent.run()
 
     Returns:
@@ -82,36 +82,41 @@ async def run_agent_with_tracking(
     generation_duration = end_time - start_time
 
     # Track usage and generation in background - don't await
-    asyncio.create_task(
-        data_operations.track_llm_usage(
-            chat_id=chat.telegram_chat_id,  # Use Telegram ID for tracking
-            session_id=session.session_id,  # Use session key for tracking
-            agent=agent,
-            result=result,
-            runtime=generation_duration,
-            run_kwargs=run_kwargs,
-        )
-    )
+    # Session is optional (can be None for background jobs)
+    async def _track_usage():
+        try:
+            # Use session.id if available, otherwise None (for background jobs)
+            session_id = session.id if session else None
+
+            # Create and save LLM usage record
+            llm_usage = LLMUsage.from_pydantic_usage(
+                chat_id=chat.id,
+                session_id=session_id,
+                agent=agent,
+                data=result.usage(),
+                runtime=generation_duration,
+            )
+            await llm_usage.save()
+
+            # Create and save LLM generation record
+            llm_generation = LLMGeneration.from_agent_run(
+                chat_id=chat.id,
+                session_id=session_id,
+                agent=agent,
+                run_result=result,
+                run_deps=run_kwargs.get("deps"),
+            )
+            await llm_generation.save()
+
+        except Exception as e:
+            # Log the error but don't raise it
+            logfire.exception(
+                f"Failed to log LLM usage: {e}",
+                agent=agent.name,
+                chat_id=chat.id,
+                session_id=session_id if session else None,
+            )
+
+    asyncio.create_task(_track_usage())
+
     return result
-
-
-async def log_metadata_update_context(
-    *,
-    chat: Chat,
-    session: Session,
-    content: str,
-) -> None:
-    """Log a metadata update to the context table.
-
-    Args:
-        chat: The chat where the update occurred
-        session: The session where the update occurred
-        content: The content to log
-    """
-    context = Context(
-        chat=chat,
-        session_id=session.id,
-        type=ContextType.METADATA.value,
-        content=content,
-    )
-    await context.save()

@@ -130,7 +130,7 @@ class Message(pydantic.BaseModel):
         """
         return self.message_type_obj.de_json(self.payload, None)
 
-    @traced(extract_args=["user_id", "chat_id", "telegram_message_id"])
+    @traced(extract_args=False)
     @db_retry()
     async def save(self) -> Message:
         """Save or update the message in the database with encrypted payload.
@@ -207,7 +207,7 @@ class Message(pydantic.BaseModel):
         )
 
     @classmethod
-    @traced(extract_args=["chat", "message_id", "telegram_message_id"])
+    @traced(extract_args=False)
     @db_retry()
     async def get_by_id(
         cls,
@@ -268,7 +268,7 @@ class Message(pydantic.BaseModel):
             )
 
     @classmethod
-    @traced(extract_args=["chat", "session_id"])
+    @traced(extract_args=["session_id"])
     @db_retry()
     async def get_by_session(
         cls,

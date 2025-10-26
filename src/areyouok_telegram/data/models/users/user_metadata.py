@@ -61,9 +61,9 @@ class UserMetadata(pydantic.BaseModel):
     # Optional fields
     id: int = 0
     preferred_name: str | None = None
-    country: str = pydantic.Field(default="rather_not_say")
-    timezone: str = pydantic.Field(default="rather_not_say")
-    response_speed: str = pydantic.Field(default="normal")
+    country: str | None = None
+    timezone: str | None = None
+    response_speed: str | None = None
     response_speed_adj: int = 0
     communication_style: str | None = None
     created_at: datetime = pydantic.Field(default_factory=lambda: datetime.now(UTC))
@@ -71,10 +71,10 @@ class UserMetadata(pydantic.BaseModel):
 
     @pydantic.field_validator("response_speed")
     @classmethod
-    def validate_response_speed_field(cls, v: str | None) -> str:
+    def validate_response_speed_field(cls, v: str | None) -> str | None:
         """Validate response_speed field."""
         if v is None:
-            return "normal"
+            return None
         v = v.lower()
         if v not in ["fast", "normal", "slow"]:
             raise InvalidFieldValueError("response_speed", v, "one of: 'fast', 'normal', 'slow'")
@@ -82,10 +82,10 @@ class UserMetadata(pydantic.BaseModel):
 
     @pydantic.field_validator("country")
     @classmethod
-    def validate_country_field(cls, v: str) -> str:
+    def validate_country_field(cls, v: str | None) -> str | None:
         """Validate country field."""
-        if v.lower() == "rather_not_say":
-            return "rather_not_say"
+        if v is None or v.lower() == "rather_not_say":
+            return v
         country = pycountry.countries.get(alpha_3=v.upper())
         if not country:
             raise InvalidCountryCodeError(v)
@@ -93,10 +93,10 @@ class UserMetadata(pydantic.BaseModel):
 
     @pydantic.field_validator("timezone")
     @classmethod
-    def validate_timezone_field(cls, v: str) -> str:
+    def validate_timezone_field(cls, v: str | None) -> str | None:
         """Validate timezone field."""
-        if v.lower() == "rather_not_say":
-            return "rather_not_say"
+        if v is None or v.lower() == "rather_not_say":
+            return v
         all_timezones = available_timezones()
         for tz in all_timezones:
             if tz.lower() == v.lower():
@@ -147,7 +147,8 @@ class UserMetadata(pydantic.BaseModel):
         Returns:
             Response wait time in seconds (fast=0, normal=2, slow=5), with adjustment
         """
-        return max(RESPONSE_SPEED_MAP.get(self.response_speed, 2.0) + self.response_speed_adj, 0)
+        base_speed = RESPONSE_SPEED_MAP.get(self.response_speed, 2.0) if self.response_speed else 2.0
+        return max(base_speed + self.response_speed_adj, 0)
 
     def to_dict(self) -> dict[str, Any]:
         """Return a dictionary representation of the user metadata."""
@@ -161,7 +162,7 @@ class UserMetadata(pydantic.BaseModel):
             "timezone": self.timezone,
         }
 
-    @traced(extract_args=["user_id"])
+    @traced(extract_args=False)
     @db_retry()
     async def save(self) -> UserMetadata:
         """Save or update user metadata in the database.
@@ -201,9 +202,9 @@ class UserMetadata(pydantic.BaseModel):
                 id=row.id,
                 user_id=row.user_id,
                 preferred_name=metadata_dict.get("preferred_name"),
-                country=metadata_dict.get("country", "rather_not_say"),
-                timezone=metadata_dict.get("timezone", "rather_not_say"),
-                response_speed=metadata_dict.get("response_speed", "normal"),
+                country=metadata_dict.get("country"),
+                timezone=metadata_dict.get("timezone"),
+                response_speed=metadata_dict.get("response_speed"),
                 response_speed_adj=metadata_dict.get("response_speed_adj", 0),
                 communication_style=metadata_dict.get("communication_style"),
                 created_at=row.created_at,
@@ -240,9 +241,9 @@ class UserMetadata(pydantic.BaseModel):
                 id=row.id,
                 user_id=row.user_id,
                 preferred_name=metadata_dict.get("preferred_name"),
-                country=metadata_dict.get("country", "rather_not_say"),
-                timezone=metadata_dict.get("timezone", "rather_not_say"),
-                response_speed=metadata_dict.get("response_speed", "normal"),
+                country=metadata_dict.get("country"),
+                timezone=metadata_dict.get("timezone"),
+                response_speed=metadata_dict.get("response_speed"),
                 response_speed_adj=metadata_dict.get("response_speed_adj", 0),
                 communication_style=metadata_dict.get("communication_style"),
                 created_at=row.created_at,

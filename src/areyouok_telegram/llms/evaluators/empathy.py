@@ -74,12 +74,17 @@ state.
 
 
 async def run_empathy_evaluation(
+    *,
+    chat,
+    session,
     message_history: list,
 ) -> dict:
     """
     Run empathy evaluation for a conversation message history.
 
     Args:
+        chat: Chat object for tracking
+        session: Session object for tracking
         message_history: List of messages in the conversation
 
     Returns:
@@ -87,8 +92,8 @@ async def run_empathy_evaluation(
     """
     eval_result = await run_agent_with_tracking(
         agent=empathy_eval_agent,
-        chat_id="evaluations",
-        session_id="evaluations",
+        chat=chat,
+        session=session,
         run_kwargs={
             "message_history": message_history,
         },

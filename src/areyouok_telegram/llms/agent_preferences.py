@@ -5,10 +5,9 @@ import pydantic
 import pydantic_ai
 from pydantic_ai import RunContext
 
-from areyouok_telegram.data.models import Chat, Session, User, UserMetadata
+from areyouok_telegram.data.models import Chat, Context, ContextType, Session, User, UserMetadata
 from areyouok_telegram.llms.exceptions import MetadataFieldUpdateError
 from areyouok_telegram.llms.models import GPT5Mini
-from areyouok_telegram.llms.utils import log_metadata_update_context
 
 
 class FeedbackMissingError(pydantic_ai.ModelRetry):
@@ -96,11 +95,13 @@ async def update_preferred_name(
     except Exception as e:
         raise MetadataFieldUpdateError("preferred_name", str(e)) from e
 
-    await log_metadata_update_context(
+    context = Context(
         chat=ctx.deps.chat,
-        session=ctx.deps.session,
+        session_id=ctx.deps.session.id,
+        type=ContextType.METADATA.value,
         content=f"Updated user preferences: preferred_name is now {new_value}",
     )
+    await context.save()
 
     return f"preferred_name updated successfully to {new_value}."
 
@@ -123,11 +124,13 @@ async def update_country(
     except Exception as e:
         raise MetadataFieldUpdateError("country", str(e)) from e
 
-    await log_metadata_update_context(
+    context = Context(
         chat=ctx.deps.chat,
-        session=ctx.deps.session,
+        session_id=ctx.deps.session.id,
+        type=ContextType.METADATA.value,
         content=f"Updated user preferences: country is now {new_value}",
     )
+    await context.save()
 
     return f"country updated successfully to {new_value}."
 
@@ -150,11 +153,13 @@ async def update_timezone(
     except Exception as e:
         raise MetadataFieldUpdateError("timezone", str(e)) from e
 
-    await log_metadata_update_context(
+    context = Context(
         chat=ctx.deps.chat,
-        session=ctx.deps.session,
+        session_id=ctx.deps.session.id,
+        type=ContextType.METADATA.value,
         content=f"Updated user preferences: timezone is now {new_value}",
     )
+    await context.save()
 
     return f"timezone updated successfully to {new_value}."
 
@@ -177,11 +182,13 @@ async def update_communication_style(
     except Exception as e:
         raise MetadataFieldUpdateError("communication_style", str(e)) from e
 
-    await log_metadata_update_context(
+    context = Context(
         chat=ctx.deps.chat,
-        session=ctx.deps.session,
+        session_id=ctx.deps.session.id,
+        type=ContextType.METADATA.value,
         content=f"Updated user preferences: communication_style is now {new_value}",
     )
+    await context.save()
 
     return f"communication_style updated successfully to {new_value}."
 
@@ -204,11 +211,13 @@ async def update_response_speed(
     except Exception as e:
         raise MetadataFieldUpdateError("response_speed", str(e)) from e
 
-    await log_metadata_update_context(
+    context = Context(
         chat=ctx.deps.chat,
-        session=ctx.deps.session,
+        session_id=ctx.deps.session.id,
+        type=ContextType.METADATA.value,
         content=f"Updated user preferences: response_speed is now {new_value}",
     )
+    await context.save()
 
     return f"response_speed updated successfully to {new_value}."
 

@@ -6,8 +6,8 @@ import pydantic
 import pydantic_ai
 from pydantic_ai import ModelRetry
 
-from areyouok_telegram.data import Context
-from areyouok_telegram.data.models.chat_event import CONTEXT_TYPE_MAP
+from areyouok_telegram.data.models import Context
+from areyouok_telegram.data.models.messaging.chat_event import CONTEXT_TYPE_MAP
 from areyouok_telegram.llms.models import Gemini25Flash
 from areyouok_telegram.utils.text import format_relative_time
 
@@ -23,16 +23,14 @@ FORMATTED_CONTEXT_TEMPLATE = """
 def construct_journal_context_text(*, journal_context_items: list[Context]) -> str:
     """Construct the text for the journal context."""
     now = datetime.now(UTC)
-    return "\n\n".join(
-        [
-            FORMATTED_CONTEXT_TEMPLATE.format(
-                timestamp=format_relative_time(ctx.created_at, reference_time=now),
-                type=CONTEXT_TYPE_MAP[ctx.type],
-                content=str(ctx.content) if ctx.content else "",
-            )
-            for ctx in journal_context_items
-        ]
-    )
+    return "\n\n".join([
+        FORMATTED_CONTEXT_TEMPLATE.format(
+            timestamp=format_relative_time(ctx.created_at, reference_time=now),
+            type=CONTEXT_TYPE_MAP[ctx.type],
+            content=str(ctx.content) if ctx.content else "",
+        )
+        for ctx in journal_context_items
+    ])
 
 
 class JournalPrompts(pydantic.BaseModel):

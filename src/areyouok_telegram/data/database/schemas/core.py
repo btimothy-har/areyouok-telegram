@@ -1,6 +1,6 @@
 """Core schemas for users, chats, and user metadata."""
 
-from sqlalchemy import BOOLEAN, Column, ForeignKey, Integer, String
+from sqlalchemy import BOOLEAN, BigInteger, Column, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import TIMESTAMP
 
 from areyouok_telegram.config import ENV
@@ -18,7 +18,7 @@ class UsersTable(Base):
 
     # Unique identifiers
     object_key = Column(String, nullable=False, unique=True, index=True)
-    telegram_user_id = Column(Integer, nullable=False, unique=True, index=True)
+    telegram_user_id = Column(BigInteger, nullable=False, unique=True, index=True)
 
     # User attributes
     is_bot = Column(BOOLEAN, nullable=False)
@@ -41,7 +41,7 @@ class ChatsTable(Base):
 
     # Unique identifiers
     object_key = Column(String, nullable=False, unique=True, index=True)
-    telegram_chat_id = Column(Integer, nullable=False, unique=True, index=True)
+    telegram_chat_id = Column(BigInteger, nullable=False, unique=True, index=True)
 
     # Encryption key for chat data
     encrypted_key = Column(String, nullable=True)

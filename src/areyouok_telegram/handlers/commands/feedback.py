@@ -177,13 +177,13 @@ async def generate_feedback_context(bot_id: str, session: Session) -> str:
 
     agent_run_payload = await run_agent_with_tracking(
         feedback_context_agent,
-        chat_id=chat_id,
-        session_id=session.id,
+        chat=chat,
+        session=session,
         run_kwargs={
             "message_history": [c.to_model_message(str(bot_id), feedback_ts) for c in chat_events_for_feedback],
             "deps": ContextAgentDependencies(
-                tg_chat_id=chat.telegram_chat_id,
-                tg_session_id=session.id,
+                chat=chat,
+                session=session,
             ),
         },
     )

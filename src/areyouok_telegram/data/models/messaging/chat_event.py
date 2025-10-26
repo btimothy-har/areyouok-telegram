@@ -24,7 +24,7 @@ CONTEXT_TYPE_MAP = {
     ContextType.PROFILE.value: "user_profile",
 }
 
-SYSTEM_USER_ID = "system"
+SYSTEM_USER_ID = -1  # Special ID for system-generated events
 
 
 class AttachmentsOnlyAllowedForMessagesError(ValueError, BaseDataError):
@@ -63,7 +63,7 @@ class ChatEvent(pydantic.BaseModel):
     event_type: str
     event_data: dict
     attachments: list[MediaFile] = pydantic.Field(default_factory=list)
-    user_id: str | None = None
+    user_id: int | None = None
 
     @pydantic.model_validator(mode="after")
     def attachments_only_allowed_for_messages(self) -> "ChatEvent":
@@ -124,19 +124,26 @@ class ChatEvent(pydantic.BaseModel):
         if message.reasoning:
             event_data["reasoning"] = message.reasoning
 
+        # Extract Telegram user ID - Message has from_user, MessageReactionUpdated has user
+        telegram_user_id = None
+        if message.message_type == "Message" and message.telegram_object.from_user:
+            telegram_user_id = message.telegram_object.from_user.id
+        elif message.message_type == "MessageReactionUpdated" and message.telegram_object.user:
+            telegram_user_id = message.telegram_object.user.id
+
         return cls(
             timestamp=message.telegram_object.date,
             event_type=event_type,
             event_data=event_data,
             attachments=attachments,
-            user_id=message.telegram_user_id,
+            user_id=telegram_user_id,
         )
 
     @classmethod
     def from_context(cls, context: Context) -> "ChatEvent":
-        # Note: For Context, we need to get chat_id from the context model
-        # Since Context now uses internal IDs, we need to convert to telegram_chat_id if needed
-        # For now, we'll use the internal chat_id as a string
+        # For ACTION context types, the user is the chat user (for private chats, telegram_chat_id == telegram_user_id)
+        user_id = context.chat.telegram_chat_id if context.type == ContextType.ACTION.value else None
+
         return cls(
             event_type=CONTEXT_TYPE_MAP.get(context.type, "context"),
             event_data={
@@ -144,10 +151,10 @@ class ChatEvent(pydantic.BaseModel):
             },
             timestamp=context.created_at,
             attachments=[],
-            user_id=str(context.chat_id) if context.type == ContextType.ACTION.value else None,
+            user_id=user_id,
         )
 
-    def to_model_message(self, bot_id: str, ts_reference: datetime) -> pydantic_ai.messages.ModelMessage:
+    def to_model_message(self, bot_id: int, ts_reference: datetime) -> pydantic_ai.messages.ModelMessage:
         """Convert the chat event to a model message for AI processing."""
 
         default_payload = {

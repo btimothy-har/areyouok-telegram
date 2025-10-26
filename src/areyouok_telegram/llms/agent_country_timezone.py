@@ -1,8 +1,8 @@
 import pydantic
 import pydantic_ai
 
-from areyouok_telegram.data import UserMetadata
-from areyouok_telegram.data.models.user_metadata import InvalidTimezoneError
+from areyouok_telegram.data.models import UserMetadata
+from areyouok_telegram.data.models.users.user_metadata import InvalidTimezoneError
 from areyouok_telegram.llms.exceptions import MetadataFieldUpdateError
 from areyouok_telegram.llms.models import GPT5Nano
 
@@ -45,8 +45,9 @@ Return the timezone string in IANA format, and only the timezone string.
 
 @country_timezone_agent.output_validator
 async def validate_country_timezone_output(ctx: pydantic_ai.RunContext, data: CountryTimezone) -> CountryTimezone:  # noqa: ARG001
+    # Validate timezone by creating a temp UserMetadata instance (triggers field validation)
     try:
-        UserMetadata.validate_field("timezone", data.timezone)
+        UserMetadata(user_id=0, timezone=data.timezone)
     except InvalidTimezoneError as e:
         raise MetadataFieldUpdateError("timezone") from e
 

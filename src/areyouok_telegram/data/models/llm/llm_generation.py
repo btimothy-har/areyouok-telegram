@@ -106,13 +106,22 @@ class LLMGeneration(pydantic.BaseModel):
         # Serialize output
         output_dict = json.loads(serialize_object(self.output))
 
-        # Serialize messages to list of dicts
-        messages_json = json.loads(
-            json.dumps([m.model_dump() if hasattr(m, "model_dump") else m for m in self.messages])
-        )
+        # Serialize messages using pydantic-ai's TypeAdapter
+        messages_json = json.loads(pydantic_ai.messages.ModelMessagesTypeAdapter.dump_json(self.messages))
 
         # Serialize deps
-        deps_dict = json.loads(serialize_object(self.deps)) if self.deps else None
+        if self.deps:
+            deps_serialized = serialize_object(self.deps)
+            # Check if serialization produced valid JSON (not empty string)
+            if deps_serialized and deps_serialized.strip():
+                try:
+                    deps_dict = json.loads(deps_serialized)
+                except json.JSONDecodeError:
+                    deps_dict = None
+            else:
+                deps_dict = None
+        else:
+            deps_dict = None
 
         return output_dict, messages_json, deps_dict
 

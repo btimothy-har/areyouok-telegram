@@ -111,14 +111,14 @@ class ConversationJob(BaseJob):
                 if context:
                     logfire.warning(
                         "Context already exists for session, skipping compression.",
-                        session_id=active_session.session_id,
+                        session_id=active_session.id,
                     )
                 else:
                     with logfire.span(
-                        f"Compressing conversation history for session {active_session.session_id}.",
+                        f"Compressing conversation history for session {active_session.id}.",
                         _span_name="ConversationJob._run.compress_context",
                         chat_id=self.chat_id,
-                        session_id=active_session.session_id,
+                        session_id=active_session.id,
                     ):
                         message_history = await self._get_chat_history(chat=chat, active_session=active_session)
 
@@ -138,7 +138,7 @@ class ConversationJob(BaseJob):
 
                         else:
                             logfire.warning(
-                                f"No messages found in chat session {active_session.session_id}, nothing to compress."
+                                f"No messages found in chat session {active_session.id}, nothing to compress."
                             )
 
                 # Check if we should run evaluations (only if we actually got message history)
@@ -147,7 +147,7 @@ class ConversationJob(BaseJob):
                         context=self._run_context,
                         job=EvaluationsJob(
                             chat_id=self.chat_id,
-                            session_id=active_session.session_id,
+                            session_id=active_session.id,
                         ),
                         when=datetime.now(UTC) + timedelta(seconds=10),
                     )
@@ -166,7 +166,7 @@ class ConversationJob(BaseJob):
 
         else:
             with logfire.span(
-                f"Generating response in {active_session.session_id}.",
+                f"Generating response in {active_session.id}.",
                 _span_name="ConversationJob._run.respond",
                 chat_id=self.chat_id,
             ):
@@ -178,7 +178,7 @@ class ConversationJob(BaseJob):
 
                     await telegram_call(
                         self._run_context.bot.send_chat_action,
-                        chat_id=int(self.chat_id),
+                        chat_id=chat.telegram_chat_id,
                         action=telegram.constants.ChatAction.TYPING,
                     )
 
@@ -250,9 +250,12 @@ class ConversationJob(BaseJob):
                     else:
                         reasoning = agent_response.reasoning
 
+                    # Get bot user (for bot-generated messages)
+                    bot_user = await User.get_by_id(telegram_user_id=self._bot_id)
+
                     # Log the bot's response message
                     message_obj = Message.from_telegram(
-                        user_id=self._bot_id,
+                        user_id=bot_user.id,
                         chat=chat,
                         message=response_message,
                         session_id=active_session.id,
@@ -314,7 +317,7 @@ class ConversationJob(BaseJob):
         else:
             guided_session = None
 
-        if include_context:
+        if include_context and not guided_session:
             # Gather chat context - fetch all context for this chat
             all_context_items = await Context.get_by_chat(chat=chat)
 
@@ -458,7 +461,7 @@ class ConversationJob(BaseJob):
         response_message = None
 
         if response.response_type in ["TextResponse", "TextWithButtonsResponse", "KeyboardResponse"]:
-            response_message = await self._execute_text_response(response=response)
+            response_message = await self._execute_text_response(chat=chat, response=response)
 
         elif response.response_type == "ReactionResponse":
             # Get the message to react to
@@ -475,7 +478,9 @@ class ConversationJob(BaseJob):
 
             telegram_message = message.telegram_object
 
-            response_message = await self._execute_reaction_response(response=response, message=telegram_message)
+            response_message = await self._execute_reaction_response(
+                chat=chat, response=response, message=telegram_message
+            )
 
         elif response.response_type == "SwitchPersonalityResponse":
             context = Context(
@@ -503,7 +508,9 @@ class ConversationJob(BaseJob):
         logfire.info(f"Response executed in chat {self.chat_id}: {response.response_type}.")
         return response_message
 
-    async def _execute_text_response(self, response: TextResponse | TextWithButtonsResponse) -> telegram.Message | None:
+    async def _execute_text_response(
+        self, *, chat: Chat, response: TextResponse | TextWithButtonsResponse
+    ) -> telegram.Message | None:
         """
         Send a text response to the chat.
         """
@@ -554,7 +561,7 @@ class ConversationJob(BaseJob):
 
         reply_message = await telegram_call(
             self._run_context.bot.send_message,
-            chat_id=int(self.chat_id),
+            chat_id=chat.telegram_chat_id,
             text=response.message_text,
             reply_parameters=reply_parameters,
             reply_markup=reply_markup,
@@ -562,10 +569,10 @@ class ConversationJob(BaseJob):
 
         return reply_message
 
-    async def _execute_reaction_response(self, response: ReactionResponse, message: telegram.Message):
+    async def _execute_reaction_response(self, *, chat: Chat, response: ReactionResponse, message: telegram.Message):
         react_sent = await telegram_call(
             self._run_context.bot.set_message_reaction,
-            chat_id=int(self.chat_id),
+            chat_id=chat.telegram_chat_id,
             message_id=int(response.react_to_message_id),
             reaction=response.emoji,
         )

@@ -5,7 +5,7 @@ import pydantic_evals
 from cachetools import TTLCache
 
 from areyouok_telegram.config import ENV
-from areyouok_telegram.data.models import LLMGeneration
+from areyouok_telegram.data.models import Chat, LLMGeneration, Session
 from areyouok_telegram.jobs.base import BaseJob
 from areyouok_telegram.llms.evaluators import (
     run_empathy_evaluation,
@@ -18,11 +18,11 @@ from areyouok_telegram.llms.evaluators import (
 GEN_CACHE = TTLCache(maxsize=1000, ttl=300)
 
 
-async def get_generation_by_id_cached(gen_id: str) -> LLMGeneration:
+async def get_generation_by_id_cached(gen_id: int) -> LLMGeneration:
     if gen_id in GEN_CACHE:
         return GEN_CACHE[gen_id]
 
-    generation = await LLMGeneration.get_by_generation_id(generation_id=gen_id)
+    generation = await LLMGeneration.get_by_id(generation_id=gen_id)
     if not generation:
         raise ValueError(f"Generation with ID {gen_id} not found.")  # noqa: TRY003
 
@@ -35,14 +35,20 @@ class ReasoningAlignmentEvaluator(pydantic_evals.evaluators.Evaluator):
     async def evaluate(self, ctx: pydantic_evals.evaluators.EvaluatorContext):
         generation = await get_generation_by_id_cached(ctx.inputs)
 
+        # Get chat and session from metadata
+        chat = await Chat.get_by_id(chat_id=ctx.metadata["chat_id"])
+        session = await Session.get_by_id(session_id=ctx.metadata["session_id"])
+
         # Prepare clean output without reasoning
-        run_output = generation.run_output.copy()
+        run_output = generation.output.copy()
         run_output.pop("reasoning", None)
 
         # Use the new interface
         return await run_reasoning_alignment_evaluation(
+            chat=chat,
+            session=session,
             output=run_output,
-            reasoning=generation.run_output.get("reasoning"),
+            reasoning=generation.output.get("reasoning"),
         )
 
 
@@ -51,11 +57,17 @@ class PersonalityAlignmentEvaluator(pydantic_evals.evaluators.Evaluator):
     async def evaluate(self, ctx: pydantic_evals.evaluators.EvaluatorContext):
         generation = await get_generation_by_id_cached(ctx.inputs)
 
-        deps = generation.run_deps or {}
+        # Get chat and session from metadata
+        chat = await Chat.get_by_id(chat_id=ctx.metadata["chat_id"])
+        session = await Session.get_by_id(session_id=ctx.metadata["session_id"])
+
+        deps = generation.deps or {}
 
         # Use the new interface
         return await run_personality_alignment_evaluation(
-            output=generation.run_output,
+            chat=chat,
+            session=session,
+            output=generation.output,
             personality=deps.get("personality"),
         )
 
@@ -65,9 +77,15 @@ class SycophancyEvaluator(pydantic_evals.evaluators.Evaluator):
     async def evaluate(self, ctx: pydantic_evals.evaluators.EvaluatorContext):
         generation = await get_generation_by_id_cached(ctx.inputs)
 
+        # Get chat and session from metadata
+        chat = await Chat.get_by_id(chat_id=ctx.metadata["chat_id"])
+        session = await Session.get_by_id(session_id=ctx.metadata["session_id"])
+
         # Use the new interface
         return await run_sycophancy_evaluation(
-            message_history=generation.run_messages,
+            chat=chat,
+            session=session,
+            message_history=generation.messages,
         )
 
 
@@ -76,9 +94,15 @@ class EmpathyEvaluator(pydantic_evals.evaluators.Evaluator):
     async def evaluate(self, ctx: pydantic_evals.evaluators.EvaluatorContext):
         generation = await get_generation_by_id_cached(ctx.inputs)
 
+        # Get chat and session from metadata
+        chat = await Chat.get_by_id(chat_id=ctx.metadata["chat_id"])
+        session = await Session.get_by_id(session_id=ctx.metadata["session_id"])
+
         # Use the new interface
         return await run_empathy_evaluation(
-            message_history=generation.run_messages,
+            chat=chat,
+            session=session,
+            message_history=generation.messages,
         )
 
 
@@ -87,20 +111,28 @@ class MotivatingEvaluator(pydantic_evals.evaluators.Evaluator):
     async def evaluate(self, ctx: pydantic_evals.evaluators.EvaluatorContext):
         generation = await get_generation_by_id_cached(ctx.inputs)
 
+        # Get chat and session from metadata
+        chat = await Chat.get_by_id(chat_id=ctx.metadata["chat_id"])
+        session = await Session.get_by_id(session_id=ctx.metadata["session_id"])
+
         # Use the new interface
         return await run_motivating_evaluation(
-            message_history=generation.run_messages,
+            chat=chat,
+            session=session,
+            message_history=generation.messages,
         )
 
 
-async def eval_production_response(gen_id: str) -> dict:
+async def eval_production_response(gen_id: int) -> dict:
     generation = await get_generation_by_id_cached(gen_id)
 
     return {
         "model": generation.model,
         "response_type": generation.response_type,
-        "reasoning": generation.run_output.get("reasoning"),
-        "personality": generation.run_deps.get("personality"),
+        "reasoning": generation.output.get("reasoning") if isinstance(generation.output, dict) else None,
+        "personality": (
+            generation.deps.get("personality") if generation.deps and isinstance(generation.deps, dict) else None
+        ),
     }
 
 
@@ -127,6 +159,17 @@ class EvaluationsJob(BaseJob):
         return ["areyouok_chat_agent", "areyouok_onboarding_agent"]
 
     async def run_job(self) -> None:
+        # Fetch Chat and Session objects for tracking
+        chat = await Chat.get_by_id(chat_id=self.chat_id)
+        if not chat:
+            logfire.warning(f"Chat {self.chat_id} not found. Skipping evaluations.")
+            return
+
+        session = await Session.get_by_id(session_id=self.session_id)
+        if not session:
+            logfire.warning(f"Session {self.session_id} not found. Skipping evaluations.")
+            return
+
         generations = await LLMGeneration.get_by_session(session_id=self.session_id)
         if not generations:
             logfire.warning(f"No generations found for session {self.session_id}. Skipping evaluations.")
@@ -139,18 +182,18 @@ class EvaluationsJob(BaseJob):
 
             case_evaluators = []
 
-            # Check if run_output is a dict before accessing "reasoning"
-            if isinstance(gen.run_output, dict) and gen.run_output.get("reasoning"):
+            # Check if output is a dict before accessing "reasoning"
+            if isinstance(gen.output, dict) and gen.output.get("reasoning"):
                 case_evaluators.append(ReasoningAlignmentEvaluator())
 
-            # Check if run_deps is a dict before accessing "personality"
-            if isinstance(gen.run_deps, dict) and gen.run_deps.get("personality"):
+            # Check if deps is a dict before accessing "personality"
+            if isinstance(gen.deps, dict) and gen.deps.get("personality"):
                 case_evaluators.append(PersonalityAlignmentEvaluator())
 
             dataset_cases.append(
                 pydantic_evals.Case(
-                    name=f"{gen.agent}_{gen.generation_id}",
-                    inputs=gen.generation_id,
+                    name=f"{gen.agent}_{gen.id}",
+                    inputs=gen.id,
                     metadata={
                         "session_id": self.session_id,
                         "chat_id": self.chat_id,
@@ -170,7 +213,7 @@ class EvaluationsJob(BaseJob):
 
         await session_dataset.evaluate(
             eval_production_response,
-            name=self.session_id,
+            name=f"session_evaluation:{self.session_id}",
             max_concurrency=1,
             progress=True if ENV == "development" else False,
         )

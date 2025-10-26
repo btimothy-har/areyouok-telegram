@@ -56,7 +56,7 @@ class Session(pydantic.BaseModel):
 
         return self.last_bot_activity > self.last_user_activity
 
-    @traced(extract_args=["chat_id"])
+    @traced(extract_args=False)
     @db_retry()
     async def save(self) -> Session:
         """Save or update the session in the database.
@@ -170,16 +170,15 @@ class Session(pydantic.BaseModel):
             Session instance
         """
 
-        session = await cls.get_sessions(chat=chat, active=True)
-        if session:
-            return session
+        sessions = await cls.get_sessions(chat=chat, active=True)
+        if sessions:
+            return sessions[0]
         else:
             session_start = session_start or datetime.now(UTC)
             new_session = cls(chat=chat, session_start=session_start)
             return await new_session.save()
 
     @classmethod
-    @traced(extract_args=["chat", "active"])
     @db_retry()
     async def get_sessions(
         cls,

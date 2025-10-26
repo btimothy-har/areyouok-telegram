@@ -83,13 +83,14 @@ async def on_preferences_command(update: telegram.Update, context: ContextTypes.
         update_instruction = f"Update {normalized_field_name} to {text_input}."
         update_result = await run_agent_with_tracking(
             preferences_agent,
-            chat_id=chat.id,
-            session_id=active_session.id,
+            chat=chat,
+            session=active_session,
             run_kwargs={
                 "user_prompt": update_instruction,
                 "deps": PreferencesAgentDependencies(
-                    tg_chat_id=chat.telegram_chat_id,
-                    tg_session_id=active_session.id,
+                    user=user,
+                    chat=chat,
+                    session=active_session,
                 ),
             },
         )

@@ -1,6 +1,6 @@
 """Messaging schemas for messages, media, updates, and notifications."""
 
-from sqlalchemy import Column, ForeignKey, Integer, String, Text
+from sqlalchemy import BigInteger, Column, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import TIMESTAMP
 
 from areyouok_telegram.config import ENV
@@ -24,7 +24,7 @@ class MessagesTable(Base):
     chat_id = Column(Integer, ForeignKey(f"{ENV}.chats.id"), nullable=False, index=True)
 
     # Telegram identifier
-    telegram_message_id = Column(Integer, nullable=False, index=True)
+    telegram_message_id = Column(BigInteger, nullable=False, index=True)
 
     # Message data
     message_type = Column(String, nullable=False)

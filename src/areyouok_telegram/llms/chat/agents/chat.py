@@ -40,7 +40,7 @@ from areyouok_telegram.llms.chat.utils import (
 from areyouok_telegram.llms.context_search import search_chat_context
 from areyouok_telegram.llms.exceptions import ContextSearchError, MemoryUpdateError, MetadataFieldUpdateError
 from areyouok_telegram.llms.models import Gemini25Pro
-from areyouok_telegram.llms.utils import log_metadata_update_context, run_agent_with_tracking
+from areyouok_telegram.llms.utils import run_agent_with_tracking
 
 AgentResponse = TextResponse | ReactionResponse | SwitchPersonalityResponse | DoNothingResponse | KeyboardResponse
 
@@ -229,11 +229,13 @@ async def update_communication_style(
         raise MetadataFieldUpdateError("communication_style", str(e)) from e
 
     # Log the metadata update to context
-    await log_metadata_update_context(
+    context = Context(
         chat=ctx.deps.chat,
-        session=ctx.deps.session,
+        session_id=ctx.deps.session.id,
+        type=ContextType.METADATA.value,
         content=f"Updated usermeta: communication_style is now {str(anon_text.output)}",
     )
+    await context.save()
 
     return f"User's new communication_style updated to: {anon_text.output}."
 
@@ -266,11 +268,13 @@ async def update_response_speed(
         raise MetadataFieldUpdateError("response_speed_adj", str(e)) from e
 
     # Log the metadata update to context
-    await log_metadata_update_context(
+    context = Context(
         chat=ctx.deps.chat,
-        session=ctx.deps.session,
+        session_id=ctx.deps.session.id,
+        type=ContextType.METADATA.value,
         content=f"Updated usermeta: adjusted response speed {response_speed_adjustment}.",
     )
+    await context.save()
 
     return f"Made response speed {response_speed_adjustment}."
 

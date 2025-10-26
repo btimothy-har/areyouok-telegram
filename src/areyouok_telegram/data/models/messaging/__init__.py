@@ -5,6 +5,7 @@ from areyouok_telegram.data.models.messaging.chat_event import SYSTEM_USER_ID, C
 from areyouok_telegram.data.models.messaging.context import Context, ContextType
 from areyouok_telegram.data.models.messaging.guided_session import (
     GuidedSession,
+    GuidedSessionState,
     GuidedSessionType,
     JournalContextMetadata,
 )
@@ -20,6 +21,7 @@ __all__ = [
     "ContextType",
     "GuidedSession",
     "GuidedSessionType",
+    "GuidedSessionState",
     "JournalContextMetadata",
     "MediaFile",
     "Message",

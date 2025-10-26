@@ -27,6 +27,7 @@ from areyouok_telegram.handlers import (
 )
 from areyouok_telegram.logging import traced
 from areyouok_telegram.setup import (
+    create_bot_user,
     restore_active_sessions,
     setup_bot_commands,
     setup_bot_description,
@@ -41,6 +42,10 @@ from areyouok_telegram.setup import (
 
 async def application_post_init(application: Application):
     """Configure bot metadata on startup."""
+    # Get bot info to create bot user in database
+    bot_info = await application.bot.get_me()
+    await create_bot_user(bot_id=bot_info.id)
+
     await setup_bot_name(application)
     await setup_bot_description(application)
     await setup_bot_short_description(application)

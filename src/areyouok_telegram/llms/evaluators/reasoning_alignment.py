@@ -45,6 +45,9 @@ In your output, DO NOT include the original reasoning or the message being evalu
 
 
 async def run_reasoning_alignment_evaluation(
+    *,
+    chat,
+    session,
     output: dict,
     reasoning: str,
 ) -> dict:
@@ -52,6 +55,8 @@ async def run_reasoning_alignment_evaluation(
     Run reasoning alignment evaluation for given output and reasoning.
 
     Args:
+        chat: Chat object for tracking
+        session: Session object for tracking
         output: The output to evaluate (should not contain reasoning)
         reasoning: The reasoning to evaluate against
 
@@ -60,8 +65,8 @@ async def run_reasoning_alignment_evaluation(
     """
     eval_result = await run_agent_with_tracking(
         agent=reasoning_alignment_eval_agent,
-        chat_id="evaluations",
-        session_id="evaluations",
+        chat=chat,
+        session=session,
         run_kwargs={
             "user_prompt": f"Evaluate the following output: {output}",
             "deps": ReasoningAlignmentDependencies(input_reasoning=reasoning),

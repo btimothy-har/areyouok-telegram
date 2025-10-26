@@ -81,7 +81,7 @@ class Notification(pydantic.BaseModel):
             return Notification.model_validate(row, from_attributes=True)
 
     @classmethod
-    @traced(extract_args=["chat"])
+    @traced(extract_args=False)
     @db_retry()
     async def get_next_pending(
         cls,
