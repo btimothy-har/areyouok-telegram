@@ -31,7 +31,7 @@ async def retrieve_relevant_contexts(
     # Create retriever with metadata filtering for user isolation
     retriever = context_vector_index.as_retriever(
         similarity_top_k=RAG_TOP_K,
-        filters=MetadataFilters(filters=[ExactMatchFilter(key="chat_id", value=str(chat.telegram_chat_id))]),
+        filters=MetadataFilters(filters=[ExactMatchFilter(key="chat_id", value=str(chat.id))]),
     )
 
     # Retrieve nodes (contains metadata only, not encrypted content)
