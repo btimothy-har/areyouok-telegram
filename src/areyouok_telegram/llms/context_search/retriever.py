@@ -1,36 +1,37 @@
 """Utility functions for context search and retrieval."""
 
+import asyncio
+
 from llama_index.core.vector_stores import ExactMatchFilter, MetadataFilters
 
 from areyouok_telegram.config import RAG_TOP_K
-from areyouok_telegram.data import Chats, Context, async_database, context_vector_index
+from areyouok_telegram.data.database.embeddings import context_vector_index
+from areyouok_telegram.data.models import Chat, Context
 from areyouok_telegram.logging import traced
-from areyouok_telegram.utils.retry import db_retry
 
 
-@traced(extract_args=["chat_id"])
-@db_retry()
+@traced(extract_args=["chat"])
 async def retrieve_relevant_contexts(
     *,
-    chat_id: str,
+    chat: Chat,
     search_query: str,
 ) -> list[Context]:
     """Retrieve relevant contexts using semantic search.
 
     Args:
-        chat_id: The chat ID to search within (ensures user isolation)
+        chat: The chat to search within (ensures user isolation)
         search_query: Natural language query describing what to search for
 
     Returns:
-        List of decrypted Context objects, or empty list if none found
+        List of auto-decrypted Context objects, or empty list if none found
 
     Raises:
-        Exception: If retrieval or decryption fails
+        Exception: If retrieval fails
     """
     # Create retriever with metadata filtering for user isolation
     retriever = context_vector_index.as_retriever(
         similarity_top_k=RAG_TOP_K,
-        filters=MetadataFilters(filters=[ExactMatchFilter(key="chat_id", value=chat_id)]),
+        filters=MetadataFilters(filters=[ExactMatchFilter(key="chat_id", value=str(chat.telegram_chat_id))]),
     )
 
     # Retrieve nodes (contains metadata only, not encrypted content)
@@ -42,18 +43,8 @@ async def retrieve_relevant_contexts(
     # Extract context IDs from node metadata
     context_ids = [int(node.metadata["context_id"]) for node in nodes]
 
-    # Fetch full Context objects from database
-    async with async_database() as db_conn:
-        # Get chat encryption key
-        chat = await Chats.get_by_id(db_conn, chat_id=chat_id)
-        chat_key = chat.retrieve_key()
+    # Fetch full Context objects in parallel (auto-decrypted)
+    contexts = await asyncio.gather(*[Context.get_by_id(chat=chat, context_id=ctx_id) for ctx_id in context_ids])
 
-        contexts = await Context.get_by_ids(db_conn, ids=context_ids)
-        if not contexts:
-            return []
-
-    # Decrypt all contexts
-    for context in contexts:
-        context.decrypt_content(chat_encryption_key=chat_key)
-
-    return contexts
+    # Filter out None values
+    return [ctx for ctx in contexts if ctx is not None]

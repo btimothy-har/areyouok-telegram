@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 import pydantic_ai
 
+from areyouok_telegram.data.models import Chat, Session
 from areyouok_telegram.llms.agent_anonymizer import anonymization_agent
 from areyouok_telegram.llms.models import Gemini25Flash
 from areyouok_telegram.llms.utils import run_agent_with_tracking
@@ -9,8 +10,8 @@ from areyouok_telegram.llms.utils import run_agent_with_tracking
 
 @dataclass
 class ContextAgentDependencies:
-    tg_chat_id: str
-    tg_session_id: str
+    chat: Chat
+    session: Session
 
 
 agent_model = Gemini25Flash(
@@ -50,8 +51,8 @@ be in English, in less than 1,000 characters.
 async def validate_output(ctx: pydantic_ai.RunContext, data: str) -> str:
     anon_text = await run_agent_with_tracking(
         anonymization_agent,
-        chat_id=ctx.deps.tg_chat_id,
-        session_id=ctx.deps.tg_session_id,
+        chat=ctx.deps.chat,
+        session=ctx.deps.session,
         run_kwargs={
             "user_prompt": data,
         },

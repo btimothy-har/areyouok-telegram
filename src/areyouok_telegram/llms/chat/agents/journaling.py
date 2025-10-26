@@ -8,16 +8,14 @@ import pydantic_ai
 from pydantic_ai import RunContext
 
 from areyouok_telegram.config import SIMULATION_MODE
-from areyouok_telegram.data import (
-    Chats,
+from areyouok_telegram.data.models import (
+    Chat,
     Context,
     ContextType,
-    GuidedSessions,
+    GuidedSession,
     GuidedSessionType,
     JournalContextMetadata,
     UserMetadata,
-    async_database,
-    operations as data_operations,
 )
 from areyouok_telegram.llms.agent_journal_setup import (
     JournalPrompts,
@@ -44,7 +42,6 @@ from areyouok_telegram.llms.chat.utils import (
 from areyouok_telegram.llms.exceptions import JournalingError
 from areyouok_telegram.llms.models import Gemini25Pro
 from areyouok_telegram.llms.utils import run_agent_with_tracking
-from areyouok_telegram.utils.retry import db_retry
 
 AgentResponse = TextResponse | ReactionResponse | DoNothingResponse | KeyboardResponse
 
@@ -53,20 +50,21 @@ AgentResponse = TextResponse | ReactionResponse | DoNothingResponse | KeyboardRe
 class JournalingAgentDependencies(CommonChatAgentDependencies):
     """Dependencies for the journaling agent."""
 
-    journaling_session_key: str = field(kw_only=True)
+    journaling_session: GuidedSession = field(kw_only=True)
     journaling_session_metadata: JournalContextMetadata | None = field(kw_only=True)
 
     def to_dict(self) -> dict:
         return super().to_dict() | {
+            "journaling_session_id": self.journaling_session.id,
+            "journaling_session_key": self.journaling_session.object_key,
             "journaling_session_metadata": self.journaling_session_metadata.model_dump()
             if self.journaling_session_metadata
             else None,
-            "journaling_session_key": self.journaling_session_key,
         }
 
 
-@db_retry()
-async def retrieve_journal_context(*, chat_id: str) -> list[Context] | None:
+async def retrieve_journal_context(*, chat: Chat) -> list[Context] | None:
+    """Retrieve relevant journal context for a chat."""
     # Determine the start timestamp for context retrieval
     now = datetime.now(UTC)
     seven_days_ago = now - timedelta(days=7)
@@ -78,35 +76,32 @@ async def retrieve_journal_context(*, chat_id: str) -> list[Context] | None:
         ContextType.PROFILE.value,
     ]
 
-    # Get contexts since last journal session or last 7 days
-    async with async_database() as db_conn:
-        # Find the most recent completed journaling session
-        last_journal_session = await GuidedSessions.get_by_chat_id(
-            db_conn,
-            chat_id=chat_id,
-            session_type=GuidedSessionType.JOURNALING.value,
-        )
+    # Find the most recent completed journaling session
+    all_journal_sessions = await GuidedSession.get_by_chat(
+        chat=chat,
+        session_type=GuidedSessionType.JOURNALING.value,
+    )
 
-        if last_journal_session and last_journal_session[0].completed_at:
-            # Use the completion time of the last journal session if within 7 days
-            last_journal_time = last_journal_session[0].completed_at
-            from_timestamp = max(last_journal_time, seven_days_ago)
-        else:
-            # No previous journal session or too old, use 7 days ago
-            from_timestamp = seven_days_ago
+    completed_sessions = [s for s in all_journal_sessions if s.completed_at]
+    if completed_sessions:
+        # Use the completion time of the most recent journal session if within 7 days
+        last_journal_time = max(s.completed_at for s in completed_sessions)
+        from_timestamp = max(last_journal_time, seven_days_ago)
+    else:
+        # No previous journal session or too old, use 7 days ago
+        from_timestamp = seven_days_ago
 
-        # Retrieve contexts of specific types since the determined timestamp
-        contexts = await Context.get_by_chat_id(
-            db_conn,
-            chat_id=chat_id,
-            from_timestamp=from_timestamp,
-            to_timestamp=now,
-        )
+    # Retrieve contexts of specific types since the determined timestamp
+    contexts = await Context.get_by_chat(
+        chat=chat,
+        from_timestamp=from_timestamp,
+        to_timestamp=now,
+    )
 
-        if contexts:
-            return [ctx for ctx in contexts if ctx.type in relevant_context_types]
+    if contexts:
+        return [ctx for ctx in contexts if ctx.type in relevant_context_types]
 
-        return None
+    return None
 
 
 agent_model = Gemini25Pro()
@@ -144,32 +139,31 @@ async def journaling_instructions(ctx: RunContext[JournalingAgentDependencies]) 
     user_preferences_text = ""
     if not SIMULATION_MODE:
         try:
-            user_profile = await data_operations.get_latest_profile(chat_id=ctx.deps.tg_chat_id)
-            if user_profile:
-                encryption_key = await data_operations.get_chat_encryption_key(chat_id=ctx.deps.tg_chat_id)
-                user_profile.decrypt_content(chat_encryption_key=encryption_key)
+            profile_contexts = await Context.get_by_chat(
+                chat=ctx.deps.chat,
+                ctype=ContextType.PROFILE.value,
+            )
+            if profile_contexts:
+                user_profile = profile_contexts[0]  # Most recent
+                user_profile_text = USER_PROFILE.format(user_profile=user_profile.content)
 
         except Exception as e:
             # If profile fetch fails, just continue without it
             logfire.warning(
                 "Failed to fetch user profile, continuing without it",
-                chat_id=ctx.deps.tg_chat_id,
+                chat_id=ctx.deps.chat.id,
                 error=str(e),
                 _exc_info=True,
             )
-        else:
-            if user_profile:
-                user_profile_text = USER_PROFILE.format(user_profile=user_profile.content)
 
-        async with async_database() as db_conn:
-            user_metadata = await UserMetadata.get_by_user_id(db_conn, user_id=ctx.deps.tg_chat_id)
-            if user_metadata:
-                user_preferences_text = USER_PREFERENCES.format(
-                    preferred_name=user_metadata.preferred_name or "Not provided.",
-                    country=user_metadata.country or "Not provided.",
-                    timezone=user_metadata.timezone or "Not provided.",
-                    communication_style=user_metadata.communication_style or "",
-                )
+        user_metadata = await UserMetadata.get_by_user_id(user_id=ctx.deps.user.id)
+        if user_metadata:
+            user_preferences_text = USER_PREFERENCES.format(
+                preferred_name=user_metadata.preferred_name or "Not provided.",
+                country=user_metadata.country or "Not provided.",
+                timezone=user_metadata.timezone or "Not provided.",
+                communication_style=user_metadata.communication_style or "",
+            )
 
     prompt = BaseChatPromptTemplate(
         response=RESPONSE_PROMPT.format(response_restrictions=restrict_response_text),
@@ -191,20 +185,16 @@ async def generate_topics(ctx: RunContext[JournalingAgentDependencies]) -> str:
     Returns a newline-separated string of topics.
     """
 
-    chat_encryption_key = await data_operations.get_chat_encryption_key(chat_id=ctx.deps.tg_chat_id)
-
-    journal_context_items = await retrieve_journal_context(chat_id=str(ctx.deps.tg_chat_id))
+    journal_context_items = await retrieve_journal_context(chat=ctx.deps.chat)
 
     if journal_context_items:
-        [ctx.decrypt_content(chat_encryption_key=chat_encryption_key) for ctx in journal_context_items]
-
         journal_context_text = construct_journal_context_text(journal_context_items=journal_context_items)
 
         # Generate journaling prompts using the prompt agent
         prompt_result = await run_agent_with_tracking(
             journal_prompts_agent,
-            chat_id=str(ctx.deps.tg_chat_id),
-            session_id=ctx.deps.tg_session_id,
+            chat=ctx.deps.chat,
+            session=ctx.deps.session,
             run_kwargs={
                 "user_prompt": (
                     "Generate 3 contextual journaling prompts based on the user's recent interactions:"
@@ -215,18 +205,9 @@ async def generate_topics(ctx: RunContext[JournalingAgentDependencies]) -> str:
 
         agent_response: JournalPrompts = prompt_result.output
 
-        async with async_database() as db_conn:
-            session = await GuidedSessions.get_by_guided_session_key(
-                db_conn, guided_session_key=ctx.deps.journaling_session_key
-            )
-            chat = await Chats.get_by_id(db_conn, chat_id=ctx.deps.tg_chat_id)
-
-            ctx.deps.journaling_session_metadata.generated_topics = agent_response.prompts
-            await session.update_metadata(
-                db_conn,
-                metadata=ctx.deps.journaling_session_metadata.model_dump(),
-                chat_encryption_key=chat.retrieve_key(),
-            )
+        ctx.deps.journaling_session_metadata.generated_topics = agent_response.prompts
+        ctx.deps.journaling_session.metadata = ctx.deps.journaling_session_metadata.model_dump()
+        await ctx.deps.journaling_session.save()
 
         return "\n".join(agent_response.prompts)
 
@@ -246,18 +227,8 @@ async def update_selected_topic(ctx: RunContext[JournalingAgentDependencies], to
     ctx.deps.journaling_session_metadata.phase = "journaling"
     ctx.deps.journaling_session_metadata.selected_topic = topic
 
-    async with async_database() as db_conn:
-        session = await GuidedSessions.get_by_guided_session_key(
-            db_conn, guided_session_key=ctx.deps.journaling_session_key
-        )
-
-        chat = await Chats.get_by_id(db_conn, chat_id=ctx.deps.tg_chat_id)
-
-        await session.update_metadata(
-            db_conn,
-            metadata=ctx.deps.journaling_session_metadata.model_dump(),
-            chat_encryption_key=chat.retrieve_key(),
-        )
+    ctx.deps.journaling_session.metadata = ctx.deps.journaling_session_metadata.model_dump()
+    await ctx.deps.journaling_session.save()
 
     return "User's selected topic updated successfully."
 
@@ -266,25 +237,14 @@ async def update_selected_topic(ctx: RunContext[JournalingAgentDependencies], to
 async def complete_journaling_session(ctx: RunContext[JournalingAgentDependencies]) -> str:
     """Mark the journaling session as complete."""
 
-    async with async_database() as db_conn:
-        session = await GuidedSessions.get_by_guided_session_key(
-            db_conn,
-            guided_session_key=ctx.deps.journaling_session_key,
-        )
+    if not ctx.deps.journaling_session.is_active:
+        raise JournalingError(f"Journaling session is currently {ctx.deps.journaling_session.state}.")
 
-        if not session.is_active:
-            raise JournalingError(f"Journaling session is currently {session.state}.")  # noqa: TRY003
+    ctx.deps.journaling_session_metadata.phase = "complete"
+    ctx.deps.journaling_session.metadata = ctx.deps.journaling_session_metadata.model_dump()
 
-        chat = await Chats.get_by_id(db_conn, chat_id=ctx.deps.tg_chat_id)
-
-        ctx.deps.journaling_session_metadata.phase = "complete"
-        await session.update_metadata(
-            db_conn,
-            metadata=ctx.deps.journaling_session_metadata.model_dump(),
-            chat_encryption_key=chat.retrieve_key(),
-        )
-
-        await session.complete(db_conn, timestamp=datetime.now(UTC))
+    await ctx.deps.journaling_session.save()
+    await ctx.deps.journaling_session.complete()
 
     return (
         "Journaling session completed successfully. "
@@ -309,15 +269,15 @@ async def validate_journaling_output(
 
     await validate_response_data(
         response=data,
-        chat_id=ctx.deps.tg_chat_id,
-        bot_id=ctx.deps.tg_bot_id,
+        chat=ctx.deps.chat,
+        bot_id=ctx.deps.bot_id,
     )
 
     if ctx.deps.notification:
         await check_special_instructions(
             response=data,
-            chat_id=ctx.deps.tg_chat_id,
-            session_id=ctx.deps.tg_session_id,
+            chat=ctx.deps.chat,
+            session=ctx.deps.session,
             instruction=ctx.deps.notification.content,
         )
 

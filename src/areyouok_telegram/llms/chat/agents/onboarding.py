@@ -1,20 +1,18 @@
 """Onboarding agent for new user initialization."""
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from typing import Any
 
 import pydantic_ai
 from pydantic_ai import RunContext
 
-from areyouok_telegram.data import GuidedSessions, Notifications, UserMetadata, async_database
+from areyouok_telegram.data.models import Context, ContextType, GuidedSession, Notification, UserMetadata
 from areyouok_telegram.llms.agent_country_timezone import CountryTimezone, country_timezone_agent
 from areyouok_telegram.llms.agent_preferences import (
     PreferencesAgentDependencies,
     PreferencesUpdateResponse,
     preferences_agent,
 )
-from areyouok_telegram.llms.chat.agents.tools import search_history_impl, update_memory_impl
 from areyouok_telegram.llms.chat.constants import (
     MESSAGE_FOR_USER_PROMPT,
     ONBOARDING_FIELDS,
@@ -31,9 +29,14 @@ from areyouok_telegram.llms.chat.utils import (
     validate_response_data,
 )
 from areyouok_telegram.llms.context_search import search_chat_context
-from areyouok_telegram.llms.exceptions import CompleteOnboardingError, MetadataFieldUpdateError
+from areyouok_telegram.llms.exceptions import (
+    CompleteOnboardingError,
+    ContextSearchError,
+    MemoryUpdateError,
+    MetadataFieldUpdateError,
+)
 from areyouok_telegram.llms.models import Gemini25Pro
-from areyouok_telegram.llms.utils import log_metadata_update_context, run_agent_with_tracking
+from areyouok_telegram.llms.utils import run_agent_with_tracking
 
 AgentResponse = TextResponse | ReactionResponse | DoNothingResponse | KeyboardResponse
 
@@ -42,11 +45,11 @@ AgentResponse = TextResponse | ReactionResponse | DoNothingResponse | KeyboardRe
 class OnboardingAgentDependencies(CommonChatAgentDependencies):
     """Dependencies for the onboarding agent."""
 
-    onboarding_session_key: str = field(kw_only=True)
+    onboarding_session: GuidedSession = field(kw_only=True)
 
     def to_dict(self) -> dict:
         return super().to_dict() | {
-            "onboarding_session_key": self.onboarding_session_key,
+            "onboarding_session_id": self.onboarding_session.id,
         }
 
 
@@ -80,8 +83,7 @@ async def onboarding_instructions(ctx: RunContext[OnboardingAgentDependencies]) 
         "response_speed",
     ]
 
-    async with async_database() as db_conn:
-        user_metadata = await UserMetadata.get_by_user_id(db_conn, user_id=ctx.deps.tg_chat_id)
+    user_metadata = await UserMetadata.get_by_user_id(user_id=ctx.deps.user.id)
 
     if user_metadata:
         if user_metadata.preferred_name:
@@ -136,8 +138,8 @@ async def save_user_response(
         else:
             tz = await run_agent_with_tracking(
                 country_timezone_agent,
-                chat_id=ctx.deps.tg_chat_id,
-                session_id=ctx.deps.tg_session_id,
+                chat=ctx.deps.chat,
+                session=ctx.deps.session,
                 run_kwargs={
                     "user_prompt": f"Identify the timezone for the ISO-3 Country: {value_to_save}.",
                 },
@@ -149,27 +151,27 @@ async def save_user_response(
         update_instruction += f"\nUpdate timezone to value: {tz_value}."
 
         if has_multiple:
-            async with async_database() as db_conn:
-                await Notifications.add(
-                    db_conn,
-                    chat_id=ctx.deps.tg_chat_id,
-                    content=(
-                        f"There are multiple timezones for the user's country {value_to_save}. "
-                        f"The default has been picked as {tz_value}. "
-                        "Inform the user of this and that they may change their timezone via the `/settings` command."
-                    ),
-                    priority=1,
-                )
+            notification = Notification(
+                chat=ctx.deps.chat,
+                content=(
+                    f"There are multiple timezones for the user's country {value_to_save}. "
+                    f"The default has been picked as {tz_value}. "
+                    "Inform the user of this and that they may change their timezone via the `/settings` command."
+                ),
+                priority=1,
+            )
+            await notification.save()
 
     update = await run_agent_with_tracking(
         preferences_agent,
-        chat_id=ctx.deps.tg_chat_id,
-        session_id=ctx.deps.tg_session_id,
+        chat=ctx.deps.chat,
+        session=ctx.deps.session,
         run_kwargs={
             "user_prompt": update_instruction,
             "deps": PreferencesAgentDependencies(
-                tg_chat_id=ctx.deps.tg_chat_id,
-                tg_session_id=ctx.deps.tg_session_id,
+                user=ctx.deps.user,
+                chat=ctx.deps.chat,
+                session=ctx.deps.session,
             ),
         },
     )
@@ -184,24 +186,18 @@ async def save_user_response(
 @onboarding_agent.tool
 async def complete_onboarding(ctx: RunContext[OnboardingAgentDependencies]) -> str:
     """Mark the user's onboarding as complete."""
-    async with async_database() as db_conn:
-        try:
-            onboarding = await GuidedSessions.get_by_guided_session_key(
-                db_conn, guided_session_key=ctx.deps.onboarding_session_key
-            )
-        except Exception as e:
-            raise CompleteOnboardingError(e) from e
+    if not ctx.deps.onboarding_session.is_active:
+        raise CompleteOnboardingError(f"Onboarding session is currently {ctx.deps.onboarding_session.state}.")
 
-        if not onboarding.is_active:
-            raise CompleteOnboardingError(f"Onboarding session is currently {onboarding.state}.")  # noqa: TRY003
+    await ctx.deps.onboarding_session.complete()
 
-        await onboarding.complete(db_conn, timestamp=datetime.now(UTC))
-
-    await log_metadata_update_context(
-        chat_id=ctx.deps.tg_chat_id,
-        session_id=ctx.deps.tg_session_id,
+    context = Context(
+        chat=ctx.deps.chat,
+        session_id=ctx.deps.session.id,
+        type=ContextType.METADATA.value,
         content="Marked the user's onboarding as complete.",
     )
+    await context.save()
 
     return "Onboarding completed successfully."
 
@@ -209,24 +205,18 @@ async def complete_onboarding(ctx: RunContext[OnboardingAgentDependencies]) -> s
 @onboarding_agent.tool
 async def terminate_onboarding(ctx: RunContext[OnboardingAgentDependencies]) -> str:
     """Stop the user's onboarding without marking it as complete."""
-    async with async_database() as db_conn:
-        try:
-            onboarding = await GuidedSessions.get_by_guided_session_key(
-                db_conn, guided_session_key=ctx.deps.onboarding_session_key
-            )
-        except Exception as e:
-            raise CompleteOnboardingError(e) from e
+    if not ctx.deps.onboarding_session.is_active:
+        raise CompleteOnboardingError(f"Onboarding session is currently {ctx.deps.onboarding_session.state}.")
 
-        if not onboarding.is_active:
-            raise CompleteOnboardingError(f"Onboarding session is currently {onboarding.state}.")  # noqa: TRY003
+    await ctx.deps.onboarding_session.inactivate()
 
-        await onboarding.inactivate(db_conn, timestamp=datetime.now(UTC))
-
-    await log_metadata_update_context(
-        chat_id=ctx.deps.tg_chat_id,
-        session_id=ctx.deps.tg_session_id,
+    context = Context(
+        chat=ctx.deps.chat,
+        session_id=ctx.deps.session.id,
+        type=ContextType.METADATA.value,
         content="Stopped the user's onboarding without completing.",
     )
+    await context.save()
 
     return "Onboarding terminated successfully."
 
@@ -252,8 +242,8 @@ async def search_past_conversations(
     """
     try:
         result = await search_chat_context(
-            chat_id=ctx.deps.tg_chat_id,
-            session_id=ctx.deps.tg_session_id,
+            chat=ctx.deps.chat,
+            session=ctx.deps.session,
             search_query=search_query,
         )
     except Exception as e:
@@ -270,7 +260,19 @@ async def update_memory(
     """
     Update your memory bank with new information about the user that you want to remember.
     """
-    return await update_memory_impl(ctx.deps, information_to_remember)
+    try:
+        context = Context(
+            chat=ctx.deps.chat,
+            session_id=ctx.deps.session.id,
+            type=ContextType.MEMORY.value,
+            content=information_to_remember,
+        )
+        await context.save()
+
+    except Exception as e:
+        raise MemoryUpdateError(information_to_remember, e) from e
+
+    return f"Information committed to memory: {information_to_remember}."
 
 
 @onboarding_agent.tool
@@ -293,7 +295,16 @@ async def search_history(
     Returns:
         A formatted response with direct answer and context summary, or error message
     """
-    return await search_history_impl(ctx.deps, search_query)
+    try:
+        result = await search_chat_context(
+            chat=ctx.deps.chat,
+            session=ctx.deps.session,
+            search_query=search_query,
+        )
+    except Exception as e:
+        raise ContextSearchError(search_query, e) from e
+    else:
+        return result
 
 
 @onboarding_agent.output_validator
@@ -307,15 +318,15 @@ async def validate_agent_response(
 
     await validate_response_data(
         response=data,
-        chat_id=ctx.deps.tg_chat_id,
-        bot_id=ctx.deps.tg_bot_id,
+        chat=ctx.deps.chat,
+        bot_id=ctx.deps.bot_id,
     )
 
     if ctx.deps.notification:
         await check_special_instructions(
             response=data,
-            chat_id=ctx.deps.tg_chat_id,
-            session_id=ctx.deps.tg_session_id,
+            chat=ctx.deps.chat,
+            session=ctx.deps.session,
             instruction=ctx.deps.notification.content,
         )
 

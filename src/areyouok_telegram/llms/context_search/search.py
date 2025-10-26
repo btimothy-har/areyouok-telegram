@@ -1,6 +1,8 @@
 """Utility functions for context search and retrieval."""
 
 from areyouok_telegram.data.models.chat_event import CONTEXT_TYPE_MAP
+
+from areyouok_telegram.data.models import Chat, Session
 from areyouok_telegram.llms.context_search.agent import ContextSearchResponse, context_search_agent
 from areyouok_telegram.llms.context_search.retriever import retrieve_relevant_contexts
 from areyouok_telegram.llms.utils import run_agent_with_tracking
@@ -16,11 +18,11 @@ FORMATTED_CONTEXT_TEMPLATE = """
 """
 
 
-@traced(extract_args=["chat_id", "session_id"])
+@traced(extract_args=["chat", "session"])
 async def search_chat_context(
     *,
-    chat_id: str,
-    session_id: str,
+    chat: Chat,
+    session: Session,
     search_query: str,
 ) -> str:
     """Search past conversations using semantic search and return formatted results.
@@ -32,8 +34,8 @@ async def search_chat_context(
     4. Returns formatted response
 
     Args:
-        chat_id: The chat ID to search within
-        session_id: Current session ID for tracking
+        chat: The chat to search within
+        session: Current session for tracking
         search_query: Natural language query describing what to search for
 
     Returns:
@@ -42,7 +44,7 @@ async def search_chat_context(
     try:
         # Retrieve relevant contexts
         contexts = await retrieve_relevant_contexts(
-            chat_id=chat_id,
+            chat=chat,
             search_query=search_query,
         )
 
@@ -75,8 +77,8 @@ Please analyze these contexts and provide:
         # Run the context search agent
         agent_result = await run_agent_with_tracking(
             context_search_agent,
-            chat_id=chat_id,
-            session_id=session_id,
+            chat=chat,
+            session=session,
             run_kwargs={
                 "user_prompt": prompt,
             },

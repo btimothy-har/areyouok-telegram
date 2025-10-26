@@ -13,7 +13,6 @@ from areyouok_telegram.data.models import (
     ContextType,
     GuidedSession,
     GuidedSessionType,
-    JournalContextMetadata,
     MediaFile,
     Message,
     MessageTypes,
@@ -125,6 +124,7 @@ class ConversationJob(BaseJob):
 
                         if len(message_history) > 0:
                             compressed_context = await self.compress_session_context(
+                                chat=chat,
                                 active_session=active_session,
                                 message_history=message_history,
                             )
@@ -202,11 +202,11 @@ class ConversationJob(BaseJob):
 
                     agent_run_payload = await run_agent_with_tracking(
                         agent,
-                        chat_id=self.chat_id,
-                        session_id=active_session.session_id,
+                        chat=chat,
+                        session=active_session,
                         run_kwargs={
                             "message_history": [
-                                c.to_model_message(str(self._bot_id), agent_run_time) for c in message_history
+                                c.to_model_message(self._bot_id, agent_run_time) for c in message_history
                             ],
                             "deps": dependencies,
                         },
@@ -343,21 +343,26 @@ class ConversationJob(BaseJob):
         # Get next notification for this chat
         notification = await Notification.get_next_pending(chat=chat)
 
+        # Get user for the chat
+        user = await User.get_by_id(telegram_user_id=chat.telegram_chat_id)
+        if not user:
+            raise ValueError(f"User not found for chat {chat.telegram_chat_id}")
+
         deps_data = {
-            "tg_bot_id": str(self._bot_id),
-            "tg_chat_id": self.chat_id,
-            "tg_session_id": active_session.session_id,
+            "bot_id": self._bot_id,
+            "user": user,
+            "chat": chat,
+            "session": active_session,
             "notification": notification,
         }
 
         if guided_session and guided_session.session_type == GuidedSessionType.JOURNALING.value:
             # Journaling session takes priority
-            deps_data["journaling_session_key"] = guided_session.guided_session_key
-            deps_data["journaling_session_metadata"] = JournalContextMetadata(**guided_session.session_metadata)
+            deps_data["journaling_session"] = guided_session
             deps = JournalingAgentDependencies(**deps_data)
 
         elif guided_session and guided_session.session_type == GuidedSessionType.ONBOARDING.value:
-            deps_data["onboarding_session_key"] = guided_session.guided_session_key
+            deps_data["onboarding_session"] = guided_session
             deps = OnboardingAgentDependencies(**deps_data)
 
         else:
@@ -405,6 +410,7 @@ class ConversationJob(BaseJob):
     async def compress_session_context(
         self,
         *,
+        chat: Chat,
         active_session: Session,
         message_history: list[ChatEvent],
     ) -> ContextTemplate:
@@ -417,10 +423,10 @@ class ConversationJob(BaseJob):
 
         context_run_payload = await run_agent_with_tracking(
             context_compression_agent,
-            chat_id=self.chat_id,
-            session_id=active_session.session_id,
+            chat=chat,
+            session=active_session,
             run_kwargs={
-                "message_history": [c.to_model_message(str(self._bot_id), agent_run_time) for c in message_history],
+                "message_history": [c.to_model_message(self._bot_id, agent_run_time) for c in message_history],
             },
         )
 

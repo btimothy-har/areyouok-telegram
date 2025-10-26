@@ -8,9 +8,8 @@ import pydantic_ai
 from pydantic_ai import RunContext
 
 from areyouok_telegram.config import SIMULATION_MODE
-from areyouok_telegram.data import UserMetadata, async_database, operations as data_operations
+from areyouok_telegram.data.models import Context, ContextType, UserMetadata
 from areyouok_telegram.llms.agent_anonymizer import anonymization_agent
-from areyouok_telegram.llms.chat.agents.tools import search_history_impl, update_memory_impl
 from areyouok_telegram.llms.chat.constants import (
     MESSAGE_FOR_USER_PROMPT,
     PERSONALITY_PROMPT,
@@ -38,7 +37,8 @@ from areyouok_telegram.llms.chat.utils import (
     check_special_instructions,
     validate_response_data,
 )
-from areyouok_telegram.llms.exceptions import MetadataFieldUpdateError
+from areyouok_telegram.llms.context_search import search_chat_context
+from areyouok_telegram.llms.exceptions import ContextSearchError, MemoryUpdateError, MetadataFieldUpdateError
 from areyouok_telegram.llms.models import Gemini25Pro
 from areyouok_telegram.llms.utils import log_metadata_update_context, run_agent_with_tracking
 
@@ -74,8 +74,7 @@ async def instructions_with_personality_switch(ctx: pydantic_ai.RunContext[ChatA
     if SIMULATION_MODE:
         user_metadata = None
     else:
-        async with async_database() as db_conn:
-            user_metadata = await UserMetadata.get_by_user_id(db_conn, user_id=ctx.deps.tg_chat_id)
+        user_metadata = await UserMetadata.get_by_user_id(user_id=ctx.deps.user.id)
 
     personality = PersonalityTypes.get_by_value(ctx.deps.personality)
     personality_text = personality.prompt_text()
@@ -112,22 +111,22 @@ async def instructions_with_personality_switch(ctx: pydantic_ai.RunContext[ChatA
     user_profile_text = ""
     if not SIMULATION_MODE:
         try:
-            user_profile = await data_operations.get_latest_profile(chat_id=ctx.deps.tg_chat_id)
-            if user_profile:
-                encryption_key = await data_operations.get_chat_encryption_key(chat_id=ctx.deps.tg_chat_id)
-                user_profile.decrypt_content(chat_encryption_key=encryption_key)
+            profile_contexts = await Context.get_by_chat(
+                chat=ctx.deps.chat,
+                ctype=ContextType.PROFILE.value,
+            )
+            if profile_contexts:
+                user_profile = profile_contexts[0]  # Most recent
+                user_profile_text = USER_PROFILE.format(user_profile=user_profile.content)
 
         except Exception as e:
             # If profile fetch fails, just continue without it
             logfire.warning(
                 "Failed to fetch user profile, continuing without it",
-                chat_id=ctx.deps.tg_chat_id,
+                chat_id=ctx.deps.chat.id,
                 error=str(e),
                 _exc_info=True,
             )
-        else:
-            if user_profile:
-                user_profile_text = USER_PROFILE.format(user_profile=user_profile.content)
 
     prompt = BaseChatPromptTemplate(
         response=RESPONSE_PROMPT.format(response_restrictions=restrict_response_text),
@@ -161,15 +160,15 @@ async def validate_agent_response(
 
     await validate_response_data(
         response=data,
-        chat_id=ctx.deps.tg_chat_id,
-        bot_id=ctx.deps.tg_bot_id,
+        chat=ctx.deps.chat,
+        bot_id=ctx.deps.bot_id,
     )
 
     if ctx.deps.notification:
         await check_special_instructions(
             response=data,
-            chat_id=ctx.deps.tg_chat_id,
-            session_id=ctx.deps.tg_session_id,
+            chat=ctx.deps.chat,
+            session=ctx.deps.session,
             instruction=ctx.deps.notification.content,
         )
 
@@ -184,10 +183,9 @@ async def get_current_time(ctx: RunContext[ChatAgentDependencies]) -> str:
 
     e.g. In the day time, the user may be working or busy. In the evening, the user may be winding down.
     """
-    async with async_database() as db_conn:
-        user_metadata = await UserMetadata.get_by_user_id(db_conn, user_id=ctx.deps.tg_chat_id)
+    user_metadata = await UserMetadata.get_by_user_id(user_id=ctx.deps.user.id)
 
-    if user_metadata.timezone and user_metadata.timezone != "rather_not_say":
+    if user_metadata and user_metadata.timezone and user_metadata.timezone != "rather_not_say":
         try:
             current_time = datetime.now(ZoneInfo(user_metadata.timezone)).strftime("%Y-%m-%d %H:%M %Z")
         except ZoneInfoNotFoundError:
@@ -212,29 +210,28 @@ async def update_communication_style(
 
     anon_text = await run_agent_with_tracking(
         anonymization_agent,
-        chat_id=ctx.deps.tg_chat_id,
-        session_id=ctx.deps.tg_session_id,
+        chat=ctx.deps.chat,
+        session=ctx.deps.session,
         run_kwargs={
             "user_prompt": new_communication_style,
         },
     )
 
-    async with async_database() as db_conn:
-        try:
-            await UserMetadata.update_metadata(
-                db_conn,
-                user_id=ctx.deps.tg_chat_id,
-                field="communication_style",
-                value=anon_text.output,
-            )
+    try:
+        user_metadata = await UserMetadata.get_by_user_id(user_id=ctx.deps.user.id)
+        if not user_metadata:
+            user_metadata = UserMetadata(user_id=ctx.deps.user.id)
 
-        except Exception as e:
-            raise MetadataFieldUpdateError("communication_style", str(e)) from e
+        user_metadata.communication_style = anon_text.output
+        await user_metadata.save()
+
+    except Exception as e:
+        raise MetadataFieldUpdateError("communication_style", str(e)) from e
 
     # Log the metadata update to context
     await log_metadata_update_context(
-        chat_id=ctx.deps.tg_chat_id,
-        session_id=ctx.deps.tg_session_id,
+        chat=ctx.deps.chat,
+        session=ctx.deps.session,
         content=f"Updated usermeta: communication_style is now {str(anon_text.output)}",
     )
 
@@ -251,31 +248,27 @@ async def update_response_speed(
     This tool may be used to granularly adjust the agent's response speed by one step faster or slower.
     """
 
-    async with async_database() as db_conn:
-        user_metadata = await UserMetadata.get_by_user_id(db_conn, user_id=ctx.deps.tg_chat_id)
+    try:
+        user_metadata = await UserMetadata.get_by_user_id(user_id=ctx.deps.user.id)
+        if not user_metadata:
+            user_metadata = UserMetadata(user_id=ctx.deps.user.id)
 
-        current_response_speed_adj = (user_metadata.response_speed_adj if user_metadata else 0) or 0
+        current_response_speed_adj = user_metadata.response_speed_adj or 0
 
         if response_speed_adjustment == "faster":
-            new_speed_adj = max(current_response_speed_adj - 1, -1)
+            user_metadata.response_speed_adj = max(current_response_speed_adj - 1, -1)
         else:
-            new_speed_adj = current_response_speed_adj + 1
+            user_metadata.response_speed_adj = current_response_speed_adj + 1
 
-        try:
-            await UserMetadata.update_metadata(
-                db_conn,
-                user_id=ctx.deps.tg_chat_id,
-                field="response_speed_adj",
-                value=new_speed_adj,
-            )
+        await user_metadata.save()
 
-        except Exception as e:
-            raise MetadataFieldUpdateError("response_speed_adj", str(e)) from e
+    except Exception as e:
+        raise MetadataFieldUpdateError("response_speed_adj", str(e)) from e
 
     # Log the metadata update to context
     await log_metadata_update_context(
-        chat_id=ctx.deps.tg_chat_id,
-        session_id=ctx.deps.tg_session_id,
+        chat=ctx.deps.chat,
+        session=ctx.deps.session,
         content=f"Updated usermeta: adjusted response speed {response_speed_adjustment}.",
     )
 
@@ -290,7 +283,19 @@ async def update_memory(
     """
     Update your memory bank with new information about the user that you want to remember.
     """
-    return await update_memory_impl(ctx.deps, information_to_remember)
+    try:
+        context = Context(
+            chat=ctx.deps.chat,
+            session_id=ctx.deps.session.id,
+            type=ContextType.MEMORY.value,
+            content=information_to_remember,
+        )
+        await context.save()
+
+    except Exception as e:
+        raise MemoryUpdateError(information_to_remember, e) from e
+
+    return f"Information committed to memory: {information_to_remember}."
 
 
 @chat_agent.tool
@@ -313,4 +318,13 @@ async def search_history(
     Returns:
         A formatted response with direct answer and context summary, or error message
     """
-    return await search_history_impl(ctx.deps, search_query)
+    try:
+        result = await search_chat_context(
+            chat=ctx.deps.chat,
+            session=ctx.deps.session,
+            search_query=search_query,
+        )
+    except Exception as e:
+        raise ContextSearchError(search_query, e) from e
+    else:
+        return result

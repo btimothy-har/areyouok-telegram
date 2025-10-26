@@ -5,7 +5,7 @@ import pydantic
 import pydantic_ai
 from pydantic_ai import RunContext
 
-from areyouok_telegram.data import UserMetadata, async_database
+from areyouok_telegram.data.models import Chat, Session, User, UserMetadata
 from areyouok_telegram.llms.exceptions import MetadataFieldUpdateError
 from areyouok_telegram.llms.models import GPT5Mini
 from areyouok_telegram.llms.utils import log_metadata_update_context
@@ -23,8 +23,9 @@ class FeedbackMissingError(pydantic_ai.ModelRetry):
 class PreferencesAgentDependencies:
     """Dependencies for the preferences agent."""
 
-    tg_chat_id: str
-    tg_session_id: str
+    user: User
+    chat: Chat
+    session: Session
 
 
 class PreferencesUpdateResponse(pydantic.BaseModel):
@@ -84,21 +85,20 @@ async def update_preferred_name(
 ) -> str:
     """Update the user's preferred name."""
 
-    async with async_database() as db_conn:
-        try:
-            await UserMetadata.update_metadata(
-                db_conn,
-                user_id=ctx.deps.tg_chat_id,
-                field="preferred_name",
-                value=new_value,
-            )
+    try:
+        user_metadata = await UserMetadata.get_by_user_id(user_id=ctx.deps.user.id)
+        if not user_metadata:
+            user_metadata = UserMetadata(user_id=ctx.deps.user.id)
 
-        except Exception as e:
-            raise MetadataFieldUpdateError("preferred_name", str(e)) from e
+        user_metadata.preferred_name = new_value
+        await user_metadata.save()
+
+    except Exception as e:
+        raise MetadataFieldUpdateError("preferred_name", str(e)) from e
 
     await log_metadata_update_context(
-        chat_id=ctx.deps.tg_chat_id,
-        session_id=ctx.deps.tg_session_id,
+        chat=ctx.deps.chat,
+        session=ctx.deps.session,
         content=f"Updated user preferences: preferred_name is now {new_value}",
     )
 
@@ -112,21 +112,20 @@ async def update_country(
 ) -> str:
     """Update the user's country. The country should be a valid ISO 3166-1 alpha-3 country code."""
 
-    async with async_database() as db_conn:
-        try:
-            await UserMetadata.update_metadata(
-                db_conn,
-                user_id=ctx.deps.tg_chat_id,
-                field="country",
-                value=new_value,
-            )
+    try:
+        user_metadata = await UserMetadata.get_by_user_id(user_id=ctx.deps.user.id)
+        if not user_metadata:
+            user_metadata = UserMetadata(user_id=ctx.deps.user.id)
 
-        except Exception as e:
-            raise MetadataFieldUpdateError("country", str(e)) from e
+        user_metadata.country = new_value
+        await user_metadata.save()
+
+    except Exception as e:
+        raise MetadataFieldUpdateError("country", str(e)) from e
 
     await log_metadata_update_context(
-        chat_id=ctx.deps.tg_chat_id,
-        session_id=ctx.deps.tg_session_id,
+        chat=ctx.deps.chat,
+        session=ctx.deps.session,
         content=f"Updated user preferences: country is now {new_value}",
     )
 
@@ -140,21 +139,20 @@ async def update_timezone(
 ) -> str:
     """Update the user's timezone."""
 
-    async with async_database() as db_conn:
-        try:
-            await UserMetadata.update_metadata(
-                db_conn,
-                user_id=ctx.deps.tg_chat_id,
-                field="timezone",
-                value=new_value,
-            )
+    try:
+        user_metadata = await UserMetadata.get_by_user_id(user_id=ctx.deps.user.id)
+        if not user_metadata:
+            user_metadata = UserMetadata(user_id=ctx.deps.user.id)
 
-        except Exception as e:
-            raise MetadataFieldUpdateError("timezone", str(e)) from e
+        user_metadata.timezone = new_value
+        await user_metadata.save()
+
+    except Exception as e:
+        raise MetadataFieldUpdateError("timezone", str(e)) from e
 
     await log_metadata_update_context(
-        chat_id=ctx.deps.tg_chat_id,
-        session_id=ctx.deps.tg_session_id,
+        chat=ctx.deps.chat,
+        session=ctx.deps.session,
         content=f"Updated user preferences: timezone is now {new_value}",
     )
 
@@ -168,21 +166,20 @@ async def update_communication_style(
 ) -> str:
     """Update the user's communication style."""
 
-    async with async_database() as db_conn:
-        try:
-            await UserMetadata.update_metadata(
-                db_conn,
-                user_id=ctx.deps.tg_chat_id,
-                field="communication_style",
-                value=new_value,
-            )
+    try:
+        user_metadata = await UserMetadata.get_by_user_id(user_id=ctx.deps.user.id)
+        if not user_metadata:
+            user_metadata = UserMetadata(user_id=ctx.deps.user.id)
 
-        except Exception as e:
-            raise MetadataFieldUpdateError("communication_style", str(e)) from e
+        user_metadata.communication_style = new_value
+        await user_metadata.save()
+
+    except Exception as e:
+        raise MetadataFieldUpdateError("communication_style", str(e)) from e
 
     await log_metadata_update_context(
-        chat_id=ctx.deps.tg_chat_id,
-        session_id=ctx.deps.tg_session_id,
+        chat=ctx.deps.chat,
+        session=ctx.deps.session,
         content=f"Updated user preferences: communication_style is now {new_value}",
     )
 
@@ -196,21 +193,20 @@ async def update_response_speed(
 ) -> str:
     """Update the user's response speed."""
 
-    async with async_database() as db_conn:
-        try:
-            await UserMetadata.update_metadata(
-                db_conn,
-                user_id=ctx.deps.tg_chat_id,
-                field="response_speed",
-                value=new_value,
-            )
+    try:
+        user_metadata = await UserMetadata.get_by_user_id(user_id=ctx.deps.user.id)
+        if not user_metadata:
+            user_metadata = UserMetadata(user_id=ctx.deps.user.id)
 
-        except Exception as e:
-            raise MetadataFieldUpdateError("response_speed", str(e)) from e
+        user_metadata.response_speed = new_value
+        await user_metadata.save()
+
+    except Exception as e:
+        raise MetadataFieldUpdateError("response_speed", str(e)) from e
 
     await log_metadata_update_context(
-        chat_id=ctx.deps.tg_chat_id,
-        session_id=ctx.deps.tg_session_id,
+        chat=ctx.deps.chat,
+        session=ctx.deps.session,
         content=f"Updated user preferences: response_speed is now {new_value}",
     )
 
