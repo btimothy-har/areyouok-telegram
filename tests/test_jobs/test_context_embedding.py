@@ -28,7 +28,10 @@ class TestContextEmbeddingJob:
         with (
             patch("areyouok_telegram.data.models.Chat.get", new=AsyncMock(return_value=[])),
             patch("areyouok_telegram.data.models.Context.get_by_chat", new=AsyncMock(return_value=[])),
-            patch("areyouok_telegram.jobs.context_embedding.ContextEmbeddingJob.load_state", new=AsyncMock(return_value={})),
+            patch(
+                "areyouok_telegram.jobs.context_embedding.ContextEmbeddingJob.load_state",
+                new=AsyncMock(return_value={}),
+            ),
             patch("areyouok_telegram.jobs.context_embedding.ContextEmbeddingJob.save_state", new=AsyncMock()),
         ):
             await job.run_job()

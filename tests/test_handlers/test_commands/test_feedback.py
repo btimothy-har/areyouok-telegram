@@ -1,7 +1,6 @@
 """Tests for handlers/commands/feedback.py."""
 
 import uuid
-from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 from urllib.parse import quote_plus
 
@@ -11,9 +10,7 @@ from telegram.constants import ReactionEmoji
 from telegram.ext import ContextTypes
 
 from areyouok_telegram.handlers.commands.feedback import (
-    FEEDBACK_CACHE,
     FEEDBACK_URL,
-    generate_feedback_context,
     on_feedback_command,
 )
 
@@ -53,7 +50,7 @@ class TestOnFeedbackCommand:
                 "areyouok_telegram.data.models.Session.get_sessions",
                 new=AsyncMock(return_value=[mock_active_session]),
             ),
-            patch("areyouok_telegram.data.models.CommandUsage.save", new=AsyncMock()) as mock_track,
+            patch("areyouok_telegram.data.models.CommandUsage.save", new=AsyncMock()),
             patch(
                 "areyouok_telegram.handlers.commands.feedback.generate_feedback_context",
                 new=AsyncMock(return_value=test_feedback_context),
@@ -144,7 +141,7 @@ class TestOnFeedbackCommand:
                 "areyouok_telegram.data.models.Session.get_sessions",
                 new=AsyncMock(return_value=[]),  # No active session
             ),
-            patch("areyouok_telegram.data.models.CommandUsage.save", new=AsyncMock()) as mock_track,
+            patch("areyouok_telegram.data.models.CommandUsage.save", new=AsyncMock()),
             patch(
                 "areyouok_telegram.handlers.commands.feedback.shorten_url", new=AsyncMock(return_value=test_short_url)
             ) as mock_shorten_url,

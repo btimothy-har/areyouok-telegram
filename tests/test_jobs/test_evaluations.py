@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from areyouok_telegram.jobs.evaluations import EvaluationsJob, get_generation_by_id_cached, GEN_CACHE
+from areyouok_telegram.jobs.evaluations import GEN_CACHE, EvaluationsJob, get_generation_by_id_cached
 
 
 class TestGetGenerationByIdCached:
@@ -20,7 +20,10 @@ class TestGetGenerationByIdCached:
         mock_generation = MagicMock()
         mock_generation.id = 1
 
-        with patch("areyouok_telegram.data.models.LLMGeneration.get_by_id", new=AsyncMock(return_value=mock_generation)):
+        with patch(
+            "areyouok_telegram.data.models.LLMGeneration.get_by_id",
+            new=AsyncMock(return_value=mock_generation),
+        ):
             result = await get_generation_by_id_cached(gen_id=1)
 
             assert result == mock_generation

@@ -22,7 +22,7 @@ class TestConversationJob:
         assert job.name == "conversation:456"
 
     @pytest.mark.asyncio
-    async def test_run_job_no_chat_stops(self, chat_factory):
+    async def test_run_job_no_chat_stops(self):
         """Test run_job stops when chat not found."""
         job = ConversationJob(chat_id=999)
 

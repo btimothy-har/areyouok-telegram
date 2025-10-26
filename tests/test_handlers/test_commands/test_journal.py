@@ -6,7 +6,6 @@ import pytest
 import telegram
 from telegram.ext import ContextTypes
 
-from areyouok_telegram.data.models import GuidedSessionState, JournalContextMetadata
 from areyouok_telegram.handlers.commands.journal import on_journal_command
 from areyouok_telegram.handlers.utils.constants import MD2_JOURNAL_START_MESSAGE
 

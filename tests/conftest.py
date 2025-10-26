@@ -132,7 +132,7 @@ def session_factory(chat_factory):
 
 
 @pytest.fixture
-def mock_active_session(chat_factory):
+def mock_active_session():
     """Create a mock active session for testing handlers."""
     # Use MagicMock to allow tests to access both .id and .session_id
     session = MagicMock()
