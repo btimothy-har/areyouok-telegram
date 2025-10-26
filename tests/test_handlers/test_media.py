@@ -4,10 +4,12 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+import telegram
 from pydub import AudioSegment
 
 from areyouok_telegram.handlers.utils.media import (
     VoiceNotProcessableError,
+    _get_mime_type_from_message,
     transcribe_voice_data_sync,
 )
 
@@ -111,3 +113,251 @@ class TestTranscribeVoiceDataSync:
         ):
             with pytest.raises(VoiceNotProcessableError):
                 transcribe_voice_data_sync(mock_voice_data)
+
+
+class TestGetMimeTypeFromMessage:
+    """Test the _get_mime_type_from_message function."""
+
+    def test_document_with_mime_type(self):
+        """Test extracting MIME type from Document."""
+        mock_message = MagicMock(spec=telegram.Message)
+        mock_file = MagicMock(spec=telegram.File)
+        mock_file.file_unique_id = "unique123"
+        mock_file.file_path = "document.pdf"
+
+        mock_document = MagicMock(spec=telegram.Document)
+        mock_document.file_unique_id = "unique123"
+        mock_document.mime_type = "application/pdf"
+
+        mock_message.document = mock_document
+        mock_message.video = None
+        mock_message.audio = None
+        mock_message.voice = None
+        mock_message.sticker = None
+        mock_message.animation = None
+        mock_message.photo = None
+        mock_message.video_note = None
+
+        result = _get_mime_type_from_message(mock_message, mock_file)
+        assert result == "application/pdf"
+
+    def test_video_with_mime_type(self):
+        """Test extracting MIME type from Video."""
+        mock_message = MagicMock(spec=telegram.Message)
+        mock_file = MagicMock(spec=telegram.File)
+        mock_file.file_unique_id = "unique456"
+        mock_file.file_path = "video.mp4"
+
+        mock_video = MagicMock(spec=telegram.Video)
+        mock_video.file_unique_id = "unique456"
+        mock_video.mime_type = "video/mp4"
+
+        mock_message.document = None
+        mock_message.video = mock_video
+        mock_message.audio = None
+        mock_message.voice = None
+        mock_message.sticker = None
+        mock_message.animation = None
+        mock_message.photo = None
+        mock_message.video_note = None
+
+        result = _get_mime_type_from_message(mock_message, mock_file)
+        assert result == "video/mp4"
+
+    def test_audio_with_mime_type(self):
+        """Test extracting MIME type from Audio."""
+        mock_message = MagicMock(spec=telegram.Message)
+        mock_file = MagicMock(spec=telegram.File)
+        mock_file.file_unique_id = "unique789"
+        mock_file.file_path = "audio.mp3"
+
+        mock_audio = MagicMock(spec=telegram.Audio)
+        mock_audio.file_unique_id = "unique789"
+        mock_audio.mime_type = "audio/mpeg"
+
+        mock_message.document = None
+        mock_message.video = None
+        mock_message.audio = mock_audio
+        mock_message.voice = None
+        mock_message.sticker = None
+        mock_message.animation = None
+        mock_message.photo = None
+        mock_message.video_note = None
+
+        result = _get_mime_type_from_message(mock_message, mock_file)
+        assert result == "audio/mpeg"
+
+    def test_voice_with_mime_type(self):
+        """Test extracting MIME type from Voice."""
+        mock_message = MagicMock(spec=telegram.Message)
+        mock_file = MagicMock(spec=telegram.File)
+        mock_file.file_unique_id = "unique101"
+        mock_file.file_path = "voice.ogg"
+
+        mock_voice = MagicMock(spec=telegram.Voice)
+        mock_voice.file_unique_id = "unique101"
+        mock_voice.mime_type = "audio/ogg"
+
+        mock_message.document = None
+        mock_message.video = None
+        mock_message.audio = None
+        mock_message.voice = mock_voice
+        mock_message.sticker = None
+        mock_message.animation = None
+        mock_message.photo = None
+        mock_message.video_note = None
+
+        result = _get_mime_type_from_message(mock_message, mock_file)
+        assert result == "audio/ogg"
+
+    def test_sticker_returns_webp(self):
+        """Test that stickers return image/webp."""
+        mock_message = MagicMock(spec=telegram.Message)
+        mock_file = MagicMock(spec=telegram.File)
+        mock_file.file_unique_id = "unique202"
+        mock_file.file_path = "sticker.webp"
+
+        mock_sticker = MagicMock(spec=telegram.Sticker)
+        mock_sticker.file_unique_id = "unique202"
+
+        mock_message.document = None
+        mock_message.video = None
+        mock_message.audio = None
+        mock_message.voice = None
+        mock_message.sticker = mock_sticker
+        mock_message.animation = None
+        mock_message.photo = None
+        mock_message.video_note = None
+
+        result = _get_mime_type_from_message(mock_message, mock_file)
+        assert result == "image/webp"
+
+    def test_animation_with_mime_type(self):
+        """Test extracting MIME type from Animation."""
+        mock_message = MagicMock(spec=telegram.Message)
+        mock_file = MagicMock(spec=telegram.File)
+        mock_file.file_unique_id = "unique303"
+        mock_file.file_path = "animation.gif"
+
+        mock_animation = MagicMock(spec=telegram.Animation)
+        mock_animation.file_unique_id = "unique303"
+        mock_animation.mime_type = "image/gif"
+
+        mock_message.document = None
+        mock_message.video = None
+        mock_message.audio = None
+        mock_message.voice = None
+        mock_message.sticker = None
+        mock_message.animation = mock_animation
+        mock_message.photo = None
+        mock_message.video_note = None
+
+        result = _get_mime_type_from_message(mock_message, mock_file)
+        assert result == "image/gif"
+
+    def test_photo_returns_jpeg(self):
+        """Test that photos return image/jpeg."""
+        mock_message = MagicMock(spec=telegram.Message)
+        mock_file = MagicMock(spec=telegram.File)
+        mock_file.file_unique_id = "unique404"
+        mock_file.file_path = "photo.jpg"
+
+        mock_photo1 = MagicMock(spec=telegram.PhotoSize)
+        mock_photo1.file_unique_id = "unique999"
+        mock_photo2 = MagicMock(spec=telegram.PhotoSize)
+        mock_photo2.file_unique_id = "unique404"
+
+        mock_message.document = None
+        mock_message.video = None
+        mock_message.audio = None
+        mock_message.voice = None
+        mock_message.sticker = None
+        mock_message.animation = None
+        mock_message.photo = [mock_photo1, mock_photo2]
+        mock_message.video_note = None
+
+        result = _get_mime_type_from_message(mock_message, mock_file)
+        assert result == "image/jpeg"
+
+    def test_video_note_returns_mp4(self):
+        """Test that video notes return video/mp4."""
+        mock_message = MagicMock(spec=telegram.Message)
+        mock_file = MagicMock(spec=telegram.File)
+        mock_file.file_unique_id = "unique505"
+        mock_file.file_path = "video_note.mp4"
+
+        mock_video_note = MagicMock(spec=telegram.VideoNote)
+        mock_video_note.file_unique_id = "unique505"
+
+        mock_message.document = None
+        mock_message.video = None
+        mock_message.audio = None
+        mock_message.voice = None
+        mock_message.sticker = None
+        mock_message.animation = None
+        mock_message.photo = None
+        mock_message.video_note = mock_video_note
+
+        result = _get_mime_type_from_message(mock_message, mock_file)
+        assert result == "video/mp4"
+
+    def test_fallback_to_mimetypes_guess(self):
+        """Test fallback to mimetypes.guess_type when media type not found."""
+        mock_message = MagicMock(spec=telegram.Message)
+        mock_file = MagicMock(spec=telegram.File)
+        mock_file.file_unique_id = "unique606"
+        mock_file.file_path = "file.png"
+
+        mock_message.document = None
+        mock_message.video = None
+        mock_message.audio = None
+        mock_message.voice = None
+        mock_message.sticker = None
+        mock_message.animation = None
+        mock_message.photo = None
+        mock_message.video_note = None
+
+        result = _get_mime_type_from_message(mock_message, mock_file)
+        assert result == "image/png"
+
+    def test_fallback_to_octet_stream(self):
+        """Test final fallback to application/octet-stream."""
+        mock_message = MagicMock(spec=telegram.Message)
+        mock_file = MagicMock(spec=telegram.File)
+        mock_file.file_unique_id = "unique707"
+        mock_file.file_path = None  # No file path
+
+        mock_message.document = None
+        mock_message.video = None
+        mock_message.audio = None
+        mock_message.voice = None
+        mock_message.sticker = None
+        mock_message.animation = None
+        mock_message.photo = None
+        mock_message.video_note = None
+
+        result = _get_mime_type_from_message(mock_message, mock_file)
+        assert result == "application/octet-stream"
+
+    def test_document_without_mime_type_uses_fallback(self):
+        """Test that document without mime_type falls back to file path guessing."""
+        mock_message = MagicMock(spec=telegram.Message)
+        mock_file = MagicMock(spec=telegram.File)
+        mock_file.file_unique_id = "unique808"
+        mock_file.file_path = "document.txt"
+
+        mock_document = MagicMock(spec=telegram.Document)
+        mock_document.file_unique_id = "unique808"
+        mock_document.mime_type = None  # No MIME type provided
+
+        mock_message.document = mock_document
+        mock_message.video = None
+        mock_message.audio = None
+        mock_message.voice = None
+        mock_message.sticker = None
+        mock_message.animation = None
+        mock_message.photo = None
+        mock_message.video_note = None
+
+        result = _get_mime_type_from_message(mock_message, mock_file)
+        assert result == "text/plain"

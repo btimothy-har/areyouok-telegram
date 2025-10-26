@@ -1,4 +1,5 @@
 import asyncio
+import mimetypes
 import time
 from datetime import UTC, datetime
 from io import BytesIO
@@ -125,6 +126,61 @@ async def handle_unsupported_media(
             await notification.save()
 
 
+def _get_mime_type_from_message(message: telegram.Message, file: telegram.File) -> str:
+    """Extract MIME type from message media object or derive from file path.
+
+    Args:
+        message: Telegram message object containing media
+        file: Telegram file object
+
+    Returns:
+        str: Proper MIME type string (e.g., "image/png", "video/mp4")
+    """
+    # Check each media type and match by file_unique_id to get the correct mime_type
+    if message.document and file.file_unique_id == message.document.file_unique_id:
+        if message.document.mime_type:
+            return message.document.mime_type
+
+    if message.video and file.file_unique_id == message.video.file_unique_id:
+        if message.video.mime_type:
+            return message.video.mime_type
+
+    if message.audio and file.file_unique_id == message.audio.file_unique_id:
+        if message.audio.mime_type:
+            return message.audio.mime_type
+
+    if message.voice and file.file_unique_id == message.voice.file_unique_id:
+        if message.voice.mime_type:
+            return message.voice.mime_type
+
+    if message.sticker and file.file_unique_id == message.sticker.file_unique_id:
+        # Stickers don't have mime_type in python-telegram-bot, but we know they're webp
+        return "image/webp"
+
+    if message.animation and file.file_unique_id == message.animation.file_unique_id:
+        if message.animation.mime_type:
+            return message.animation.mime_type
+
+    if message.photo:
+        # Photos are always JPEG in Telegram
+        for photo in message.photo:
+            if file.file_unique_id == photo.file_unique_id:
+                return "image/jpeg"
+
+    if message.video_note and file.file_unique_id == message.video_note.file_unique_id:
+        # Video notes are always MP4 in Telegram
+        return "video/mp4"
+
+    # Fallback: try to guess from file path
+    if file.file_path:
+        guessed_type, _ = mimetypes.guess_type(file.file_path)
+        if guessed_type:
+            return guessed_type
+
+    # Final fallback
+    return "application/octet-stream"
+
+
 @traced(extract_args=["message", "file"])
 async def _download_file(
     chat: Chat,
@@ -144,13 +200,16 @@ async def _download_file(
     try:
         content_bytes = await telegram_call(file.download_as_bytearray)
 
+        # Determine MIME type from message media object
+        mime_type = _get_mime_type_from_message(message, file)
+
         # Create and save media file
         media_file = MediaFile(
             chat=chat,
             message_id=message.message_id,
             file_id=file.file_id,
             file_unique_id=file.file_unique_id,
-            mime_type=file.file_path.split(".")[-1] if file.file_path else "application/octet-stream",
+            mime_type=mime_type,
             bytes_data=bytes(content_bytes),
             file_size=file.file_size,
         )
