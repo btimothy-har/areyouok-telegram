@@ -57,19 +57,13 @@ class TestOnStartCommand:
                 "areyouok_telegram.data.models.GuidedSession.get_by_chat",
                 new=AsyncMock(return_value=[mock_onboarding_session]),
             ) as mock_get_guided_session,
-            patch(
-                "areyouok_telegram.data.models.GuidedSession.save", new=AsyncMock()
-            ),
+            patch("areyouok_telegram.data.models.GuidedSession.save", new=AsyncMock()),
             patch(
                 "areyouok_telegram.data.models.Message.from_telegram",
                 return_value=MagicMock(save=AsyncMock()),
             ),
-            patch(
-                "areyouok_telegram.data.models.Session.new_message", new=AsyncMock()
-            ),
-            patch(
-                "areyouok_telegram.data.models.CommandUsage.save", new=AsyncMock()
-            ),
+            patch("areyouok_telegram.data.models.Session.new_message", new=AsyncMock()),
+            patch("areyouok_telegram.data.models.CommandUsage.save", new=AsyncMock()),
         ):
             await on_start_command(mock_update, mock_context)
 
@@ -129,9 +123,7 @@ class TestOnStartCommand:
                 "areyouok_telegram.data.models.GuidedSession.get_by_chat",
                 new=AsyncMock(return_value=[mock_onboarding_session]),
             ),
-            patch(
-                "areyouok_telegram.data.models.CommandUsage.save", new=AsyncMock()
-            ),
+            patch("areyouok_telegram.data.models.CommandUsage.save", new=AsyncMock()),
             patch(
                 "areyouok_telegram.handlers.commands.start.MD2_ONBOARDING_COMPLETE_MESSAGE",
                 "Onboarding already completed!",
@@ -189,19 +181,13 @@ class TestOnStartCommand:
                 "areyouok_telegram.data.models.GuidedSession.get_by_chat",
                 new=AsyncMock(return_value=[mock_onboarding_session]),
             ),
-            patch(
-                "areyouok_telegram.data.models.GuidedSession.save", new=AsyncMock()
-            ),
+            patch("areyouok_telegram.data.models.GuidedSession.save", new=AsyncMock()),
             patch(
                 "areyouok_telegram.data.models.Message.from_telegram",
                 return_value=MagicMock(save=AsyncMock()),
             ),
-            patch(
-                "areyouok_telegram.data.models.Session.new_message", new=AsyncMock()
-            ),
-            patch(
-                "areyouok_telegram.data.models.CommandUsage.save", new=AsyncMock()
-            ),
+            patch("areyouok_telegram.data.models.Session.new_message", new=AsyncMock()),
+            patch("areyouok_telegram.data.models.CommandUsage.save", new=AsyncMock()),
             patch(
                 "areyouok_telegram.handlers.commands.start.MD2_ONBOARDING_START_MESSAGE",
                 "Hello there! Please wait...",

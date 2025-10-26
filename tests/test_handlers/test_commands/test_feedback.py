@@ -53,9 +53,7 @@ class TestOnFeedbackCommand:
                 "areyouok_telegram.data.models.Session.get_sessions",
                 new=AsyncMock(return_value=[mock_active_session]),
             ),
-            patch(
-                "areyouok_telegram.data.models.CommandUsage.save", new=AsyncMock()
-            ) as mock_track,
+            patch("areyouok_telegram.data.models.CommandUsage.save", new=AsyncMock()) as mock_track,
             patch(
                 "areyouok_telegram.handlers.commands.feedback.generate_feedback_context",
                 new=AsyncMock(return_value=test_feedback_context),
@@ -146,9 +144,7 @@ class TestOnFeedbackCommand:
                 "areyouok_telegram.data.models.Session.get_sessions",
                 new=AsyncMock(return_value=[]),  # No active session
             ),
-            patch(
-                "areyouok_telegram.data.models.CommandUsage.save", new=AsyncMock()
-            ) as mock_track,
+            patch("areyouok_telegram.data.models.CommandUsage.save", new=AsyncMock()) as mock_track,
             patch(
                 "areyouok_telegram.handlers.commands.feedback.shorten_url", new=AsyncMock(return_value=test_short_url)
             ) as mock_shorten_url,
