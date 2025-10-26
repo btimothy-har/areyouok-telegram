@@ -31,8 +31,8 @@ class MessagesTable(Base):
     encrypted_payload = Column(String, nullable=False)
     encrypted_reasoning = Column(Text, nullable=True)
 
-    # Session association (FK added later when sessions table exists)
-    session_id = Column(Integer, nullable=True, index=True)
+    # Session association
+    session_id = Column(Integer, ForeignKey(f"{ENV}.sessions.id"), nullable=True, index=True)
 
     # Metadata
     created_at = Column(TIMESTAMP(timezone=True), nullable=False)

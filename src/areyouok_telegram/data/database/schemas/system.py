@@ -41,7 +41,7 @@ class JobStateTable(Base):
     object_key = Column(String, nullable=False, unique=True, index=True)
 
     # Job identification
-    job_name = Column(String, nullable=False, index=True)
+    job_name = Column(String, nullable=False, unique=True, index=True)
 
     # JSON state data - flexible schema for different job types
     state_data = Column(JSONB, nullable=False, default={})

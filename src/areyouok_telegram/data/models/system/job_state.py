@@ -77,7 +77,7 @@ class JobState(pydantic.BaseModel):
                     updated_at=self.updated_at,
                 )
                 .on_conflict_do_update(
-                    index_elements=["object_key"],
+                    index_elements=["job_name"],
                     set_={
                         "state_data": self.state_data,
                         "updated_at": self.updated_at,
