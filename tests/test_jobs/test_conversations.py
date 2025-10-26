@@ -33,7 +33,7 @@ class TestConversationJob:
             await job.run_job()
 
             # Should stop when chat not found
-            mock_stop.assert_called_once()
+        mock_stop.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_run_job_no_active_session_stops(self, chat_factory):
@@ -49,4 +49,4 @@ class TestConversationJob:
             await job.run_job()
 
             # Should stop when no active session
-            mock_stop.assert_called_once()
+        mock_stop.assert_called_once()
