@@ -17,34 +17,63 @@ from areyouok_telegram.logging import traced
 from areyouok_telegram.utils.retry import db_retry
 
 
-def serialize_object(obj: Any) -> str:
-    """Serialize an object to JSON string or string representation.
+def serialize_to_jsonb(obj: Any) -> dict | list | str | int | float | bool | None:
+    """Convert object to JSONB-compatible Python type.
+
+    Returns Python objects (dict, list, primitives, None) that PostgreSQL JSONB
+    can natively handle. SQLAlchemy handles the final JSON serialization.
 
     Args:
         obj: Object to serialize
 
     Returns:
-        Serialized string representation
+        JSONB-compatible Python object (dict, list, str, int, float, bool, or None)
     """
     if obj is None:
-        return ""
+        return None
 
-    try:
-        # Try Pydantic model first
-        if isinstance(obj, pydantic.BaseModel):
-            return json.dumps(obj.model_dump())
+    # Primitives pass through directly
+    if isinstance(obj, (str, int, float, bool)):
+        return obj
 
-        # Try object with __dict__
-        if dataclasses.is_dataclass(obj):
-            if hasattr(obj, "to_dict"):
-                return json.dumps(obj.to_dict())
-            else:
-                return json.dumps(dataclasses.asdict(obj))
+    # Pydantic models → dict (with recursive mode for nested models)
+    if isinstance(obj, pydantic.BaseModel):
+        return obj.model_dump(mode="python")
 
-        return json.dumps(obj)
+    # Dataclasses → dict
+    if dataclasses.is_dataclass(obj):
+        if hasattr(obj, "to_dict"):
+            return obj.to_dict()
+        # Use dataclasses.asdict which handles nested dataclasses
+        return dataclasses.asdict(obj)
 
-    except (TypeError, ValueError):
-        return str(obj)
+    # Dict - recursively serialize values
+    if isinstance(obj, dict):
+        try:
+            # Verify it's JSON-serializable as-is
+            json.dumps(obj)
+        except (TypeError, ValueError):
+            # Recursively serialize problematic values
+            return {k: serialize_to_jsonb(v) for k, v in obj.items()}
+        else:
+            return obj
+
+    # List/tuple - recursively serialize items
+    if isinstance(obj, (list, tuple)):
+        try:
+            # Verify it's JSON-serializable as-is
+            json.dumps(obj)
+            return obj if isinstance(obj, list) else list(obj)
+        except (TypeError, ValueError):
+            # Recursively serialize problematic items
+            return [serialize_to_jsonb(item) for item in obj]
+
+    # Fallback: wrap string representation with metadata for debugging
+    return {
+        "_serialized_fallback": True,
+        "_type": type(obj).__name__,
+        "_value": str(obj),
+    }
 
 
 class LLMGeneration(pydantic.BaseModel):
@@ -80,50 +109,48 @@ class LLMGeneration(pydantic.BaseModel):
 
     @staticmethod
     def _deserialize_from_storage(
-        output_data: dict, messages_data: list, deps_data: dict | None
+        output_data: dict | str, messages_data: list, deps_data: dict | None
     ) -> tuple[Any, list[pydantic_ai.messages.ModelMessage], Any | None]:
         """Deserialize data from JSONB storage.
 
         Args:
-            output_data: Output dictionary
+            output_data: Output data (dict for Pydantic models, str for string outputs)
             messages_data: Messages list
             deps_data: Dependencies dictionary (or None)
 
         Returns:
             Tuple of (output, messages, deps)
+
+        Note:
+            We store the raw data without reconstructing the original types.
+            Output remains as dict/str, deps remains as dict.
+            This is sufficient for read-only access and avoids complex type reconstruction.
         """
-        # Parse messages
+        # Parse messages back to pydantic-ai ModelMessage objects
         messages = pydantic_ai.messages.ModelMessagesTypeAdapter.validate_python(messages_data)
 
         return output_data, messages, deps_data
 
-    def _serialize_for_storage(self) -> tuple[dict, list[dict], dict | None]:
+    def _serialize_for_storage(self) -> tuple[dict | str, list[dict], dict | None]:
         """Serialize data for JSONB storage.
 
         Returns:
-            Tuple of (output_dict, messages_list, deps_dict)
+            Tuple of (output_data, messages_list, deps_dict)
+            - output_data: dict or str (for agents that return strings)
+            - messages_list: list of dicts
+            - deps_dict: dict or None
         """
-        # Serialize output
-        output_dict = json.loads(serialize_object(self.output))
+        # Serialize output (can be str, Pydantic model, or dict)
+        output_data = serialize_to_jsonb(self.output)
 
         # Serialize messages using pydantic-ai's TypeAdapter
+        # This returns bytes, so we parse to Python objects for JSONB
         messages_json = json.loads(pydantic_ai.messages.ModelMessagesTypeAdapter.dump_json(self.messages))
 
-        # Serialize deps
-        if self.deps:
-            deps_serialized = serialize_object(self.deps)
-            # Check if serialization produced valid JSON (not empty string)
-            if deps_serialized and deps_serialized.strip():
-                try:
-                    deps_dict = json.loads(deps_serialized)
-                except json.JSONDecodeError:
-                    deps_dict = None
-            else:
-                deps_dict = None
-        else:
-            deps_dict = None
+        # Serialize deps (dataclass with to_dict() method or None)
+        deps_dict = serialize_to_jsonb(self.deps) if self.deps else None
 
-        return output_dict, messages_json, deps_dict
+        return output_data, messages_json, deps_dict
 
     @traced()
     @db_retry()

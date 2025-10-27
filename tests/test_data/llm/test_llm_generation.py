@@ -1,53 +1,104 @@
 """Tests for LLMGeneration model."""
 
 import dataclasses
-import json
 from datetime import UTC, datetime
 
 import pydantic
 import pytest
 
-from areyouok_telegram.data.models.llm.llm_generation import LLMGeneration, serialize_object
+from areyouok_telegram.data.models.llm.llm_generation import LLMGeneration, serialize_to_jsonb
 
 
-def test_serialize_object_pydantic_model():
-    """Test serialize_object() with Pydantic model."""
+def test_serialize_to_jsonb_pydantic_model():
+    """Test serialize_to_jsonb() with Pydantic model."""
 
     class TestModel(pydantic.BaseModel):
         x: int
         y: str
 
     obj = TestModel(x=1, y="a")
-    result = serialize_object(obj)
-    assert json.loads(result) == {"x": 1, "y": "a"}
+    result = serialize_to_jsonb(obj)
+    assert result == {"x": 1, "y": "a"}
+    assert isinstance(result, dict)
 
 
-def test_serialize_object_dataclass():
-    """Test serialize_object() with dataclass."""
+def test_serialize_to_jsonb_dataclass():
+    """Test serialize_to_jsonb() with dataclass."""
 
     @dataclasses.dataclass
     class TestData:
         a: int
 
     obj = TestData(a=5)
-    result = serialize_object(obj)
-    assert json.loads(result) == {"a": 5}
+    result = serialize_to_jsonb(obj)
+    assert result == {"a": 5}
+    assert isinstance(result, dict)
 
 
-def test_serialize_object_none():
-    """Test serialize_object() returns empty string for None."""
-    assert serialize_object(None) == ""
+def test_serialize_to_jsonb_none():
+    """Test serialize_to_jsonb() returns None for None."""
+    assert serialize_to_jsonb(None) is None
 
 
-def test_serialize_object_fallback():
-    """Test serialize_object() falls back to str() for non-serializable objects."""
+def test_serialize_to_jsonb_string():
+    """Test serialize_to_jsonb() passes through strings."""
+    result = serialize_to_jsonb("test string")
+    assert result == "test string"
+    assert isinstance(result, str)
+
+
+def test_serialize_to_jsonb_primitives():
+    """Test serialize_to_jsonb() passes through primitives."""
+    assert serialize_to_jsonb(42) == 42
+    assert serialize_to_jsonb(3.14) == 3.14
+    assert serialize_to_jsonb(True) is True
+
+
+def test_serialize_to_jsonb_fallback():
+    """Test serialize_to_jsonb() falls back with metadata for non-serializable objects."""
 
     class CustomObj:
         def __str__(self):
             return "custom"
 
-    result = serialize_object(CustomObj())
-    assert result == "custom"
+    result = serialize_to_jsonb(CustomObj())
+    assert isinstance(result, dict)
+    assert result["_serialized_fallback"] is True
+    assert result["_type"] == "CustomObj"
+    assert result["_value"] == "custom"
+
+
+def test_serialize_to_jsonb_nested_pydantic():
+    """Test serialize_to_jsonb() handles nested Pydantic models correctly."""
+
+    class InnerModel(pydantic.BaseModel):
+        value: int
+
+    class OuterModel(pydantic.BaseModel):
+        name: str
+        inner: InnerModel
+
+    obj = OuterModel(name="test", inner=InnerModel(value=42))
+    result = serialize_to_jsonb(obj)
+    assert result == {"name": "test", "inner": {"value": 42}}
+    assert isinstance(result, dict)
+    assert isinstance(result["inner"], dict)
+
+
+def test_serialize_to_jsonb_dataclass_with_to_dict():
+    """Test serialize_to_jsonb() uses to_dict() method when available."""
+
+    @dataclasses.dataclass
+    class DataWithToDict:
+        x: int
+
+        def to_dict(self) -> dict:
+            return {"x": self.x, "custom": "value"}
+
+    obj = DataWithToDict(x=10)
+    result = serialize_to_jsonb(obj)
+    assert result == {"x": 10, "custom": "value"}
+    assert isinstance(result, dict)
 
 
 @pytest.mark.usefixtures("patch_async_database")
