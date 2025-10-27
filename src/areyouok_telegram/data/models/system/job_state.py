@@ -6,7 +6,7 @@ import hashlib
 from datetime import UTC, datetime
 
 import pydantic
-from sqlalchemy import select
+from sqlalchemy import delete as sql_delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from areyouok_telegram.data.database import async_database
@@ -77,7 +77,7 @@ class JobState(pydantic.BaseModel):
                     updated_at=self.updated_at,
                 )
                 .on_conflict_do_update(
-                    index_elements=["object_key"],
+                    index_elements=["job_name"],
                     set_={
                         "state_data": self.state_data,
                         "updated_at": self.updated_at,
@@ -96,9 +96,5 @@ class JobState(pydantic.BaseModel):
     async def delete(self) -> None:
         """Delete the state for a job."""
         async with async_database() as db_conn:
-            stmt = select(JobStateTable).where(JobStateTable.object_key == self.object_key)
-            result = await db_conn.execute(stmt)
-            row = result.scalar_one_or_none()
-
-            if row:
-                await db_conn.delete(row)
+            stmt = sql_delete(JobStateTable).where(JobStateTable.job_name == self.job_name)
+            await db_conn.execute(stmt)
