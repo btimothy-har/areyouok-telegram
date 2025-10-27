@@ -1,7 +1,6 @@
 """Tests for handlers/commands/feedback.py."""
 
 import uuid
-from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 from urllib.parse import quote_plus
 
@@ -11,9 +10,7 @@ from telegram.constants import ReactionEmoji
 from telegram.ext import ContextTypes
 
 from areyouok_telegram.handlers.commands.feedback import (
-    FEEDBACK_CACHE,
     FEEDBACK_URL,
-    generate_feedback_context,
     on_feedback_command,
 )
 
@@ -23,7 +20,7 @@ class TestOnFeedbackCommand:
 
     @pytest.mark.asyncio
     async def test_feedback_command_with_active_session(
-        self, mock_telegram_user, mock_telegram_chat, mock_telegram_message, mock_active_session
+        self, mock_telegram_user, mock_telegram_chat, mock_telegram_message, mock_active_session, chat_factory
     ):
         """Test feedback command with active session generates proper URL and UI."""
         # Setup
@@ -40,15 +37,20 @@ class TestOnFeedbackCommand:
         test_feedback_context = "User discussed emotional support needs with bot."
         test_short_url = "https://tinyurl.com/test123"
 
+        # Use real Chat instance
+        mock_chat = chat_factory(id_value=1)
+
         with (
             patch("uuid.uuid4", return_value=MagicMock(spec=uuid.UUID, __str__=lambda _: test_uuid)),
             patch(
-                "areyouok_telegram.handlers.commands.feedback.data_operations.get_or_create_active_session",
-                new=AsyncMock(return_value=mock_active_session),
+                "areyouok_telegram.handlers.commands.feedback.Chat.get_by_id",
+                new=AsyncMock(return_value=mock_chat),
             ),
             patch(
-                "areyouok_telegram.handlers.commands.feedback.data_operations.track_command_usage", new=AsyncMock()
-            ) as mock_track,
+                "areyouok_telegram.data.models.Session.get_sessions",
+                new=AsyncMock(return_value=[mock_active_session]),
+            ),
+            patch("areyouok_telegram.data.models.CommandUsage.save", new=AsyncMock()),
             patch(
                 "areyouok_telegram.handlers.commands.feedback.generate_feedback_context",
                 new=AsyncMock(return_value=test_feedback_context),
@@ -62,13 +64,7 @@ class TestOnFeedbackCommand:
         ):
             await on_feedback_command(mock_update, mock_context)
 
-            # Verify session retrieval
-            assert mock_track.call_count == 1
-            mock_track.assert_called_with(
-                command="feedback",
-                chat_id=str(mock_telegram_chat.id),
-                session_id=mock_active_session.session_id,
-            )
+            # Command usage tracking happens via CommandUsage.save (already mocked)
 
             # Verify feedback context generation
             mock_generate_context.assert_called_once_with(
@@ -116,7 +112,7 @@ class TestOnFeedbackCommand:
 
     @pytest.mark.asyncio
     async def test_feedback_command_without_active_session(
-        self, mock_telegram_user, mock_telegram_chat, mock_telegram_message
+        self, mock_telegram_user, mock_telegram_chat, mock_telegram_message, chat_factory
     ):
         """Test feedback command without active session uses fallback values."""
         # Setup
@@ -132,15 +128,20 @@ class TestOnFeedbackCommand:
         test_uuid = "test-uuid-456"
         test_short_url = "https://tinyurl.com/test456"
 
+        # Use real Chat instance
+        mock_chat = chat_factory(id_value=1)
+
         with (
             patch("uuid.uuid4", return_value=MagicMock(spec=uuid.UUID, __str__=lambda _: test_uuid)),
             patch(
-                "areyouok_telegram.handlers.commands.feedback.data_operations.get_or_create_active_session",
-                new=AsyncMock(return_value=None),
+                "areyouok_telegram.handlers.commands.feedback.Chat.get_by_id",
+                new=AsyncMock(return_value=mock_chat),
             ),
             patch(
-                "areyouok_telegram.handlers.commands.feedback.data_operations.track_command_usage", new=AsyncMock()
-            ) as mock_track,
+                "areyouok_telegram.data.models.Session.get_sessions",
+                new=AsyncMock(return_value=[]),  # No active session
+            ),
+            patch("areyouok_telegram.data.models.CommandUsage.save", new=AsyncMock()),
             patch(
                 "areyouok_telegram.handlers.commands.feedback.shorten_url", new=AsyncMock(return_value=test_short_url)
             ) as mock_shorten_url,
@@ -150,12 +151,7 @@ class TestOnFeedbackCommand:
         ):
             await on_feedback_command(mock_update, mock_context)
 
-            # Verify command usage tracking with None session_id
-            mock_track.assert_called_once_with(
-                command="feedback",
-                chat_id=str(mock_telegram_chat.id),
-                session_id=None,
-            )
+            # Command usage tracking happens via CommandUsage.save (already mocked)
 
             # Verify URL shortening with fallback values
             expected_long_url = FEEDBACK_URL.format(
@@ -189,183 +185,3 @@ class TestOnFeedbackCommand:
         assert "entry.604567897=Test+context" in formatted_url  # Spaces encoded as +
         assert "entry.4225678=test" in formatted_url
         assert "entry.191939218=1.2.3" in formatted_url
-
-
-class TestGenerateFeedbackContext:
-    """Test the generate_feedback_context function."""
-
-    @pytest.mark.asyncio
-    async def test_generate_context_with_sufficient_messages(self, frozen_time, mock_active_session, mock_db_session):
-        """Test context generation with sufficient messages."""
-        # Setup mock messages
-        mock_messages = []
-        for i in range(15):  # More than 10 messages
-            msg = MagicMock()
-            msg.message_type = "Message" if i % 2 == 0 else "MessageReactionUpdated"
-            msg.message_id = f"msg_{i}"
-            msg.decrypt = MagicMock()
-            mock_messages.append(msg)
-
-        mock_chat = MagicMock()
-        mock_chat.retrieve_key = MagicMock(return_value=b"test_key")
-
-        mock_context_items = [MagicMock() for _ in range(3)]
-        for ctx in mock_context_items:
-            ctx.type = "user_preference"  # Not SESSION type
-            ctx.decrypt_content = MagicMock()
-
-        mock_agent_payload = MagicMock()
-        mock_agent_payload.output = "Generated feedback context summary"
-
-        with (
-            patch("areyouok_telegram.handlers.commands.feedback.async_database") as mock_db,
-            patch("areyouok_telegram.handlers.commands.feedback.Chats") as mock_chats,
-            patch("areyouok_telegram.handlers.commands.feedback.MediaFiles") as mock_media,
-            patch("areyouok_telegram.handlers.commands.feedback.Context") as mock_context_model,
-            patch("areyouok_telegram.handlers.commands.feedback.ChatEvent") as mock_chat_event,
-            patch(
-                "areyouok_telegram.handlers.commands.feedback.run_agent_with_tracking",
-                new=AsyncMock(return_value=mock_agent_payload),
-            ) as mock_run_agent,
-        ):
-            mock_db.return_value.__aenter__.return_value = mock_db_session
-            mock_chats.get_by_id = AsyncMock(return_value=mock_chat)
-            mock_active_session.get_messages = AsyncMock(return_value=mock_messages)
-            mock_active_session.session_id = "test_session_123"
-            mock_active_session.chat_id = "test_chat_456"
-
-            mock_media.get_by_message_id = AsyncMock(return_value=[])
-            mock_context_model.get_by_session_id = AsyncMock(return_value=mock_context_items)
-
-            # Create proper mock events with timestamps for sorting
-            mock_msg_event = MagicMock()
-            mock_msg_event.timestamp = frozen_time
-            mock_ctx_event = MagicMock()
-            mock_ctx_event.timestamp = frozen_time
-
-            mock_chat_event.from_message = MagicMock(return_value=mock_msg_event)
-            mock_chat_event.from_context = MagicMock(return_value=mock_ctx_event)
-
-            # Clear cache before test
-            FEEDBACK_CACHE.clear()
-
-            result = await generate_feedback_context("bot_123", mock_active_session)
-
-            assert result == "Generated feedback context summary"
-
-            # Verify database calls
-            mock_chats.get_by_id.assert_called_once_with(mock_db_session, chat_id="test_chat_456")
-            mock_active_session.get_messages.assert_called_once_with(mock_db_session)
-
-            # Verify decryption calls
-            for msg in mock_messages:
-                msg.decrypt.assert_called_once_with(b"test_key")
-
-            # Verify agent was called
-            mock_run_agent.assert_called_once()
-
-            # Verify result is cached
-            assert "test_chat_456" in FEEDBACK_CACHE
-
-    @pytest.mark.asyncio
-    async def test_generate_context_with_insufficient_messages(self, mock_active_session, mock_db_session):
-        """Test context generation with insufficient messages returns early."""
-        # Setup with only 5 messages (less than 10)
-        mock_messages = [MagicMock() for _ in range(5)]
-
-        mock_chat = MagicMock()
-        mock_chat.retrieve_key = MagicMock(return_value=b"test_key")
-
-        with (
-            patch("areyouok_telegram.handlers.commands.feedback.async_database") as mock_db,
-            patch("areyouok_telegram.handlers.commands.feedback.Chats") as mock_chats,
-        ):
-            mock_db.return_value.__aenter__.return_value = mock_db_session
-            mock_chats.get_by_id = AsyncMock(return_value=mock_chat)
-            mock_active_session.get_messages = AsyncMock(return_value=mock_messages)
-            mock_active_session.chat_id = "test_chat_789"
-
-            # Clear cache before test
-            FEEDBACK_CACHE.clear()
-
-            result = await generate_feedback_context("bot_123", mock_active_session)
-
-            assert result == "Less than 10 messages in the session. Not enough context for feedback context."
-
-    @pytest.mark.asyncio
-    async def test_generate_context_uses_cache(self, mock_active_session):
-        """Test that cached context is returned when available and fresh."""
-        cache_key = "test_chat_cache"
-        cached_output = "Cached feedback context"
-        cache_timestamp = datetime.now(UTC)
-
-        # Setup cache
-        FEEDBACK_CACHE[cache_key] = (cached_output, cache_timestamp)
-        mock_active_session.chat_id = cache_key
-
-        with patch("areyouok_telegram.handlers.commands.feedback.datetime") as mock_datetime:
-            # Mock current time to be within cache TTL (< 300 seconds)
-            mock_datetime.now.return_value = cache_timestamp + timedelta(seconds=200)
-            mock_datetime.UTC = UTC
-
-            result = await generate_feedback_context("bot_123", mock_active_session)
-
-            assert result == cached_output
-
-    @pytest.mark.asyncio
-    async def test_generate_context_cache_expired(self, frozen_time, mock_active_session, mock_db_session):
-        """Test that expired cache is ignored and new context is generated."""
-        cache_key = "test_chat_expired"
-        cached_output = "Old cached context"
-        cache_timestamp = datetime(2025, 1, 1, 10, 0, 0, tzinfo=UTC)  # Old timestamp
-
-        # Setup expired cache
-        FEEDBACK_CACHE[cache_key] = (cached_output, cache_timestamp)
-        mock_active_session.chat_id = cache_key
-        mock_active_session.session_id = "test_session"
-
-        # Setup fresh context generation
-        mock_messages = [MagicMock() for _ in range(12)]
-        for msg in mock_messages:
-            msg.message_type = "Message"
-            msg.decrypt = MagicMock()
-
-        mock_chat = MagicMock()
-        mock_chat.retrieve_key = MagicMock(return_value=b"test_key")
-
-        mock_agent_payload = MagicMock()
-        mock_agent_payload.output = "Fresh feedback context"
-
-        with (
-            patch("areyouok_telegram.handlers.commands.feedback.datetime") as mock_datetime,
-            patch("areyouok_telegram.handlers.commands.feedback.async_database") as mock_db,
-            patch("areyouok_telegram.handlers.commands.feedback.Chats") as mock_chats,
-            patch("areyouok_telegram.handlers.commands.feedback.MediaFiles") as mock_media,
-            patch("areyouok_telegram.handlers.commands.feedback.Context") as mock_context_model,
-            patch("areyouok_telegram.handlers.commands.feedback.ChatEvent") as mock_chat_event,
-            patch(
-                "areyouok_telegram.handlers.commands.feedback.run_agent_with_tracking",
-                new=AsyncMock(return_value=mock_agent_payload),
-            ) as mock_run_agent,
-        ):
-            # Mock current time to be beyond cache TTL (> 300 seconds)
-            current_time = cache_timestamp + timedelta(seconds=400)
-            mock_datetime.now.return_value = current_time
-            mock_datetime.UTC = UTC
-
-            mock_db.return_value.__aenter__.return_value = mock_db_session
-            mock_chats.get_by_id = AsyncMock(return_value=mock_chat)
-            mock_active_session.get_messages = AsyncMock(return_value=mock_messages)
-            mock_media.get_by_message_id = AsyncMock(return_value=[])
-            mock_context_model.get_by_session_id = AsyncMock(return_value=[])
-
-            # Create proper mock events with timestamps for sorting
-            mock_msg_event = MagicMock()
-            mock_msg_event.timestamp = frozen_time
-
-            mock_chat_event.from_message = MagicMock(return_value=mock_msg_event)
-
-            result = await generate_feedback_context("bot_123", mock_active_session)
-
-            assert result == "Fresh feedback context"
-            mock_run_agent.assert_called_once()

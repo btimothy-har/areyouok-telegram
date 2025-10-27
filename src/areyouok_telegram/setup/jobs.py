@@ -4,7 +4,7 @@ import logfire
 from telegram.ext import Application, ContextTypes
 
 from areyouok_telegram.config import PROFILE_JOB_INTERVAL_SECS, RAG_JOB_INTERVAL_SECS
-from areyouok_telegram.data import Sessions, async_database
+from areyouok_telegram.data.models import Session
 from areyouok_telegram.jobs import (
     ContextEmbeddingJob,
     ConversationJob,
@@ -17,21 +17,20 @@ from areyouok_telegram.jobs import (
 
 async def restore_active_sessions(ctx: Application | ContextTypes.DEFAULT_TYPE):
     """Setup conversation jobs for active chats on startup."""
-    async with async_database() as db_conn:
-        # Fetch all active sessions
-        active_sessions = await Sessions.get_all_active_sessions(db_conn)
+    # Fetch all active sessions
+    active_sessions = await Session.get_sessions(active=True)
 
-        if not active_sessions:
-            logfire.info("No active sessions found, skipping conversation job setup.")
-            return
+    if not active_sessions:
+        logfire.info("No active sessions found, skipping conversation job setup.")
+        return
 
-        for session in active_sessions:
-            await schedule_job(
-                context=ctx,
-                job=ConversationJob(chat_id=session.chat_id),
-                interval=timedelta(seconds=5),
-                first=datetime.now(UTC) + timedelta(seconds=5),
-            )
+    for session in active_sessions:
+        await schedule_job(
+            context=ctx,
+            job=ConversationJob(chat_id=session.chat.id),
+            interval=timedelta(seconds=5),
+            first=datetime.now(UTC) + timedelta(seconds=5),
+        )
 
     logfire.info(f"Restored {len(active_sessions)} active sessions.")
 

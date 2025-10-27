@@ -2,8 +2,9 @@ import pycountry
 import telegram
 from telegram.ext import ContextTypes
 
-from areyouok_telegram.data import UserMetadata, async_database, operations as data_operations
-from areyouok_telegram.handlers.constants import MD2_PREFERENCES_DISPLAY_TEMPLATE
+from areyouok_telegram.data.models import Chat, CommandUsage, Session, User, UserMetadata
+from areyouok_telegram.handlers.exceptions import NoChatFoundError, NoUserFoundError
+from areyouok_telegram.handlers.utils.constants import MD2_PREFERENCES_DISPLAY_TEMPLATE
 from areyouok_telegram.llms import run_agent_with_tracking
 from areyouok_telegram.llms.agent_preferences import (
     PreferencesAgentDependencies,
@@ -11,27 +12,36 @@ from areyouok_telegram.llms.agent_preferences import (
     preferences_agent,
 )
 from areyouok_telegram.logging import traced
-from areyouok_telegram.utils.retry import db_retry, telegram_call
+from areyouok_telegram.utils.retry import telegram_call
 from areyouok_telegram.utils.text import escape_markdown_v2
 
 
 @traced(extract_args=["update"])
-@db_retry()
 async def on_preferences_command(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /preferences command - display user's current preferences."""
 
+    chat = await Chat.get_by_id(telegram_chat_id=update.effective_chat.id)
+    if not chat:
+        raise NoChatFoundError(update.effective_chat.id)
+
+    user = await User.get_by_id(telegram_user_id=update.effective_user.id)
+    if not user:
+        raise NoUserFoundError(update.effective_user.id)
+
     # Get active session up front
-    active_session = await data_operations.get_or_create_active_session(
-        chat_id=str(update.effective_chat.id),
-        timestamp=update.message.date,
+    active_session = await Session.get_or_create_new_session(
+        chat=chat,
+        session_start=update.message.date,
     )
 
     # Track command usage
-    await data_operations.track_command_usage(
+    command_usage = CommandUsage(
+        chat=chat,
         command="preferences",
-        chat_id=str(update.effective_chat.id),
-        session_id=active_session.session_id,
+        session_id=active_session.id,
+        timestamp=update.message.date,
     )
+    await command_usage.save()
 
     command_input = update.message.text
 
@@ -69,12 +79,22 @@ async def on_preferences_command(update: telegram.Update, context: ContextTypes.
             action=telegram.constants.ChatAction.TYPING,
         )
 
-        update_outcome = await _update_user_metadata_field(
-            chat_id=str(update.effective_chat.id),
-            session_id=str(active_session.session_id),
-            field_name=normalized_field_name,
-            new_value=text_input,
+        # Update user metadata field via LLM agent
+        update_instruction = f"Update {normalized_field_name} to {text_input}."
+        update_result = await run_agent_with_tracking(
+            preferences_agent,
+            chat=chat,
+            session=active_session,
+            run_kwargs={
+                "user_prompt": update_instruction,
+                "deps": PreferencesAgentDependencies(
+                    user=user,
+                    chat=chat,
+                    session=active_session,
+                ),
+            },
         )
+        update_outcome: PreferencesUpdateResponse = update_result.output
 
         await telegram_call(
             context.bot.send_message,
@@ -83,50 +103,8 @@ async def on_preferences_command(update: telegram.Update, context: ContextTypes.
         )
 
     else:
-        user_preferences_text = await _construct_user_preferences_response(user_id=str(update.effective_user.id))
-
-        await telegram_call(
-            context.bot.send_message,
-            chat_id=update.effective_chat.id,
-            text=user_preferences_text,
-            parse_mode="MarkdownV2",
-        )
-
-
-async def _update_user_metadata_field(
-    *,
-    chat_id: str,
-    session_id: str,
-    field_name: str,
-    new_value: str,
-) -> PreferencesUpdateResponse:
-    update_instruction = f"Update {field_name} to {new_value}."
-
-    update = await run_agent_with_tracking(
-        preferences_agent,
-        chat_id=chat_id,
-        session_id=session_id,
-        run_kwargs={
-            "user_prompt": update_instruction,
-            "deps": PreferencesAgentDependencies(
-                tg_chat_id=chat_id,
-                tg_session_id=session_id,
-            ),
-        },
-    )
-    update_outcome: PreferencesUpdateResponse = update.output
-
-    return update_outcome
-
-
-@db_retry()
-async def _construct_user_preferences_response(user_id: str):
-    async with async_database() as db_conn:
         # Get user metadata
-        user_metadata = await UserMetadata.get_by_user_id(
-            db_conn,
-            user_id=user_id,
-        )
+        user_metadata = await UserMetadata.get_by_user_id(user_id=user.id)
 
         # Format settings display
         if user_metadata:
@@ -158,4 +136,9 @@ async def _construct_user_preferences_response(user_id: str):
             response_speed=escape_markdown_v2(response_speed),
         )
 
-    return preferences_text
+        await telegram_call(
+            context.bot.send_message,
+            chat_id=update.effective_chat.id,
+            text=preferences_text,
+            parse_mode="MarkdownV2",
+        )

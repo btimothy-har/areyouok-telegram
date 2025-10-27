@@ -4,9 +4,16 @@ import random
 import telegram
 from telegram.ext import ContextTypes
 
-from areyouok_telegram.data import operations as data_operations
+from areyouok_telegram.data.models import Chat, Message, Session, User
 from areyouok_telegram.handlers.commands.feedback import generate_feedback_context
-from areyouok_telegram.handlers.exceptions import NoEditedMessageError, NoMessageError, NoMessageReactionError
+from areyouok_telegram.handlers.exceptions import (
+    NoChatFoundError,
+    NoEditedMessageError,
+    NoMessageError,
+    NoMessageReactionError,
+    NoUserFoundError,
+)
+from areyouok_telegram.handlers.utils.media import extract_media_from_telegram_message
 from areyouok_telegram.logging import traced
 from areyouok_telegram.utils.retry import telegram_call
 
@@ -16,9 +23,17 @@ async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_
     if not update.message:
         raise NoMessageError(update.update_id)
 
-    active_session = await data_operations.get_or_create_active_session(
-        chat_id=str(update.effective_chat.id),
-        timestamp=update.message.date,
+    chat = await Chat.get_by_id(telegram_chat_id=update.effective_chat.id)
+    if not chat:
+        raise NoChatFoundError(update.effective_chat.id)
+
+    user = await User.get_by_id(telegram_user_id=update.effective_user.id)
+    if not user:
+        raise NoUserFoundError(update.effective_user.id)
+
+    session = await Session.get_or_create_new_session(
+        chat=chat,
+        session_start=update.message.date,
     )
 
     await telegram_call(
@@ -27,11 +42,27 @@ async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_
         action=telegram.constants.ChatAction.TYPING,
     )
 
-    await data_operations.new_session_event(
-        session=active_session,
+    # Save message
+    message = Message.from_telegram(
+        user_id=user.id,
+        chat=chat,
         message=update.message,
-        user_id=str(update.effective_user.id),
+        session_id=session.id,
+    )
+    message = await message.save()
+
+    await session.new_message(
+        timestamp=update.message.date,
         is_user=True,
+    )
+
+    asyncio.create_task(
+        extract_media_from_telegram_message(
+            chat,
+            message_id=message.id,
+            message=update.message,
+            session_id=session.id,
+        )
     )
 
     # Pre-generate / cache context at random
@@ -39,7 +70,7 @@ async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_
         asyncio.create_task(
             generate_feedback_context(
                 bot_id=str(context.bot.id),
-                session=active_session,
+                session=session,
             )
         )
 
@@ -49,15 +80,31 @@ async def on_edit_message(update: telegram.Update, context: ContextTypes.DEFAULT
     if not update.edited_message:
         raise NoEditedMessageError(update.update_id)
 
-    active_session = await data_operations.get_or_create_active_session(
-        chat_id=str(update.effective_chat.id),
-        timestamp=update.edited_message.date,
+    chat = await Chat.get_by_id(telegram_chat_id=update.effective_chat.id)
+    if not chat:
+        raise NoChatFoundError(update.effective_chat.id)
+
+    user = await User.get_by_id(telegram_user_id=update.effective_user.id)
+    if not user:
+        raise NoUserFoundError(update.effective_user.id)
+
+    session = await Session.get_or_create_new_session(
+        chat=chat,
+        session_start=update.edited_message.date,
     )
 
-    await data_operations.new_session_event(
-        session=active_session,
+    # Save edited message
+    message = Message.from_telegram(
+        user_id=user.id,
+        chat=chat,
         message=update.edited_message,
-        user_id=str(update.effective_user.id),
+        session_id=session.id,
+    )
+    message = await message.save()
+
+    # Update session activity (not message count)
+    await session.new_activity(
+        timestamp=update.edited_message.edit_date or update.edited_message.date,
         is_user=True,
     )
 
@@ -68,14 +115,30 @@ async def on_message_react(update: telegram.Update, context: ContextTypes.DEFAUL
     if not update.message_reaction:
         raise NoMessageReactionError(update.update_id)
 
-    active_session = await data_operations.get_or_create_active_session(
-        chat_id=str(update.effective_chat.id),
-        timestamp=update.message_reaction.date,
+    chat = await Chat.get_by_id(telegram_chat_id=update.effective_chat.id)
+    if not chat:
+        raise NoChatFoundError(update.effective_chat.id)
+
+    user = await User.get_by_id(telegram_user_id=update.effective_user.id)
+    if not user:
+        raise NoUserFoundError(update.effective_user.id)
+
+    session = await Session.get_or_create_new_session(
+        chat=chat,
+        session_start=update.message_reaction.date,
     )
 
-    await data_operations.new_session_event(
-        session=active_session,
+    # Save reaction
+    message = Message.from_telegram(
+        user_id=user.id,
+        chat=chat,
         message=update.message_reaction,
-        user_id=str(update.effective_user.id),
+        session_id=session.id,
+    )
+    message = await message.save()
+
+    # Update session activity (not message count)
+    await session.new_activity(
+        timestamp=update.message_reaction.date,
         is_user=True,
     )

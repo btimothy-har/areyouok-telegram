@@ -8,7 +8,7 @@ from sqlalchemy import create_engine, inspect
 from sqlalchemy.schema import CreateSchema, DropSchema
 
 from areyouok_telegram.config import ENV, PG_CONNECTION_STRING
-from areyouok_telegram.data import Base
+from areyouok_telegram.data.database import Base
 
 console = Console()
 

@@ -11,21 +11,14 @@ from telegram.constants import ReactionEmoji
 from telegram.ext import ContextTypes
 
 from areyouok_telegram.config import ENV
-from areyouok_telegram.data import (
-    ChatEvent,
-    Chats,
-    Context,
-    ContextType,
-    MediaFiles,
-    Sessions,
-    async_database,
-    operations as data_operations,
-)
-from areyouok_telegram.handlers.constants import MD2_FEEDBACK_MESSAGE
+from areyouok_telegram.data.models import Chat, ChatEvent, CommandUsage, Context, MediaFile, Message, Session
+from areyouok_telegram.data.models.messaging import ContextType
+from areyouok_telegram.handlers.exceptions import NoChatFoundError
+from areyouok_telegram.handlers.utils.constants import MD2_FEEDBACK_MESSAGE
 from areyouok_telegram.llms import run_agent_with_tracking
 from areyouok_telegram.llms.agent_feedback_context import ContextAgentDependencies, feedback_context_agent
 from areyouok_telegram.logging import traced
-from areyouok_telegram.utils.retry import db_retry, telegram_call
+from areyouok_telegram.utils.retry import telegram_call
 from areyouok_telegram.utils.text import package_version, shorten_url
 
 FEEDBACK_CACHE = TTLCache(maxsize=1000, ttl=300)  # Cache feedback context for 5 minutes
@@ -34,22 +27,30 @@ FEEDBACK_URL = "https://docs.google.com/forms/d/e/1FAIpQLScV9gxqsBE0vNyQ_xJJI1yk
 
 
 @traced(extract_args=["update"])
-@db_retry()
 async def on_feedback_command(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /feedback command - provide a feedback URL to the user."""
 
     feedback_uuid = str(uuid.uuid4())
 
-    active_session = await data_operations.get_or_create_active_session(
-        chat_id=str(update.effective_chat.id),
-        create_if_not_exists=False,
-    )
+    chat = await Chat.get_by_id(telegram_chat_id=update.effective_chat.id)
+    if not chat:
+        raise NoChatFoundError(update.effective_chat.id)
 
-    await data_operations.track_command_usage(
-        command="feedback",
-        chat_id=str(update.effective_chat.id),
-        session_id=getattr(active_session, "session_id", None),
+    # Get active sessions
+    active_sessions = await Session.get_sessions(
+        chat=chat,
+        active=True,
     )
+    active_session = active_sessions[0] if active_sessions else None
+
+    # Track command usage
+    command_usage = CommandUsage(
+        chat=chat,
+        command="feedback",
+        session_id=active_session.id if active_session else None,
+        timestamp=update.message.date,
+    )
+    await command_usage.save()
 
     if not active_session:
         feedback_url = FEEDBACK_URL.format(
@@ -91,7 +92,7 @@ async def on_feedback_command(update: telegram.Update, context: ContextTypes.DEF
 
         feedback_url = FEEDBACK_URL.format(
             uuid=quote_plus(feedback_uuid),
-            session_id=quote_plus(active_session.session_id),
+            session_id=quote_plus(str(active_session.id)),
             context=quote_plus(feedback_context),
             env=quote_plus(ENV),
             version=quote_plus(package_version()),
@@ -125,8 +126,7 @@ async def on_feedback_command(update: telegram.Update, context: ContextTypes.DEF
     )
 
 
-@db_retry()
-async def generate_feedback_context(bot_id: str, session: Sessions) -> str:
+async def generate_feedback_context(bot_id: str, session: Session) -> str:
     feedback_ts = datetime.now(UTC)
 
     chat_id = session.chat_id
@@ -138,53 +138,54 @@ async def generate_feedback_context(bot_id: str, session: Sessions) -> str:
 
     chat_events_for_feedback = []
 
-    async with async_database() as db_conn:
-        chat_obj = await Chats.get_by_id(db_conn, chat_id=chat_id)
+    # Get chat object
+    chat = session.chat
 
-        chat_messages = await session.get_messages(db_conn)
+    # Get messages for this session
+    chat_messages = await Message.get_by_session(
+        chat=chat,
+        session_id=session.id,
+    )
 
-        if len(chat_messages) < 10:
-            return "Less than 10 messages in the session. Not enough context for feedback context."
+    if len(chat_messages) < 10:
+        return "Less than 10 messages in the session. Not enough context for feedback context."
 
-        for msg in chat_messages:
-            msg.decrypt(chat_obj.retrieve_key())
+    for msg in chat_messages:
+        # Messages are already decrypted by the model
+        if msg.message_type == "Message":
+            media = await MediaFile.get_by_message(
+                chat=chat,
+                message_id=msg.id,
+            )
+        elif msg.message_type == "MessageReactionUpdated":
+            media = []
+        else:
+            continue  # Skip unknown message types
 
-            if msg.message_type == "Message":
-                media = await MediaFiles.get_by_message_id(
-                    db_conn,
-                    chat_id=chat_id,
-                    message_id=msg.message_id,
-                )
-            elif msg.message_type == "MessageReactionUpdated":
-                media = []
-            else:
-                continue  # Skip unknown message types
+        # Media is already decrypted by the model
+        chat_events_for_feedback.append(ChatEvent.from_message(msg, media))
 
-            if media:
-                [m.decrypt_content(chat_encryption_key=chat_obj.retrieve_key()) for m in media]
-
-            chat_events_for_feedback.append(ChatEvent.from_message(msg, media))
-
-        chat_context = await Context.get_by_session_id(
-            db_conn,
-            session_id=session.session_id,
-        )
-        if chat_context:
-            context = [c for c in chat_context if c.type != ContextType.SESSION.value]
-            [c.decrypt_content(chat_encryption_key=chat_obj.retrieve_key()) for c in context]
-            chat_events_for_feedback.extend([ChatEvent.from_context(c) for c in context])
+    # Get context for session
+    chat_context = await Context.get_by_chat(
+        chat=chat,
+        session=session,
+    )
+    if chat_context:
+        context_list = [c for c in chat_context if c.type != ContextType.SESSION.value]
+        # Context is already decrypted by the model
+        chat_events_for_feedback.extend([ChatEvent.from_context(c) for c in context_list])
 
     chat_events_for_feedback.sort(key=lambda x: x.timestamp)
 
     agent_run_payload = await run_agent_with_tracking(
         feedback_context_agent,
-        chat_id=chat_id,
-        session_id=session.session_id,
+        chat=chat,
+        session=session,
         run_kwargs={
             "message_history": [c.to_model_message(str(bot_id), feedback_ts) for c in chat_events_for_feedback],
             "deps": ContextAgentDependencies(
-                tg_chat_id=chat_id,
-                tg_session_id=session.session_id,
+                chat=chat,
+                session=session,
             ),
         },
     )

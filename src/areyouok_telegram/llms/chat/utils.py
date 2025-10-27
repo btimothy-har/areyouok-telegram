@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Literal
 
-from areyouok_telegram.data import Messages, Notifications, async_database
+from areyouok_telegram.data.models import Chat, Message, Notification, Session, User
 from areyouok_telegram.llms.agent_content_check import (
     ContentCheckDependencies,
     ContentCheckResponse,
@@ -31,19 +31,21 @@ AgentResponse = (
 class CommonChatAgentDependencies:
     """Common dependencies for chat agents."""
 
-    tg_bot_id: str
-    tg_chat_id: str
-    tg_session_id: str
+    bot_id: int  # Telegram bot user ID
+    user: User
+    chat: Chat
+    session: Session
     restricted_responses: set[Literal["text", "reaction", "switch_personality", "keyboard"]] = field(
         default_factory=set
     )
-    notification: Notifications | None = None
+    notification: Notification | None = None
 
     def to_dict(self) -> dict:
         return {
-            "tg_bot_id": self.tg_bot_id,
-            "tg_chat_id": self.tg_chat_id,
-            "tg_session_id": self.tg_session_id,
+            "bot_id": self.bot_id,
+            "user_id": self.user.id,
+            "chat_id": self.chat.id,
+            "session_id": self.session.id,
             "restricted_responses": list(self.restricted_responses),
             "notification_content": self.notification.content if self.notification else None,
         }
@@ -67,24 +69,24 @@ def check_restricted_responses(*, response: AgentResponse, restricted: set[str])
         raise ResponseRestrictedError(response.response_type)
 
 
-async def validate_response_data(*, response: AgentResponse, chat_id: str, bot_id: str) -> None:
+async def validate_response_data(*, response: AgentResponse, chat: Chat, bot_id: int) -> None:
     if response.response_type == "ReactionResponse":
-        async with async_database() as db_conn:
-            message, _ = await Messages.retrieve_message_by_id(
-                db_conn=db_conn,
-                message_id=response.react_to_message_id,
-                chat_id=chat_id,
-            )
+        message = await Message.get_by_id(
+            chat=chat,
+            telegram_message_id=response.react_to_message_id,
+        )
 
         if not message:
             raise InvalidMessageError(response.react_to_message_id)
 
-        if message.user_id == str(bot_id):
+        # Get bot's internal user ID for comparison
+        bot_user = await User.get_by_id(telegram_user_id=bot_id)
+        if bot_user and message.user_id == bot_user.id:
             raise ReactToSelfError(response.react_to_message_id)
 
 
 async def check_special_instructions(
-    *, response: AgentResponse, chat_id: str, session_id: str, instruction: str
+    *, response: AgentResponse, chat: Chat, session: Session, instruction: str
 ) -> None:
     if response.response_type not in ("TextResponse", "TextWithButtonsResponse", "KeyboardResponse"):
         raise UnacknowledgedImportantMessageError(instruction)
@@ -92,8 +94,8 @@ async def check_special_instructions(
     else:
         content_check_run = await run_agent_with_tracking(
             agent=content_check_agent,
-            chat_id=chat_id,
-            session_id=session_id,
+            chat=chat,
+            session=session,
             run_kwargs={
                 "user_prompt": response.message_text,
                 "deps": ContentCheckDependencies(

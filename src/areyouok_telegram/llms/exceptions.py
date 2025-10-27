@@ -100,11 +100,25 @@ class CompleteOnboardingError(pydantic_ai.ModelRetry):
         super().__init__(f"Error completing onboarding: {message}")
 
 
+class SessionNotActiveError(CompleteOnboardingError):
+    """Raised when trying to complete a session that is not active."""
+
+    def __init__(self):
+        super().__init__("Session is not active.")
+
+
 class JournalingError(pydantic_ai.ModelRetry):
     """Exception raised when an error occurs during a journaling session."""
 
     def __init__(self, message: str):
         super().__init__(f"Error in journaling session: {message}")
+
+
+class JournalingSessionNotActiveError(JournalingError):
+    """Raised when trying to complete a journaling session that is not active."""
+
+    def __init__(self):
+        super().__init__("Session is not active.")
 
 
 class ResponseLengthError(pydantic_ai.ModelRetry):

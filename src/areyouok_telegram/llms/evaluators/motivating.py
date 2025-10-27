@@ -102,12 +102,17 @@ Rate each dimension based on the AI's most recent response while considering the
 
 
 async def run_motivating_evaluation(
+    *,
+    chat,
+    session,
     message_history: list,
 ) -> dict:
     """
     Run motivating evaluation for a conversation message history.
 
     Args:
+        chat: Chat object for tracking
+        session: Session object for tracking
         message_history: List of messages in the conversation
 
     Returns:
@@ -115,8 +120,8 @@ async def run_motivating_evaluation(
     """
     eval_result = await run_agent_with_tracking(
         agent=motivating_eval_agent,
-        chat_id="evaluations",
-        session_id="evaluations",
+        chat=chat,
+        session=session,
         run_kwargs={
             "message_history": message_history,
         },

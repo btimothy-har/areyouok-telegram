@@ -6,8 +6,8 @@ import pydantic
 import pydantic_ai
 from pydantic_ai import ModelRetry
 
-from areyouok_telegram.data import Context
-from areyouok_telegram.data.models.chat_event import CONTEXT_TYPE_MAP
+from areyouok_telegram.data.models import Context
+from areyouok_telegram.data.models.messaging.chat_event import CONTEXT_TYPE_MAP
 from areyouok_telegram.llms.models import Gemini25Flash
 from areyouok_telegram.utils.text import format_relative_time
 

@@ -5,68 +5,43 @@ import telegram
 from telegram.constants import ChatType
 from telegram.ext import ContextTypes
 
-from areyouok_telegram.data import Chats, Context, Users, async_database, operations as data_operations
-from areyouok_telegram.handlers.exceptions import InvalidCallbackDataError
+from areyouok_telegram.data.models import Chat, Context, Session, Update, User
+from areyouok_telegram.handlers.exceptions import InvalidCallbackDataError, NoChatFoundError
 from areyouok_telegram.jobs import ConversationJob, schedule_job
-from areyouok_telegram.utils.retry import db_retry, telegram_call
+from areyouok_telegram.utils.retry import telegram_call
 
 
 async def on_new_update(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):
-    @db_retry()
-    async def _handle_update():
-        async with async_database() as db_conn:
-            if update.effective_user:
-                await Users.new_or_update(db_conn, user=update.effective_user)
-
-            if update.effective_chat:
-                await Chats.new_or_update(db_conn, chat=update.effective_chat)
-
     # Don't use `traced` decorator here to avoid circular logging issues
     with logfire.span(
         "New update received.",
         _span_name="handlers.globals.on_new_update",
         update=update,
     ):
-        await _handle_update()
+        # Save the update
+        update_instance = Update.from_telegram(update=update)
+        update_instance = await update_instance.save()
+
+        if update.effective_user:
+            user = User.from_telegram(update.effective_user)
+            user = await user.save()
+
+        if update.effective_chat:
+            chat = Chat.from_telegram(update.effective_chat)
+            chat = await chat.save()
 
     # Only schedule the job if the update is from a private chat
     # This prevents unnecessary job scheduling for group chats or channel, which we don't support yet.
     if update.effective_chat and update.effective_chat.type == ChatType.PRIVATE:
         await schedule_job(
             context=context,
-            job=ConversationJob(chat_id=str(update.effective_chat.id)),
+            job=ConversationJob(chat_id=chat.id),  # Use internal chat ID
             interval=timedelta(milliseconds=500),
             first=datetime.now(UTC) + timedelta(seconds=2),
         )
 
 
 async def on_dynamic_response_callback(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):  # noqa:ARG001
-    @db_retry()
-    async def _create_action_context():
-        chat_id = str(update.effective_chat.id)
-
-        async with async_database() as db_conn:
-            active_session = await data_operations.get_or_create_active_session(
-                chat_id=chat_id,
-                create_if_not_exists=True,
-            )
-            chat_obj = await Chats.get_by_id(db_conn, chat_id=chat_id)
-
-            await Context.new(
-                db_conn,
-                chat_encryption_key=chat_obj.retrieve_key(),
-                chat_id=str(update.effective_chat.id),
-                session_id=active_session.session_id,
-                ctype="action",
-                content=str(update.callback_query.data).removeprefix("response::"),
-            )
-
-            await active_session.new_activity(
-                db_conn,
-                timestamp=datetime.now(UTC),
-                is_user=True,
-            )
-
     if not update.callback_query:
         raise InvalidCallbackDataError(update.update_id)
 
@@ -74,4 +49,26 @@ async def on_dynamic_response_callback(update: telegram.Update, context: Context
         raise InvalidCallbackDataError(update.update_id)
 
     await telegram_call(update.callback_query.answer)
-    await _create_action_context()
+
+    # Create action context
+    chat = await Chat.get_by_id(telegram_chat_id=update.effective_chat.id)
+    if not chat:
+        raise NoChatFoundError(update.effective_chat.id)
+
+    session = await Session.get_or_create_new_session(
+        chat=chat,
+        session_start=datetime.now(UTC),
+    )
+
+    context_obj = Context(
+        chat=chat,
+        session_id=session.id,
+        type="action",
+        content=str(update.callback_query.data).removeprefix("response::"),
+    )
+    await context_obj.save()
+
+    await session.new_activity(
+        timestamp=datetime.now(UTC),
+        is_user=True,
+    )
