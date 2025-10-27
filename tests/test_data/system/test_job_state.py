@@ -1,7 +1,6 @@
 """Tests for JobState model."""
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock
 
 import pytest
 
@@ -54,16 +53,6 @@ async def test_job_state_delete(mock_db_session):
     """Test JobState.delete() removes the record."""
     js = JobState(job_name="temp_job", state_data={})
 
-    class Row:
-        object_key = js.object_key
-
-    class _ResOneOrNone:
-        def scalar_one_or_none(self):
-            return Row()
-
-    mock_db_session.execute.return_value = _ResOneOrNone()
-    mock_db_session.delete = AsyncMock()
-
     await js.delete()
+    # Verify that execute was called to run the DELETE statement
     mock_db_session.execute.assert_called_once()
-    mock_db_session.delete.assert_called_once()
