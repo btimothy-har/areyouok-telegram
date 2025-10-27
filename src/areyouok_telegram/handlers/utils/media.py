@@ -184,7 +184,7 @@ def _get_mime_type_from_message(message: telegram.Message, file: telegram.File) 
     return "application/octet-stream"
 
 
-@traced(extract_args=["message", "file"])
+@traced(extract_args=["chat", "file"])
 async def _download_file(
     chat: Chat,
     *,
