@@ -83,7 +83,7 @@ class LLMGeneration(pydantic.BaseModel):
 
     # Foreign keys
     chat_id: int
-    session_id: int
+    session_id: int | None
 
     # Generation metadata
     agent: str
@@ -103,9 +103,8 @@ class LLMGeneration(pydantic.BaseModel):
     def object_key(self) -> str:
         """Generate a unique object key for a generation based on chat, session, timestamp, and agent."""
         timestamp_str = self.timestamp.isoformat()
-        return hashlib.sha256(
-            f"llm_gen:{self.chat_id}:{self.session_id}:{timestamp_str}:{self.agent}".encode()
-        ).hexdigest()
+        session_str = str(self.session_id) if self.session_id is not None else "no_session"
+        return hashlib.sha256(f"llm_gen:{self.chat_id}:{session_str}:{timestamp_str}:{self.agent}".encode()).hexdigest()
 
     @staticmethod
     def _deserialize_from_storage(
@@ -205,7 +204,7 @@ class LLMGeneration(pydantic.BaseModel):
         cls,
         *,
         chat_id: int,
-        session_id: int,
+        session_id: int | None,
         agent: pydantic_ai.Agent,
         run_result: pydantic_ai.agent.AgentRunResult,
         run_deps: Any = None,
@@ -214,7 +213,7 @@ class LLMGeneration(pydantic.BaseModel):
 
         Args:
             chat_id: Internal chat ID (FK to chats.id)
-            session_id: Internal session ID (FK to sessions.id)
+            session_id: Internal session ID (FK to sessions.id), or None for background jobs
             agent: pydantic_ai.Agent object
             run_result: The agent run result to serialize and store
             run_deps: Optional dependencies passed to agent.run()

@@ -24,7 +24,7 @@ class LLMUsageTable(Base):
 
     # Foreign keys
     chat_id = Column(Integer, ForeignKey(f"{ENV}.chats.id"), nullable=False)
-    session_id = Column(Integer, ForeignKey(f"{ENV}.sessions.id"), nullable=False)
+    session_id = Column(Integer, ForeignKey(f"{ENV}.sessions.id"), nullable=True)
 
     # Usage metadata
     timestamp = Column(TIMESTAMP(timezone=True), nullable=False)
@@ -62,7 +62,7 @@ class LLMGenerationsTable(Base):
 
     # Foreign keys
     chat_id = Column(Integer, ForeignKey(f"{ENV}.chats.id"), nullable=False, index=True)
-    session_id = Column(Integer, ForeignKey(f"{ENV}.sessions.id"), nullable=False, index=True)
+    session_id = Column(Integer, ForeignKey(f"{ENV}.sessions.id"), nullable=True, index=True)
 
     # Generation metadata
     agent = Column(String, nullable=False)
