@@ -23,7 +23,7 @@ class LLMUsage(pydantic.BaseModel):
 
     # Foreign keys
     chat_id: int
-    session_id: int
+    session_id: int | None
 
     # Usage metadata
     timestamp: datetime
@@ -91,7 +91,7 @@ class LLMUsage(pydantic.BaseModel):
         cls,
         *,
         chat_id: int,
-        session_id: int,
+        session_id: int | None,
         agent: pydantic_ai.Agent,
         data: pydantic_ai.usage.RunUsage,
         runtime: float,
@@ -100,7 +100,7 @@ class LLMUsage(pydantic.BaseModel):
 
         Args:
             chat_id: Internal chat ID (FK to chats.id)
-            session_id: Internal session ID (FK to sessions.id)
+            session_id: Internal session ID (FK to sessions.id), or None for background jobs
             agent: pydantic_ai Agent object
             data: RunUsage data from pydantic_ai
             runtime: Generation runtime in seconds
