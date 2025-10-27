@@ -51,7 +51,7 @@ def test_serialize_to_jsonb_primitives():
     """Test serialize_to_jsonb() passes through primitives."""
     assert serialize_to_jsonb(42) == 42
     assert serialize_to_jsonb(3.14) == 3.14
-    assert serialize_to_jsonb(True) is True
+    assert serialize_to_jsonb(True) is True  # noqa: FBT003
 
 
 def test_serialize_to_jsonb_fallback():
