@@ -246,8 +246,8 @@ async def _download_file(
                         usage_type="openai.voice_transcription",
                         model="gpt-4o-transcribe",
                         provider="openai",
-                        input_tokens=sum(t.usage.prompt_tokens for t in transcriptions),
-                        output_tokens=sum(t.usage.completion_tokens for t in transcriptions),
+                        input_tokens=sum(t.usage.input_tokens for t in transcriptions),
+                        output_tokens=sum(t.usage.output_tokens for t in transcriptions),
                         runtime=end_time - start_time,
                     )
                     await llm_usage.save()
