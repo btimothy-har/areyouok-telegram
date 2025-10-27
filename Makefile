@@ -2,7 +2,7 @@ up:
 	uv sync
 
 test:
-	uv run pytest --cov=areyouok_telegram --cov-report=term-missing .
+	uv run pytest
 
 lint:
 	uv run ruff check . && uv run ruff format --check .
