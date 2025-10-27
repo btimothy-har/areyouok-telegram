@@ -24,7 +24,7 @@ class VoiceNotProcessableError(Exception):
         super().__init__(message)
 
 
-@traced(extract_args=["message"])
+@traced(extract_args=["chat"])
 async def extract_media_from_telegram_message(
     chat: Chat,
     *,

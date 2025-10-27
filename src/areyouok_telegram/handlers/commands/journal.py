@@ -11,7 +11,7 @@ from areyouok_telegram.logging import traced
 from areyouok_telegram.utils.retry import telegram_call
 
 
-@traced(extract_args=["update"])
+@traced(extract_args=False)
 async def on_journal_command(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /journal command to start a new journaling session."""
 
