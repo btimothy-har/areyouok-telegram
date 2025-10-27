@@ -64,7 +64,7 @@ async def on_journal_command(update: telegram.Update, context: ContextTypes.DEFA
         state=GuidedSessionState.ACTIVE.value,
         metadata=initial_metadata.model_dump(),
     )
-    await new_session.save()
+    new_session = await new_session.save()
 
     # Record this event in the session
     user = await User.get_by_id(telegram_user_id=update.effective_user.id)
@@ -77,7 +77,7 @@ async def on_journal_command(update: telegram.Update, context: ContextTypes.DEFA
         message=update.message,
         session_id=active_session.id,
     )
-    await message.save()
+    message = await message.save()
 
     await active_session.new_message(
         timestamp=update.message.date,

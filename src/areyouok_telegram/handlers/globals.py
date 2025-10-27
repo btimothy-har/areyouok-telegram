@@ -20,15 +20,15 @@ async def on_new_update(update: telegram.Update, context: ContextTypes.DEFAULT_T
     ):
         # Save the update
         update_instance = Update.from_telegram(update=update)
-        await update_instance.save()
+        update_instance = await update_instance.save()
 
         if update.effective_user:
             user = User.from_telegram(update.effective_user)
-            await user.save()
+            user = await user.save()
 
         if update.effective_chat:
             chat = Chat.from_telegram(update.effective_chat)
-            chat = await chat.save()  # Capture returned Chat with populated id
+            chat = await chat.save()
 
     # Only schedule the job if the update is from a private chat
     # This prevents unnecessary job scheduling for group chats or channel, which we don't support yet.

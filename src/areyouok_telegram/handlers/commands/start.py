@@ -52,7 +52,7 @@ async def on_start_command(update: telegram.Update, context: ContextTypes.DEFAUL
             session_type=GuidedSessionType.ONBOARDING.value,
             state=GuidedSessionState.ACTIVE.value,
         )
-        await new_session.save()
+        new_session = await new_session.save()
 
     user = await User.get_by_id(telegram_user_id=update.effective_user.id)
     if not user:
@@ -64,7 +64,7 @@ async def on_start_command(update: telegram.Update, context: ContextTypes.DEFAUL
         message=update.message,
         session_id=active_session.id,
     )
-    await message.save()
+    message = await message.save()
 
     await active_session.new_message(
         timestamp=update.message.date,

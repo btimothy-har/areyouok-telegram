@@ -49,19 +49,20 @@ async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_
         message=update.message,
         session_id=session.id,
     )
-    await message.save()
+    message = await message.save()
 
-    # Update session
     await session.new_message(
         timestamp=update.message.date,
         is_user=True,
     )
 
-    # Extract media if present
-    await extract_media_from_telegram_message(
-        chat,
-        message=update.message,
-        session_id=session.id,
+    asyncio.create_task(
+        extract_media_from_telegram_message(
+            chat,
+            message_id=message.id,
+            message=update.message,
+            session_id=session.id,
+        )
     )
 
     # Pre-generate / cache context at random
@@ -99,7 +100,7 @@ async def on_edit_message(update: telegram.Update, context: ContextTypes.DEFAULT
         message=update.edited_message,
         session_id=session.id,
     )
-    await message.save()
+    message = await message.save()
 
     # Update session activity (not message count)
     await session.new_activity(
@@ -134,7 +135,7 @@ async def on_message_react(update: telegram.Update, context: ContextTypes.DEFAUL
         message=update.message_reaction,
         session_id=session.id,
     )
-    await message.save()
+    message = await message.save()
 
     # Update session activity (not message count)
     await session.new_activity(

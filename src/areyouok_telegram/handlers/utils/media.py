@@ -28,6 +28,7 @@ class VoiceNotProcessableError(Exception):
 async def extract_media_from_telegram_message(
     chat: Chat,
     *,
+    message_id: int,
     message: telegram.Message,
     session_id: int | None = None,
 ) -> int:
@@ -35,6 +36,7 @@ async def extract_media_from_telegram_message(
 
     Args:
         chat: Chat object
+        message_id: Message ID (FK to messages.id)
         message: Telegram message object
         session_id: Optional session ID
 
@@ -64,6 +66,7 @@ async def extract_media_from_telegram_message(
         *[
             _download_file(
                 chat,
+                message_id=message_id,
                 session_id=session_id,
                 message=message,
                 file=file,
@@ -185,6 +188,7 @@ def _get_mime_type_from_message(message: telegram.Message, file: telegram.File) 
 async def _download_file(
     chat: Chat,
     *,
+    message_id: int,
     message: telegram.Message,
     file: telegram.File,
     session_id: int | None = None,
@@ -193,6 +197,7 @@ async def _download_file(
 
     Args:
         chat: Chat object (provides context and encryption key)
+        message_id: Message ID (FK to messages.id)
         message: Telegram message object
         file: Telegram file
         session_id: Optional session ID
@@ -206,7 +211,7 @@ async def _download_file(
         # Create and save media file
         media_file = MediaFile(
             chat=chat,
-            message_id=message.message_id,
+            message_id=message_id,
             file_id=file.file_id,
             file_unique_id=file.file_unique_id,
             mime_type=mime_type,
@@ -251,7 +256,7 @@ async def _download_file(
                     transcription_bytes = transcription_text.encode("utf-8")
                     transcription_media = MediaFile(
                         chat=chat,
-                        message_id=message.message_id,
+                        message_id=message_id,
                         file_id=f"{file.file_id}_transcription",
                         file_unique_id=f"{file.file_unique_id}_transcription",
                         mime_type="text/plain",

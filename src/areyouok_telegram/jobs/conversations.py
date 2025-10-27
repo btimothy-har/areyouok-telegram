@@ -269,7 +269,7 @@ class ConversationJob(BaseJob):
                         session_id=active_session.id,
                         reasoning=reasoning,
                     )
-                    await message_obj.save()
+                    message_obj = await message_obj.save()
 
                     # Update session activity
                     if isinstance(response_message, telegram.Message):

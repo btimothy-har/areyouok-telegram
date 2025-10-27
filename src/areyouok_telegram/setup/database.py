@@ -47,5 +47,5 @@ async def create_bot_user(bot_id: int):
         is_bot=True,
         is_premium=False,
     )
-    await bot_user.save()
+    bot_user = await bot_user.save()
     logfire.info(f"Created bot user with id={bot_user.id}, telegram_user_id={bot_id}")
