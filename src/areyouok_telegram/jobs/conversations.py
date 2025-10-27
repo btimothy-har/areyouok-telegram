@@ -406,7 +406,7 @@ class ConversationJob(BaseJob):
         if (
             message_history
             and message_history[-1].event_type == "message"
-            and message_history[-1].user_id == str(self._bot_id)
+            and message_history[-1].user_id == self._bot_id
         ):
             response_restrictions.add("text")
 
