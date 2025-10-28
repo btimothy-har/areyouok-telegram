@@ -63,7 +63,7 @@ build-backend = "hatchling.build"
 packages = ["src/areyouok_telegram"]
 
 [tool.uv]
-required-version = "~=0.8.18"
+required-version = "~=0.9.5"
 default-groups = ["application", "dev", "cli"]
 
 [tool.ruff]
