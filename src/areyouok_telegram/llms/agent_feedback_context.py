@@ -13,6 +13,12 @@ class ContextAgentDependencies:
     chat: Chat
     session: Session
 
+    def to_dict(self) -> dict:
+        return {
+            "chat_id": self.chat.id,
+            "session_id": self.session.id,
+        }
+
 
 agent_model = Gemini25Flash(
     model_settings=pydantic_ai.models.google.GoogleModelSettings(

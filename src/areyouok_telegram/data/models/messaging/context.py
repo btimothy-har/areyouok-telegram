@@ -141,7 +141,6 @@ class Context(pydantic.BaseModel):
             )
 
     @classmethod
-    @traced(extract_args=False)
     @db_retry()
     async def get_by_chat(
         cls,

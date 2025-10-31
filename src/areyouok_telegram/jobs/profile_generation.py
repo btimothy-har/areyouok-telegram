@@ -8,7 +8,6 @@ from areyouok_telegram.data.models import Chat, Context, ContextType, Session
 from areyouok_telegram.jobs.base import BaseJob
 from areyouok_telegram.llms import run_agent_with_tracking
 from areyouok_telegram.llms.profile_generation import ProfileTemplate, profile_generation_agent
-from areyouok_telegram.logging import traced
 from areyouok_telegram.utils.text import format_relative_time
 
 # Context types that trigger profile generation (excludes job outputs)
@@ -58,7 +57,6 @@ class ProfileGenerationJob(BaseJob):
         """Generate job name."""
         return "profile_generation"
 
-    @traced(extract_args=False)
     async def run_job(self) -> None:
         """Batch process profile generation for all chats."""
 
@@ -112,7 +110,6 @@ class ProfileGenerationJob(BaseJob):
             logfire.exception("Failed to run profile generation batch job")
             raise
 
-    @traced(extract_args=["chat"])
     async def _process_chat(self, *, chat: Chat, cutoff_time: datetime) -> bool:
         """Process a single chat for profile generation.
 
@@ -171,65 +168,64 @@ class ProfileGenerationJob(BaseJob):
             )
             return False
 
-        # Format contexts for the agent using XML structure
-        context_items = [
-            FORMATTED_CONTEXT_TEMPLATE.format(
-                timestamp=format_relative_time(ctx["created_at"], self._run_timestamp),
-                type=ctx["type"],
-                content=ctx["content"],
-            )
-            for ctx in decrypted_contents
-        ]
-        contexts_xml = "\n".join(context_items)
-
-        # Get the most recent PROFILE context to include in the prompt
-        prev_content = "No previous profile available."
-        previous_profiles = await Context.get_by_chat(
-            chat=chat,
-            ctype=ContextType.PROFILE.value,
-        )
-        if previous_profiles:
-            # get_by_chat returns in descending order by created_at, so first is most recent
-            previous_profile = previous_profiles[0]
-            if previous_profile.content:
-                prev_content = previous_profile.content
-
-        # Generate profile using the agent
-        user_prompt = USER_PROMPT_TEMPLATE.format(
-            previous_profile=prev_content,
-            contexts=contexts_xml,
-        )
-
-        result = await run_agent_with_tracking(
-            profile_generation_agent,
-            chat=chat,
-            run_kwargs={"user_prompt": user_prompt},
-        )
-
-        profile: ProfileTemplate = result.output
-
-        # Save result as PROFILE context type (session_id is None since profiles are cross-session)
-        profile_context = Context(
-            chat=chat,
-            session_id=None,
-            type=ContextType.PROFILE.value,
-            content=profile.content,
-        )
-        await profile_context.save()
-
-        # Also save the change_log as a separate context
-        update_context = Context(
-            chat=chat,
-            session_id=None,
-            type=ContextType.PROFILE_UPDATE.value,
-            content=profile.change_log,
-        )
-        await update_context.save()
-
-        logfire.info(
-            f"Generated profile for chat {chat.id}",
+        with logfire.span(
+            f"Generating profile for chat {chat.id}",
+            _span_name="ProfileGenerationJob._process_chat.format_contexts",
             chat_id=chat.id,
-            context_count=len(decrypted_contents),
-        )
+        ):
+            # Format contexts for the agent using XML structure
+            context_items = [
+                FORMATTED_CONTEXT_TEMPLATE.format(
+                    timestamp=format_relative_time(ctx["created_at"], self._run_timestamp),
+                    type=ctx["type"],
+                    content=ctx["content"],
+                )
+                for ctx in decrypted_contents
+            ]
+            contexts_xml = "\n".join(context_items)
+
+            # Get the most recent PROFILE context to include in the prompt
+            prev_content = "No previous profile available."
+            previous_profiles = await Context.get_by_chat(
+                chat=chat,
+                ctype=ContextType.PROFILE.value,
+            )
+            if previous_profiles:
+                # get_by_chat returns in descending order by created_at, so first is most recent
+                previous_profile = previous_profiles[0]
+                if previous_profile.content:
+                    prev_content = previous_profile.content
+
+            # Generate profile using the agent
+            user_prompt = USER_PROMPT_TEMPLATE.format(
+                previous_profile=prev_content,
+                contexts=contexts_xml,
+            )
+
+            result = await run_agent_with_tracking(
+                profile_generation_agent,
+                chat=chat,
+                run_kwargs={"user_prompt": user_prompt},
+            )
+
+            profile: ProfileTemplate = result.output
+
+            # Save result as PROFILE context type (session_id is None since profiles are cross-session)
+            profile_context = Context(
+                chat=chat,
+                session_id=None,
+                type=ContextType.PROFILE.value,
+                content=profile.content,
+            )
+            await profile_context.save()
+
+            # Also save the change_log as a separate context
+            update_context = Context(
+                chat=chat,
+                session_id=None,
+                type=ContextType.PROFILE_UPDATE.value,
+                content=profile.change_log,
+            )
+            await update_context.save()
 
         return True

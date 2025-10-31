@@ -154,17 +154,6 @@ class ConversationJob(BaseJob):
                                     f"No messages found in chat session {active_session.id}, nothing to compress."
                                 )
 
-                    # Check if we should run evaluations (only if we actually got message history)
-                    if len(message_history) > 5:
-                        await run_job_once(
-                            context=self._run_context,
-                            job=EvaluationsJob(
-                                chat_id=self.chat_id,
-                                session_id=active_session.id,
-                            ),
-                            when=datetime.now(UTC) + timedelta(seconds=10),
-                        )
-
                     # Always close session and stop job when inactive, regardless of context existence
                     # Check for any active guided sessions and inactivate them
                     guided_sessions = await GuidedSession.get_by_chat(chat=chat, session=active_session)
@@ -175,7 +164,18 @@ class ConversationJob(BaseJob):
                     await active_session.close_session(timestamp=self._run_timestamp)
                     logfire.info(f"Session {active_session.id} closed due to inactivity.")
 
-                    await self.stop()
+                await self.stop()
+
+                # Check if we should run evaluations (only if we actually got message history)
+                if len(message_history) > 5:
+                    await run_job_once(
+                        context=self._run_context,
+                        job=EvaluationsJob(
+                            chat_id=self.chat_id,
+                            session_id=active_session.id,
+                        ),
+                        when=datetime.now(UTC) + timedelta(seconds=10),
+                    )
 
         else:
             with logfire.span(
