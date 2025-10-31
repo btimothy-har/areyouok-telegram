@@ -99,12 +99,13 @@ class ProfileGenerationJob(BaseJob):
                 profiles_generated=profiles_generated,
             )
 
-            logfire.info(
-                f"Generated {profiles_generated} profiles from {len(all_chats)} chats.",
-                profiles_generated=profiles_generated,
-                total_chats=len(all_chats),
-                run_timestamp=self._run_timestamp.isoformat(),
-            )
+            if profiles_generated > 0:
+                logfire.info(
+                    f"Generated {profiles_generated} profiles from {len(all_chats)} chats.",
+                    profiles_generated=profiles_generated,
+                    total_chats=len(all_chats),
+                    run_timestamp=self._run_timestamp.isoformat(),
+                )
 
         except Exception:
             logfire.exception("Failed to run profile generation batch job")
