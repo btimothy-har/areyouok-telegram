@@ -112,7 +112,6 @@ class BaseJob(ABC):
 
         logfire.debug(f"Saved state for job {self.name}", state_keys=list(state_data.keys()))
 
-    @traced(extract_args=False)
     async def load_state(self) -> dict:
         """
         Load job state from the database.
@@ -135,7 +134,6 @@ class BaseJob(ABC):
         logfire.debug(f"No state found for job {self.name}, returning empty dict")
         return {}
 
-    @traced(extract_args=False)
     async def clear_state(self) -> None:
         """
         Clear persisted job state from the database.

@@ -122,7 +122,6 @@ class Chat(pydantic.BaseModel):
             return cls.model_validate(row, from_attributes=True)
 
     @classmethod
-    @traced(extract_args=False)
     @db_retry()
     async def get(
         cls,

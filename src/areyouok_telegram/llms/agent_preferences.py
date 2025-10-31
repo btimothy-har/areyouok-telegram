@@ -26,6 +26,13 @@ class PreferencesAgentDependencies:
     chat: Chat
     session: Session
 
+    def to_dict(self) -> dict:
+        return {
+            "user_id": self.user.id,
+            "chat_id": self.chat.id,
+            "session_id": self.session.id,
+        }
+
 
 class PreferencesUpdateResponse(pydantic.BaseModel):
     """Model for user settings response."""

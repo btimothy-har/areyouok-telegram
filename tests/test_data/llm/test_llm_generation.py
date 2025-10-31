@@ -101,6 +101,36 @@ def test_serialize_to_jsonb_dataclass_with_to_dict():
     assert isinstance(result, dict)
 
 
+def test_serialize_to_jsonb_dataclass_with_pydantic_and_to_dict():
+    """Test serialize_to_jsonb() with dataclass containing Pydantic models that has to_dict()."""
+
+    class PydanticModel(pydantic.BaseModel):
+        id: int
+        name: str
+
+    @dataclasses.dataclass
+    class DataWithPydanticAndToDict:
+        user: PydanticModel
+        chat: PydanticModel
+
+        def to_dict(self) -> dict:
+            # Simulate the pattern used in agent dependencies
+            return {
+                "user_id": self.user.id,
+                "chat_id": self.chat.id,
+            }
+
+    user = PydanticModel(id=1, name="Alice")
+    chat = PydanticModel(id=2, name="Chat")
+    obj = DataWithPydanticAndToDict(user=user, chat=chat)
+
+    result = serialize_to_jsonb(obj)
+    assert result == {"user_id": 1, "chat_id": 2}
+    assert isinstance(result, dict)
+    # Verify it's serialized to IDs, not full Pydantic models
+    assert "name" not in result
+
+
 @pytest.mark.usefixtures("patch_async_database")
 @pytest.mark.asyncio
 async def test_llm_generation_save_and_get_by_id(mock_db_session):

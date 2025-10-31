@@ -12,7 +12,6 @@ from areyouok_telegram.config import OPENAI_API_KEY, RAG_BATCH_SIZE, RAG_EMBEDDI
 from areyouok_telegram.data.database import context_doc_store, context_vector_store
 from areyouok_telegram.data.models import Chat, Context, ContextType
 from areyouok_telegram.jobs.base import BaseJob
-from areyouok_telegram.logging import traced
 
 CONTEXT_TYPES_TO_EMBED = [
     ContextType.SESSION.value,
@@ -66,7 +65,6 @@ class ContextEmbeddingJob(BaseJob):
         """Generate job name."""
         return "context_embedding"
 
-    @traced(extract_args=False)
     async def run_job(self) -> None:
         """Batch process contexts created since last run."""
 
@@ -123,11 +121,12 @@ class ContextEmbeddingJob(BaseJob):
                 last_processed_count=len(documents),
             )
 
-            logfire.info(
-                f"Embedded {len(documents)} contexts.",
-                count=len(documents),
-                run_timestamp=self._run_timestamp.isoformat(),
-            )
+            if len(documents) > 0:
+                logfire.info(
+                    f"Embedded {len(documents)} contexts.",
+                    count=len(documents),
+                    run_timestamp=self._run_timestamp.isoformat(),
+                )
 
         except Exception:
             logfire.exception("Failed to run context embedding batch job")
