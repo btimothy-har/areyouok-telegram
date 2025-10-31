@@ -1,90 +1,166 @@
 ---
 alwaysApply: true
 ---
-# CLAUDE.md
+# Are You OK? Telegram Application
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Are You OK? is an empathic LLM Telegram bot application designed to be a day-to-day emotional companion supporting individual mental health wellness.
 
-## 3rd Party Documentation
+**Repository Structure:**
+- **/src/areyouok_telegram**: Main application code
+- **/tests**: Test suite (mirrors source structure)
+- **/scripts**: Utility and development scripts
+- **/.cursor/rules**: Component-specific coding rules
 
-When working with 3rd party libraries or frameworks, use `mcp__context7` to retrieve up-to-date documentation.
+The application is intentionally self-contained to simplify open-source distribution.
 
-This is especially important for core libraries like Pydantic, PydanticAI and Python-Telegram-Bot.
+## Quick Reference
 
-## Project Overview
+### Development Commands
 
-Are You OK is an empathic LLM Telegram bot application designed to be a day-to-day emotional companion.
+This project uses `uv` for Python package management. Run from project root:
 
-The repository is structured around the singular Telegram bot application:
-- **/src/areyouok_telegram**: the Telegram bot application
-- **/tests**: Test suite for the application
-- **/scripts**: Utility and/or development scripts
+```bash
+# Setup
+uv sync                                          # Install/update dependencies
 
-The Telegram bot application is intentionally self-contained to simplify open-source distribution.
+# Development
+uv run -m areyouok_telegram.main                # Run application
+uv run ruff check . && uv run ruff format .     # Lint and format
+uv run pytest --cov=areyouok_telegram .         # Run tests with coverage
 
-## Commands
+# CLI Tools
+uv run generate-salt                             # Generate encryption salt
+uv run reset-db                                  # Reset database
+uv run simulate                                  # Run conversation simulation
+```
 
-This project uses `uv` for Python package management. All commands should be run from the project root:
+### 3rd Party Documentation
 
-- **Setup/Update dependencies**: `uv sync`
-- **Run the application**: `uv run -m areyouok_telegram.main`
-- **Run tests (with coverage by default)**: `uv run pytest --cov=areyouok_telegram --cov-report=term-missing .`
-- **Run a single test**: `uv run pytest tests/path/to/test_file.py::TestClass::test_method`
-- **Lint code**: `uv run ruff check . && uv run ruff format --check .`
-- **Fix linting issues**:`uv run ruff check --fix . && uv run ruff format .`
+When working with external libraries, use `mcp_context7` to retrieve up-to-date documentation.
 
-## Application Architecture
+**Core libraries requiring doc lookups:**
+- **Pydantic** & **PydanticAI**: Data validation and AI agents
+- **Python-Telegram-Bot**: Telegram API wrapper
+- **SQLAlchemy**: Database ORM
+- **Logfire**: Observability
+
+## Architecture Overview
 
 ### Core Application (`src/areyouok_telegram/`)
-Components:
-- **`main.py`**: Entry point with uvloop event loop, Logfire logging, and data scrubbing for privacy.
-- **`app.py`**: Application factory creating Telegram bot with concurrent updates support.
-- **`config.py`**: Environment configuration loading from `.env` file (bot token, database connection, etc.); All environment variables should be declared here.
+- **`main.py`**: Entry point (uvloop, Logfire setup, data scrubbing)
+- **`app.py`**: Application factory (bot initialization)
+- **`config.py`**: Environment configuration (**ALL env vars declared here**)
+- **`cli.py`**: CLI command definitions
+- **`setup/`**: Initialization modules (bot, database, jobs, exceptions)
 
 ### Data Layer (`src/areyouok_telegram/data/`)
-- **Data Models**: SQLAlchemy ORM with PostgreSQL database. `db_conn (AsyncSession)` should be passed in as the only positional arguments on data model methods. All other arguments must be keyword-based.
-- **`connection.py`**: Async PostgreSQL connection management. The context manager handles commits, rollbacks, and session close.
+SQLAlchemy ORM with PostgreSQL. Models organized by domain:
+- **`messaging/`**: Chat, Message, Session, Context, MediaFile
+- **`users/`**: User, UserMetadata
+- **`system/`**: JobState, Notification, Update, CommandUsage
+- **`llm/`**: LLMUsage, LLMGeneration
 
-### Telegram Event Handlers (`src/areyouok_telegram/handlers/`)
-- **`globals.py`**: Global event handlers for non-specific events: `on_error_event`, `on_new_update`.
-- **`messages.py`**: Message event handlers when the application receives a new message.
-- **`commands.py`**: Command handlers for bot commands (denoted by slash prefix).
-- **`media_utils.py`**: Utilities for handling media content.
+👉 **See**: `.cursor/rules/data-layer.mdc` for detailed conventions
 
-### Jobs (`src/areyouok_telegram/jobs/`)
-- **`conversations.py`**: Core conversation/response handler. Interfaces with the LLM integration to generate AI responses.
-- **`ping.py`**: Health check ping job.
-- **`data_log_warning.py`**: Data logging warning job.
-- **`base.py`**: Base job declaration providing a common interface for all jobs.
+### Telegram Handlers (`src/areyouok_telegram/handlers/`)
+- **`globals.py`**: Global event handlers
+- **`messages.py`**: Message event handlers
+- **`commands/`**: Command handlers (start, preferences, journal, feedback)
+- **`utils/`**: Handler utilities
 
-### Encryption Utilities (`src/areyouok_telegram/encryption/`)
-- Utility functions to handle generation of new keys, encrypting and decrypting content.
+👉 **See**: `.cursor/rules/handlers.mdc` for handler patterns
+
+### Background Jobs (`src/areyouok_telegram/jobs/`)
+- **`base.py`**: Base job interface
+- **`conversations.py`**: AI response generation
+- **`ping.py`**: Health checks
+- **`data_log_warning.py`**: Data logging alerts
+
+👉 **See**: `.cursor/rules/jobs.mdc` for job conventions
 
 ### LLM Integration (`src/areyouok_telegram/llms/`)
-- **`chat/`**: Main chat agent with dynamic personalities (anchoring, celebration, exploration, witnessing)
-- **`context_compression/`**: Context compression agent for managing conversation history
-- **`models/`**: LLM model definitions and base classes using pydantic-ai
-- **Miscellaneous agents**: Content validation and utility agents (agent_anonymizer.py, agent_content_check.py, agent_country_timezone.py)
+PydanticAI-based agent system:
+- **`chat/`**: Personality-based chat agents (anchoring, celebration, exploration, witnessing)
+- **`context_compression/`**: Conversation history management
+- **`models/`**: LLM model definitions
+- **Utility agents**: Content validation, anonymization, settings
 
-## Error Handling
+👉 **See**: `.cursor/rules/llms.mdc` for AI architecture
 
-- Use tenacity to handle retryable errors (e.g. time outs, HTTP errors, etc).
-- Log, Alert, and Inform application failures:
-  - Log the exception traceback in Logfire
-  - Alert application developers/owners
-  - Inform the user that a failure has occurred
+### Security (`src/areyouok_telegram/encryption/`)
+Privacy-first design with per-chat Fernet encryption for all user data.
+
+## Core Coding Guidelines
+
+### Error Handling: Three-Tier Approach
+
+**Log → Alert → Inform**
+1. **Log** exception to Logfire with full traceback
+2. **Alert** developers via developer chat
+3. **Inform** user with friendly error message
+
+**Retry Strategy:**
+- Use `@db_retry()` decorator for transient failures (timeouts, connection issues)
+- Do NOT retry validation errors or business logic failures
+
+### Observability & Privacy
+
+**Structured Logging:**
+- Use `@traced()` decorator on key functions
+- Set `extract_args=False` for sensitive functions
+- **NEVER log**: message content, encryption keys, tokens, PII
+
+**Data Privacy:**
+- All user messages encrypted at rest (per-chat Fernet keys)
+- Scrub sensitive data before logging
+- Use anonymization for logged user content
+
+### Environment Configuration
+
+**Required Variables:**
+- `TELEGRAM_BOT_TOKEN`, `PG_CONNECTION_STRING`, `USER_ENCRYPTION_SALT`, `LOGFIRE_TOKEN`
+- At least one LLM provider key: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, or `OPENROUTER_API_KEY`
+
+**All environment variables must be declared in `config.py`**
+
+### Code Quality Standards
+
+**Python:**
+- Python 3.12+
+- Ruff for linting and formatting (config in `pyproject.toml`)
+- Type hints required
+- Async/await for I/O operations
 
 ## Test Strategy
-- Uses **pytest** with async support (`pytest-asyncio`)
-- Test coverage with **pytest-cov** (branch coverage enabled)
-- Expected minimum coverage of 85%, with exclusions
-- **Unit tests only**: All testing focuses on individual function behavior
-- All external dependencies (database, APIs, LLMs) are mocked using `unittest.mock` or `pytest-mock`
-- Time-based functionality frozen during tests using **freezegun**
-- Tests organized in `tests/` mirroring source structure
-- **factory-boy** for generating test data
-- Test fixtures best practices:
-  - Shared fixtures in `tests/conftest.py`
-  - Suite-specific fixtures in test files
-  - Use fixtures as arguments when modifying them
-  - Use `@pytest.mark.usefixtures` when not modifying
+
+**Framework & Tools:**
+- **pytest** with async support (`pytest-asyncio`)
+- **pytest-cov** for coverage reporting (branch coverage enabled)
+- **pytest-mock** for mocking
+- **freezegun** for time manipulation
+- **factory-boy** for test data generation
+
+**Testing Philosophy:**
+- Minimum 85% coverage (with documented exclusions)
+- **Unit tests only**: Focus on individual function behavior
+- **Mock all external dependencies**: Database, APIs, LLMs
+- Test organization: Mirror source structure in `tests/`
+
+**Fixture Best Practices:**
+- Shared fixtures in `tests/conftest.py`
+- Suite-specific fixtures in individual test files
+- Use fixtures as **arguments** when modifying them
+- Use `@pytest.mark.usefixtures` when not modifying them
+
+**Coverage Exclusions:**
+- CLI entry points
+- Exception `__init__` methods
+- Type checking branches (`if TYPE_CHECKING`)
+
+## Component-Specific Rules
+
+For detailed conventions and patterns, see:
+- **`.cursor/rules/data-layer.mdc`**: Database operations, model patterns, encryption
+- **`.cursor/rules/handlers.mdc`**: Telegram event handling, command structure
+- **`.cursor/rules/jobs.mdc`**: Background job patterns, scheduling
+- **`.cursor/rules/llms.mdc`**: AI agent architecture, personality system, RAG

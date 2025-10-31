@@ -1,0 +1,380 @@
+---
+globs: src/areyouok_telegram/data/**
+alwaysApply: false
+---
+# Data Layer Conventions
+
+Conventions and patterns for the data layer (`src/areyouok_telegram/data/`).
+
+## Database Connection
+
+### Context Manager Pattern
+
+Always use the async context manager for database operations:
+
+```python
+from areyouok_telegram.data.database import async_database
+
+async with async_database() as db_conn:
+    # db_conn is an AsyncSession
+    result = await db_conn.execute(stmt)
+    # Commit happens automatically on success
+    # Rollback happens automatically on exception
+    # Connection closes automatically
+```
+
+**The context manager handles:**
+- Session creation
+- Automatic commit on success
+- Automatic rollback on exception
+- Session cleanup
+
+### Never Manually Commit/Rollback
+
+❌ **Don't do this:**
+```python
+async with async_database() as db_conn:
+    result = await db_conn.execute(stmt)
+    await db_conn.commit()  # NO! Context manager does this
+```
+
+✅ **Do this:**
+```python
+async with async_database() as db_conn:
+    result = await db_conn.execute(stmt)
+    # Done! Context manager handles commit
+```
+
+## Data Model Conventions
+
+### Method Signature Pattern
+
+**Rule**: `db_conn` is the ONLY positional argument. All other arguments MUST be keyword-only.
+
+✅ **Correct:**
+```python
+@classmethod
+async def get_by_id(
+    cls,
+    db_conn: AsyncSession,
+    *,  # Forces keyword-only arguments
+    user_id: int,
+    chat_id: int,
+) -> User | None:
+    pass
+```
+
+❌ **Incorrect:**
+```python
+@classmethod
+async def get_by_id(
+    cls,
+    db_conn: AsyncSession,
+    user_id: int,  # Missing *, allows positional
+    chat_id: int,
+) -> User | None:
+    pass
+```
+
+### Standard Decorators
+
+Apply decorators in this order:
+
+```python
+@classmethod  # If it's a class method
+@traced(extract_args=["arg1", "arg2"])  # Or extract_args=False for sensitive data
+@db_retry()  # Always apply for database operations
+async def method_name(cls, db_conn: AsyncSession, *, ...):
+    pass
+```
+
+**Decorator Guidelines:**
+- `@traced()`: Use for observability
+  - `extract_args=False`: For methods handling sensitive data
+  - `extract_args=["field1", "field2"]`: To log specific safe arguments
+- `@db_retry()`: Always use for database operations (handles transient failures)
+
+### Model Structure
+
+All models should follow this pattern:
+
+```python
+class MyModel(pydantic.BaseModel):
+    """Model description."""
+    
+    model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
+    
+    # Required fields (no defaults)
+    chat: Chat
+    user_id: int
+    
+    # Optional fields (with defaults)
+    id: int = 0
+    created_at: datetime = pydantic.Field(default_factory=lambda: datetime.now(UTC))
+    
+    @property
+    def object_key(self) -> str:
+        """Unique identifier for deduplication."""
+        return hashlib.sha256(f"model:{self.id}:{...}".encode()).hexdigest()
+```
+
+## Data Model Organization
+
+Models are organized by domain:
+
+### `messaging/`
+- **Chat**: Telegram chat/conversation
+- **Message**: User and bot messages
+- **Session**: Conversation sessions
+- **Context**: Session context and metadata
+- **MediaFile**: Audio, images, documents
+- **GuidedSession**: Structured conversation flows
+- **ChatEvent**: Chat lifecycle events
+
+### `users/`
+- **User**: Telegram user profile
+- **UserMetadata**: Extended user information
+
+### `system/`
+- **Update**: Telegram update tracking
+- **JobState**: Background job state
+- **Notification**: System notifications
+- **CommandUsage**: Command analytics
+
+### `llm/`
+- **LLMUsage**: Token usage tracking
+- **LLMGeneration**: LLM request/response logs
+
+## Encryption Patterns
+
+### Per-Chat Encryption
+
+All sensitive user data (messages, context) MUST be encrypted using per-chat Fernet keys.
+
+**Encryption Flow:**
+```python
+class Message(pydantic.BaseModel):
+    chat: Chat
+    payload: dict
+    
+    def encrypt_message(self) -> str:
+        """Encrypt payload using chat's key."""
+        user_encryption_key = self.chat.retrieve_key()
+        fernet = Fernet(user_encryption_key.encode())
+        payload_json = json.dumps(self.payload)
+        encrypted_bytes = fernet.encrypt(payload_json.encode("utf-8"))
+        return encrypted_bytes.decode("utf-8")
+```
+
+**Decryption Flow:**
+```python
+@staticmethod
+def decrypt_message(encrypted_payload: str, user_encryption_key: str) -> dict:
+    """Decrypt payload."""
+    fernet = Fernet(user_encryption_key.encode())
+    encrypted_bytes = encrypted_payload.encode("utf-8")
+    decrypted_bytes = fernet.decrypt(encrypted_bytes)
+    return json.loads(decrypted_bytes.decode("utf-8"))
+```
+
+### Save Pattern
+
+Models should:
+1. Encrypt sensitive data before saving
+2. Return decrypted instance after save
+
+```python
+@traced(extract_args=False)  # Sensitive data
+@db_retry()
+async def save(self) -> Message:
+    """Save message with encryption."""
+    encrypted_payload = self.encrypt_message()
+    
+    async with async_database() as db_conn:
+        stmt = (
+            pg_insert(MessagesTable)
+            .values(
+                object_key=self.object_key,
+                encrypted_payload=encrypted_payload,
+                # ... other fields
+            )
+            .returning(MessagesTable)
+        )
+        
+        result = await db_conn.execute(stmt)
+        row = result.scalar_one()
+        
+        # Return with decrypted data
+        return Message(
+            id=row.id,
+            chat=self.chat,
+            payload=self.payload,  # Original, not encrypted
+            # ... other fields
+        )
+```
+
+### Retrieval Pattern
+
+Always decrypt after retrieval:
+
+```python
+@classmethod
+@db_retry()
+async def get_by_id(cls, db_conn: AsyncSession, *, message_id: int, chat: Chat) -> Message | None:
+    """Retrieve and decrypt message."""
+    async with async_database() as db_conn:
+        stmt = select(MessagesTable).where(MessagesTable.id == message_id)
+        result = await db_conn.execute(stmt)
+        row = result.scalars().first()
+        
+        if row is None:
+            return None
+        
+        # Decrypt before returning
+        encryption_key = chat.retrieve_key()
+        decrypted_payload = cls.decrypt_message(row.encrypted_payload, encryption_key)
+        
+        return Message(
+            id=row.id,
+            chat=chat,
+            payload=decrypted_payload,
+            # ... other fields
+        )
+```
+
+## Query Patterns
+
+### Use PostgreSQL INSERT...ON CONFLICT
+
+For upsert operations, use PostgreSQL's native conflict handling:
+
+```python
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+stmt = (
+    pg_insert(TableName)
+    .values(
+        object_key=unique_key,
+        field1=value1,
+        # ...
+    )
+    .on_conflict_do_nothing(index_elements=["object_key"])
+    .returning(TableName)
+)
+```
+
+### Filtering with Optional Parameters
+
+Handle optional filters cleanly:
+
+```python
+@classmethod
+async def get_by_chat(
+    cls,
+    db_conn: AsyncSession,
+    *,
+    chat_id: int,
+    from_timestamp: datetime | None = None,
+    to_timestamp: datetime | None = None,
+) -> list[Message]:
+    """Retrieve messages with optional filtering."""
+    stmt = select(MessagesTable).where(MessagesTable.chat_id == chat_id)
+    
+    # Apply optional filters
+    if from_timestamp:
+        stmt = stmt.where(MessagesTable.created_at >= from_timestamp)
+    
+    if to_timestamp:
+        stmt = stmt.where(MessagesTable.created_at < to_timestamp)
+    
+    stmt = stmt.order_by(MessagesTable.created_at.desc())
+    
+    result = await db_conn.execute(stmt)
+    rows = result.scalars().all()
+    # ... process rows
+```
+
+## Common Patterns
+
+### Object Keys for Deduplication
+
+Use SHA-256 hashes of identifying fields:
+
+```python
+@property
+def object_key(self) -> str:
+    """Unique key for deduplication."""
+    unique_string = f"model:{self.field1}:{self.field2}:{self.field3}"
+    return hashlib.sha256(unique_string.encode()).hexdigest()
+```
+
+### Timestamps
+
+Always use UTC:
+
+```python
+from datetime import UTC, datetime
+
+created_at: datetime = pydantic.Field(default_factory=lambda: datetime.now(UTC))
+```
+
+### Return None for Not Found
+
+Prefer returning `None` over raising exceptions for not-found cases:
+
+```python
+async def get_by_id(cls, db_conn: AsyncSession, *, record_id: int) -> Record | None:
+    """Returns None if not found."""
+    result = await db_conn.execute(stmt)
+    row = result.scalars().first()
+    
+    if row is None:
+        return None  # Not raising an exception
+    
+    return Record(...)
+```
+
+### Raise Exceptions for Invalid Input
+
+Raise descriptive exceptions for invalid arguments:
+
+```python
+class InvalidMessageTypeError(Exception):
+    def __init__(self, message_type: str):
+        super().__init__(f"Invalid message type: {message_type}. Expected 'Message' or 'MessageReactionUpdated'.")
+        self.message_type = message_type
+```
+
+## Privacy & Security Rules
+
+### Never Log Sensitive Data
+
+❌ **Never:**
+- Message content
+- Encryption keys
+- User tokens
+- Personal information
+
+✅ **Safe to log:**
+- Record IDs
+- Counts/statistics
+- Timestamps
+- Operation outcomes
+
+### Use extract_args=False
+
+For methods handling sensitive data:
+
+```python
+@traced(extract_args=False)  # Don't log any arguments
+@db_retry()
+async def save_message(self, db_conn: AsyncSession, *, content: str):
+    pass
+```
+
+### Encryption Key Storage
+
+- Per-chat keys derived from chat ID + application salt
+- Keys retrieved via `chat.retrieve_key()`
+- Never store decrypted keys in database
+- Never log encryption keys

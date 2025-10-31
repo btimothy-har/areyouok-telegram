@@ -1,0 +1,575 @@
+---
+globs: src/areyouok_telegram/llms/**
+alwaysApply: false
+---
+# LLM Integration Conventions
+
+Conventions and patterns for LLM agents (`src/areyouok_telegram/llms/`).
+
+## Architecture Overview
+
+The LLM layer is built on **PydanticAI** with structured outputs and comprehensive tracking.
+
+### Component Structure
+
+**Chat Agents** (`chat/agents/`):
+- `chat.py`: Main conversational agent with personality system
+- `onboarding.py`: Onboarding flow agent
+- `journaling.py`: Journal entry guidance agent
+
+**Personality System** (`chat/personalities/`):
+- Dynamic personality modes that shape bot behavior
+- Types: Anchoring, Celebration, Companionship, Exploration, Witnessing
+- Can switch personalities mid-conversation
+
+**Context Management**:
+- `context_compression/`: Compresses conversation history
+- `context_search/`: RAG-based context retrieval using pgvector
+- `profile_generation/`: Generates user profiles from conversations
+
+**Utility Agents**:
+- `agent_anonymizer.py`: Content anonymization
+- `agent_content_check.py`: Safety and content validation
+- `agent_country_timezone.py`: Location/timezone detection
+- `agent_preferences.py`: Settings management
+- `agent_feedback_context.py`: Feedback context generation
+
+**Model Management** (`models.py`):
+- Unified model configuration across providers
+- Primary + fallback model support
+- Provider abstraction (Anthropic, OpenAI, Google, OpenRouter)
+
+**Evaluators** (`evaluators/`):
+- Quality metrics: Empathy, Personality Alignment, Reasoning, Sycophancy
+
+## Agent Definition Pattern
+
+### Basic Agent Structure
+
+```python
+import pydantic_ai
+from dataclasses import dataclass
+from areyouok_telegram.llms.models import Gemini25Pro
+
+@dataclass
+class MyAgentDependencies:
+    """Context passed to agent."""
+    chat: Chat
+    user: User
+    # ... other context
+
+agent_model = Gemini25Pro()
+
+my_agent = pydantic_ai.Agent(
+    model=agent_model.model,
+    output_type=MyOutputType,  # Pydantic model for structured output
+    deps_type=MyAgentDependencies,
+    name="my_agent",  # Unique identifier
+    end_strategy="exhaustive",  # Run output validators exhaustively
+    retries=3,  # Retry failed validations
+)
+```
+
+### Instructions
+
+Define dynamic instructions using the `@agent.instructions` decorator:
+
+```python
+@my_agent.instructions
+async def dynamic_instructions(ctx: pydantic_ai.RunContext[MyAgentDependencies]) -> str:
+    # Build instructions dynamically based on context
+    user_info = f"User: {ctx.deps.user.name}"
+    
+    # Load additional context
+    user_metadata = await UserMetadata.get_by_user_id(user_id=ctx.deps.user.id)
+    
+    # Return instructions as string
+    return f"{user_info}\n\nInstructions: ..."
+```
+
+**Key Points:**
+- Can be async
+- Access dependencies via `ctx.deps`
+- Can load additional data from database
+- Return string that becomes part of system prompt
+
+### Output Validators
+
+Validate and refine agent outputs:
+
+```python
+@my_agent.output_validator
+async def validate_output(
+    ctx: pydantic_ai.RunContext[MyAgentDependencies],
+    data: MyOutputType,
+) -> MyOutputType:
+    # Validation logic
+    if not data.text:
+        raise pydantic_ai.OutputValidationError("Text cannot be empty")
+    
+    # Can modify output
+    if len(data.text) > 1000:
+        data.text = data.text[:1000]
+    
+    return data
+```
+
+**When validators fail:**
+- Agent retries (up to `retries` count)
+- Error message goes back to LLM for refinement
+- Use `OutputValidationError` with descriptive messages
+
+### Tools (Function Calling)
+
+Define tools for agents to call:
+
+```python
+@my_agent.tool
+async def search_memories(
+    ctx: pydantic_ai.RunContext[MyAgentDependencies],
+    query: str,
+) -> str:
+    """Search user's past conversations.
+    
+    Args:
+        query: Search query for memory retrieval
+    """
+    results = await search_chat_context(
+        chat=ctx.deps.chat,
+        query=query,
+    )
+    return results
+```
+
+**Tool Guidelines:**
+- Use descriptive docstrings (LLM sees them)
+- Type hints are important for structured calling
+- Can be async
+- Return simple types (str, int, dict, etc.)
+
+## Running Agents
+
+### Always Use run_agent_with_tracking
+
+**Never call `agent.run()` directly**. Use the wrapper:
+
+```python
+from areyouok_telegram.llms.utils import run_agent_with_tracking
+
+result = await run_agent_with_tracking(
+    agent=my_agent,
+    chat=chat,
+    session=session,  # Optional, can be None for background jobs
+    run_kwargs={
+        "user_prompt": user_message,
+        "deps": MyAgentDependencies(chat=chat, user=user),
+    },
+)
+```
+
+**This provides:**
+- Automatic usage tracking (tokens, cost)
+- Generation logging
+- Retry on transient errors
+- Consistent error handling
+- Performance metrics
+
+### Agent Run Result
+
+```python
+result = await run_agent_with_tracking(...)
+
+# Access output data
+response_data = result.data  # Your output_type instance
+
+# Access usage
+usage = result.usage()  # Token counts, model info
+
+# Access message history
+messages = result.all_messages()  # Full conversation with agent
+```
+
+## Model Configuration
+
+### Available Models
+
+Defined in `models.py`:
+
+- **Claude Opus 4.1**: `ClaudeOpus41()`
+- **Claude Sonnet 4**: `ClaudeSonnet4()`
+- **GPT-4o**: `GPT4o()`
+- **GPT-4o Mini**: `GPT4oMini()`
+- **o1 Preview**: `O1Preview()`
+- **o1 Mini**: `O1Mini()`
+- **Gemini 2.5 Pro**: `Gemini25Pro()`
+- **Gemini 2.5 Flash**: `Gemini25Flash()`
+- **Gemini 1.5 Pro**: `Gemini15Pro()`
+
+### Model Selection
+
+Choose based on task requirements:
+
+**High-reasoning tasks** (planning, complex analysis):
+- `ClaudeOpus41()` or `O1Preview()`
+
+**General conversation** (chat, onboarding):
+- `Gemini25Pro()`, `ClaudeSonnet4()`, or `GPT4o()`
+
+**Fast, simple tasks** (classification, extraction):
+- `Gemini25Flash()`, `GPT4oMini()`, or `O1Mini()`
+
+### Custom Settings
+
+```python
+from pydantic_ai.settings import ModelSettings
+
+custom_settings = ModelSettings(
+    temperature=0.7,  # Higher = more creative
+    max_tokens=2000,
+    top_p=0.9,
+)
+
+model = Gemini25Pro(model_settings=custom_settings)
+```
+
+### Fallback Models
+
+Models automatically fallback to OpenRouter if primary provider fails:
+
+```python
+model = Gemini25Pro()
+# If GEMINI_API_KEY unavailable or errors, falls back to OpenRouter
+```
+
+**Configured in `BaseModelConfig`:**
+- Primary model (direct provider)
+- OpenRouter fallback (if configured)
+- Automatic failover on errors
+
+## Personality System
+
+### Dynamic Personalities
+
+The chat agent adapts its personality based on user needs:
+
+**Available Personalities:**
+- **Anchoring**: Grounding, stabilization during distress
+- **Celebration**: Positive reinforcement, achievement recognition
+- **Companionship**: Warm, friendly everyday conversation
+- **Exploration**: Curiosity-driven discovery and reflection
+- **Witnessing**: Deep listening, validation, holding space
+
+### Personality Structure
+
+Each personality implements:
+
+```python
+class Personality:
+    value: str  # Unique identifier
+    emoji: str  # Visual representation
+    
+    def prompt_text(self) -> str:
+        """Return personality-specific instructions."""
+        return "..."
+```
+
+### Switching Personalities
+
+Agents can switch personalities mid-conversation:
+
+```python
+class SwitchPersonalityResponse(pydantic.BaseModel):
+    new_personality: str
+    reasoning: str
+```
+
+**Personality switches are:**
+- Agent-initiated based on user needs
+- Tracked in context
+- Can be restricted via `restricted_responses`
+
+## Response Types
+
+### Text Response
+
+Simple text message:
+
+```python
+class TextResponse(pydantic.BaseModel):
+    text: str  # MarkdownV2 formatted
+    reasoning: str  # Internal reasoning (not shown to user)
+```
+
+### Keyboard Response
+
+Text with inline buttons:
+
+```python
+class KeyboardButton(pydantic.BaseModel):
+    text: str
+    callback_data: str
+
+class KeyboardResponse(pydantic.BaseModel):
+    text: str
+    buttons: list[KeyboardButton]
+    reasoning: str
+```
+
+### Reaction Response
+
+React to user message with emoji:
+
+```python
+class ReactionResponse(pydantic.BaseModel):
+    reaction: str  # Single emoji
+    reasoning: str
+```
+
+### Do Nothing Response
+
+No response needed:
+
+```python
+class DoNothingResponse(pydantic.BaseModel):
+    reasoning: str
+```
+
+## Context Management
+
+### Context Compression
+
+Compress long conversation history:
+
+```python
+from areyouok_telegram.llms.context_compression import context_compression_agent
+
+result = await run_agent_with_tracking(
+    agent=context_compression_agent,
+    chat=chat,
+    session=session,
+    run_kwargs={
+        "message_history": messages,
+        "deps": ContextCompressionDependencies(
+            chat=chat,
+            template=ContextTemplate.SESSION,
+        ),
+    },
+)
+
+compressed = result.data.content  # Compressed text
+```
+
+**Use cases:**
+- End of session summaries
+- Long conversation compression
+- Memory formation
+
+### Context Search (RAG)
+
+Search past conversations using embeddings:
+
+```python
+from areyouok_telegram.llms.context_search import search_chat_context
+
+results = await search_chat_context(
+    chat=chat,
+    query="What did we discuss about work?",
+    limit=5,
+)
+```
+
+**Powered by:**
+- PostgreSQL pgvector
+- LlamaIndex integration
+- OpenAI embeddings (configurable)
+
+### Profile Generation
+
+Generate user profiles from conversations:
+
+```python
+from areyouok_telegram.llms.profile_generation import profile_generation_agent
+
+result = await run_agent_with_tracking(
+    agent=profile_generation_agent,
+    chat=chat,
+    session=None,  # Background job
+    run_kwargs={
+        "user_prompt": conversation_summary,
+        "deps": ProfileGenerationDependencies(
+            chat=chat,
+            existing_profile=existing_profile,
+        ),
+    },
+)
+
+profile = result.data  # ProfileOutput
+```
+
+## Agent Dependencies Pattern
+
+### Common Dependencies Base
+
+Extend `CommonChatAgentDependencies`:
+
+```python
+from areyouok_telegram.llms.chat.utils import CommonChatAgentDependencies
+
+@dataclass
+class MyAgentDependencies(CommonChatAgentDependencies):
+    """Extends common deps with agent-specific fields."""
+    
+    custom_field: str = "default"
+    
+    def to_dict(self) -> dict:
+        return super().to_dict() | {
+            "custom_field": self.custom_field,
+        }
+```
+
+**Common fields include:**
+- `chat: Chat`
+- `session: Session`
+- `user: User`
+- `message_history: list`
+- `notification: Notification | None`
+- `restricted_responses: list[str]`
+
+## Error Handling
+
+### Retryable Errors
+
+The system automatically retries:
+- Network errors (timeout, connection)
+- 5xx server errors
+- Provider-specific transient errors
+
+**Configured in `utils.py`:**
+```python
+def should_retry_llm_error(e: Exception) -> bool:
+    # Determines if error is retryable
+```
+
+### Output Validation Errors
+
+Raise descriptive errors for LLM to retry:
+
+```python
+if not is_valid(data):
+    raise pydantic_ai.OutputValidationError(
+        "Response must include reasoning and text. "
+        f"Current response: {data}"
+    )
+```
+
+**Error message goes to LLM** to help it correct the output.
+
+### Exception Types
+
+Define custom exceptions in `llms/exceptions.py`:
+
+```python
+class ContextSearchError(Exception):
+    """Raised when context search fails."""
+    pass
+
+class MetadataFieldUpdateError(Exception):
+    """Raised when metadata update fails."""
+    pass
+```
+
+## Best Practices
+
+### 1. Use Structured Outputs
+
+Define Pydantic models for output:
+
+```python
+class MyOutput(pydantic.BaseModel):
+    text: str
+    confidence: float = pydantic.Field(ge=0.0, le=1.0)
+    reasoning: str
+```
+
+### 2. Make Instructions Dynamic
+
+Load user context in `@agent.instructions`:
+
+```python
+@agent.instructions
+async def instructions(ctx):
+    user_meta = await UserMetadata.get_by_user_id(...)
+    return f"User prefers {user_meta.communication_style}"
+```
+
+### 3. Validate Thoroughly
+
+Use output validators to ensure quality:
+
+```python
+@agent.output_validator
+async def validate(ctx, data):
+    if len(data.text) < 10:
+        raise OutputValidationError("Response too short")
+    return data
+```
+
+### 4. Track Everything
+
+Always use `run_agent_with_tracking`:
+
+```python
+result = await run_agent_with_tracking(
+    agent=my_agent,
+    chat=chat,
+    session=session,
+    run_kwargs={...},
+)
+```
+
+### 5. Handle Missing Data
+
+Check for None values:
+
+```python
+user_metadata = await UserMetadata.get_by_user_id(...)
+if user_metadata:
+    prompt += f"User prefers: {user_metadata.preferred_name}"
+else:
+    prompt += "User preferences not available"
+```
+
+### 6. Use Appropriate Models
+
+Match model to task complexity:
+- Complex reasoning → Opus, o1-preview
+- General chat → Gemini Pro, Sonnet
+- Simple tasks → Flash, Mini
+
+### 7. Provide Tool Descriptions
+
+Tools need good docstrings:
+
+```python
+@agent.tool
+async def search(ctx, query: str) -> str:
+    """Search past conversations for relevant context.
+    
+    Args:
+        query: Natural language search query
+    
+    Returns:
+        Relevant excerpts from past conversations
+    """
+```
+
+## Anti-Patterns to Avoid
+
+❌ **Direct agent.run() calls** - Use `run_agent_with_tracking`
+❌ **Static instructions** - Make them dynamic with context
+❌ **Unstructured outputs** - Use Pydantic models
+❌ **Missing validation** - Always validate outputs
+❌ **Ignoring retries** - Let the framework handle it
+❌ **Hardcoded models** - Use model configs
+❌ **No error handling** - Handle validation and retry errors
+❌ **Synchronous I/O** - Use async throughout
