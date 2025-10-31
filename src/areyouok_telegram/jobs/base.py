@@ -86,7 +86,6 @@ class BaseJob(ABC):
         """
         raise NotImplementedError("Subclasses must implement the 'run_job' method.")
 
-    @traced(extract_args=["state_data"])
     async def save_state(self, **state_data) -> None:
         """
         Save job state to the database.
