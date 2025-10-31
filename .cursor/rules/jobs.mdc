@@ -1,0 +1,486 @@
+---
+globs: src/areyouok_telegram/jobs/**
+alwaysApply: false
+---
+# Background Jobs Conventions
+
+Conventions and patterns for background jobs (`src/areyouok_telegram/jobs/`).
+
+## Job Architecture
+
+### Base Job Class
+
+All jobs inherit from `BaseJob` (defined in `jobs/base.py`):
+
+```python
+from areyouok_telegram.jobs.base import BaseJob
+
+class MyJob(BaseJob):
+    def __init__(self, param1: str):
+        super().__init__()
+        self.param1 = param1
+    
+    @property
+    def name(self) -> str:
+        """Unique job identifier."""
+        return f"my_job:{self.param1}"
+    
+    async def run_job(self) -> None:
+        """Job implementation."""
+        # Job logic here
+```
+
+**Key Components:**
+- `name` property: Unique identifier for the job
+- `run_job()` method: Core job logic
+- Inherits state management and lifecycle methods
+
+### Job Naming Convention
+
+Job names should follow the pattern: `{job_type}:{identifier}`
+
+**Examples:**
+- `conversation:123` - Conversation job for chat ID 123
+- `ping` - Global ping job (no identifier needed)
+- `data_log_warning` - Global data logging job
+
+### Job Identity
+
+Jobs have an `id` property (MD5 hash of name) for locking:
+
+```python
+@property
+def id(self) -> str:
+    return hashlib.md5(self.name.encode()).hexdigest()
+```
+
+## Job Lifecycle
+
+### Initialization
+
+```python
+def __init__(self, chat_id: int):
+    super().__init__()  # Always call parent __init__
+    self.chat_id = chat_id
+    # Initialize job-specific attributes
+```
+
+### Execution Flow
+
+1. Job is scheduled by scheduler
+2. Scheduler calls `job.run(context)`
+3. `run()` method updates internal state and calls `run_job()`
+4. `run_job()` contains job logic
+5. Job either completes or schedules itself again
+
+### Stopping Jobs
+
+Jobs can be stopped gracefully:
+
+```python
+await self.stop()  # Schedules job removal
+```
+
+**When to stop:**
+- Resource no longer exists (chat deleted, user gone)
+- Job conditions no longer met (session timeout)
+- One-time job completed
+
+## State Management
+
+### Saving State
+
+Persist state across bot restarts:
+
+```python
+await self.save_state(
+    last_run_time=datetime.now(UTC).isoformat(),
+    processed_count=100,
+    custom_data={"key": "value"},
+)
+```
+
+**State data must be JSON-serializable.**
+
+### Loading State
+
+```python
+state = await self.load_state()
+last_run_time = state.get('last_run_time')
+if last_run_time:
+    last_run_time = datetime.fromisoformat(last_run_time)
+```
+
+Returns empty dict if no state exists.
+
+### Clearing State
+
+```python
+await self.clear_state()
+```
+
+Use for cleanup or job reset.
+
+## Job Scheduling
+
+### Schedule New Job
+
+```python
+from areyouok_telegram.jobs import schedule_job
+from datetime import timedelta, UTC, datetime
+
+await schedule_job(
+    context=context,  # Telegram context
+    job=MyJob(param1="value"),
+    interval=timedelta(seconds=30),  # Run every 30 seconds
+    first=datetime.now(UTC) + timedelta(seconds=2),  # Start in 2 seconds
+)
+```
+
+### Run Job Once
+
+```python
+from areyouok_telegram.jobs.scheduler import run_job_once
+
+await run_job_once(
+    context=context,
+    job=MyJob(param1="value"),
+    delay=timedelta(seconds=5),  # Run once in 5 seconds
+)
+```
+
+### Job Locking
+
+Jobs use locks to prevent concurrent execution:
+
+```python
+from areyouok_telegram.jobs.base import JOB_LOCK
+
+async with JOB_LOCK[self.id]:
+    # Critical section - only one instance can execute
+    existing_jobs = self._run_context.job_queue.get_jobs_by_name(self.name)
+    # ...
+```
+
+## Standard Job Patterns
+
+### Chat-Based Jobs
+
+Jobs that operate on a specific chat:
+
+```python
+class ConversationJob(BaseJob):
+    def __init__(self, chat_id: int):
+        super().__init__()
+        self.chat_id = chat_id  # Internal chat ID
+    
+    @property
+    def name(self) -> str:
+        return f"conversation:{self.chat_id}"
+    
+    async def run_job(self) -> None:
+        # Load chat
+        chat = await Chat.get_by_id(chat_id=self.chat_id)
+        if not chat:
+            # Chat no longer exists, stop job
+            await self.stop()
+            return
+        
+        # Process chat
+        # ...
+```
+
+**Pattern:**
+1. Load resource (chat, user, etc.)
+2. Check if resource still exists
+3. If not, stop job and return
+4. Otherwise, process
+
+### Periodic Global Jobs
+
+Jobs that run globally on a schedule:
+
+```python
+class PingJob(BaseJob):
+    @property
+    def name(self) -> str:
+        return "ping"
+    
+    async def run_job(self) -> None:
+        logfire.info("Ping job executed", timestamp=self._run_timestamp)
+        # Job continues running per schedule
+```
+
+**Don't call `stop()` - let scheduler handle repetition.**
+
+### One-Time Jobs
+
+Jobs that run once then stop:
+
+```python
+class EvaluationsJob(BaseJob):
+    def __init__(self, session_id: int):
+        super().__init__()
+        self.session_id = session_id
+    
+    @property
+    def name(self) -> str:
+        return f"evaluations:{self.session_id}"
+    
+    async def run_job(self) -> None:
+        # Do one-time work
+        session = await Session.get_by_id(session_id=self.session_id)
+        # Process evaluations...
+        
+        # Job complete - it won't run again
+        await self.stop()
+```
+
+## Conversation Job Pattern
+
+The `ConversationJob` is the most complex job. Key patterns:
+
+### Check for Active Session
+
+```python
+active_sessions = await Session.get_sessions(chat=chat, active=True)
+active_session = active_sessions[0] if active_sessions else None
+
+if not active_session:
+    # No session, stop job
+    await self.stop()
+    return
+```
+
+### Check if Response Needed
+
+```python
+if active_session.has_bot_responded:
+    # Bot already responded, check for timeout
+    reference_ts = active_session.last_user_activity or active_session.session_start
+    inactivity_duration = self._run_timestamp - reference_ts
+    
+    if inactivity_duration > timedelta(minutes=CHAT_SESSION_TIMEOUT_MINS):
+        # Session timed out, compress and stop
+        await self.compress_and_stop(chat, active_session)
+        return
+```
+
+### Determine Agent Type
+
+```python
+# Check for guided sessions (onboarding, journaling, etc.)
+guided_sessions = await GuidedSession.get_by_chat(
+    chat=chat,
+    session_type=GuidedSessionType.ONBOARDING.value,
+)
+active_guided_session = next(
+    (gs for gs in guided_sessions if gs.is_active),
+    None
+)
+
+if active_guided_session:
+    # Use specialized agent (onboarding, journaling)
+    if active_guided_session.session_type == GuidedSessionType.ONBOARDING.value:
+        response = await onboarding_agent.run(...)
+    elif active_guided_session.session_type == GuidedSessionType.JOURNALING.value:
+        response = await journaling_agent.run(...)
+else:
+    # Use general chat agent
+    response = await chat_agent.run(...)
+```
+
+### Send Response
+
+```python
+# Handle different response types
+if isinstance(response.data, TextResponse):
+    await telegram_call(
+        self._run_context.bot.send_message,
+        chat_id=chat.telegram_chat_id,
+        text=response.data.text,
+        parse_mode="MarkdownV2",
+    )
+elif isinstance(response.data, TextWithButtonsResponse):
+    # Build inline keyboard
+    keyboard = [
+        [InlineKeyboardButton(btn.text, callback_data=f"response::{btn.callback_data}")]
+        for btn in response.data.buttons
+    ]
+    await telegram_call(
+        self._run_context.bot.send_message,
+        chat_id=chat.telegram_chat_id,
+        text=response.data.text,
+        parse_mode="MarkdownV2",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+```
+
+### Save Bot Message
+
+```python
+bot_message = Message(
+    chat=chat,
+    user_id=bot_user.id,
+    telegram_message_id=sent_message.message_id,
+    message_type="Message",
+    payload=sent_message.to_dict(),
+    session_id=active_session.id,
+    reasoning=response.data.reasoning if hasattr(response.data, 'reasoning') else None,
+)
+await bot_message.save()
+```
+
+### Update Session
+
+```python
+await active_session.new_message(
+    timestamp=datetime.now(UTC),
+    is_user=False,
+)
+```
+
+## Error Handling in Jobs
+
+### Validate Resources
+
+Always check that required resources exist:
+
+```python
+chat = await Chat.get_by_id(chat_id=self.chat_id)
+if not chat:
+    logfire.warning("Chat not found, stopping job", chat_id=self.chat_id)
+    await self.stop()
+    return
+```
+
+### Handle Missing Data
+
+```python
+user = await User.get_by_telegram_id(telegram_user_id=chat.telegram_chat_id)
+if not user:
+    raise UserNotFoundError(chat.telegram_chat_id)
+```
+
+### Use Logfire Spans
+
+Wrap logical sections in spans:
+
+```python
+with logfire.span(
+    "Compressing conversation history",
+    _span_name="ConversationJob.compress_context",
+    session_id=session.id,
+):
+    compressed = await context_compression_agent.run(...)
+```
+
+## LLM Integration in Jobs
+
+### Run Agent with Tracking
+
+Always use `run_agent_with_tracking`:
+
+```python
+from areyouok_telegram.llms import run_agent_with_tracking
+
+response = await run_agent_with_tracking(
+    agent=chat_agent,
+    user_prompt=user_prompt,
+    deps=dependencies,
+    chat=chat,
+    session=active_session,
+    message_infer_name=True,  # For agent result tracking
+)
+```
+
+This provides:
+- Automatic LLM usage tracking
+- Generation logging
+- Consistent error handling
+
+### Agent Dependencies
+
+Each agent has typed dependencies:
+
+```python
+deps = ChatAgentDependencies(
+    chat=chat,
+    session=active_session,
+    user=user,
+    user_metadata=user_metadata,
+    message_history=message_history,
+    # ... other deps
+)
+
+response = await chat_agent.run(user_prompt, deps=deps)
+```
+
+## Job Best Practices
+
+### 1. Always Call super().__init__()
+
+```python
+def __init__(self, chat_id: int):
+    super().__init__()  # Required!
+    self.chat_id = chat_id
+```
+
+### 2. Check Resource Existence
+
+```python
+chat = await Chat.get_by_id(chat_id=self.chat_id)
+if not chat:
+    await self.stop()
+    return
+```
+
+### 3. Use Proper Job Names
+
+```python
+@property
+def name(self) -> str:
+    return f"job_type:{unique_identifier}"
+```
+
+### 4. Stop When Done
+
+For one-time or conditional jobs:
+```python
+if job_complete:
+    await self.stop()
+```
+
+### 5. Persist State for Long-Running Jobs
+
+```python
+await self.save_state(
+    last_processed_id=last_id,
+    checkpoint=checkpoint_data,
+)
+```
+
+### 6. Use Logfire for Observability
+
+```python
+with logfire.span("Processing step", _span_name="MyJob.process"):
+    # Processing logic
+```
+
+### 7. Handle Timeouts
+
+```python
+inactivity_duration = datetime.now(UTC) - last_activity
+if inactivity_duration > TIMEOUT_THRESHOLD:
+    await self.stop()
+```
+
+## Anti-Patterns to Avoid
+
+❌ **Forgetting super().__init__()** - Breaks parent initialization
+❌ **Not stopping dead jobs** - Wastes resources
+❌ **Blocking operations** - Use async throughout
+❌ **Missing error handling** - Always validate resources
+❌ **Direct LLM calls** - Use `run_agent_with_tracking`
+❌ **Untracked state** - Persist important state
+❌ **Missing observability** - Use Logfire spans

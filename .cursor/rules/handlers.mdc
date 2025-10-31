@@ -1,0 +1,478 @@
+---
+globs: src/areyouok_telegram/handlers/**
+alwaysApply: false
+---
+# Telegram Handler Conventions
+
+Conventions and patterns for Telegram event handlers (`src/areyouok_telegram/handlers/`).
+
+## Handler Structure
+
+### Handler Organization
+
+**Global Handlers** (`globals.py`):
+- `on_new_update`: First handler for all updates; saves Update/User/Chat, schedules jobs
+- `on_dynamic_response_callback`: Handles inline button callbacks
+
+**Message Handlers** (`messages.py`):
+- `on_new_message`: Handles new text/media messages
+- `on_edit_message`: Handles message edits
+- `on_message_reaction`: Handles reactions to messages
+
+**Command Handlers** (`commands/`):
+Each command gets its own module:
+- `start.py`: `/start` command (onboarding)
+- `preferences.py`: `/preferences` command (user settings)
+- `journal.py`: `/journal` command (journal management)
+- `feedback.py`: `/feedback` command (feedback collection)
+
+**Handler Utilities** (`utils/`):
+- `constants.py`: Shared constants (messages, keyboard layouts)
+- `media.py`: Media extraction and processing
+
+## Standard Handler Pattern
+
+### Function Signature
+
+All handlers follow this signature:
+
+```python
+@traced(extract_args=["update"])
+async def on_handler_name(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler description."""
+    # Handler implementation
+```
+
+**Key Points:**
+- Always use `@traced(extract_args=["update"])` for observability
+- Standard parameters: `update` and `context`
+- Async function
+- Descriptive docstring
+
+### Standard Handler Flow
+
+```python
+@traced(extract_args=["update"])
+async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):
+    # 1. Validate update has required data
+    if not update.message:
+        raise NoMessageError(update.update_id)
+    
+    # 2. Load required models (Chat, User, Session)
+    chat = await Chat.get_by_id(telegram_chat_id=update.effective_chat.id)
+    if not chat:
+        raise NoChatFoundError(update.effective_chat.id)
+    
+    user = await User.get_by_id(telegram_user_id=update.effective_user.id)
+    if not user:
+        raise NoUserFoundError(update.effective_user.id)
+    
+    session = await Session.get_or_create_new_session(
+        chat=chat,
+        session_start=update.message.date,
+    )
+    
+    # 3. Send "typing" indicator for better UX
+    await telegram_call(
+        context.bot.send_chat_action,
+        chat_id=update.effective_chat.id,
+        action=telegram.constants.ChatAction.TYPING,
+    )
+    
+    # 4. Save message to database
+    message = Message.from_telegram(
+        user_id=user.id,
+        chat=chat,
+        message=update.message,
+        session_id=session.id,
+    )
+    message = await message.save()
+    
+    # 5. Update session activity
+    await session.new_message(
+        timestamp=update.message.date,
+        is_user=True,
+    )
+    
+    # 6. Schedule background tasks (non-blocking)
+    asyncio.create_task(some_background_task())
+```
+
+## Error Handling
+
+### Custom Exceptions
+
+Define specific exceptions in `handlers/exceptions.py`:
+
+```python
+class NoMessageError(Exception):
+    def __init__(self, update_id: int):
+        super().__init__(f"Update {update_id} has no message")
+        self.update_id = update_id
+
+class NoChatFoundError(Exception):
+    def __init__(self, chat_id: int):
+        super().__init__(f"Chat {chat_id} not found in database")
+        self.chat_id = chat_id
+```
+
+### Validation First
+
+Always validate the update structure before processing:
+
+```python
+# Check for required update attributes
+if not update.message:
+    raise NoMessageError(update.update_id)
+
+if not update.callback_query:
+    raise InvalidCallbackDataError(update.update_id)
+
+if not update.edited_message:
+    raise NoEditedMessageError(update.update_id)
+```
+
+### Model Existence Checks
+
+Check that required models exist:
+
+```python
+chat = await Chat.get_by_id(telegram_chat_id=update.effective_chat.id)
+if not chat:
+    raise NoChatFoundError(update.effective_chat.id)
+
+user = await User.get_by_id(telegram_user_id=update.effective_user.id)
+if not user:
+    raise NoUserFoundError(update.effective_user.id)
+```
+
+## Telegram API Calls
+
+### Always Use telegram_call Wrapper
+
+**Never call Telegram API directly**. Always use the `telegram_call` wrapper:
+
+❌ **Don't:**
+```python
+await context.bot.send_message(chat_id=chat_id, text=text)
+```
+
+✅ **Do:**
+```python
+from areyouok_telegram.utils.retry import telegram_call
+
+await telegram_call(
+    context.bot.send_message,
+    chat_id=chat_id,
+    text=text,
+    parse_mode="MarkdownV2",
+)
+```
+
+**Why?** `telegram_call` provides:
+- Automatic retry on network errors
+- Retry on timeout errors
+- Handles `RetryAfter` rate limiting
+- Consistent error logging
+
+### Common Telegram Actions
+
+**Send typing indicator:**
+```python
+await telegram_call(
+    context.bot.send_chat_action,
+    chat_id=update.effective_chat.id,
+    action=telegram.constants.ChatAction.TYPING,
+)
+```
+
+**Send message:**
+```python
+await telegram_call(
+    context.bot.send_message,
+    chat_id=update.effective_chat.id,
+    text=message_text,
+    parse_mode="MarkdownV2",  # For formatted text
+)
+```
+
+**Answer callback query:**
+```python
+await telegram_call(update.callback_query.answer)
+```
+
+**Send voice message:**
+```python
+await telegram_call(
+    context.bot.send_voice,
+    chat_id=update.effective_chat.id,
+    voice=audio_bytes,
+)
+```
+
+## Session Management
+
+### Get or Create Session
+
+Always use `get_or_create_new_session`:
+
+```python
+session = await Session.get_or_create_new_session(
+    chat=chat,
+    session_start=update.message.date,
+)
+```
+
+This handles:
+- Creating new session if none exists
+- Returning active session if within timeout window
+- Starting new session if previous one expired
+
+### Update Session Activity
+
+Track both user and bot activity:
+
+```python
+# After user message
+await session.new_message(
+    timestamp=update.message.date,
+    is_user=True,
+)
+
+# After bot response
+await session.new_message(
+    timestamp=datetime.now(UTC),
+    is_user=False,
+)
+
+# For non-message activity (reactions, callbacks)
+await session.new_activity(
+    timestamp=datetime.now(UTC),
+    is_user=True,
+)
+```
+
+## Background Tasks
+
+### Use asyncio.create_task for Non-Blocking Work
+
+For operations that don't need to complete before responding:
+
+```python
+# Fire and forget - don't await
+asyncio.create_task(
+    extract_media_from_telegram_message(
+        chat=chat,
+        message_id=message.id,
+        message=update.message,
+        session_id=session.id,
+    )
+)
+
+# Handler continues immediately
+```
+
+**Use Cases:**
+- Media extraction/transcription
+- Context pre-generation
+- Analytics logging
+- Non-critical updates
+
+## Command Handlers
+
+### Track Command Usage
+
+All commands should track usage:
+
+```python
+command_usage = CommandUsage(
+    chat=chat,
+    command="start",
+    session_id=active_session.id,
+    timestamp=update.message.date,
+)
+await command_usage.save()
+```
+
+### Command-Specific Patterns
+
+**Check guided session state:**
+```python
+guided_sessions = await GuidedSession.get_by_chat(
+    chat=chat,
+    session_type=GuidedSessionType.ONBOARDING.value,
+)
+onboarding_session = guided_sessions[0] if guided_sessions else None
+
+if onboarding_session and onboarding_session.is_completed:
+    # Already completed onboarding
+    await telegram_call(
+        context.bot.send_message,
+        chat_id=update.effective_chat.id,
+        text=ALREADY_COMPLETED_MESSAGE,
+    )
+    return
+```
+
+**Create guided session:**
+```python
+new_session = GuidedSession(
+    chat=chat,
+    session=active_session,
+    session_type=GuidedSessionType.ONBOARDING.value,
+    state=GuidedSessionState.ACTIVE.value,
+)
+new_session = await new_session.save()
+```
+
+## Context and Metadata
+
+### Save Action Context
+
+For button callbacks and user actions:
+
+```python
+context_obj = Context(
+    chat=chat,
+    session_id=session.id,
+    type="action",
+    content=action_data,  # Will be encrypted
+)
+await context_obj.save()
+```
+
+### Common Context Types
+
+From `ContextType` enum:
+- `session`: Session-level context
+- `response`: Bot response metadata
+- `personality`: Active personality state
+- `metadata`: General metadata
+- `action`: User action (button clicks, etc.)
+- `memory`: Long-term memory
+- `profile`: User profile information
+- `profile_update`: Profile change tracking
+
+## Message Text Formatting
+
+### Use MarkdownV2
+
+For formatted messages, use MarkdownV2:
+
+```python
+text = (
+    "*Bold text*\n"
+    "_Italic text_\n"
+    "[Link](https://example.com)\n"
+    "`code`"
+)
+
+await telegram_call(
+    context.bot.send_message,
+    chat_id=chat_id,
+    text=text,
+    parse_mode="MarkdownV2",
+)
+```
+
+### Escape Special Characters
+
+MarkdownV2 requires escaping: `_`, `*`, `[`, `]`, `(`, `)`, `~`, `` ` ``, `>`, `#`, `+`, `-`, `=`, `|`, `{`, `}`, `.`, `!`
+
+Store pre-escaped constants in `handlers/utils/constants.py`:
+
+```python
+MD2_ONBOARDING_START_MESSAGE = (
+    "Welcome\\! I'm here to support you\\.\n\n"
+    "How are you feeling today?"
+)
+```
+
+## Media Handling
+
+### Extract Media Asynchronously
+
+Use the media utilities for media extraction:
+
+```python
+from areyouok_telegram.handlers.utils.media import extract_media_from_telegram_message
+
+asyncio.create_task(
+    extract_media_from_telegram_message(
+        chat=chat,
+        message_id=message.id,
+        message=update.message,
+        session_id=session.id,
+    )
+)
+```
+
+This handles:
+- Voice message transcription
+- Image processing
+- Document extraction
+- Media file storage
+
+## Best Practices
+
+### 1. Early Returns for Edge Cases
+
+```python
+if onboarding_session and onboarding_session.is_completed:
+    await telegram_call(context.bot.send_message, ...)
+    return  # Exit early
+```
+
+### 2. Load Models Before Work
+
+Load all required models at the start:
+```python
+chat = await Chat.get_by_id(...)
+user = await User.get_by_id(...)
+session = await Session.get_or_create_new_session(...)
+```
+
+### 3. Update Activity After Actions
+
+Always update session after user/bot activity:
+```python
+await session.new_message(timestamp=..., is_user=True)
+```
+
+### 4. Use Type Hints
+
+```python
+async def handler(
+    update: telegram.Update,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> None:
+    ...
+```
+
+### 5. Don't Block on Background Tasks
+
+Use `asyncio.create_task()` for non-critical work:
+```python
+asyncio.create_task(long_running_task())  # Don't await
+# Handler continues
+```
+
+### 6. Validate Before Processing
+
+Check update structure and model existence before doing work:
+```python
+if not update.message:
+    raise NoMessageError(...)
+
+if not chat:
+    raise NoChatFoundError(...)
+```
+
+## Anti-Patterns to Avoid
+
+❌ **Direct Telegram API calls** (use `telegram_call`)
+❌ **Blocking on background tasks** (use `asyncio.create_task`)
+❌ **Processing without validation** (check update structure first)
+❌ **Missing session updates** (track all activity)
+❌ **Unescaped MarkdownV2** (escape or use constants)
+❌ **Untracked command usage** (log all commands)
