@@ -346,6 +346,9 @@ class LLMGeneration(pydantic.BaseModel):
         This permanently removes the generation data including output, messages, and deps.
         LLMUsage records are preserved for analytical purposes.
         """
+        if self.id == 0:
+            raise ValueError("Cannot delete a generation with an ID of 0")  # noqa: TRY003
+
         async with async_database() as db_conn:
             stmt = sql_delete(LLMGenerationsTable).where(LLMGenerationsTable.id == self.id)
             await db_conn.execute(stmt)

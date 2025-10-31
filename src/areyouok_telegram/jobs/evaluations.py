@@ -1,3 +1,4 @@
+import asyncio
 from dataclasses import dataclass
 
 import logfire
@@ -225,10 +226,7 @@ class EvaluationsJob(BaseJob):
             chat_id=self.chat_id,
         )
 
-        for gen in generations:
-            await gen.delete()
-            # Clear cache entry for this specific generation
-            GEN_CACHE.pop(gen.id, None)
+        await asyncio.gather(*[self._purge_generation(gen) for gen in generations])
 
         logfire.info(
             "Purged generation records.",
@@ -236,3 +234,8 @@ class EvaluationsJob(BaseJob):
             chat_id=self.chat_id,
             count=len(generations),
         )
+
+    async def _purge_generation(self, gen: LLMGeneration) -> None:
+        await gen.delete()
+        # Clear cache entry for this specific generation
+        GEN_CACHE.pop(gen.id, None)
