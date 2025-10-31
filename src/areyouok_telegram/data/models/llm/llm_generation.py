@@ -8,7 +8,7 @@ from typing import Any
 
 import pydantic
 import pydantic_ai
-from sqlalchemy import select
+from sqlalchemy import delete as sql_delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from areyouok_telegram.data.database import async_database
@@ -338,3 +338,14 @@ class LLMGeneration(pydantic.BaseModel):
                 generations.append(generation)
 
             return generations
+
+    @db_retry()
+    async def delete(self) -> None:
+        """Delete this generation record from the database.
+
+        This permanently removes the generation data including output, messages, and deps.
+        LLMUsage records are preserved for analytical purposes.
+        """
+        async with async_database() as db_conn:
+            stmt = sql_delete(LLMGenerationsTable).where(LLMGenerationsTable.id == self.id)
+            await db_conn.execute(stmt)

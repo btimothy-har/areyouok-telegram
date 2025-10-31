@@ -217,3 +217,22 @@ class EvaluationsJob(BaseJob):
             max_concurrency=1,
             progress=True if ENV == "development" else False,
         )
+
+        # Purge generation data after evaluations complete
+        logfire.info(
+            "Purging generation data after evaluation completion.",
+            session_id=self.session_id,
+            chat_id=self.chat_id,
+        )
+
+        for gen in generations:
+            await gen.delete()
+            # Clear cache entry for this specific generation
+            GEN_CACHE.pop(gen.id, None)
+
+        logfire.info(
+            "Purged generation records.",
+            session_id=self.session_id,
+            chat_id=self.chat_id,
+            count=len(generations),
+        )

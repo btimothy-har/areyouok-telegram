@@ -177,3 +177,33 @@ async def test_llm_generation_save_and_get_by_id(mock_db_session):
     mock_db_session.execute.return_value = _ResOneOrNone()
     fetched = await LLMGeneration.get_by_id(generation_id=20)
     assert fetched and fetched.agent == "test_agent"
+
+
+@pytest.mark.usefixtures("patch_async_database")
+@pytest.mark.asyncio
+async def test_llm_generation_delete(mock_db_session):
+    """Test LLMGeneration.delete() removes a single generation record."""
+    gen = LLMGeneration(
+        id=42,
+        chat_id=1,
+        session_id=2,
+        agent="test_agent",
+        model="gpt-4",
+        timestamp=datetime.now(UTC),
+        response_type="str",
+        output={"result": "ok"},
+        messages=[],
+        deps=None,
+    )
+
+    class MockResult:
+        pass
+
+    mock_db_session.execute.return_value = MockResult()
+
+    await gen.delete()
+
+    assert mock_db_session.execute.called
+    call_args = mock_db_session.execute.call_args
+    stmt = call_args[0][0]
+    assert "DELETE" in str(stmt).upper()
