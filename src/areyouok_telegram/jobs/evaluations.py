@@ -1,3 +1,4 @@
+import asyncio
 from dataclasses import dataclass
 
 import logfire
@@ -217,3 +218,24 @@ class EvaluationsJob(BaseJob):
             max_concurrency=1,
             progress=True if ENV == "development" else False,
         )
+
+        # Purge generation data after evaluations complete
+        logfire.info(
+            "Purging generation data after evaluation completion.",
+            session_id=self.session_id,
+            chat_id=self.chat_id,
+        )
+
+        await asyncio.gather(*[self._purge_generation(gen) for gen in generations])
+
+        logfire.info(
+            "Purged generation records.",
+            session_id=self.session_id,
+            chat_id=self.chat_id,
+            count=len(generations),
+        )
+
+    async def _purge_generation(self, gen: LLMGeneration) -> None:
+        await gen.delete()
+        # Clear cache entry for this specific generation
+        GEN_CACHE.pop(gen.id, None)
