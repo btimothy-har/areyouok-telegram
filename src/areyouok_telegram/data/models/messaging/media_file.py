@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 from datetime import UTC, datetime
@@ -72,6 +73,42 @@ class MediaFile(pydantic.BaseModel):
         encrypted_bytes = fernet.encrypt(self.bytes_data)
         return base64.b64encode(encrypted_bytes).decode("ascii")
 
+    @classmethod
+    @db_retry()
+    async def get_by_id(cls, chat: Chat, *, media_file_id: int) -> MediaFile | None:
+        """Retrieve a media file by its internal ID, auto-decrypted.
+
+        Args:
+            chat: Chat object (provides encryption key)
+            media_file_id: Internal media file ID
+
+        Returns:
+            Decrypted MediaFile instance if found, None otherwise
+        """
+        async with async_database() as db_conn:
+            stmt = select(MediaFilesTable).where(MediaFilesTable.id == media_file_id)
+            result = await db_conn.execute(stmt)
+            row = result.scalar_one_or_none()
+
+            if row is None:
+                return None
+
+            encryption_key = chat.retrieve_key()
+            decrypted_bytes = cls.decrypt_content(row.encrypted_content_base64, encryption_key)
+
+            return MediaFile(
+                id=row.id,
+                chat=chat,
+                message_id=row.message_id,
+                file_id=row.file_id,
+                file_unique_id=row.file_unique_id,
+                mime_type=row.mime_type,
+                bytes_data=decrypted_bytes,
+                file_size=row.file_size,
+                created_at=row.created_at,
+                updated_at=row.updated_at,
+            )
+
     @property
     def is_openai_google_supported(self) -> bool:
         """Check if the file is supported by OpenAI and Google.
@@ -136,27 +173,13 @@ class MediaFile(pydantic.BaseModel):
                     "encrypted_content_base64": stmt.excluded.encrypted_content_base64,
                     "updated_at": now,
                 },
-            ).returning(MediaFilesTable)
+            ).returning(MediaFilesTable.id)
 
             result = await db_conn.execute(stmt)
-            row = result.scalar_one()
+            row_id = result.scalar_one()
 
-            # Return with decrypted content
-            encryption_key = self.chat.retrieve_key()
-            decrypted_bytes = self.decrypt_content(row.encrypted_content_base64, encryption_key)
-
-            return MediaFile(
-                id=row.id,
-                chat=self.chat,
-                message_id=row.message_id,
-                file_id=row.file_id,
-                file_unique_id=row.file_unique_id,
-                mime_type=row.mime_type,
-                bytes_data=decrypted_bytes,
-                file_size=row.file_size,
-                created_at=row.created_at,
-                updated_at=row.updated_at,
-            )
+        # Return refreshed from database using get_by_id
+        return await MediaFile.get_by_id(chat=self.chat, media_file_id=row_id)
 
     @classmethod
     @db_retry()
@@ -175,33 +198,18 @@ class MediaFile(pydantic.BaseModel):
         Returns:
             List of decrypted MediaFile instances
         """
+        # Query for IDs only
         async with async_database() as db_conn:
-            stmt = select(MediaFilesTable).where(
+            stmt = select(MediaFilesTable.id).where(
                 MediaFilesTable.chat_id == chat.id,
                 MediaFilesTable.message_id == message_id,
             )
             result = await db_conn.execute(stmt)
-            rows = result.scalars().all()
+            media_file_ids = result.scalars().all()
 
-            # Convert to MediaFile instances and decrypt
-            encryption_key = chat.retrieve_key()
-            media_files = []
+        # Hydrate via get_by_id concurrently
+        media_file_tasks = [cls.get_by_id(chat, media_file_id=mf_id) for mf_id in media_file_ids]
+        media_files_with_none = await asyncio.gather(*media_file_tasks)
+        media_files = [mf for mf in media_files_with_none if mf is not None]
 
-            for row in rows:
-                decrypted_bytes = cls.decrypt_content(row.encrypted_content_base64, encryption_key)
-
-                media_file = MediaFile(
-                    id=row.id,
-                    chat=chat,
-                    message_id=row.message_id,
-                    file_id=row.file_id,
-                    file_unique_id=row.file_unique_id,
-                    mime_type=row.mime_type,
-                    bytes_data=decrypted_bytes,
-                    file_size=row.file_size,
-                    created_at=row.created_at,
-                    updated_at=row.updated_at,
-                )
-                media_files.append(media_file)
-
-            return media_files
+        return media_files

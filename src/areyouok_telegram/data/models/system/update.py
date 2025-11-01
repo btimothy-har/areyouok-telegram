@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 
 import pydantic
 import telegram
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from areyouok_telegram.data.database import async_database
@@ -72,9 +73,31 @@ class Update(pydantic.BaseModel):
                     "payload": stmt.excluded.payload,
                     "updated_at": stmt.excluded.updated_at,
                 },
-            ).returning(UpdatesTable)
+            ).returning(UpdatesTable.id)
 
             result = await db_conn.execute(stmt)
-            row = result.scalar_one()
+            row_id = result.scalar_one()
+
+        # Return refreshed from database using get_by_id
+        return await Update.get_by_id(update_id=row_id)
+
+    @classmethod
+    @db_retry()
+    async def get_by_id(cls, *, update_id: int) -> "Update | None":
+        """Retrieve an update by its internal ID.
+
+        Args:
+            update_id: Internal update ID
+
+        Returns:
+            Update instance if found, None otherwise
+        """
+        async with async_database() as db_conn:
+            stmt = select(UpdatesTable).where(UpdatesTable.id == update_id)
+            result = await db_conn.execute(stmt)
+            row = result.scalar_one_or_none()
+
+            if row is None:
+                return None
 
             return Update.model_validate(row, from_attributes=True)

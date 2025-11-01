@@ -47,32 +47,160 @@ async with async_database() as db_conn:
 
 ## Data Model Conventions
 
+### Standard Access Pattern
+
+All models follow a consistent ID-first access pattern optimized for future caching:
+
+1. **`get_by_id` accepts only internal IDs** - Single-purpose method for ID-based retrieval
+2. **`save()` returns via `get_by_id`** - Consistent hydration path
+3. **Query methods use ID-first pattern** - Query for IDs, then hydrate via `get_by_id`
+
+This creates a single retrieval bottleneck where caching can be added later.
+
+### get_by_id Pattern
+
+**All models must implement `get_by_id` accepting only the internal ID:**
+
+✅ **Standard Pattern:**
+```python
+@classmethod
+@db_retry()
+async def get_by_id(cls, *, user_id: int) -> User | None:
+    """Retrieve a user by internal ID.
+    
+    Args:
+        user_id: Internal user ID
+        
+    Returns:
+        User instance if found, None otherwise
+    """
+    async with async_database() as db_conn:
+        stmt = select(UsersTable).where(UsersTable.id == user_id)
+        result = await db_conn.execute(stmt)
+        row = result.scalars().first()
+        
+        if row is None:
+            return None
+            
+        return cls.model_validate(row, from_attributes=True)
+```
+
+**For models needing Chat for decryption:**
+```python
+@classmethod
+@db_retry()
+async def get_by_id(cls, chat: Chat, *, message_id: int) -> Message | None:
+    """Retrieve a message by internal ID, auto-decrypted."""
+    # Chat is needed for decryption, passed as first parameter
+    ...
+```
+
+### Alternative Lookup Methods
+
+Models with multiple lookup paths provide separate methods:
+
+```python
+# Internal ID lookup (standard)
+await User.get_by_id(user_id=123)
+
+# Telegram ID lookup (helper)
+await User.get_by_telegram_id(telegram_user_id=456)
+
+# By name lookup (helper)
+await JobState.get(job_name="my_job")
+```
+
+❌ **Don't combine lookups in get_by_id:**
+```python
+# BAD - Don't do this
+async def get_by_id(cls, *, user_id: int | None = None, telegram_id: int | None = None):
+    ...
+```
+
+### save() Pattern
+
+All `save()` methods must return via `get_by_id` for consistent hydration:
+
+```python
+@db_retry()
+async def save(self) -> User:
+    """Save or update the user in the database.
+    
+    Returns:
+        User instance refreshed from database
+    """
+    async with async_database() as db_conn:
+        stmt = (
+            pg_insert(UsersTable)
+            .values(...)
+            .returning(UsersTable)
+        )
+        
+        result = await db_conn.execute(stmt)
+        row = result.scalar_one()
+    
+    # Return via get_by_id (not reconstructing from row)
+    return await User.get_by_id(user_id=row.id)
+```
+
+### ID-First Query Pattern
+
+All list/search methods must query for IDs first, then hydrate via `get_by_id` **concurrently using asyncio.gather**:
+
+```python
+import asyncio
+
+@classmethod
+@db_retry()
+async def get_by_session(cls, chat: Chat, *, session_id: int) -> list[Message]:
+    """Retrieve messages by session_id, auto-decrypted."""
+    # Step 1: Query for IDs only
+    async with async_database() as db_conn:
+        stmt = (
+            select(MessagesTable.id)  # Select only ID
+            .where(MessagesTable.session_id == session_id)
+            .where(MessagesTable.chat_id == chat.id)
+            .order_by(MessagesTable.created_at)
+        )
+        
+        result = await db_conn.execute(stmt)
+        message_ids = result.scalars().all()
+    
+    # Step 2: Hydrate via get_by_id concurrently
+    message_tasks = [cls.get_by_id(chat, message_id=msg_id) for msg_id in message_ids]
+    messages_with_none = await asyncio.gather(*message_tasks)
+    messages = [msg for msg in messages_with_none if msg is not None]
+    
+    return messages
+```
+
+**Benefits:**
+- Single retrieval point for all object hydration
+- Easy to add caching layer to `get_by_id` later
+- Consistent decryption/validation logic
+- Easier testing and debugging
+- **Concurrent fetching for better performance**
+
 ### Method Signature Pattern
 
-**Rule**: `db_conn` is the ONLY positional argument. All other arguments MUST be keyword-only.
+All other arguments MUST be keyword-only (except Chat when needed for decryption):
 
 ✅ **Correct:**
 ```python
 @classmethod
-async def get_by_id(
-    cls,
-    db_conn: AsyncSession,
-    *,  # Forces keyword-only arguments
-    user_id: int,
-    chat_id: int,
-) -> User | None:
+async def get_by_id(cls, *, user_id: int) -> User | None:
+    pass
+
+# Or with Chat for decryption
+@classmethod
+async def get_by_id(cls, chat: Chat, *, message_id: int) -> Message | None:
     pass
 ```
 
 ❌ **Incorrect:**
 ```python
 @classmethod
-async def get_by_id(
-    cls,
-    db_conn: AsyncSession,
-    user_id: int,  # Missing *, allows positional
-    chat_id: int,
-) -> User | None:
+async def get_by_id(cls, user_id: int) -> User | None:  # Missing *
     pass
 ```
 
@@ -181,7 +309,7 @@ def decrypt_message(encrypted_payload: str, user_encryption_key: str) -> dict:
 
 Models should:
 1. Encrypt sensitive data before saving
-2. Return decrypted instance after save
+2. Return via `get_by_id` for consistent hydration
 
 ```python
 @traced(extract_args=False)  # Sensitive data
@@ -204,23 +332,18 @@ async def save(self) -> Message:
         result = await db_conn.execute(stmt)
         row = result.scalar_one()
         
-        # Return with decrypted data
-        return Message(
-            id=row.id,
-            chat=self.chat,
-            payload=self.payload,  # Original, not encrypted
-            # ... other fields
-        )
+    # Return via get_by_id for consistent hydration
+    return await Message.get_by_id(self.chat, message_id=row.id)
 ```
 
 ### Retrieval Pattern
 
-Always decrypt after retrieval:
+Always decrypt after retrieval via `get_by_id`:
 
 ```python
 @classmethod
 @db_retry()
-async def get_by_id(cls, db_conn: AsyncSession, *, message_id: int, chat: Chat) -> Message | None:
+async def get_by_id(cls, chat: Chat, *, message_id: int) -> Message | None:
     """Retrieve and decrypt message."""
     async with async_database() as db_conn:
         stmt = select(MessagesTable).where(MessagesTable.id == message_id)
@@ -265,20 +388,24 @@ stmt = (
 
 ### Filtering with Optional Parameters
 
-Handle optional filters cleanly:
+All list/filter methods use the ID-first pattern with concurrent hydration:
 
 ```python
+import asyncio
+
 @classmethod
+@db_retry()
 async def get_by_chat(
     cls,
-    db_conn: AsyncSession,
+    chat: Chat,
     *,
-    chat_id: int,
     from_timestamp: datetime | None = None,
     to_timestamp: datetime | None = None,
 ) -> list[Message]:
     """Retrieve messages with optional filtering."""
-    stmt = select(MessagesTable).where(MessagesTable.chat_id == chat_id)
+    # Step 1: Query for IDs only
+    async with async_database() as db_conn:
+        stmt = select(MessagesTable.id).where(MessagesTable.chat_id == chat.id)
     
     # Apply optional filters
     if from_timestamp:
@@ -290,8 +417,14 @@ async def get_by_chat(
     stmt = stmt.order_by(MessagesTable.created_at.desc())
     
     result = await db_conn.execute(stmt)
-    rows = result.scalars().all()
-    # ... process rows
+        message_ids = result.scalars().all()
+    
+    # Step 2: Hydrate via get_by_id concurrently
+    message_tasks = [cls.get_by_id(chat, message_id=msg_id) for msg_id in message_ids]
+    messages_with_none = await asyncio.gather(*message_tasks)
+    messages = [msg for msg in messages_with_none if msg is not None]
+    
+    return messages
 ```
 
 ## Common Patterns

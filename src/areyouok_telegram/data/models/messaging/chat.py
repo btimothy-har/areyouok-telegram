@@ -11,7 +11,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from areyouok_telegram.data.database import async_database
 from areyouok_telegram.data.database.schemas import ChatsTable
-from areyouok_telegram.data.exceptions import InvalidIDArgumentError, MissingEncryptionKeyError
+from areyouok_telegram.data.exceptions import MissingEncryptionKeyError
 from areyouok_telegram.encryption import decrypt_chat_key, encrypt_chat_key, generate_chat_key
 from areyouok_telegram.utils.retry import db_retry
 
@@ -85,33 +85,17 @@ class Chat(pydantic.BaseModel):
 
     @classmethod
     @db_retry()
-    async def get_by_id(
-        cls,
-        *,
-        chat_id: int | None = None,
-        telegram_chat_id: int | None = None,
-    ) -> "Chat | None":
-        """Retrieve a chat by internal chat ID or Telegram chat ID.
+    async def get_by_id(cls, *, chat_id: int) -> "Chat | None":
+        """Retrieve a chat by internal chat ID.
 
         Args:
             chat_id: Internal chat ID
-            telegram_chat_id: Telegram chat ID
 
         Returns:
             Chat instance if found, None otherwise
-
-        Raises:
-            ValueError: If neither or both IDs are provided
         """
-        if sum([chat_id is not None, telegram_chat_id is not None]) != 1:
-            raise InvalidIDArgumentError(["chat_id", "telegram_chat_id"])
-
         async with async_database() as db_conn:
-            if chat_id is not None:
-                stmt = select(ChatsTable).where(ChatsTable.id == chat_id)
-            else:
-                stmt = select(ChatsTable).where(ChatsTable.telegram_chat_id == telegram_chat_id)
-
+            stmt = select(ChatsTable).where(ChatsTable.id == chat_id)
             result = await db_conn.execute(stmt)
             row = result.scalars().first()
 
@@ -119,6 +103,29 @@ class Chat(pydantic.BaseModel):
                 return None
 
             return cls.model_validate(row, from_attributes=True)
+
+    @classmethod
+    @db_retry()
+    async def get_by_telegram_id(cls, *, telegram_chat_id: int) -> "Chat | None":
+        """Retrieve a chat by Telegram chat ID.
+
+        Args:
+            telegram_chat_id: Telegram chat ID
+
+        Returns:
+            Chat instance if found, None otherwise
+        """
+        # Query for ID only
+        async with async_database() as db_conn:
+            stmt = select(ChatsTable.id).where(ChatsTable.telegram_chat_id == telegram_chat_id)
+            result = await db_conn.execute(stmt)
+            row = result.scalar_one_or_none()
+
+            if row is None:
+                return None
+
+        # Hydrate via get_by_id
+        return await cls.get_by_id(chat_id=row)
 
     @classmethod
     @db_retry()
@@ -217,9 +224,10 @@ class Chat(pydantic.BaseModel):
                     "updated_at": stmt.excluded.updated_at,
                     # Don't update encrypted_key if chat already exists
                 },
-            )
+            ).returning(ChatsTable.id)
 
-            await db_conn.execute(stmt)
+            result = await db_conn.execute(stmt)
+            row_id = result.scalar_one()
 
-        # Return the chat object after upsert with refreshed data from DB
-        return await Chat.get_by_id(telegram_chat_id=self.telegram_chat_id)
+        # Return via get_by_id for consistent hydration
+        return await Chat.get_by_id(chat_id=row_id)

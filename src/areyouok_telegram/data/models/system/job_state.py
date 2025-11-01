@@ -37,8 +37,29 @@ class JobState(pydantic.BaseModel):
 
     @classmethod
     @db_retry()
+    async def get_by_id(cls, *, job_state_id: int) -> JobState | None:
+        """Retrieve a job state by its internal ID.
+
+        Args:
+            job_state_id: Internal job state ID
+
+        Returns:
+            JobState instance if found, None otherwise
+        """
+        async with async_database() as db_conn:
+            stmt = select(JobStateTable).where(JobStateTable.id == job_state_id)
+            result = await db_conn.execute(stmt)
+            row = result.scalar_one_or_none()
+
+            if row is None:
+                return None
+
+            return cls.model_validate(row, from_attributes=True)
+
+    @classmethod
+    @db_retry()
     async def get(cls, *, job_name: str) -> JobState | None:
-        """Retrieve the JobState instance for a job.
+        """Retrieve the JobState instance for a job by name.
 
         Args:
             job_name: Unique name of the job
@@ -46,15 +67,17 @@ class JobState(pydantic.BaseModel):
         Returns:
             JobState instance, or None if no state exists
         """
+        # Query for ID only
         async with async_database() as db_conn:
-            stmt = select(JobStateTable).where(JobStateTable.job_name == job_name)
+            stmt = select(JobStateTable.id).where(JobStateTable.job_name == job_name)
             result = await db_conn.execute(stmt)
             row = result.scalar_one_or_none()
 
-            if row:
-                return cls.model_validate(row, from_attributes=True)
+            if row is None:
+                return None
 
-            return None
+        # Hydrate via get_by_id
+        return await cls.get_by_id(job_state_id=row)
 
     @db_retry()
     async def save(self) -> JobState:
@@ -80,13 +103,14 @@ class JobState(pydantic.BaseModel):
                         "updated_at": self.updated_at,
                     },
                 )
-                .returning(JobStateTable)
+                .returning(JobStateTable.id)
             )
 
             result = await db_conn.execute(stmt)
-            row = result.scalar_one()
+            row_id = result.scalar_one()
 
-            return JobState.model_validate(row, from_attributes=True)
+        # Return via get_by_id for consistent hydration
+        return await JobState.get_by_id(job_state_id=row_id)
 
     @db_retry()
     async def delete(self) -> None:

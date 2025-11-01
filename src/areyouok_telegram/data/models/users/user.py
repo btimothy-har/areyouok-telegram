@@ -12,7 +12,6 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from areyouok_telegram.data.database import async_database
 from areyouok_telegram.data.database.schemas import UsersTable
-from areyouok_telegram.data.exceptions import InvalidIDArgumentError
 from areyouok_telegram.utils.retry import db_retry
 
 
@@ -39,33 +38,17 @@ class User(pydantic.BaseModel):
 
     @classmethod
     @db_retry()
-    async def get_by_id(
-        cls,
-        *,
-        user_id: int | None = None,
-        telegram_user_id: int | None = None,
-    ) -> User | None:
-        """Retrieve a user by internal ID or Telegram user ID.
+    async def get_by_id(cls, *, user_id: int) -> User | None:
+        """Retrieve a user by internal ID.
 
         Args:
             user_id: Internal user ID
-            telegram_user_id: Telegram user ID
 
         Returns:
             User instance if found, None otherwise
-
-        Raises:
-            ValueError: If neither or both IDs are provided
         """
-        if sum([user_id is not None, telegram_user_id is not None]) != 1:
-            raise InvalidIDArgumentError(["user_id", "telegram_user_id"])
-
         async with async_database() as db_conn:
-            if user_id is not None:
-                stmt = select(UsersTable).where(UsersTable.id == user_id)
-            else:
-                stmt = select(UsersTable).where(UsersTable.telegram_user_id == telegram_user_id)
-
+            stmt = select(UsersTable).where(UsersTable.id == user_id)
             result = await db_conn.execute(stmt)
             row = result.scalars().first()
 
@@ -73,6 +56,29 @@ class User(pydantic.BaseModel):
                 return None
 
             return cls.model_validate(row, from_attributes=True)
+
+    @classmethod
+    @db_retry()
+    async def get_by_telegram_id(cls, *, telegram_user_id: int) -> User | None:
+        """Retrieve a user by Telegram user ID.
+
+        Args:
+            telegram_user_id: Telegram user ID
+
+        Returns:
+            User instance if found, None otherwise
+        """
+        # Query for ID only
+        async with async_database() as db_conn:
+            stmt = select(UsersTable.id).where(UsersTable.telegram_user_id == telegram_user_id)
+            result = await db_conn.execute(stmt)
+            row = result.scalar_one_or_none()
+
+            if row is None:
+                return None
+
+        # Hydrate via get_by_id
+        return await cls.get_by_id(user_id=row)
 
     @db_retry()
     async def save(self) -> User:
@@ -102,12 +108,13 @@ class User(pydantic.BaseModel):
                     "is_premium": stmt.excluded.is_premium,
                     "updated_at": stmt.excluded.updated_at,
                 },
-            )
+            ).returning(UsersTable.id)
 
-            await db_conn.execute(stmt)
+            result = await db_conn.execute(stmt)
+            row_id = result.scalar_one()
 
-        # Return the user object after upsert
-        return await User.get_by_id(telegram_user_id=self.telegram_user_id)
+        # Return via get_by_id for consistent hydration
+        return await User.get_by_id(user_id=row_id)
 
     @classmethod
     def from_telegram(cls, user: telegram.User) -> User:

@@ -8,6 +8,7 @@ import logfire
 import pydantic
 import pydantic_ai
 from genai_prices import Usage, calc_price
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from areyouok_telegram.data.database import async_database
@@ -48,6 +49,27 @@ class LLMUsage(pydantic.BaseModel):
     # Internal ID
     id: int = 0
 
+    @classmethod
+    @db_retry()
+    async def get_by_id(cls, *, llm_usage_id: int) -> LLMUsage | None:
+        """Retrieve an LLM usage record by its internal ID.
+
+        Args:
+            llm_usage_id: Internal LLM usage ID
+
+        Returns:
+            LLMUsage instance if found, None otherwise
+        """
+        async with async_database() as db_conn:
+            stmt = select(LLMUsageTable).where(LLMUsageTable.id == llm_usage_id)
+            result = await db_conn.execute(stmt)
+            row = result.scalar_one_or_none()
+
+            if row is None:
+                return None
+
+            return LLMUsage.model_validate(row, from_attributes=True)
+
     @db_retry()
     async def save(self) -> LLMUsage:
         """Save the LLM usage record to the database.
@@ -73,16 +95,14 @@ class LLMUsage(pydantic.BaseModel):
                     output_cost=self.output_cost,
                     total_cost=self.total_cost,
                 )
-                .returning(LLMUsageTable)
+                .returning(LLMUsageTable.id)
             )
 
             result = await db_conn.execute(stmt)
-            row = result.scalar_one()
+            row_id = result.scalar_one()
 
-            # Update self with the database-generated id
-            self.id = row.id
-
-            return self
+        # Return refreshed from database using get_by_id
+        return await LLMUsage.get_by_id(llm_usage_id=row_id)
 
     @classmethod
     def from_pydantic_usage(

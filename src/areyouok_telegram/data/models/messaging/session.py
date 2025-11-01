@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 from datetime import UTC, datetime
 
@@ -93,18 +94,8 @@ class Session(pydantic.BaseModel):
             result = await db_conn.execute(stmt)
             row = result.scalar_one()
 
-            # Return with Chat object
-            return Session(
-                id=row.id,
-                chat=self.chat,
-                session_start=row.session_start,
-                session_end=row.session_end,
-                last_user_message=row.last_user_message,
-                last_user_activity=row.last_user_activity,
-                last_bot_message=row.last_bot_message,
-                last_bot_activity=row.last_bot_activity,
-                message_count=row.message_count,
-            )
+        # Return refreshed from database using get_by_id
+        return await Session.get_by_id(session_id=row.id)
 
     async def new_activity(self, *, timestamp: datetime, is_user: bool) -> Session:
         """Record user activity (like edits) without incrementing message count.
@@ -194,8 +185,9 @@ class Session(pydantic.BaseModel):
         Returns:
             List of Session instances with Chat objects loaded
         """
+        # Query for IDs only
         async with async_database() as db_conn:
-            stmt = select(SessionsTable)
+            stmt = select(SessionsTable.id)
 
             # Filter by chat if provided
             if chat:
@@ -216,33 +208,14 @@ class Session(pydantic.BaseModel):
             stmt = stmt.order_by(SessionsTable.session_start.desc())
 
             result = await db_conn.execute(stmt)
-            rows = result.scalars().all()
+            session_ids = result.scalars().all()
 
-            # Load Chat objects for each session
-            sessions = []
-            for row in rows:
-                # Use provided chat or load it
-                if chat and row.chat_id == chat.id:
-                    session_chat = chat
-                else:
-                    session_chat = await Chat.get_by_id(chat_id=row.chat_id)
-                    if not session_chat:
-                        continue
+        # Hydrate via get_by_id concurrently
+        session_tasks = [cls.get_by_id(session_id=sess_id) for sess_id in session_ids]
+        sessions_with_none = await asyncio.gather(*session_tasks)
+        sessions = [sess for sess in sessions_with_none if sess is not None]
 
-                session = Session(
-                    id=row.id,
-                    chat=session_chat,
-                    session_start=row.session_start,
-                    session_end=row.session_end,
-                    last_user_message=row.last_user_message,
-                    last_user_activity=row.last_user_activity,
-                    last_bot_message=row.last_bot_message,
-                    last_bot_activity=row.last_bot_activity,
-                    message_count=row.message_count,
-                )
-                sessions.append(session)
-
-            return sessions
+        return sessions
 
     @classmethod
     @db_retry()

@@ -71,10 +71,32 @@ class Notification(pydantic.BaseModel):
                     "processed_at": stmt.excluded.processed_at,
                     "updated_at": stmt.excluded.updated_at,
                 },
-            ).returning(NotificationsTable)
+            ).returning(NotificationsTable.id)
 
             result = await db_conn.execute(stmt)
-            row = result.scalar_one()
+            row_id = result.scalar_one()
+
+        # Return refreshed from database using get_by_id
+        return await Notification.get_by_id(notification_id=row_id)
+
+    @classmethod
+    @db_retry()
+    async def get_by_id(cls, *, notification_id: int) -> Notification | None:
+        """Retrieve a notification by its internal ID.
+
+        Args:
+            notification_id: Internal notification ID
+
+        Returns:
+            Notification instance if found, None otherwise
+        """
+        async with async_database() as db_conn:
+            stmt = select(NotificationsTable).where(NotificationsTable.id == notification_id)
+            result = await db_conn.execute(stmt)
+            row = result.scalar_one_or_none()
+
+            if row is None:
+                return None
 
             return Notification.model_validate(row, from_attributes=True)
 
@@ -92,21 +114,23 @@ class Notification(pydantic.BaseModel):
         Returns:
             The next pending notification, or None if no pending notifications exist
         """
+        # Query for ID only
         async with async_database() as db_conn:
             stmt = (
-                select(NotificationsTable)
+                select(NotificationsTable.id)
                 .where(NotificationsTable.chat_id == chat.id, NotificationsTable.processed_at.is_(None))
                 .order_by(NotificationsTable.priority.asc(), NotificationsTable.created_at.asc())
                 .limit(1)
             )
 
             result = await db_conn.execute(stmt)
-            row = result.scalar_one_or_none()
+            notification_id = result.scalar_one_or_none()
 
-            if row is None:
+            if notification_id is None:
                 return None
 
-            return Notification.model_validate(row, from_attributes=True)
+        # Hydrate via get_by_id
+        return await cls.get_by_id(notification_id=notification_id)
 
     async def mark_as_completed(self) -> Notification:
         """Mark notification as completed by setting processed_at timestamp and saving.

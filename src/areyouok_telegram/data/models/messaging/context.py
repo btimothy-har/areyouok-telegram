@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import json
@@ -123,21 +124,14 @@ class Context(pydantic.BaseModel):
                     encrypted_content=encrypted_content,
                     created_at=self.created_at,
                 )
-                .returning(ContextTable)
+                .returning(ContextTable.id)
             )
 
             result = await db_conn.execute(stmt)
-            row = result.scalar_one()
+            row_id = result.scalar_one()
 
-            # Return Context with the chat object and decrypted content
-            return Context(
-                id=row.id,
-                chat=self.chat,
-                session_id=row.session_id,
-                type=row.type,
-                content=self.content,
-                created_at=row.created_at,
-            )
+        # Return refreshed from database using get_by_id
+        return await Context.get_by_id(chat=self.chat, context_id=row_id)
 
     @classmethod
     @db_retry()
@@ -168,8 +162,9 @@ class Context(pydantic.BaseModel):
         if ctype and ctype not in VALID_CONTEXT_TYPES:
             raise InvalidContextTypeError(ctype)
 
+        # Query for IDs only
         async with async_database() as db_conn:
-            stmt = select(ContextTable).where(ContextTable.chat_id == chat.id)
+            stmt = select(ContextTable.id).where(ContextTable.chat_id == chat.id)
 
             # Apply optional filters
             if session:
@@ -187,28 +182,14 @@ class Context(pydantic.BaseModel):
             stmt = stmt.order_by(ContextTable.created_at.desc())
 
             result = await db_conn.execute(stmt)
-            rows = result.scalars().all()
+            context_ids = result.scalars().all()
 
-            # Convert to Context instances and decrypt content
-            encryption_key = chat.retrieve_key()
-            contexts = []
-            for row in rows:
-                # Decrypt content during construction
-                decrypted_content = None
-                if encryption_key:
-                    decrypted_content = cls.decrypt_content(row.encrypted_content, encryption_key)
+        # Hydrate via get_by_id concurrently
+        context_tasks = [cls.get_by_id(chat, context_id=ctx_id) for ctx_id in context_ids]
+        contexts_with_none = await asyncio.gather(*context_tasks)
+        contexts = [ctx for ctx in contexts_with_none if ctx is not None]
 
-                context = Context(
-                    id=row.id,
-                    chat=chat,
-                    session_id=row.session_id,
-                    type=row.type,
-                    content=decrypted_content,
-                    created_at=row.created_at,
-                )
-                contexts.append(context)
-
-            return contexts
+        return contexts
 
     @classmethod
     @db_retry()

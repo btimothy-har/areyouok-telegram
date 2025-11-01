@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 from datetime import UTC, datetime, timedelta
@@ -200,29 +201,13 @@ class GuidedSession(pydantic.BaseModel):
                         "updated_at": values["updated_at"],
                     },
                 )
-                .returning(GuidedSessionsTable)
+                .returning(GuidedSessionsTable.id)
             )
             result = await db_conn.execute(stmt)
-            row = result.scalar_one()
+            row_id = result.scalar_one()
 
-            # Return with decrypted metadata
-            decrypted_metadata = {}
-            if row.encrypted_metadata:
-                chat_encryption_key = self.chat.retrieve_key()
-                decrypted_metadata = self.decrypt_metadata(row.encrypted_metadata, chat_encryption_key)
-
-            return GuidedSession(
-                id=row.id,
-                chat=self.chat,
-                session=self.session,
-                session_type=row.session_type,
-                state=row.state,
-                started_at=row.started_at,
-                completed_at=row.completed_at,
-                metadata=decrypted_metadata,
-                created_at=row.created_at,
-                updated_at=row.updated_at,
-            )
+        # Return refreshed from database using get_by_id
+        return await GuidedSession.get_by_id(self.chat, guided_session_id=row_id)
 
     async def complete(self) -> GuidedSession:
         """Complete this guided session and save to database.
@@ -264,8 +249,9 @@ class GuidedSession(pydantic.BaseModel):
         Returns:
             List of GuidedSession instances ordered by created_at desc
         """
+        # Query for IDs only
         async with async_database() as db_conn:
-            stmt = select(GuidedSessionsTable).where(GuidedSessionsTable.chat_id == chat.id)
+            stmt = select(GuidedSessionsTable.id).where(GuidedSessionsTable.chat_id == chat.id)
 
             if session:
                 stmt = stmt.where(GuidedSessionsTable.session_id == session.id)
@@ -278,48 +264,27 @@ class GuidedSession(pydantic.BaseModel):
 
             stmt = stmt.order_by(GuidedSessionsTable.created_at.desc())
             result = await db_conn.execute(stmt)
-            rows = result.scalars().all()
+            guided_session_ids = result.scalars().all()
 
-            # Convert to GuidedSession instances with loaded objects and decrypted metadata
-            guided_sessions = []
-            chat_encryption_key = chat.retrieve_key()
+        # Hydrate via get_by_id concurrently
+        guided_session_tasks = [cls.get_by_id(chat, guided_session_id=gs_id) for gs_id in guided_session_ids]
+        guided_sessions_with_none = await asyncio.gather(*guided_session_tasks)
+        guided_sessions = [gs for gs in guided_sessions_with_none if gs is not None]
 
-            for row in rows:
-                # Load Session object
-                session_obj = await Session.get_by_id(session_id=row.session_id)
-                if not session_obj:
-                    continue
-
-                # Decrypt metadata
-                decrypted_metadata = {}
-                if row.encrypted_metadata and chat_encryption_key:
-                    decrypted_metadata = cls.decrypt_metadata(row.encrypted_metadata, chat_encryption_key)
-
-                guided_session = GuidedSession(
-                    id=row.id,
-                    chat=chat,
-                    session=session_obj,
-                    session_type=row.session_type,
-                    state=row.state,
-                    started_at=row.started_at,
-                    completed_at=row.completed_at,
-                    metadata=decrypted_metadata,
-                    created_at=row.created_at,
-                    updated_at=row.updated_at,
-                )
-                guided_sessions.append(guided_session)
-
-            return guided_sessions
+        return guided_sessions
 
     @classmethod
     @db_retry()
     async def get_by_id(
         cls,
+        chat: Chat,
+        *,
         guided_session_id: int,
     ) -> GuidedSession | None:
         """Retrieve a guided session by ID with loaded objects and decrypted metadata.
 
         Args:
+            chat: Chat object (provides encryption key and avoids refetching)
             guided_session_id: Internal guided session ID
 
         Returns:
@@ -333,11 +298,10 @@ class GuidedSession(pydantic.BaseModel):
             if row is None:
                 return None
 
-            # Load Chat and Session objects
-            chat = await Chat.get_by_id(chat_id=row.chat_id)
-            session = await Session.get_by_id(session_id=row.session_id)
+            # Load Session object
+            session = await Session.get_by_id(chat, session_id=row.session_id)
 
-            if not chat or not session:
+            if not session:
                 return None
 
             # Decrypt metadata

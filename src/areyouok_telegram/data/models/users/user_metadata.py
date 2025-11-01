@@ -188,15 +188,37 @@ class UserMetadata(pydantic.BaseModel):
                     "content": stmt.excluded.content,
                     "updated_at": stmt.excluded.updated_at,
                 },
-            ).returning(UserMetadataTable)
+            ).returning(UserMetadataTable.id)
 
             result = await db_conn.execute(stmt)
-            row = result.scalar_one()
+            row_id = result.scalar_one()
 
-            # Return with decrypted fields
-            metadata_dict = UserMetadata.decrypt_metadata(row.content) if row.content else {}
+        # Return refreshed from database using get_by_id
+        return await UserMetadata.get_by_id(user_metadata_id=row_id)
 
-            return UserMetadata(
+    @classmethod
+    @db_retry()
+    async def get_by_id(cls, *, user_metadata_id: int) -> UserMetadata | None:
+        """Retrieve user metadata by its internal ID with decrypted fields.
+
+        Args:
+            user_metadata_id: Internal user metadata ID
+
+        Returns:
+            UserMetadata instance if found, None otherwise
+        """
+        async with async_database() as db_conn:
+            stmt = select(UserMetadataTable).where(UserMetadataTable.id == user_metadata_id)
+            result = await db_conn.execute(stmt)
+            row = result.scalar_one_or_none()
+
+            if row is None:
+                return None
+
+            # Decrypt metadata fields
+            metadata_dict = cls.decrypt_metadata(row.content) if row.content else {}
+
+            return cls(
                 id=row.id,
                 user_id=row.user_id,
                 preferred_name=metadata_dict.get("preferred_name"),
@@ -224,26 +246,14 @@ class UserMetadata(pydantic.BaseModel):
         Returns:
             UserMetadata instance if found, None otherwise
         """
+        # Query for ID only
         async with async_database() as db_conn:
-            stmt = select(UserMetadataTable).where(UserMetadataTable.user_id == user_id)
+            stmt = select(UserMetadataTable.id).where(UserMetadataTable.user_id == user_id)
             result = await db_conn.execute(stmt)
-            row = result.scalars().first()
+            row = result.scalar_one_or_none()
 
             if row is None:
                 return None
 
-            # Decrypt metadata fields
-            metadata_dict = cls.decrypt_metadata(row.content) if row.content else {}
-
-            return cls(
-                id=row.id,
-                user_id=row.user_id,
-                preferred_name=metadata_dict.get("preferred_name"),
-                country=metadata_dict.get("country"),
-                timezone=metadata_dict.get("timezone"),
-                response_speed=metadata_dict.get("response_speed"),
-                response_speed_adj=metadata_dict.get("response_speed_adj", 0),
-                communication_style=metadata_dict.get("communication_style"),
-                created_at=row.created_at,
-                updated_at=row.updated_at,
-            )
+        # Hydrate via get_by_id
+        return await cls.get_by_id(user_metadata_id=row)

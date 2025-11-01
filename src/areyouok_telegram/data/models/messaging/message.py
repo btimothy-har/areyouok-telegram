@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 from datetime import UTC, datetime
@@ -14,7 +15,6 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from areyouok_telegram.data.database import async_database
 from areyouok_telegram.data.database.schemas import MessagesTable
-from areyouok_telegram.data.exceptions import InvalidIDArgumentError
 from areyouok_telegram.data.models.messaging.chat import Chat
 from areyouok_telegram.utils.retry import db_retry
 
@@ -213,35 +213,19 @@ class Message(pydantic.BaseModel):
         cls,
         chat: Chat,
         *,
-        message_id: int | None = None,
-        telegram_message_id: int | None = None,
+        message_id: int,
     ) -> Message | None:
-        """Retrieve a message by internal ID or Telegram message ID, auto-decrypted.
+        """Retrieve a message by internal ID, auto-decrypted.
 
         Args:
-            chat: Chat object (provides chat_id and encryption key)
+            chat: Chat object (provides encryption key)
             message_id: Internal message ID
-            telegram_message_id: Telegram message ID
 
         Returns:
             Decrypted Message instance if found, None otherwise
-
-        Raises:
-            ValueError: If neither or both IDs are provided
         """
-        if sum([message_id is not None, telegram_message_id is not None]) != 1:
-            raise InvalidIDArgumentError(["message_id", "telegram_message_id"])
-
         async with async_database() as db_conn:
-            if message_id is not None:
-                stmt = select(MessagesTable).where(MessagesTable.id == message_id)
-            else:
-                stmt = select(MessagesTable).where(
-                    MessagesTable.telegram_message_id == telegram_message_id,
-                    MessagesTable.chat_id == chat.id,
-                    MessagesTable.message_type == "Message",
-                )
-
+            stmt = select(MessagesTable).where(MessagesTable.id == message_id)
             result = await db_conn.execute(stmt)
             row = result.scalar_one_or_none()
 
@@ -269,6 +253,40 @@ class Message(pydantic.BaseModel):
 
     @classmethod
     @db_retry()
+    async def get_by_telegram_id(
+        cls,
+        chat: Chat,
+        *,
+        telegram_message_id: int,
+    ) -> Message | None:
+        """Retrieve a message by Telegram message ID, auto-decrypted.
+
+        Args:
+            chat: Chat object (provides chat_id and encryption key)
+            telegram_message_id: Telegram message ID
+
+        Returns:
+            Decrypted Message instance if found, None otherwise
+        """
+        # Query for ID only
+        async with async_database() as db_conn:
+            stmt = select(MessagesTable.id).where(
+                MessagesTable.telegram_message_id == telegram_message_id,
+                MessagesTable.chat_id == chat.id,
+                MessagesTable.message_type == "Message",
+            )
+
+            result = await db_conn.execute(stmt)
+            row = result.scalar_one_or_none()
+
+            if row is None:
+                return None
+
+        # Hydrate via get_by_id
+        return await cls.get_by_id(chat, message_id=row)
+
+    @classmethod
+    @db_retry()
     async def get_by_session(
         cls,
         chat: Chat,
@@ -284,39 +302,21 @@ class Message(pydantic.BaseModel):
         Returns:
             List of decrypted Message instances
         """
+        # Query for IDs only
         async with async_database() as db_conn:
             stmt = (
-                select(MessagesTable)
+                select(MessagesTable.id)
                 .where(MessagesTable.session_id == session_id)
                 .where(MessagesTable.chat_id == chat.id)
                 .order_by(MessagesTable.created_at)
             )
 
             result = await db_conn.execute(stmt)
-            rows = result.scalars().all()
+            message_ids = result.scalars().all()
 
-            # Decrypt messages
-            encryption_key = chat.retrieve_key()
-            messages = []
+        # Hydrate via get_by_id concurrently
+        message_tasks = [cls.get_by_id(chat, message_id=msg_id) for msg_id in message_ids]
+        messages_with_none = await asyncio.gather(*message_tasks)
+        messages = [msg for msg in messages_with_none if msg is not None]
 
-            for row in rows:
-                # Decrypt payload and reasoning together
-                decrypted_payload, decrypted_reasoning = cls.decrypt_message(
-                    row.encrypted_payload, row.encrypted_reasoning, encryption_key
-                )
-
-                message = Message(
-                    id=row.id,
-                    user_id=row.user_id,
-                    chat=chat,
-                    session_id=row.session_id,
-                    telegram_message_id=row.telegram_message_id,
-                    message_type=row.message_type,
-                    payload=decrypted_payload,
-                    reasoning=decrypted_reasoning,
-                    created_at=row.created_at,
-                    updated_at=row.updated_at,
-                )
-                messages.append(message)
-
-            return messages
+        return messages

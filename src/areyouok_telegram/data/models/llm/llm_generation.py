@@ -1,5 +1,6 @@
 """LLMGeneration Pydantic model for tracking LLM generation outputs."""
 
+import asyncio
 import dataclasses
 import hashlib
 import json
@@ -175,27 +176,14 @@ class LLMGeneration(pydantic.BaseModel):
                     messages=messages_list,
                     deps=deps_dict,
                 )
-                .returning(LLMGenerationsTable)
+                .returning(LLMGenerationsTable.id)
             )
 
             result = await db_conn.execute(stmt)
-            row = result.scalar_one()
+            row_id = result.scalar_one()
 
-            # Deserialize and return
-            output, messages, deps = self._deserialize_from_storage(row.output, row.messages, row.deps)
-
-            return LLMGeneration(
-                id=row.id,
-                chat_id=row.chat_id,
-                session_id=row.session_id,
-                agent=row.agent,
-                model=row.model,
-                timestamp=row.timestamp,
-                response_type=row.response_type,
-                output=output,
-                messages=messages,
-                deps=deps,
-            )
+        # Return refreshed from database using get_by_id
+        return await LLMGeneration.get_by_id(generation_id=row_id)
 
     @classmethod
     def from_agent_run(
@@ -304,36 +292,23 @@ class LLMGeneration(pydantic.BaseModel):
         Returns:
             List of LLMGeneration instances
         """
+        # Query for IDs only
         async with async_database() as db_conn:
             stmt = (
-                select(LLMGenerationsTable)
+                select(LLMGenerationsTable.id)
                 .where(LLMGenerationsTable.session_id == session_id)
                 .order_by(LLMGenerationsTable.timestamp)
             )
 
             result = await db_conn.execute(stmt)
-            rows = result.scalars().all()
+            generation_ids = result.scalars().all()
 
-            generations = []
-            for row in rows:
-                # Deserialize content
-                output, messages, deps = cls._deserialize_from_storage(row.output, row.messages, row.deps)
+        # Hydrate via get_by_id concurrently
+        generation_tasks = [cls.get_by_id(generation_id=gen_id) for gen_id in generation_ids]
+        generations_with_none = await asyncio.gather(*generation_tasks)
+        generations = [gen for gen in generations_with_none if gen is not None]
 
-                generation = cls(
-                    id=row.id,
-                    chat_id=row.chat_id,
-                    session_id=row.session_id,
-                    agent=row.agent,
-                    model=row.model,
-                    timestamp=row.timestamp,
-                    response_type=row.response_type,
-                    output=output,
-                    messages=messages,
-                    deps=deps,
-                )
-                generations.append(generation)
-
-            return generations
+        return generations
 
     @db_retry()
     async def delete(self) -> None:
