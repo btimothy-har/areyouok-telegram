@@ -2,6 +2,7 @@
 
 import dataclasses
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock, patch
 
 import pydantic
 import pytest
@@ -147,6 +148,34 @@ async def test_llm_generation_save_and_get_by_id(mock_db_session):
         deps=None,
     )
 
+    # Mock for save: first execute returns ID
+    class MockExecuteResult:
+        def scalar_one(self):
+            return 20
+
+    mock_db_session.execute.return_value = MockExecuteResult()
+
+    # Create expected saved generation
+    saved_gen = LLMGeneration(
+        id=20,
+        chat_id=1,
+        session_id=2,
+        agent="test_agent",
+        model="gpt-4",
+        timestamp=gen.timestamp,
+        response_type="str",
+        output={"result": "ok"},
+        messages=[],
+        deps=None,
+    )
+
+    # Mock get_by_id to return saved generation
+    with patch.object(LLMGeneration, "get_by_id", new=AsyncMock(return_value=saved_gen)):
+        saved = await gen.save()
+
+    assert saved.id == 20
+
+    # get_by_id test separately
     output_dict, messages_list, deps_dict = gen._serialize_for_storage()
 
     class Row:
@@ -161,15 +190,6 @@ async def test_llm_generation_save_and_get_by_id(mock_db_session):
         messages = messages_list
         deps = deps_dict
 
-    class _ResOne:
-        def scalar_one(self):
-            return Row()
-
-    mock_db_session.execute.return_value = _ResOne()
-    saved = await gen.save()
-    assert saved.id == 20
-
-    # get_by_id
     class _ResOneOrNone:
         def scalar_one_or_none(self):
             return Row()

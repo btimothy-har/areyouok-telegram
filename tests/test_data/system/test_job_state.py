@@ -1,6 +1,7 @@
 """Tests for JobState model."""
 
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -21,29 +22,40 @@ async def test_job_state_save_and_get(mock_db_session):
     """Test JobState.save() upserts and get() retrieves."""
     js = JobState(job_name="ping_job", state_data={"last_run": "2025-01-01"})
 
-    class Row:
-        id = 3
-        job_name = "ping_job"
-        state_data = {"last_run": "2025-01-01"}
-        created_at = datetime.now(UTC)
-        updated_at = datetime.now(UTC)
-
-    class _ResOne:
+    # Mock for save: first execute returns ID
+    class MockExecuteResult:
         def scalar_one(self):
-            return Row()
+            return 3
 
-    mock_db_session.execute.return_value = _ResOne()
-    saved = await js.save()
+    mock_db_session.execute.return_value = MockExecuteResult()
+
+    # Create expected saved job state
+    saved_js = JobState(
+        id=3,
+        job_name="ping_job",
+        state_data={"last_run": "2025-01-01"},
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+
+    # Mock get_by_id to return saved job state
+    with patch.object(JobState, "get_by_id", new=AsyncMock(return_value=saved_js)):
+        saved = await js.save()
+
     assert saved.id == 3
     assert saved.state_data == {"last_run": "2025-01-01"}
 
-    # Mock get()
+    # Mock get() - uses ID-first pattern
     class _ResOneOrNone:
         def scalar_one_or_none(self):
-            return Row()
+            return 3  # Return ID only
 
     mock_db_session.execute.return_value = _ResOneOrNone()
-    fetched = await JobState.get(job_name="ping_job")
+
+    # Mock get_by_id for get() method
+    with patch.object(JobState, "get_by_id", new=AsyncMock(return_value=saved_js)):
+        fetched = await JobState.get(job_name="ping_job")
+
     assert fetched and fetched.job_name == "ping_job"
 
 

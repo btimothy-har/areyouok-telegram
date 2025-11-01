@@ -1,7 +1,7 @@
 """Tests for GuidedSession model."""
 
 from datetime import UTC, datetime, timedelta
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -17,25 +17,31 @@ async def test_guided_session_save_and_state_flags(chat_factory, session_factory
 
     gs = GuidedSession(chat=chat, session=session, session_type=GuidedSessionType.ONBOARDING.value, metadata={"x": 1})
 
-    class Row:
-        id = 5
-        chat_id = chat.id
-        session_id = session.id
-        session_type = GuidedSessionType.ONBOARDING.value
-        state = GuidedSessionState.INCOMPLETE.value
-        started_at = gs.started_at
-        completed_at = None
-        encrypted_metadata = gs.encrypt_metadata()
-        created_at = datetime.now(UTC)
-        updated_at = datetime.now(UTC)
-
-    class _ResOne:
+    # Mock for save: first execute returns ID
+    class MockExecuteResult:
         def scalar_one(self):
-            return Row()
+            return 5
 
-    mock_db_session.execute.return_value = _ResOne()
+    mock_db_session.execute.return_value = MockExecuteResult()
 
-    result = await gs.save()
+    # Create expected saved guided session
+    saved_gs = GuidedSession(
+        id=5,
+        chat=chat,
+        session=session,
+        session_type=GuidedSessionType.ONBOARDING.value,
+        state=GuidedSessionState.INCOMPLETE.value,
+        started_at=gs.started_at,
+        completed_at=None,
+        metadata={"x": 1},
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+
+    # Mock get_by_id to return saved guided session
+    with patch.object(GuidedSession, "get_by_id", new=AsyncMock(return_value=saved_gs)):
+        result = await gs.save()
+
     assert result.id == 5
     assert not result.is_completed and not result.is_active and result.is_incomplete
 
@@ -47,38 +53,33 @@ async def test_guided_session_get_by_chat_decrypts(chat_factory, session_factory
     chat, key = chat_factory(id_value=31, with_key_mock=True)
     session = session_factory(chat=chat, id_value=89)
 
-    gs_for_encryption = GuidedSession(
-        chat=chat, session=session, session_type=GuidedSessionType.JOURNALING.value, metadata={"a": 2}
+    # Mock for get_by_chat query (returns IDs)
+    class _ScalarsAll:
+        def scalars(self):
+            class _S:
+                def all(self):
+                    return [6]  # Return list of IDs
+
+            return _S()
+
+    mock_db_session.execute.return_value = _ScalarsAll()
+
+    # Create expected guided session
+    gs = GuidedSession(
+        id=6,
+        chat=chat,
+        session=session,
+        session_type=GuidedSessionType.JOURNALING.value,
+        state=GuidedSessionState.ACTIVE.value,
+        started_at=datetime.now(UTC) - timedelta(minutes=10),
+        completed_at=None,
+        metadata={"a": 2},
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
-    encrypted = gs_for_encryption.encrypt_metadata()
 
-    class Row:
-        id = 6
-        chat_id = chat.id
-        session_id = session.id
-        session_type = GuidedSessionType.JOURNALING.value
-        state = GuidedSessionState.ACTIVE.value
-        started_at = datetime.now(UTC) - timedelta(minutes=10)
-        completed_at = None
-        encrypted_metadata = encrypted
-        created_at = datetime.now(UTC)
-        updated_at = datetime.now(UTC)
-
-    # get_by_chat will call Session.get_by_id; mock it
-    async def _get_by_id_mock(*, session_id: int):
-        return session if session_id == session.id else None
-
-    with patch("areyouok_telegram.data.models.messaging.session.Session.get_by_id", _get_by_id_mock):
-
-        class _ScalarsAll:
-            def scalars(self):
-                class _S:
-                    def all(self):
-                        return [Row()]
-
-                return _S()
-
-        mock_db_session.execute.return_value = _ScalarsAll()
-
+    # Mock GuidedSession.get_by_id to return full guided session
+    with patch.object(GuidedSession, "get_by_id", new=AsyncMock(return_value=gs)):
         items = await GuidedSession.get_by_chat(chat, session=session, session_type=GuidedSessionType.JOURNALING.value)
-        assert len(items) == 1 and items[0].metadata == {"a": 2}
+
+    assert len(items) == 1 and items[0].metadata == {"a": 2}

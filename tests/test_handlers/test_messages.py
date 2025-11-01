@@ -38,11 +38,11 @@ class TestOnNewMessage:
 
         with (
             patch(
-                "areyouok_telegram.handlers.messages.Chat.get_by_id",
+                "areyouok_telegram.handlers.messages.Chat.get_by_telegram_id",
                 new=AsyncMock(return_value=mock_chat),
             ),
             patch(
-                "areyouok_telegram.handlers.messages.User.get_by_id",
+                "areyouok_telegram.handlers.messages.User.get_by_telegram_id",
                 new=AsyncMock(return_value=mock_user),
             ),
             patch(

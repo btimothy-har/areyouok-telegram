@@ -1,6 +1,7 @@
 """Tests for Update model."""
 
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock, patch
 
 import pytest
 import telegram
@@ -26,18 +27,25 @@ async def test_update_save(mock_db_session):
     """Test Update.save() upserts the record."""
     upd = Update(telegram_update_id=456, payload={"update_id": 456})
 
-    class Row:
-        id = 2
-        telegram_update_id = 456
-        payload = {"update_id": 456}
-        created_at = datetime.now(UTC)
-        updated_at = datetime.now(UTC)
-
-    class _ResOne:
+    # Mock for save: first execute returns ID
+    class MockExecuteResult:
         def scalar_one(self):
-            return Row()
+            return 2
 
-    mock_db_session.execute.return_value = _ResOne()
-    saved = await upd.save()
+    mock_db_session.execute.return_value = MockExecuteResult()
+
+    # Create expected saved update
+    saved_update = Update(
+        id=2,
+        telegram_update_id=456,
+        payload={"update_id": 456},
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+
+    # Mock get_by_id to return saved update
+    with patch.object(Update, "get_by_id", new=AsyncMock(return_value=saved_update)):
+        saved = await upd.save()
+
     assert saved.id == 2
     assert saved.telegram_update_id == 456

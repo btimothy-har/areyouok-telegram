@@ -1,6 +1,7 @@
 """Tests for MediaFile model."""
 
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -22,38 +23,49 @@ async def test_media_file_encrypt_save_and_get_by_message(mock_db_session, chat_
         bytes_data=b"abc",
     )
 
-    class Row:
-        id = 3
-        chat_id = chat.id
-        message_id = 10
-        file_id = "abc"
-        file_unique_id = "u-1"
-        mime_type = "image/png"
-        file_size = 3
-        encrypted_content_base64 = mf.encrypt_content()
-        created_at = datetime.now(UTC)
-        updated_at = datetime.now(UTC)
-
-    class _ResOne:
+    # Mock for save: first execute returns ID
+    class MockExecuteResult:
         def scalar_one(self):
-            return Row()
+            return 3
 
-    mock_db_session.execute.return_value = _ResOne()
-    saved = await mf.save()
+    mock_db_session.execute.return_value = MockExecuteResult()
+
+    # Create expected saved media file
+    saved_mf = MediaFile(
+        id=3,
+        chat=chat,
+        message_id=10,
+        file_id="abc",
+        file_unique_id="u-1",
+        mime_type="image/png",
+        bytes_data=b"abc",
+        file_size=3,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+
+    # Mock get_by_id to return saved media file
+    with patch.object(MediaFile, "get_by_id", new=AsyncMock(return_value=saved_mf)):
+        saved = await mf.save()
+
     assert saved.id == 3
     assert saved.bytes_data == b"abc"
 
-    # Test get_by_message
+    # Test get_by_message - uses ID-first pattern
     class _ScalarsAll:
         def scalars(self):
             class _S:
                 def all(self):
-                    return [Row()]
+                    return [3]  # Return list of IDs
 
             return _S()
 
     mock_db_session.execute.return_value = _ScalarsAll()
-    items = await MediaFile.get_by_message(chat, message_id=10)
+
+    # Mock get_by_id for get_by_message
+    with patch.object(MediaFile, "get_by_id", new=AsyncMock(return_value=saved_mf)):
+        items = await MediaFile.get_by_message(chat, message_id=10)
+
     assert len(items) == 1 and items[0].bytes_data == b"abc"
 
 

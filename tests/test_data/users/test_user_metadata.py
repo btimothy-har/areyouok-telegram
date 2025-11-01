@@ -1,6 +1,7 @@
 """Tests for UserMetadata model."""
 
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -50,36 +51,43 @@ async def test_user_metadata_save_and_get_by_user_id(mock_db_session):
         response_speed="normal",
     )
 
-    # Mock save returning encrypted row
-    encrypted_content = um.encrypt_metadata()
-
-    class Row:
-        id = 5
-        user_id = 100
-        content = encrypted_content
-        created_at = datetime.now(UTC)
-        updated_at = datetime.now(UTC)
-
-    class _ResOne:
+    # Mock for save: first execute returns ID
+    class MockExecuteResult:
         def scalar_one(self):
-            return Row()
+            return 5
 
-    mock_db_session.execute.return_value = _ResOne()
-    saved = await um.save()
+    mock_db_session.execute.return_value = MockExecuteResult()
+
+    # Create expected saved user metadata
+    saved_um = UserMetadata(
+        id=5,
+        user_id=100,
+        preferred_name="Alice",
+        country="USA",
+        timezone="America/Los_Angeles",
+        response_speed="normal",
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+
+    # Mock get_by_id to return saved user metadata
+    with patch.object(UserMetadata, "get_by_id", new=AsyncMock(return_value=saved_um)):
+        saved = await um.save()
+
     assert saved.id == 5
     assert saved.preferred_name == "Alice"
 
-    # Mock get_by_user_id
-    class _ScalarsFirst:
-        def scalars(self):
-            class _S:
-                def first(self):
-                    return Row()
+    # Mock get_by_user_id - uses ID-first pattern
+    class _ResOneOrNone:
+        def scalar_one_or_none(self):
+            return 5  # Return ID only
 
-            return _S()
+    mock_db_session.execute.return_value = _ResOneOrNone()
 
-    mock_db_session.execute.return_value = _ScalarsFirst()
-    fetched = await UserMetadata.get_by_user_id(user_id=100)
+    # Mock get_by_id for get_by_user_id method
+    with patch.object(UserMetadata, "get_by_id", new=AsyncMock(return_value=saved_um)):
+        fetched = await UserMetadata.get_by_user_id(user_id=100)
+
     assert fetched and fetched.preferred_name == "Alice"
 
 
