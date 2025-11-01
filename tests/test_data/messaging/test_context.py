@@ -73,7 +73,8 @@ async def test_context_get_by_chat_filters(mock_db_session, chat_factory, sessio
     chat, key = chat_factory(id_value=12, telegram_chat_id=1212, with_key_mock=True)
     session = session_factory(chat=chat, id_value=34)
 
-    encrypted = Context(chat=chat, type=ContextType.MEMORY.value, content=[1, 2, 3]).encrypt_content()
+    # Create encrypted context (just to verify encryption works, not stored)
+    Context(chat=chat, type=ContextType.MEMORY.value, content=[1, 2, 3]).encrypt_content()
 
     # Mock for get_by_chat query (returns IDs)
     class _ScalarsAll:
