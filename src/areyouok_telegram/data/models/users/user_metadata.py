@@ -16,7 +16,6 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from areyouok_telegram.data.database import async_database
 from areyouok_telegram.data.database.schemas import UserMetadataTable
 from areyouok_telegram.encryption import decrypt_content, encrypt_content
-from areyouok_telegram.logging import traced
 from areyouok_telegram.utils.retry import db_retry
 
 RESPONSE_SPEED_MAP = {
@@ -162,7 +161,6 @@ class UserMetadata(pydantic.BaseModel):
             "timezone": self.timezone,
         }
 
-    @traced(extract_args=False)
     @db_retry()
     async def save(self) -> UserMetadata:
         """Save or update user metadata in the database.

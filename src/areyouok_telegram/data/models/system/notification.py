@@ -12,7 +12,6 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from areyouok_telegram.data.database import async_database
 from areyouok_telegram.data.database.schemas import NotificationsTable
 from areyouok_telegram.data.models.messaging.chat import Chat
-from areyouok_telegram.logging import traced
 from areyouok_telegram.utils.retry import db_retry
 
 
@@ -44,7 +43,6 @@ class Notification(pydantic.BaseModel):
         """Return status based on processed_at."""
         return "pending" if self.processed_at is None else "completed"
 
-    @traced()
     @db_retry()
     async def save(self) -> Notification:
         """Save or update the notification in the database.
@@ -81,7 +79,6 @@ class Notification(pydantic.BaseModel):
             return Notification.model_validate(row, from_attributes=True)
 
     @classmethod
-    @traced(extract_args=False)
     @db_retry()
     async def get_next_pending(
         cls,
@@ -111,7 +108,6 @@ class Notification(pydantic.BaseModel):
 
             return Notification.model_validate(row, from_attributes=True)
 
-    @traced()
     async def mark_as_completed(self) -> Notification:
         """Mark notification as completed by setting processed_at timestamp and saving.
 

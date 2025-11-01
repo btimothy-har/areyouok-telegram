@@ -13,7 +13,6 @@ from areyouok_telegram.data.database import async_database
 from areyouok_telegram.data.database.schemas import ChatsTable
 from areyouok_telegram.data.exceptions import InvalidIDArgumentError, MissingEncryptionKeyError
 from areyouok_telegram.encryption import decrypt_chat_key, encrypt_chat_key, generate_chat_key
-from areyouok_telegram.logging import traced
 from areyouok_telegram.utils.retry import db_retry
 
 
@@ -182,7 +181,6 @@ class Chat(pydantic.BaseModel):
             updated_at=datetime.now(UTC),
         )
 
-    @traced(extract_args=False)
     @db_retry()
     async def save(self) -> "Chat":
         """Save or update the chat in the database.

@@ -12,7 +12,6 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from areyouok_telegram.data.database import async_database
 from areyouok_telegram.data.database.schemas import SessionsTable
 from areyouok_telegram.data.models.messaging.chat import Chat
-from areyouok_telegram.logging import traced
 from areyouok_telegram.utils.retry import db_retry
 
 
@@ -56,7 +55,6 @@ class Session(pydantic.BaseModel):
 
         return self.last_bot_activity > self.last_user_activity
 
-    @traced(extract_args=False)
     @db_retry()
     async def save(self) -> Session:
         """Save or update the session in the database.
@@ -108,7 +106,6 @@ class Session(pydantic.BaseModel):
                 message_count=row.message_count,
             )
 
-    @traced(extract_args=["timestamp", "is_user"])
     async def new_activity(self, *, timestamp: datetime, is_user: bool) -> Session:
         """Record user activity (like edits) without incrementing message count.
 
@@ -126,7 +123,6 @@ class Session(pydantic.BaseModel):
 
         return await self.save()
 
-    @traced(extract_args=["timestamp", "is_user"])
     async def new_message(self, *, timestamp: datetime, is_user: bool) -> Session:
         """Record a new message in the session, updating appropriate timestamps and saving.
 
@@ -148,7 +144,6 @@ class Session(pydantic.BaseModel):
 
         return await self.save()
 
-    @traced(extract_args=["timestamp"])
     async def close_session(self, *, timestamp: datetime) -> Session:
         """Close a session by setting session_end and saving.
 

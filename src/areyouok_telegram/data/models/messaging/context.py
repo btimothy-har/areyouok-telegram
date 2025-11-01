@@ -18,7 +18,6 @@ from areyouok_telegram.data.database import async_database
 from areyouok_telegram.data.database.schemas import ContextTable
 from areyouok_telegram.data.models.messaging.chat import Chat
 from areyouok_telegram.data.models.messaging.session import Session
-from areyouok_telegram.logging import traced
 from areyouok_telegram.utils.retry import db_retry
 
 
@@ -100,7 +99,6 @@ class Context(pydantic.BaseModel):
         encrypted_bytes = fernet.encrypt(content_json.encode("utf-8"))
         return encrypted_bytes.decode("utf-8")
 
-    @traced(extract_args=False)
     @db_retry()
     async def save(self) -> Context:
         """Save the context to the database with encrypted content.
@@ -213,7 +211,6 @@ class Context(pydantic.BaseModel):
             return contexts
 
     @classmethod
-    @traced(extract_args=["context_id"])
     @db_retry()
     async def get_by_id(
         cls,

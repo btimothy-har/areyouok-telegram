@@ -14,7 +14,6 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from areyouok_telegram.data.database import async_database
 from areyouok_telegram.data.database.schemas import MediaFilesTable
 from areyouok_telegram.data.models.messaging.chat import Chat
-from areyouok_telegram.logging import traced
 from areyouok_telegram.utils.retry import db_retry
 
 
@@ -103,7 +102,6 @@ class MediaFile(pydantic.BaseModel):
             or self.mime_type.startswith("text/")
         )
 
-    @traced(extract_args=False)
     @db_retry()
     async def save(self) -> MediaFile:
         """Save or update the media file in the database with encrypted content.
@@ -161,7 +159,6 @@ class MediaFile(pydantic.BaseModel):
             )
 
     @classmethod
-    @traced(extract_args=["message_id"])
     @db_retry()
     async def get_by_message(
         cls,

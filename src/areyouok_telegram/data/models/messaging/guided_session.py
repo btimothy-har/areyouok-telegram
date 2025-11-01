@@ -17,7 +17,6 @@ from areyouok_telegram.data.database import async_database
 from areyouok_telegram.data.database.schemas import GuidedSessionsTable
 from areyouok_telegram.data.models.messaging.chat import Chat
 from areyouok_telegram.data.models.messaging.session import Session
-from areyouok_telegram.logging import traced
 from areyouok_telegram.utils.retry import db_retry
 
 
@@ -161,7 +160,6 @@ class GuidedSession(pydantic.BaseModel):
         now = datetime.now(UTC)
         return now - self.started_at > timedelta(hours=1)
 
-    @traced(extract_args=False)
     @db_retry()
     async def save(self) -> GuidedSession:
         """Save or update the guided session in the database.
@@ -226,7 +224,6 @@ class GuidedSession(pydantic.BaseModel):
                 updated_at=row.updated_at,
             )
 
-    @traced(extract_args=[])
     async def complete(self) -> GuidedSession:
         """Complete this guided session and save to database.
 
@@ -237,7 +234,6 @@ class GuidedSession(pydantic.BaseModel):
         self.completed_at = datetime.now(UTC)
         return await self.save()
 
-    @traced(extract_args=[])
     async def inactivate(self) -> GuidedSession:
         """Mark this guided session as inactive due to timeout and save to database.
 
@@ -248,7 +244,6 @@ class GuidedSession(pydantic.BaseModel):
         return await self.save()
 
     @classmethod
-    @traced(extract_args=False)
     @db_retry()
     async def get_by_chat(
         cls,
@@ -317,7 +312,6 @@ class GuidedSession(pydantic.BaseModel):
             return guided_sessions
 
     @classmethod
-    @traced(extract_args=["guided_session_id"])
     @db_retry()
     async def get_by_id(
         cls,

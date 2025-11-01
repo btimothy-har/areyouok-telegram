@@ -16,7 +16,6 @@ from areyouok_telegram.data.database import async_database
 from areyouok_telegram.data.database.schemas import MessagesTable
 from areyouok_telegram.data.exceptions import InvalidIDArgumentError
 from areyouok_telegram.data.models.messaging.chat import Chat
-from areyouok_telegram.logging import traced
 from areyouok_telegram.utils.retry import db_retry
 
 MessageTypes = telegram.Message | telegram.MessageReactionUpdated
@@ -130,7 +129,6 @@ class Message(pydantic.BaseModel):
         """
         return self.message_type_obj.de_json(self.payload, None)
 
-    @traced(extract_args=False)
     @db_retry()
     async def save(self) -> Message:
         """Save or update the message in the database with encrypted payload.
@@ -210,7 +208,6 @@ class Message(pydantic.BaseModel):
         )
 
     @classmethod
-    @traced(extract_args=False)
     @db_retry()
     async def get_by_id(
         cls,
@@ -271,7 +268,6 @@ class Message(pydantic.BaseModel):
             )
 
     @classmethod
-    @traced(extract_args=["session_id"])
     @db_retry()
     async def get_by_session(
         cls,
