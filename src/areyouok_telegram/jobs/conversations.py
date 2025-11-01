@@ -485,7 +485,7 @@ class ConversationJob(BaseJob):
             # Get the message to react to
             message = await Message.get_by_id(
                 chat=chat,
-                telegram_message_id=response.react_to_message_id,
+                telegram_message_id=int(response.react_to_message_id),
             )
 
             if not message:
@@ -588,10 +588,11 @@ class ConversationJob(BaseJob):
         return reply_message
 
     async def _execute_reaction_response(self, *, chat: Chat, response: ReactionResponse, message: telegram.Message):
+        message_id = int(response.react_to_message_id)
         react_sent = await telegram_call(
             self._run_context.bot.set_message_reaction,
             chat_id=chat.telegram_chat_id,
-            message_id=int(response.react_to_message_id),
+            message_id=message_id,
             reaction=response.emoji,
         )
 
@@ -601,7 +602,7 @@ class ConversationJob(BaseJob):
             # Manually create MessageReactionUpdated object as Telegram API does not return it
             reaction_message = telegram.MessageReactionUpdated(
                 chat=message.chat,
-                message_id=int(response.react_to_message_id),
+                message_id=message_id,
                 date=datetime.now(UTC),
                 old_reaction=(),
                 new_reaction=(telegram.ReactionTypeEmoji(emoji=response.emoji),),

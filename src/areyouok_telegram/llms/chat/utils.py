@@ -73,7 +73,7 @@ async def validate_response_data(*, response: AgentResponse, chat: Chat, bot_id:
     if response.response_type == "ReactionResponse":
         message = await Message.get_by_id(
             chat=chat,
-            telegram_message_id=response.react_to_message_id,
+            telegram_message_id=int(response.react_to_message_id),
         )
 
         if not message:
