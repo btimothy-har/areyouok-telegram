@@ -1,7 +1,7 @@
 """Tests for LLMUsage model."""
 
 from datetime import UTC, datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -24,28 +24,35 @@ async def test_llm_usage_save(mock_db_session):
         runtime=1.5,
     )
 
-    class Row:
-        id = 10
-        chat_id = 1
-        session_id = 2
-        timestamp = usage.timestamp
-        usage_type = "pydantic.test_agent"
-        model = "gpt-4"
-        provider = "openai"
-        input_tokens = 100
-        output_tokens = 50
-        runtime = 1.5
-        details = None
-        input_cost = None
-        output_cost = None
-        total_cost = None
-
-    class _ResOne:
+    # Mock for save: first execute returns ID
+    class MockExecuteResult:
         def scalar_one(self):
-            return Row()
+            return 10
 
-    mock_db_session.execute.return_value = _ResOne()
-    saved = await usage.save()
+    mock_db_session.execute.return_value = MockExecuteResult()
+
+    # Create expected saved usage
+    saved_usage = LLMUsage(
+        id=10,
+        chat_id=1,
+        session_id=2,
+        timestamp=usage.timestamp,
+        usage_type="pydantic.test_agent",
+        model="gpt-4",
+        provider="openai",
+        input_tokens=100,
+        output_tokens=50,
+        runtime=1.5,
+        details=None,
+        input_cost=None,
+        output_cost=None,
+        total_cost=None,
+    )
+
+    # Mock get_by_id to return saved usage
+    with patch.object(LLMUsage, "get_by_id", new=AsyncMock(return_value=saved_usage)):
+        saved = await usage.save()
+
     assert saved.id == 10
 
 

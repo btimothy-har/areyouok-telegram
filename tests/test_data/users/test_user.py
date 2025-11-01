@@ -32,6 +32,10 @@ async def test_user_save_and_get_by_id(mock_db_session):
         created_at = datetime.now(UTC)
         updated_at = datetime.now(UTC)
 
+    class MockExecuteResult:
+        def scalar_one(self):
+            return 9
+
     class _ScalarsFirst:
         def scalars(self):
             class _S:
@@ -40,8 +44,8 @@ async def test_user_save_and_get_by_id(mock_db_session):
 
             return _S()
 
-    # First execute: insert; second: select in get_by_id
-    mock_db_session.execute.side_effect = [object(), _ScalarsFirst()]
+    # First execute: insert returning ID; second: select in get_by_id
+    mock_db_session.execute.side_effect = [MockExecuteResult(), _ScalarsFirst()]
 
     saved = await user.save()
     assert saved.id == 9

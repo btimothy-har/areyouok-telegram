@@ -23,6 +23,13 @@ async def test_chat_save_generates_key_and_upserts(mock_db_session):
     """Test Chat.save() generates encryption key and performs upsert."""
     chat = Chat(telegram_chat_id=999, type="private")
 
+    # Mock execute to return ID via scalar_one()
+    class MockExecuteResult:
+        def scalar_one(self):
+            return 1
+
+    mock_db_session.execute.return_value = MockExecuteResult()
+
     # Mock get_by_id to return saved chat
     saved_chat = Chat(telegram_chat_id=999, type="private", id=1, encrypted_key="enc_key")
 
@@ -32,7 +39,7 @@ async def test_chat_save_generates_key_and_upserts(mock_db_session):
     assert result.id == 1
     assert result.telegram_chat_id == 999
     assert result.encrypted_key
-    mock_db_session.execute.assert_called_once()
+    assert mock_db_session.execute.call_count == 1
 
 
 @pytest.mark.usefixtures("patch_async_database")

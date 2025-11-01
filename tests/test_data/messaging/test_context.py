@@ -1,6 +1,7 @@
 """Tests for Context model."""
 
 from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -16,24 +17,31 @@ async def test_context_encrypt_save_and_get_by_id(mock_db_session, chat_factory,
 
     ctx = Context(chat=chat, type=ContextType.SESSION.value, content={"a": 1}, session_id=session.id)
 
-    class Row:
-        id = 9
-        chat_id = chat.id
-        session_id = session.id
-        type = ContextType.SESSION.value
-        encrypted_content = "enc"
-        created_at = datetime.now(UTC)
-
-    class _ResOne:
+    # Mock for save: first execute returns ID
+    class MockExecuteResult:
         def scalar_one(self):
-            return Row()
+            return 9
 
-    mock_db_session.execute.return_value = _ResOne()
-    saved = await ctx.save()
+    mock_db_session.execute.return_value = MockExecuteResult()
+
+    # Create expected saved context
+    saved_context = Context(
+        id=9,
+        chat=chat,
+        type=ContextType.SESSION.value,
+        content={"a": 1},
+        session_id=session.id,
+        created_at=datetime.now(UTC),
+    )
+
+    # Mock get_by_id to return saved context
+    with patch.object(Context, "get_by_id", new=AsyncMock(return_value=saved_context)):
+        saved = await ctx.save()
+
     assert saved.id == 9
     assert saved.content == {"a": 1}
 
-    # Now get_by_id should decrypt and return content
+    # Now test get_by_id independently with encrypted content
     ctx_for_enc = Context(chat=chat, type=ContextType.SESSION.value, content={"a": 1})
     enc_content_str = ctx_for_enc.encrypt_content()
 
@@ -67,31 +75,36 @@ async def test_context_get_by_chat_filters(mock_db_session, chat_factory, sessio
 
     encrypted = Context(chat=chat, type=ContextType.MEMORY.value, content=[1, 2, 3]).encrypt_content()
 
-    class Row:
-        id = 1
-        chat_id = chat.id
-        session_id = session.id
-        type = ContextType.MEMORY.value
-        encrypted_content = encrypted
-        created_at = datetime.now(UTC)
-
+    # Mock for get_by_chat query (returns IDs)
     class _ScalarsAll:
         def scalars(self):
             class _S:
                 def all(self):
-                    return [Row()]
+                    return [1]  # Return list of IDs
 
             return _S()
 
     mock_db_session.execute.return_value = _ScalarsAll()
 
-    items = await Context.get_by_chat(
-        chat,
-        session=session,
-        ctype=ContextType.MEMORY.value,
-        from_timestamp=datetime.now(UTC) - timedelta(days=1),
-        to_timestamp=datetime.now(UTC),
+    # Mock Context.get_by_id to return full context
+    context = Context(
+        id=1,
+        chat=chat,
+        session_id=session.id,
+        type=ContextType.MEMORY.value,
+        content=[1, 2, 3],
+        created_at=datetime.now(UTC),
     )
+
+    with patch.object(Context, "get_by_id", new=AsyncMock(return_value=context)):
+        items = await Context.get_by_chat(
+            chat,
+            session=session,
+            ctype=ContextType.MEMORY.value,
+            from_timestamp=datetime.now(UTC) - timedelta(days=1),
+            to_timestamp=datetime.now(UTC),
+        )
+
     assert len(items) == 1 and items[0].content == [1, 2, 3]
 
 
@@ -113,37 +126,36 @@ async def test_context_same_content_different_times(mock_db_session, chat_factor
     assert ctx1.object_key != ctx2.object_key
 
     # Mock save for ctx1
-    class Row1:
-        id = 10
-        chat_id = chat.id
-        session_id = None
-        type = ContextType.ACTION.value
-        encrypted_content = "enc1"
-        created_at = time1
-
-    class _ResOne1:
+    class MockExecuteResult1:
         def scalar_one(self):
-            return Row1()
+            return 10
 
-    mock_db_session.execute.return_value = _ResOne1()
-    saved1 = await ctx1.save()
+    mock_db_session.execute.return_value = MockExecuteResult1()
+
+    # Create expected saved contexts
+    saved_ctx1 = Context(
+        id=10, chat=chat, session_id=None, type=ContextType.ACTION.value, content=content, created_at=time1
+    )
+
+    with patch.object(Context, "get_by_id", new=AsyncMock(return_value=saved_ctx1)):
+        saved1 = await ctx1.save()
+
     assert saved1.id == 10
 
     # Mock save for ctx2
-    class Row2:
-        id = 11
-        chat_id = chat.id
-        session_id = None
-        type = ContextType.ACTION.value
-        encrypted_content = "enc2"
-        created_at = time2
-
-    class _ResOne2:
+    class MockExecuteResult2:
         def scalar_one(self):
-            return Row2()
+            return 11
 
-    mock_db_session.execute.return_value = _ResOne2()
-    saved2 = await ctx2.save()
+    mock_db_session.execute.return_value = MockExecuteResult2()
+
+    saved_ctx2 = Context(
+        id=11, chat=chat, session_id=None, type=ContextType.ACTION.value, content=content, created_at=time2
+    )
+
+    with patch.object(Context, "get_by_id", new=AsyncMock(return_value=saved_ctx2)):
+        saved2 = await ctx2.save()
+
     assert saved2.id == 11
 
     # Both saves should succeed with different IDs

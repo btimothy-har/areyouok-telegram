@@ -39,26 +39,34 @@ async def test_session_get_sessions_filters(mock_db_session):
     """Test Session.get_sessions() with active filter."""
     chat = Chat(telegram_chat_id=321, type="private", id=33, encrypted_key="enc")
 
-    class Row:
-        id = 1
-        chat_id = chat.id
-        session_start = datetime.now(UTC) - timedelta(hours=2)
-        session_end = None
-        last_user_message = None
-        last_user_activity = None
-        last_bot_message = None
-        last_bot_activity = None
-        message_count = 0
-
+    # Mock for get_sessions query (returns IDs)
     class _ScalarsAll:
         def scalars(self):
             class _S:
                 def all(self):
-                    return [Row()]
+                    return [1]  # Return list of IDs
 
             return _S()
 
     mock_db_session.execute.return_value = _ScalarsAll()
 
-    items = await Session.get_sessions(chat=chat, active=True)
+    # Mock Session.get_by_id to return full session
+    session = Session(
+        id=1,
+        chat=chat,
+        session_start=datetime.now(UTC) - timedelta(hours=2),
+        session_end=None,
+        last_user_message=None,
+        last_user_activity=None,
+        last_bot_message=None,
+        last_bot_activity=None,
+        message_count=0,
+    )
+
+    with (
+        patch.object(Chat, "get_by_id", new=AsyncMock(return_value=chat)),
+        patch.object(Session, "get_by_id", new=AsyncMock(return_value=session)),
+    ):
+        items = await Session.get_sessions(chat=chat, active=True)
+
     assert len(items) == 1 and items[0].chat.id == chat.id
