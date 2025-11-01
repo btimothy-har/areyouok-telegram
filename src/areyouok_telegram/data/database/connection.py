@@ -12,7 +12,7 @@ Base = declarative_base()
 async_engine = create_async_engine(
     f"postgresql+asyncpg://{PG_CONNECTION_STRING}",
     pool_pre_ping=True,
-    pool_size=40,
+    pool_size=20,
     max_overflow=10,
     pool_timeout=30,
     pool_recycle=3600,
