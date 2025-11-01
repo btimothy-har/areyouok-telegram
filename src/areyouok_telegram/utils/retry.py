@@ -11,7 +11,14 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ch
 
 def db_retry():
     return retry(
-        retry=retry_if_exception_type((ConnectionDoesNotExistError, DBAPIError, InterfaceError, DetachedInstanceError)),
+        retry=retry_if_exception_type((
+            ConnectionDoesNotExistError,
+            DBAPIError,
+            InterfaceError,
+            DetachedInstanceError,
+            TimeoutError,
+            asyncio.TimeoutError,
+        )),
         wait=wait_chain(*[wait_fixed(0.5) for _ in range(2)] + [wait_random_exponential(multiplier=0.5, max=5)]),
         stop=stop_after_attempt(5),
         reraise=True,

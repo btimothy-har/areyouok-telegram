@@ -1,4 +1,3 @@
-import asyncio
 from dataclasses import dataclass
 
 import logfire
@@ -226,7 +225,8 @@ class EvaluationsJob(BaseJob):
             chat_id=self.chat_id,
         )
 
-        await asyncio.gather(*[self._purge_generation(gen) for gen in generations])
+        for gen in generations:
+            await self._purge_generation(gen)
 
         logfire.info(
             "Purged generation records.",
