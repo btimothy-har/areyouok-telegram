@@ -39,7 +39,6 @@ class User(pydantic.BaseModel):
         return hashlib.sha256(f"user:{self.telegram_user_id}".encode()).hexdigest()
 
     @classmethod
-    @traced(extract_args=False)
     @db_retry()
     async def get_by_id(
         cls,
