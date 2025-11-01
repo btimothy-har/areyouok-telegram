@@ -93,3 +93,58 @@ async def test_context_get_by_chat_filters(mock_db_session, chat_factory, sessio
         to_timestamp=datetime.now(UTC),
     )
     assert len(items) == 1 and items[0].content == [1, 2, 3]
+
+
+@pytest.mark.usefixtures("patch_async_database")
+@pytest.mark.asyncio
+async def test_context_same_content_different_times(mock_db_session, chat_factory):
+    """Test that identical content can be saved at different times."""
+    chat, key = chat_factory(id_value=15, telegram_chat_id=1515, with_key_mock=True)
+
+    # Create two contexts with identical content but different timestamps
+    content = {"action": "same_action", "value": 42}
+    time1 = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+    time2 = datetime(2024, 1, 1, 12, 0, 1, tzinfo=UTC)  # 1 second later
+
+    ctx1 = Context(chat=chat, type=ContextType.ACTION.value, content=content, created_at=time1)
+    ctx2 = Context(chat=chat, type=ContextType.ACTION.value, content=content, created_at=time2)
+
+    # Verify they have different object keys due to different timestamps
+    assert ctx1.object_key != ctx2.object_key
+
+    # Mock save for ctx1
+    class Row1:
+        id = 10
+        chat_id = chat.id
+        session_id = None
+        type = ContextType.ACTION.value
+        encrypted_content = "enc1"
+        created_at = time1
+
+    class _ResOne1:
+        def scalar_one(self):
+            return Row1()
+
+    mock_db_session.execute.return_value = _ResOne1()
+    saved1 = await ctx1.save()
+    assert saved1.id == 10
+
+    # Mock save for ctx2
+    class Row2:
+        id = 11
+        chat_id = chat.id
+        session_id = None
+        type = ContextType.ACTION.value
+        encrypted_content = "enc2"
+        created_at = time2
+
+    class _ResOne2:
+        def scalar_one(self):
+            return Row2()
+
+    mock_db_session.execute.return_value = _ResOne2()
+    saved2 = await ctx2.save()
+    assert saved2.id == 11
+
+    # Both saves should succeed with different IDs
+    assert saved1.id != saved2.id

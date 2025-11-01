@@ -65,7 +65,8 @@ class Context(pydantic.BaseModel):
     @property
     def object_key(self) -> str:
         content_b64 = base64.b64encode(json.dumps(self.content).encode()).decode()
-        return hashlib.sha256(f"context:{self.chat.id}:{self.type}:{content_b64}".encode()).hexdigest()
+        timestamp_str = self.created_at.isoformat()
+        return hashlib.sha256(f"context:{self.chat.id}:{self.type}:{content_b64}:{timestamp_str}".encode()).hexdigest()
 
     @staticmethod
     def decrypt_content(encrypted_content: str, chat_encryption_key: str) -> Any:
@@ -104,8 +105,8 @@ class Context(pydantic.BaseModel):
     async def save(self) -> Context:
         """Save the context to the database with encrypted content.
 
-        Note: This always creates a new record. The object_key is unique per content,
-        so identical content will be rejected by the database constraint.
+        Note: This always creates a new record. The object_key includes timestamp,
+        so identical content can be saved at different times.
 
         Returns:
             Context instance refreshed from database (with decrypted content)
