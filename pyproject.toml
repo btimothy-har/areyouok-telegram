@@ -90,7 +90,6 @@ select = [
     "PLE", # Pylint-Error
     "PLW", # Pylint-Warning
     "Q", # flake8-quotes
-    "TRY", # tryceratops
     "UP", # pyupgrade
     "W", # Pycodestyle
     "YTT", # flake8-2020
