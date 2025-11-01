@@ -15,7 +15,7 @@ from areyouok_telegram.utils.retry import telegram_call
 async def on_journal_command(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /journal command to start a new journaling session."""
 
-    chat = await Chat.get_by_id(telegram_chat_id=update.effective_chat.id)
+    chat = await Chat.get_by_telegram_id(telegram_chat_id=update.effective_chat.id)
     if not chat:
         raise NoChatFoundError(update.effective_chat.id)
 
@@ -67,7 +67,7 @@ async def on_journal_command(update: telegram.Update, context: ContextTypes.DEFA
     new_session = await new_session.save()
 
     # Record this event in the session
-    user = await User.get_by_id(telegram_user_id=update.effective_user.id)
+    user = await User.get_by_telegram_id(telegram_user_id=update.effective_user.id)
     if not user:
         raise NoUserFoundError(update.effective_user.id)
 

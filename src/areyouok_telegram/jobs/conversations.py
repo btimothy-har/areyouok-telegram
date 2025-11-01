@@ -89,7 +89,7 @@ class ConversationJob(BaseJob):
                 await self.stop()
                 return
 
-        user = await User.get_by_id(telegram_user_id=chat.telegram_chat_id)
+        user = await User.get_by_telegram_id(telegram_user_id=chat.telegram_chat_id)
         if not user:
             await self.stop()
             return
@@ -269,7 +269,7 @@ class ConversationJob(BaseJob):
                         reasoning = agent_response.reasoning
 
                     # Get bot user (for bot-generated messages)
-                    bot_user = await User.get_by_id(telegram_user_id=self._bot_id)
+                    bot_user = await User.get_by_telegram_id(telegram_user_id=self._bot_id)
 
                     # Log the bot's response message
                     message_obj = Message.from_telegram(
@@ -365,7 +365,7 @@ class ConversationJob(BaseJob):
         notification = await Notification.get_next_pending(chat=chat)
 
         # Get user for the chat
-        user = await User.get_by_id(telegram_user_id=chat.telegram_chat_id)
+        user = await User.get_by_telegram_id(telegram_user_id=chat.telegram_chat_id)
         if not user:
             raise UserNotFoundError(chat.telegram_chat_id)
 
@@ -456,7 +456,7 @@ class ConversationJob(BaseJob):
 
     async def apply_response_delay(self, *, chat: Chat):
         # For private chats, telegram_chat_id == telegram_user_id
-        user = await User.get_by_id(telegram_user_id=chat.telegram_chat_id)
+        user = await User.get_by_telegram_id(telegram_user_id=chat.telegram_chat_id)
         if user:
             user_metadata = await UserMetadata.get_by_user_id(user_id=user.id)
             response_delay = user_metadata.response_wait_time if user_metadata else 2
@@ -483,7 +483,7 @@ class ConversationJob(BaseJob):
 
         elif response.response_type == "ReactionResponse":
             # Get the message to react to
-            message = await Message.get_by_id(
+            message = await Message.get_by_telegram_id(
                 chat=chat,
                 telegram_message_id=int(response.react_to_message_id),
             )

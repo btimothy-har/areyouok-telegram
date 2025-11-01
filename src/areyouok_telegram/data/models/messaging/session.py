@@ -88,14 +88,14 @@ class Session(pydantic.BaseModel):
                         "message_count": self.message_count,
                     },
                 )
-                .returning(SessionsTable)
+                .returning(SessionsTable.id)
             )
 
             result = await db_conn.execute(stmt)
-            row = result.scalar_one()
+            row_id = result.scalar_one()
 
         # Return refreshed from database using get_by_id
-        return await Session.get_by_id(session_id=row.id)
+        return await Session.get_by_id(session_id=row_id)
 
     async def new_activity(self, *, timestamp: datetime, is_user: bool) -> Session:
         """Record user activity (like edits) without incrementing message count.

@@ -56,7 +56,7 @@ async def on_dynamic_response_callback(update: telegram.Update, context: Context
     await telegram_call(update.callback_query.answer)
 
     # Create action context
-    chat = await Chat.get_by_id(telegram_chat_id=update.effective_chat.id)
+    chat = await Chat.get_by_telegram_id(telegram_chat_id=update.effective_chat.id)
     if not chat:
         raise NoChatFoundError(update.effective_chat.id)
 

@@ -71,7 +71,7 @@ def check_restricted_responses(*, response: AgentResponse, restricted: set[str])
 
 async def validate_response_data(*, response: AgentResponse, chat: Chat, bot_id: int) -> None:
     if response.response_type == "ReactionResponse":
-        message = await Message.get_by_id(
+        message = await Message.get_by_telegram_id(
             chat=chat,
             telegram_message_id=int(response.react_to_message_id),
         )
@@ -80,7 +80,7 @@ async def validate_response_data(*, response: AgentResponse, chat: Chat, bot_id:
             raise InvalidMessageError(response.react_to_message_id)
 
         # Get bot's internal user ID for comparison
-        bot_user = await User.get_by_id(telegram_user_id=bot_id)
+        bot_user = await User.get_by_telegram_id(telegram_user_id=bot_id)
         if bot_user and message.user_id == bot_user.id:
             raise ReactToSelfError(response.react_to_message_id)
 

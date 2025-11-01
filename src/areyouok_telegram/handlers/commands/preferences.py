@@ -20,11 +20,11 @@ from areyouok_telegram.utils.text import escape_markdown_v2
 async def on_preferences_command(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /preferences command - display user's current preferences."""
 
-    chat = await Chat.get_by_id(telegram_chat_id=update.effective_chat.id)
+    chat = await Chat.get_by_telegram_id(telegram_chat_id=update.effective_chat.id)
     if not chat:
         raise NoChatFoundError(update.effective_chat.id)
 
-    user = await User.get_by_id(telegram_user_id=update.effective_user.id)
+    user = await User.get_by_telegram_id(telegram_user_id=update.effective_user.id)
     if not user:
         raise NoUserFoundError(update.effective_user.id)
 

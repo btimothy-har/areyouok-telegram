@@ -32,7 +32,7 @@ async def on_feedback_command(update: telegram.Update, context: ContextTypes.DEF
 
     feedback_uuid = str(uuid.uuid4())
 
-    chat = await Chat.get_by_id(telegram_chat_id=update.effective_chat.id)
+    chat = await Chat.get_by_telegram_id(telegram_chat_id=update.effective_chat.id)
     if not chat:
         raise NoChatFoundError(update.effective_chat.id)
 

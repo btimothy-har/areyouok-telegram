@@ -11,7 +11,7 @@ from areyouok_telegram.utils.retry import telegram_call
 
 @traced(extract_args=["update"])
 async def on_start_command(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):
-    chat = await Chat.get_by_id(telegram_chat_id=update.effective_chat.id)
+    chat = await Chat.get_by_telegram_id(telegram_chat_id=update.effective_chat.id)
     if not chat:
         raise NoChatFoundError(update.effective_chat.id)
 
@@ -54,7 +54,7 @@ async def on_start_command(update: telegram.Update, context: ContextTypes.DEFAUL
         )
         new_session = await new_session.save()
 
-    user = await User.get_by_id(telegram_user_id=update.effective_user.id)
+    user = await User.get_by_telegram_id(telegram_user_id=update.effective_user.id)
     if not user:
         raise NoUserFoundError(update.effective_user.id)
 

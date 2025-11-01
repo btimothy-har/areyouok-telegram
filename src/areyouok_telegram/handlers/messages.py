@@ -27,11 +27,11 @@ async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_
     if not update.message:
         raise NoMessageError(update.update_id)
 
-    chat = await Chat.get_by_id(telegram_chat_id=update.effective_chat.id)
+    chat = await Chat.get_by_telegram_id(telegram_chat_id=update.effective_chat.id)
     if not chat:
         raise NoChatFoundError(update.effective_chat.id)
 
-    user = await User.get_by_id(telegram_user_id=update.effective_user.id)
+    user = await User.get_by_telegram_id(telegram_user_id=update.effective_user.id)
     if not user:
         raise NoUserFoundError(update.effective_user.id)
 
@@ -87,11 +87,11 @@ async def on_edit_message(update: telegram.Update, context: ContextTypes.DEFAULT
     if not update.edited_message:
         raise NoEditedMessageError(update.update_id)
 
-    chat = await Chat.get_by_id(telegram_chat_id=update.effective_chat.id)
+    chat = await Chat.get_by_telegram_id(telegram_chat_id=update.effective_chat.id)
     if not chat:
         raise NoChatFoundError(update.effective_chat.id)
 
-    user = await User.get_by_id(telegram_user_id=update.effective_user.id)
+    user = await User.get_by_telegram_id(telegram_user_id=update.effective_user.id)
     if not user:
         raise NoUserFoundError(update.effective_user.id)
 
@@ -125,11 +125,11 @@ async def on_message_react(update: telegram.Update, context: ContextTypes.DEFAUL
     if not update.message_reaction:
         raise NoMessageReactionError(update.update_id)
 
-    chat = await Chat.get_by_id(telegram_chat_id=update.effective_chat.id)
+    chat = await Chat.get_by_telegram_id(telegram_chat_id=update.effective_chat.id)
     if not chat:
         raise NoChatFoundError(update.effective_chat.id)
 
-    user = await User.get_by_id(telegram_user_id=update.effective_user.id)
+    user = await User.get_by_telegram_id(telegram_user_id=update.effective_user.id)
     if not user:
         raise NoUserFoundError(update.effective_user.id)
 

@@ -299,7 +299,7 @@ class GuidedSession(pydantic.BaseModel):
                 return None
 
             # Load Session object
-            session = await Session.get_by_id(chat, session_id=row.session_id)
+            session = await Session.get_by_id(session_id=row.session_id)
 
             if not session:
                 return None

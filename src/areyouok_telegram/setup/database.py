@@ -36,7 +36,7 @@ async def create_bot_user(bot_id: int):
     from areyouok_telegram.data.models import User  # noqa: PLC0415
 
     # Check if bot user already exists
-    bot_user = await User.get_by_id(telegram_user_id=bot_id)
+    bot_user = await User.get_by_telegram_id(telegram_user_id=bot_id)
     if bot_user:
         logfire.info(f"Bot user already exists with id={bot_user.id}")
         return
