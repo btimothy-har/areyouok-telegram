@@ -5,6 +5,7 @@ import telegram
 from telegram.constants import ChatType
 from telegram.ext import ContextTypes
 
+from areyouok_telegram.config import DEVELOPER_CHAT_ID
 from areyouok_telegram.data.models import Chat, Context, Session, Update, User
 from areyouok_telegram.handlers.exceptions import InvalidCallbackDataError, NoChatFoundError
 from areyouok_telegram.jobs import ConversationJob, schedule_job
@@ -33,6 +34,9 @@ async def on_new_update(update: telegram.Update, context: ContextTypes.DEFAULT_T
     # Only schedule the job if the update is from a private chat
     # This prevents unnecessary job scheduling for group chats or channel, which we don't support yet.
     if update.effective_chat and update.effective_chat.type == ChatType.PRIVATE:
+        if DEVELOPER_CHAT_ID and update.effective_chat.id == int(DEVELOPER_CHAT_ID):
+            return
+
         await schedule_job(
             context=context,
             job=ConversationJob(chat_id=chat.id),  # Use internal chat ID
