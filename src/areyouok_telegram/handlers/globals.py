@@ -14,6 +14,10 @@ from areyouok_telegram.utils.retry import telegram_call
 
 async def on_new_update(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):
     # Don't use `traced` decorator here to avoid circular logging issues
+
+    if DEVELOPER_CHAT_ID and update.effective_chat and update.effective_chat.id == int(DEVELOPER_CHAT_ID):
+        return
+
     with logfire.span(
         "New update received.",
         _span_name="handlers.globals.on_new_update",
@@ -34,9 +38,6 @@ async def on_new_update(update: telegram.Update, context: ContextTypes.DEFAULT_T
     # Only schedule the job if the update is from a private chat
     # This prevents unnecessary job scheduling for group chats or channel, which we don't support yet.
     if update.effective_chat and update.effective_chat.type == ChatType.PRIVATE:
-        if DEVELOPER_CHAT_ID and update.effective_chat.id == int(DEVELOPER_CHAT_ID):
-            return
-
         await schedule_job(
             context=context,
             job=ConversationJob(chat_id=chat.id),  # Use internal chat ID

@@ -4,6 +4,7 @@ import random
 import telegram
 from telegram.ext import ContextTypes
 
+from areyouok_telegram.config import DEVELOPER_CHAT_ID
 from areyouok_telegram.data.models import Chat, Message, Session, User
 from areyouok_telegram.handlers.commands.feedback import generate_feedback_context
 from areyouok_telegram.handlers.exceptions import (
@@ -20,6 +21,9 @@ from areyouok_telegram.utils.retry import telegram_call
 
 @traced(extract_args=["update"])
 async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):
+    if DEVELOPER_CHAT_ID and update.effective_chat and update.effective_chat.id == int(DEVELOPER_CHAT_ID):
+        return
+
     if not update.message:
         raise NoMessageError(update.update_id)
 
@@ -77,6 +81,9 @@ async def on_new_message(update: telegram.Update, context: ContextTypes.DEFAULT_
 
 @traced(extract_args=["update"])
 async def on_edit_message(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):  # noqa: ARG001
+    if DEVELOPER_CHAT_ID and update.effective_chat and update.effective_chat.id == int(DEVELOPER_CHAT_ID):
+        return
+
     if not update.edited_message:
         raise NoEditedMessageError(update.update_id)
 
@@ -112,6 +119,9 @@ async def on_edit_message(update: telegram.Update, context: ContextTypes.DEFAULT
 @traced(extract_args=["update"])
 async def on_message_react(update: telegram.Update, context: ContextTypes.DEFAULT_TYPE):  # noqa: ARG001
     """Handle reactions to messages."""
+    if DEVELOPER_CHAT_ID and update.effective_chat and update.effective_chat.id == int(DEVELOPER_CHAT_ID):
+        return
+
     if not update.message_reaction:
         raise NoMessageReactionError(update.update_id)
 
