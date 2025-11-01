@@ -89,6 +89,11 @@ class ConversationJob(BaseJob):
                 await self.stop()
                 return
 
+        user = await User.get_by_id(telegram_user_id=chat.telegram_chat_id)
+        if not user:
+            await self.stop()
+            return
+
         # Get active session (don't create if it doesn't exist)
         active_sessions = await Session.get_sessions(chat=chat, active=True)
         active_session = active_sessions[0] if active_sessions else None

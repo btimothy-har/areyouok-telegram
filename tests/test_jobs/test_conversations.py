@@ -36,13 +36,15 @@ class TestConversationJob:
         mock_stop.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_run_job_no_active_session_stops(self, chat_factory):
+    async def test_run_job_no_active_session_stops(self, chat_factory, user_factory):
         """Test run_job stops when no active session."""
         job = ConversationJob(chat_id=123)
         mock_chat = chat_factory(id_value=123)
+        mock_user = user_factory(id_value=1)
 
         with (
             patch("areyouok_telegram.data.models.Chat.get_by_id", new=AsyncMock(return_value=mock_chat)),
+            patch("areyouok_telegram.data.models.User.get_by_id", new=AsyncMock(return_value=mock_user)),
             patch("areyouok_telegram.data.models.Session.get_sessions", new=AsyncMock(return_value=[])),
             patch.object(job, "stop", new=AsyncMock()) as mock_stop,
         ):
