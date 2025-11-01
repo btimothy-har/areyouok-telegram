@@ -60,6 +60,19 @@ class TextResponse(BaseAgentResponse):
         default=None, description="Message ID to reply to, if replying directly to a message. Use only when necessary."
     )
 
+    @pydantic.field_validator("reply_to_message_id", mode="before")
+    @classmethod
+    def validate_reply_to_message_id(cls, v: str | int | None) -> str | None:
+        """Validate that reply_to_message_id is a valid integer string."""
+        if v is None:
+            return None
+        try:
+            # Accept both string and int, convert to string
+            int(v)
+            return str(v)
+        except (ValueError, TypeError) as e:
+            raise ValueError(f"reply_to_message_id must be a valid integer, got: {v}") from e
+
 
 class TextWithButtonsResponse(TextResponse):
     """
@@ -112,6 +125,17 @@ class ReactionResponse(BaseAgentResponse):
 
     react_to_message_id: str = pydantic.Field(description="The message ID to react to with an emoji.")
     emoji: ReactionEmoji = pydantic.Field(description="The emoji to use for the reaction.")
+
+    @pydantic.field_validator("react_to_message_id", mode="before")
+    @classmethod
+    def validate_react_to_message_id(cls, v: str | int) -> str:
+        """Validate that react_to_message_id is a valid integer string."""
+        try:
+            # Accept both string and int, convert to string
+            int(v)
+            return str(v)
+        except (ValueError, TypeError) as e:
+            raise ValueError(f"react_to_message_id must be a valid integer, got: {v}") from e
 
 
 class SwitchPersonalityResponse(BaseAgentResponse):
